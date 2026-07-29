@@ -13,11 +13,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=58`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=60`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r58 packages installed; that would make future packages look like
+r50-r60 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -33,7 +33,7 @@ normal Alpine/postmarketOS practice.
 | `0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch` | Board DT for FT3519 touch and related pinctrl/regulator wiring. |
 | `0002-input-touchscreen-add-focaltech-ft3519t.patch` | Vendor-derived FT3519 touchscreen driver with debug logging disabled by default. Large and not upstream-quality yet, but required for working touch. |
 | `0003-mt6878-add-mt6369-spmi-pmic.patch` | MT6369 SPMI PMIC/regulator foundation required by touch and peripheral rails. |
-| `0011-arm64-dts-mt6878-nothing-tetris-add-disabled-peripherals.patch` | Hardware inventory nodes kept disabled until drivers are ready. |
+| `0011-arm64-dts-mt6878-nothing-tetris-add-disabled-peripherals.patch` | Hardware inventory nodes kept disabled until drivers are ready, including MT6631 connsys/Wi-Fi/BT/GNSS. |
 | `0025-pinctrl-mediatek-mt6878-fill-eint-table-holes.patch` | EINT table fix needed by board interrupts. |
 
 ### Stable framebuffer display path
@@ -65,6 +65,7 @@ normal Alpine/postmarketOS practice.
 | `0037-clk-mediatek-mt6878-audiosys.patch` | Adds MT6878 audiosys clock foundation. Audio still needs AFE/machine-driver work. |
 | `0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch` | Adds disabled RT1711H Type-C inventory node. |
 | `0039-usb-typec-mt6375-tcpc.patch` | Adds the MT6375 interrupt domain and a minimal Linux TCPM/TCPCI Type-C driver. |
+| `0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch` | Adds a minimal MT6878/MT6631 connsys power-domain/regulator bring-up driver with sysfs validation hooks. |
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
@@ -87,8 +88,8 @@ not a confirmed external RT1711H controller.
 1. Validate MT6375 Type-C attach/orientation/role events on device, then remove
    the disabled RT1711H inventory node if hardware confirms it is not populated.
 2. Flashlight as LED-class/V4L2 flash.
-3. MT6631 Wi-Fi through the minimum conninfra/WMT/firmware path.
-4. Bluetooth/GNSS after connectivity is stable.
+3. MT6631 connectivity foundation: conninfra power/reset/EMI and WMT.
+4. Wi-Fi/BT/GNSS clients after connectivity is stable.
 5. MT6878 AFE + MT6369 machine driver + AW88261 routing + UCM.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
 7. Modem/SIM and cameras as later large projects.

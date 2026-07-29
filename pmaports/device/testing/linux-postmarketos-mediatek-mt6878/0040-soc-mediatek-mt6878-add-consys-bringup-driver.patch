@@ -1,0 +1,350 @@
+--- a/drivers/soc/mediatek/Kconfig
++++ b/drivers/soc/mediatek/Kconfig
+@@ -83,6 +83,17 @@ config MTK_SVS
+ 	  which has several controllers(banks) for calculating suitable
+ 	  voltage to different power domains(CPU/GPU/CCI) according to
+ 	  chip process corner, temperatures and other factors. Then DVFS
+ 	  driver could apply SVS bank voltage to PMIC/Buck.
++
++config MTK_MT6878_CONSYS
++	tristate "MediaTek MT6878 connectivity bring-up driver"
++	depends on ARCH_MEDIATEK || COMPILE_TEST
++	depends on PM
++	help
++	  Minimal MT6878/MT6631 connectivity subsystem bring-up driver.
++	  This only controls the CONN power domain and connectivity rails
++	  and exposes a manual sysfs power switch for hardware validation.
++	  Wi-Fi, Bluetooth and GNSS client drivers still need separate WMT
++	  and protocol driver support.
+ 
+ config MTK_SOCINFO
+ 	tristate "MediaTek SoC Information"
+--- a/drivers/soc/mediatek/Makefile
++++ b/drivers/soc/mediatek/Makefile
+@@ -9,3 +9,4 @@ obj-$(CONFIG_MTK_MMSYS) += mtk-mmsys.o
+ obj-$(CONFIG_MTK_MMSYS) += mtk-mutex.o
+ obj-$(CONFIG_MTK_SVS) += mtk-svs.o
+ obj-$(CONFIG_MTK_SOCINFO) += mtk-socinfo.o
++obj-$(CONFIG_MTK_MT6878_CONSYS) += mtk-mt6878-consys.o
+--- /dev/null
++++ b/drivers/soc/mediatek/mtk-mt6878-consys.c
+@@ -0,0 +1,319 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Minimal MediaTek MT6878 / MT6631 connectivity subsystem bring-up.
++ */
++
++#include <linux/bits.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++
++enum mt6878_consys_reg {
++	CONSYS_RGU_ON,
++	CONSYS_CFG_ON,
++	CONSYS_WT_SLP,
++	CONSYS_BUS_CR_ON,
++	CONSYS_HOST_CSR,
++	CONSYS_REG_MAX,
++};
++
++struct mt6878_consys_regmap {
++	unsigned int dt_index;
++	const char *name;
++};
++
++static const struct mt6878_consys_regmap mt6878_consys_regs[] = {
++	[CONSYS_RGU_ON] = { 0, "rgu_on" },
++	[CONSYS_CFG_ON] = { 4, "cfg_on" },
++	[CONSYS_WT_SLP] = { 5, "wt_slp" },
++	[CONSYS_BUS_CR_ON] = { 6, "bus_cr_on" },
++	[CONSYS_HOST_CSR] = { 20, "host_csr" },
++};
++
++struct mt6878_consys_supply {
++	const char *name;
++	int min_uv;
++	int max_uv;
++	struct regulator *regulator;
++};
++
++struct mt6878_consys {
++	struct device *dev;
++	void __iomem *regs[CONSYS_REG_MAX];
++	struct mt6878_consys_supply supplies[4];
++	struct mutex lock;
++	bool powered;
++};
++
++static int mt6878_consys_get_supplies(struct mt6878_consys *cs)
++{
++	static const struct mt6878_consys_supply init[] = {
++		{ "vcn13", 1300000, 1700000 },
++		{ "vrfio18", 1700000, 1700000 },
++		{ "vcn33-1", 3300000, 3300000 },
++		{ "vcn33-2", 3300000, 3300000 },
++	};
++	unsigned int i;
++	int ret;
++
++	memcpy(cs->supplies, init, sizeof(init));
++
++	for (i = 0; i < ARRAY_SIZE(cs->supplies); i++) {
++		cs->supplies[i].regulator =
++			devm_regulator_get_optional(cs->dev, cs->supplies[i].name);
++		if (IS_ERR(cs->supplies[i].regulator)) {
++			ret = PTR_ERR(cs->supplies[i].regulator);
++			if (ret == -ENODEV) {
++				dev_dbg(cs->dev, "optional supply %s missing\n",
++					cs->supplies[i].name);
++				cs->supplies[i].regulator = NULL;
++				continue;
++			}
++
++			return dev_err_probe(cs->dev, ret,
++					     "failed to get %s supply\n",
++					     cs->supplies[i].name);
++		}
++	}
++
++	return 0;
++}
++
++static int mt6878_consys_enable_supplies(struct mt6878_consys *cs)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(cs->supplies); i++) {
++		struct mt6878_consys_supply *supply = &cs->supplies[i];
++
++		if (!supply->regulator)
++			continue;
++
++		ret = regulator_set_voltage(supply->regulator, supply->min_uv,
++					    supply->max_uv);
++		if (ret)
++			goto err_disable;
++
++		ret = regulator_enable(supply->regulator);
++		if (ret)
++			goto err_disable;
++	}
++
++	return 0;
++
++err_disable:
++	while (i--) {
++		if (cs->supplies[i].regulator)
++			regulator_disable(cs->supplies[i].regulator);
++	}
++
++	return ret;
++}
++
++static void mt6878_consys_disable_supplies(struct mt6878_consys *cs)
++{
++	int i;
++
++	for (i = ARRAY_SIZE(cs->supplies) - 1; i >= 0; i--) {
++		if (cs->supplies[i].regulator)
++			regulator_disable(cs->supplies[i].regulator);
++	}
++}
++
++static u32 mt6878_consys_read(struct mt6878_consys *cs,
++			      enum mt6878_consys_reg reg, u32 offset)
++{
++	return readl(cs->regs[reg] + offset);
++}
++
++static int mt6878_consys_power_on(struct mt6878_consys *cs)
++{
++	int ret;
++
++	if (cs->powered)
++		return 0;
++
++	ret = mt6878_consys_enable_supplies(cs);
++	if (ret)
++		return ret;
++
++	ret = pm_runtime_resume_and_get(cs->dev);
++	if (ret)
++		goto err_supplies;
++
++	usleep_range(2000, 3000);
++
++	dev_info(cs->dev,
++		 "powered on: rgu=0x%08x cfg=0x%08x wt_slp=0x%08x host=0x%08x\n",
++		 mt6878_consys_read(cs, CONSYS_RGU_ON, 0x0),
++		 mt6878_consys_read(cs, CONSYS_CFG_ON, 0x0),
++		 mt6878_consys_read(cs, CONSYS_WT_SLP, 0x0),
++		 mt6878_consys_read(cs, CONSYS_HOST_CSR, 0x0));
++
++	cs->powered = true;
++	return 0;
++
++err_supplies:
++	mt6878_consys_disable_supplies(cs);
++	return ret;
++}
++
++static void mt6878_consys_power_off(struct mt6878_consys *cs)
++{
++	if (!cs->powered)
++		return;
++
++	pm_runtime_put_sync(cs->dev);
++	mt6878_consys_disable_supplies(cs);
++	cs->powered = false;
++	dev_info(cs->dev, "powered off\n");
++}
++
++static ssize_t power_on_show(struct device *dev,
++			     struct device_attribute *attr, char *buf)
++{
++	struct mt6878_consys *cs = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", cs->powered);
++}
++
++static ssize_t power_on_store(struct device *dev,
++			      struct device_attribute *attr,
++			      const char *buf, size_t count)
++{
++	struct mt6878_consys *cs = dev_get_drvdata(dev);
++	bool enable;
++	int ret;
++
++	ret = kstrtobool(buf, &enable);
++	if (ret)
++		return ret;
++
++	mutex_lock(&cs->lock);
++	if (enable)
++		ret = mt6878_consys_power_on(cs);
++	else
++		mt6878_consys_power_off(cs);
++	mutex_unlock(&cs->lock);
++
++	return ret ? ret : count;
++}
++static DEVICE_ATTR_RW(power_on);
++
++static ssize_t registers_show(struct device *dev,
++			      struct device_attribute *attr, char *buf)
++{
++	struct mt6878_consys *cs = dev_get_drvdata(dev);
++	ssize_t len = 0;
++
++	mutex_lock(&cs->lock);
++	len += sysfs_emit_at(buf, len, "powered: %u\n", cs->powered);
++	if (cs->powered) {
++		len += sysfs_emit_at(buf, len, "rgu_on[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_RGU_ON, 0x0));
++		len += sysfs_emit_at(buf, len, "rgu_on[0x010]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_RGU_ON, 0x10));
++		len += sysfs_emit_at(buf, len, "cfg_on[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_CFG_ON, 0x0));
++		len += sysfs_emit_at(buf, len, "cfg_on[0x018]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_CFG_ON, 0x18));
++		len += sysfs_emit_at(buf, len, "wt_slp[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_WT_SLP, 0x0));
++		len += sysfs_emit_at(buf, len, "bus_cr_on[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_BUS_CR_ON, 0x0));
++		len += sysfs_emit_at(buf, len, "host_csr[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_HOST_CSR, 0x0));
++	}
++	mutex_unlock(&cs->lock);
++
++	return len;
++}
++static DEVICE_ATTR_RO(registers);
++
++static struct attribute *mt6878_consys_attrs[] = {
++	&dev_attr_power_on.attr,
++	&dev_attr_registers.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(mt6878_consys);
++
++static int mt6878_consys_probe(struct platform_device *pdev)
++{
++	struct mt6878_consys *cs;
++	unsigned int i;
++	int ret;
++
++	cs = devm_kzalloc(&pdev->dev, sizeof(*cs), GFP_KERNEL);
++	if (!cs)
++		return -ENOMEM;
++
++	cs->dev = &pdev->dev;
++	mutex_init(&cs->lock);
++	platform_set_drvdata(pdev, cs);
++
++	for (i = 0; i < ARRAY_SIZE(mt6878_consys_regs); i++) {
++		cs->regs[i] = devm_platform_ioremap_resource(pdev,
++					mt6878_consys_regs[i].dt_index);
++		if (IS_ERR(cs->regs[i]))
++			return dev_err_probe(&pdev->dev, PTR_ERR(cs->regs[i]),
++					     "failed to map %s\n",
++					     mt6878_consys_regs[i].name);
++	}
++
++	ret = mt6878_consys_get_supplies(cs);
++	if (ret)
++		return ret;
++
++	pm_runtime_enable(&pdev->dev);
++	ret = device_add_groups(&pdev->dev, mt6878_consys_groups);
++	if (ret)
++		goto err_pm;
++
++	dev_info(&pdev->dev, "registered MT6878/MT6631 connsys bring-up device\n");
++	return 0;
++
++err_pm:
++	pm_runtime_disable(&pdev->dev);
++	return ret;
++}
++
++static int mt6878_consys_remove(struct platform_device *pdev)
++{
++	struct mt6878_consys *cs = platform_get_drvdata(pdev);
++
++	device_remove_groups(&pdev->dev, mt6878_consys_groups);
++	mutex_lock(&cs->lock);
++	mt6878_consys_power_off(cs);
++	mutex_unlock(&cs->lock);
++	pm_runtime_disable(&pdev->dev);
++
++	return 0;
++}
++
++static const struct of_device_id mt6878_consys_of_match[] = {
++	{ .compatible = "mediatek,mt6878-6631-consys" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6878_consys_of_match);
++
++static struct platform_driver mt6878_consys_driver = {
++	.probe = mt6878_consys_probe,
++	.remove = mt6878_consys_remove,
++	.driver = {
++		.name = "mtk-mt6878-consys",
++		.of_match_table = mt6878_consys_of_match,
++	},
++};
++module_platform_driver(mt6878_consys_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6878 connectivity subsystem bring-up driver");
++MODULE_LICENSE("GPL");
