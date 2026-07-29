@@ -36,7 +36,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18-r60` |
+| Kernel version | `6.18-r61` |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -60,7 +60,7 @@ Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PA
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
 | Camera | Flash | Broken | Needs LED-class/V4L2 flash bring-up. |
-| Connectivity | Connsys foundation | Pending | r60 adds an MT6878/MT6631 manual power-on driver for on-device validation. |
+| Connectivity | Connsys foundation | Pending | r61 adds an MT6878/MT6631 manual regulator/MMIO bring-up driver for on-device validation; MT6878 scpsys still needs porting. |
 | Connectivity | Wi-Fi | Broken | MT6631 DT inventory is present but disabled; needs WMT/firmware/WLAN client bring-up after connsys validation. |
 | Connectivity | Bluetooth | Broken | MT6631 BT inventory is present but disabled; depends on WMT and connectivity foundation. |
 | Connectivity | GPS/GNSS | Broken | MT6631 GNSS inventory is present but disabled; depends on WMT and connectivity foundation. |

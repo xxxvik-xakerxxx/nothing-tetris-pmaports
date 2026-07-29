@@ -13,11 +13,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=60`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=61`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r60 packages installed; that would make future packages look like
+r50-r61 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -65,7 +65,7 @@ normal Alpine/postmarketOS practice.
 | `0037-clk-mediatek-mt6878-audiosys.patch` | Adds MT6878 audiosys clock foundation. Audio still needs AFE/machine-driver work. |
 | `0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch` | Adds disabled RT1711H Type-C inventory node. |
 | `0039-usb-typec-mt6375-tcpc.patch` | Adds the MT6375 interrupt domain and a minimal Linux TCPM/TCPCI Type-C driver. |
-| `0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch` | Adds a minimal MT6878/MT6631 connsys power-domain/regulator bring-up driver with sysfs validation hooks. |
+| `0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch` | Adds a minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,

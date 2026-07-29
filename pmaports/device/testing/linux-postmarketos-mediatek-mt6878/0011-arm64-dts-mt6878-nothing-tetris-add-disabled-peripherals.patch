@@ -1,6 +1,6 @@
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -97,6 +97,185 @@
+@@ -97,6 +97,184 @@
  	regulator-max-microvolt = <3000000>;
  };
  
@@ -108,7 +108,6 @@
 +		      <0 0x1c00a000 0 0x51c>,
 +		      <0 0x1803c000 0 0x34>,
 +		      <0 0x1803e000 0 0x34>;
-+		power-domains = <&scpsys MT6878_POWER_DOMAIN_CONN>;
 +		emi-addr = <0>;
 +		emi-size = <0x0c00000>;
 +		ro-bt-emi-size = <0x2e0000>;
