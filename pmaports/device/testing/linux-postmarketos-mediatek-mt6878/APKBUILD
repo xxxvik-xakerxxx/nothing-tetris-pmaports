@@ -1,0 +1,109 @@
+maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
+pkgname=linux-postmarketos-mediatek-mt6878
+pkgver=6.18
+pkgrel=52
+pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
+arch="aarch64"
+_carch="arm64"
+_flavor="postmarketos-mediatek-mt6878"
+url="https://github.com/MT6878-mainline/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps pmb:cross-native pmb:kconfigcheck-community"
+makedepends="
+	bash
+	bc
+	bison
+	clang
+	devicepkg-dev
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	python3
+"
+
+_repository="linux"
+_commit="d84b264a54a37611f2f46bc19363cb9b41606205"
+_config="config-$_flavor.$arch"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/MT6878-mainline/$_repository/archive/$_commit.tar.gz
+	$_config
+	0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch
+	0002-input-touchscreen-add-focaltech-ft3519t.patch
+	0003-mt6878-add-mt6369-spmi-pmic.patch
+	0011-arm64-dts-mt6878-nothing-tetris-add-disabled-peripherals.patch
+	0012-drm-sysfb-add-full-frame-update-quirk.patch
+	0013-drm-sysfb-flush-inherited-framebuffer-cache.patch
+	0014-drm-sysfb-limit-cache-clean-to-damage.patch
+	0015-drm-sysfb-use-iomem-copy-for-tetris.patch
+	0016-mt6878-add-mt6363-keys-and-mt6375-telemetry.patch
+	0025-pinctrl-mediatek-mt6878-fill-eint-table-holes.patch
+	0029-power-supply-mt6375-add-read-only-monitor.patch
+	0030-regulator-mt6363-add-connectivity-rails.patch
+	0032-power-supply-mt6375-register-monitor-on-platform-bus.patch
+	0033-asoc-aw88261-identify-tetris-speaker-amp.patch
+	0034-clk-mediatek-mt6878-add-mfg-plls.patch
+	0035-input-rt6010-haptics.patch
+	0036-arm64-dts-mt6878-tetris-enable-rt6010-haptics.patch
+	0037-clk-mediatek-mt6878-audiosys.patch
+	0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch
+"
+builddir="$srcdir/$_repository-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/config-$_flavor.$arch" .config
+}
+
+build() {
+	unset LDFLAGS
+	make -j4 ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
+		Image.gz modules \
+		mediatek/mt6878-nothing-tetris.dtb
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+
+	install -Dm644 "$builddir/arch/$_carch/boot/Image.gz" \
+				   "$pkgdir/boot/vmlinuz"
+
+	make -j4 modules_install \
+		ARCH="$_carch" \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir" \
+		INSTALL_MOD_STRIP=1 \
+		LLVM=1
+	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris.dtb" \
+		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
+a748b1fb57801ab7afaaaa5adf7b492a7c76c183039d7139bd89c3213b24095a9ba4ac8e7c72941082271e08e199bb1ef71cc9f43737bb9e849087c7ef2ab6ef  config-postmarketos-mediatek-mt6878.aarch64
+1f76125369ecda237d955748c5563ea156b413b2eccf9c8e46766a1c2521ccd5530f4fb076e6510abbbef8b4d6e6e23608163c62a8241d2e7d99fd07aee08e54  0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch
+d9f2ec794f4d260b0adb20ef3b0992cf3fdc899126a62d2a0251413df1ee2949e110488ba1eb08b4311fc03e67080e195131247a551b8e02b95bc07529c24f1d  0002-input-touchscreen-add-focaltech-ft3519t.patch
+a08b09097ad9c91d4507d5a0efb080a70801cc976d3f5ac72e87bdc11450a4c2a3aee251b60dbad225208445e9fc40072413bd7d5e8e95e9d24b4d779a212079  0003-mt6878-add-mt6369-spmi-pmic.patch
+159cce6e07779a9a99e1a641078c908948a6fdd57deabeb6e4fbd231adedef6f3f8af14905bc61e74eae68a71e315b27655ad0d22a5ca4ef024ffe2b1be85c53  0011-arm64-dts-mt6878-nothing-tetris-add-disabled-peripherals.patch
+7e72e50fe98ccc541ec884c4bd6a28899bb10b076373a555f7cecf9bc3d76f247628e09b0b6bedf470de063d6f60f7e46876c73a6c61d1ad5a1cb69b24d142d7  0012-drm-sysfb-add-full-frame-update-quirk.patch
+0c9836d242400a8faacc5ba644b7f822864f02011f5c85f0a125c6f76a86e1431cca54079f611458190ba5393bf4aa6d6331d4e46cabe6147928749d5ca17770  0013-drm-sysfb-flush-inherited-framebuffer-cache.patch
+8661069cb9a51eed5f8c3d8910d88a0e20bbc02038d9cee5d4328bc98b7df09e919b7734b88fa27b693ef1058fd3ad060801399e398765da1b78719e76a92ac7  0014-drm-sysfb-limit-cache-clean-to-damage.patch
+7c422125b04de6d25423c3a8bc8adc1c0ed4d4533078bddf4e969f5e967503e370d413a1c648368aca8e20956d8f68ff31904b50771af6be484521d538b4233a  0015-drm-sysfb-use-iomem-copy-for-tetris.patch
+3f294f6613c7bf74a2b3ad4d025c7a24b5f54cec4d608dfe5baa5fd084bd551c8f5e77046bcd86358f7a3e0357b0d356fca574b67fa12b4ecf2c0c1562639992  0016-mt6878-add-mt6363-keys-and-mt6375-telemetry.patch
+261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0025-pinctrl-mediatek-mt6878-fill-eint-table-holes.patch
+e91a650a198fdf7a847cbfc1b00c4de7d5740c0df4d110e881c997c941cb90734d248536a1aa6333cb304a18dc55d29cde541f3185c493d7673c3c3f46db6f5e  0029-power-supply-mt6375-add-read-only-monitor.patch
+d1cba3c08d57412b8db8e693345c30e4a7c7388eba6ada37cce25dac7ca4d1e248b26a3b6652bb9572177673cffb8bfc2375a50b5715b474c3af729bbe866f9f  0030-regulator-mt6363-add-connectivity-rails.patch
+0fd76968d4da6303c9d724dc96590f163f5c24da98b09ea5b75910945a36de160ad5a5923d82d6b6dffeb322d959c135eac6cfbf8c8c54cb64a6f5e3cb6d05ca  0032-power-supply-mt6375-register-monitor-on-platform-bus.patch
+f31c9a5fa0ef9ce19e43fdc5a1f6fee17aa9994c346c26f32c7fb4973d2decea7be4278d7388fa9345fa7d00a75cf5a293ac238ea29fd9d398089c2c0bcf3664  0033-asoc-aw88261-identify-tetris-speaker-amp.patch
+4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0034-clk-mediatek-mt6878-add-mfg-plls.patch
+e660974de4e415a91ff24f7a2124f66b6bc53096fb4c0f242424a8a8092093621c8d2bba33be32b98a7873fde6f903b156f7dbd4aeb9c4bf96a3002f9b44f48d  0035-input-rt6010-haptics.patch
+e51ee3e68350eaebfc63b0c4f479c6791bd917459760a7f3c4d56ff2e6e6bb3cc363c3af14efd15b2ac92115d02c86e5f1eb2c0a70326ace22e1855446c56767  0036-arm64-dts-mt6878-tetris-enable-rt6010-haptics.patch
+2823a1815438a48ae1b539a88c1c8f46b62737c25dd6febff19459de69d5b6bc84b11ed947a2013968cae4d71af189dc8a23c9c6dfb6c0492be2930aa79e4465  0037-clk-mediatek-mt6878-audiosys.patch
+53c684629a269eccb625e488008fad00d322d7cb7f99ec911d013c23f14f68dc957e38c163b544101cafafc05353432448eb9c5a61935774f5ed961d5d96c3a3  0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch
+"

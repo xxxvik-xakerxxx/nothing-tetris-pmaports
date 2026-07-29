@@ -1,0 +1,77 @@
+From 0000000000000000000000000000000000000013 Mon Sep 17 00:00:00 2001
+From: postmarketOS Porting <porting@localhost>
+Date: Sat, 25 Jul 2026 00:00:00 +0300
+Subject: [PATCH] drm/sysfb: flush inherited framebuffer cache
+
+Firmware display setup maps the inherited framebuffer as
+cacheable memory and cleans the affected cache lines on every sync.
+The Nothing Tetris display pipeline depends on that behavior: a WC
+mapping plus a write barrier produces corrupted scanout once userspace
+starts updating the framebuffer.
+
+For simple-framebuffer nodes that request full-frame updates, use a WB
+mapping and clean the whole framebuffer to the point of coherency after
+each update. This mirrors the known-good firmware handoff path while keeping the
+normal simpledrm behavior unchanged for other devices.
+---
+ drivers/gpu/drm/sysfb/drm_sysfb_helper.h  |  2 ++
+ drivers/gpu/drm/sysfb/drm_sysfb_modeset.c |  4 ++++
+ drivers/gpu/drm/sysfb/simpledrm.c         | 10 ++++++++--
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/sysfb/drm_sysfb_helper.h b/drivers/gpu/drm/sysfb/drm_sysfb_helper.h
+--- a/drivers/gpu/drm/sysfb/drm_sysfb_helper.h
++++ b/drivers/gpu/drm/sysfb/drm_sysfb_helper.h
+@@ -81,6 +81,8 @@ struct drm_sysfb_device {
+ 	unsigned int fb_pitch;
+ 	unsigned int fb_gamma_lut_size;
+ 	bool force_full_frame_updates;
++	phys_addr_t fb_phys;
++	size_t fb_size;
+ 
+ 	/* hardware-framebuffer kernel address */
+ 	struct iosys_map fb_addr;
+diff --git a/drivers/gpu/drm/sysfb/drm_sysfb_modeset.c b/drivers/gpu/drm/sysfb/drm_sysfb_modeset.c
+--- a/drivers/gpu/drm/sysfb/drm_sysfb_modeset.c
++++ b/drivers/gpu/drm/sysfb/drm_sysfb_modeset.c
+@@ -3,5 +3,6 @@
+ #include <asm/barrier.h>
+ 
++#include <linux/dma-map-ops.h>
+ #include <linux/export.h>
+ #include <linux/slab.h>
+ 
+@@ -281,6 +282,9 @@ void drm_sysfb_plane_helper_atomic_update(struct drm_plane *plane, struct drm_at
+ 		}
+ 	}
+ 	wmb();
++	if (sysfb->force_full_frame_updates)
++		arch_sync_dma_for_device(sysfb->fb_phys, sysfb->fb_size,
++					 DMA_TO_DEVICE);
+ 
+ 	drm_dev_exit(idx);
+ out_drm_gem_fb_end_cpu_access:
+diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm.c
+--- a/drivers/gpu/drm/sysfb/simpledrm.c
++++ b/drivers/gpu/drm/sysfb/simpledrm.c
+@@ -701,11 +701,17 @@ static struct simpledrm_device *simpledrm_device_create(struct drm_driver *drv,
+ 
+ 		drm_dbg(dev, "using system memory framebuffer at %pr\n", mem);
+ 
+-		screen_base = devm_memremap(dev->dev, mem->start, resource_size(mem), MEMREMAP_WC);
++		screen_base = devm_memremap(dev->dev, mem->start, resource_size(mem),
++					   sysfb->force_full_frame_updates ?
++					   MEMREMAP_WB : MEMREMAP_WC);
+ 		if (IS_ERR(screen_base))
+ 			return screen_base;
+ 
+ 		iosys_map_set_vaddr(&sysfb->fb_addr, screen_base);
++		if (sysfb->force_full_frame_updates) {
++			sysfb->fb_phys = mem->start;
++			sysfb->fb_size = resource_size(mem);
++		}
+ 	} else {
+ 		void __iomem *screen_base;
+ 
+-- 
+2.50.1

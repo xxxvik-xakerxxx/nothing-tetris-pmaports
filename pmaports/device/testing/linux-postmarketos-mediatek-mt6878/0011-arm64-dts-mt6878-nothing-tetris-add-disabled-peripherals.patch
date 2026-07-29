@@ -1,0 +1,83 @@
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -97,6 +97,80 @@
+ 	regulator-max-microvolt = <3000000>;
+ };
+ 
++/*
++ * Downstream hardware inventory. Keep these nodes disabled until their
++ * drivers have been ported and validated independently on the device.
++ */
++&i2c0 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <400000>;
++
++	haptic@5f {
++		compatible = "ics,haptic_rt";
++		reg = <0x5f>;
++		enable-gpios = <&pio 74 GPIO_ACTIVE_HIGH>;
++		interrupt-parent = <&pio>;
++		interrupts = <9 IRQ_TYPE_EDGE_FALLING>;
++		status = "disabled";
++	};
++};
++
++&i2c3 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <400000>;
++
++	audio-switch@42 {
++		compatible = "mediatek,hl5280-audioswitch";
++		reg = <0x42>;
++		status = "disabled";
++	};
++};
++
++&i2c5 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <1000000>;
++
++	mt6375: pmic@34 {
++		compatible = "mediatek,mt6375";
++		reg = <0x34>;
++		interrupt-parent = <&pio>;
++		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
++		interrupt-controller;
++		#interrupt-cells = <1>;
++		wakeup-source;
++
++		mt6375_adc: adc {
++			compatible = "mediatek,mt6375-adc";
++			#io-channel-cells = <1>;
++		};
++	};
++};
++
++&i2c6 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <400000>;
++
++	speaker-amp@34 {
++		compatible = "awinic,aw882xx_smartpa";
++		reg = <0x34>;
++		interrupt-parent = <&pio>;
++		interrupts = <41 IRQ_TYPE_EDGE_FALLING>;
++		#sound-dai-cells = <0>;
++		status = "disabled";
++	};
++
++	speaker-amp@5c {
++		compatible = "richtek,rt5512";
++		reg = <0x5c>;
++		#sound-dai-cells = <0>;
++		status = "disabled";
++	};
++};
++
+ &pio {
+ 	key_gpio_default: key-default {
+ 		pins-cmd1-dat {

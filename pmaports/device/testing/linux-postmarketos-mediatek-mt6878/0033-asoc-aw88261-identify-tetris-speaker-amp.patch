@@ -1,0 +1,56 @@
+From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
+Subject: [PATCH] ASoC: aw88261: identify the Tetris speaker amplifier
+
+The populated Tetris BOM uses an AW88261 at i2c6 address 0x34; its
+read-only chip ID was verified as 0x2113. Add an OF match and describe
+only that populated amplifier. No sound card is connected yet, so probe
+does not load firmware or power the amplifier.
+
+--- a/sound/soc/codecs/aw88261.c
++++ b/sound/soc/codecs/aw88261.c
+@@ -1269,9 +1269,16 @@
+ };
+ MODULE_DEVICE_TABLE(i2c, aw88261_i2c_id);
+ 
++static const struct of_device_id aw88261_of_match[] = {
++	{ .compatible = "awinic,aw88261" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, aw88261_of_match);
++
+ static struct i2c_driver aw88261_i2c_driver = {
+ 	.driver = {
+ 		.name = AW88261_I2C_NAME,
++		.of_match_table = aw88261_of_match,
+ 	},
+ 	.probe = aw88261_i2c_probe,
+ 	.id_table = aw88261_i2c_id,
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -160,22 +160,14 @@
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+ 	clock-frequency = <400000>;
++	status = "okay";
+ 
+-	speaker-amp@34 {
+-		compatible = "awinic,aw882xx_smartpa";
++	audio-codec@34 {
++		compatible = "awinic,aw88261";
+ 		reg = <0x34>;
+-		interrupt-parent = <&pio>;
+-		interrupts = <41 IRQ_TYPE_EDGE_FALLING>;
+ 		#sound-dai-cells = <0>;
+-		status = "disabled";
++		awinic,audio-channel = <0>;
+ 	};
+-
+-	speaker-amp@5c {
+-		compatible = "richtek,rt5512";
+-		reg = <0x5c>;
+-		#sound-dai-cells = <0>;
+-		status = "disabled";
+-	};
+ };
+ 
+ &pio {

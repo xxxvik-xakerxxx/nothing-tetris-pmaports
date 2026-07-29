@@ -1,0 +1,120 @@
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -19,6 +19,14 @@
+ 		serial0 = &uart0;
+ 	};
+ 
++	touch_vdd_3v0: regulator-touch-vdd-3v0 {
++		compatible = "regulator-fixed";
++		regulator-name = "touch-vdd-3v0";
++		regulator-min-microvolt = <3000000>;
++		regulator-max-microvolt = <3000000>;
++		regulator-always-on;
++	};
++
+ 	// NOTE: Will be replaced by our firmware display handoff. Keep in for now.
+ 	chosen {
+ 		bootargs = "clk_ignore_unused";
+@@ -62,14 +70,101 @@
+ 	};
+ };
+ 
++&i2c2 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	clock-frequency = <400000>;
++	pinctrl-names = "default", "ts_int_active",
++			"ts_reset_active", "ts_int_suspend",
++			"ts_reset_suspend", "ts_i2c_mode";
++	pinctrl-0 = <&touch_pins_default>;
++	pinctrl-1 = <&touch_int_active>;
++	pinctrl-2 = <&touch_reset_active>;
++	pinctrl-3 = <&touch_int_suspend>;
++	pinctrl-4 = <&touch_reset_suspend>;
++	pinctrl-5 = <&touch_i2c_mode>;
++	status = "okay";
++
++	touchscreen@38 {
++		compatible = "focaltech,fts";
++		reg = <0x38>;
++		interrupt-parent = <&pio>;
++		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
++		focaltech,dvdd-gpio = <&pio 69 GPIO_ACTIVE_HIGH>;
++		focaltech,reset-gpio = <&pio 6 GPIO_ACTIVE_LOW>;
++		focaltech,irq-gpio = <&pio 7 IRQ_TYPE_EDGE_FALLING>;
++		focaltech,max-touch-number = <10>;
++		focaltech,display-coords = <0 0 1080 2400>;
++		vdd-supply = <&touch_vdd_3v0>;
++	};
++};
++
+ &pio {
+-	key_gpio_default:key-default {
++	key_gpio_default: key-default {
+ 		pins-cmd1-dat {
+ 			pinmux = <PINMUX_GPIO54__FUNC_GPIO54>;
+ 			input-enable;
+ 			bias-pull-up;
+ 		};
+ 	};
++
++	touch_pins_default: touch-default {
++		pins-i2c {
++			pinmux = <PINMUX_GPIO129__FUNC_SCL2>,
++				 <PINMUX_GPIO130__FUNC_SDA2>;
++		};
++
++		pins-irq {
++			pinmux = <PINMUX_GPIO7__FUNC_GPIO7>;
++			input-enable;
++			bias-pull-up;
++		};
++
++		pins-reset {
++			pinmux = <PINMUX_GPIO6__FUNC_GPIO6>;
++			output-high;
++		};
++
++		pins-dvdd {
++			pinmux = <PINMUX_GPIO69__FUNC_GPIO69>;
++			output-high;
++		};
++	};
++
++	touch_int_active: touch-int-active {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO7__FUNC_GPIO7>;
++			input-enable;
++		};
++	};
++
++	touch_reset_active: touch-reset-active {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO6__FUNC_GPIO6>;
++			output-high;
++		};
++	};
++
++	touch_int_suspend: touch-int-suspend {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO7__FUNC_GPIO7>;
++			output-low;
++		};
++	};
++
++	touch_reset_suspend: touch-reset-suspend {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO6__FUNC_GPIO6>;
++			output-low;
++		};
++	};
++
++	touch_i2c_mode: touch-i2c-mode {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO129__FUNC_SCL2>,
++				 <PINMUX_GPIO130__FUNC_SDA2>;
++		};
++	};
+ };
+ 
+ &u2port {

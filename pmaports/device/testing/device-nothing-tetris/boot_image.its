@@ -1,0 +1,50 @@
+/dts-v1/;
+
+/ {
+	description = "Nothing CMF Phone 1 FIT Image";
+	#address-cells = <1>;
+
+	images {
+		kernel {
+			description = "Kernel";
+			data = /incbin/("vmlinuz");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "gzip";
+			load = <0x42000000>;
+			entry = <0x42000000>;
+		};
+
+		fdt {
+			description = "MT6878 Nothing Tetris DTB";
+			data = /incbin/("mt6878-nothing-tetris.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load = <0x47000000>;
+			entry = <0x47000000>;
+		};
+
+		initrd {
+			description = "Initramfs";
+			data = /incbin/("initramfs");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "none";
+			load = <0x45500000>;
+			entry = <0x45500000>;
+		};
+	};
+
+	configurations {
+		default = "standard";
+		standard {
+			description = "Standard Boot";
+			kernel = "kernel";
+			fdt = "fdt";
+			ramdisk = "initrd";
+		};
+	};
+};

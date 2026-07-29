@@ -1,0 +1,249 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+index 898cd78..2c7ba4a 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -394,6 +394,86 @@
+ 			#clock-cells = <1>;
+ 		};
+ 
++		audiosys: syscon@11050000 {
++			compatible = "mediatek,mt6878-audiosys", "syscon";
++			reg = <0x11050000 0x9000>;
++			#clock-cells = <1>;
++
++			afe: audio-controller {
++				compatible = "mediatek,mt6878-afe";
++				interrupts = <GIC_SPI 392 IRQ_TYPE_LEVEL_HIGH 0>;
++				clocks = <&audiosys CLK_AFE_AUDIO_HOPPING>,
++					 <&audiosys CLK_AFE_AUDIO_F26M>,
++					 <&audiosys CLK_AFE_DL0_DAC>,
++					 <&audiosys CLK_AFE_DL0_DAC_HIRES>,
++					 <&audiosys CLK_AFE_DL0_PREDIS>,
++					 <&audiosys CLK_AFE_UL0_ADC>,
++					 <&audiosys CLK_AFE_UL0_ADC_HIRES>,
++					 <&audiosys CLK_AFE_UL1_ADC>,
++					 <&audiosys CLK_AFE_UL1_ADC_HIRES>,
++					 <&audiosys CLK_AFE_APLL1>,
++					 <&audiosys CLK_AFE_APLL2>,
++					 <&audiosys CLK_AFE_APLL_TUNER1>,
++					 <&audiosys CLK_AFE_APLL_TUNER2>,
++					 <&topckgen CLK_TOP_AUD_INTBUS_SEL>,
++					 <&topckgen CLK_TOP_MAINPLL_D4_D4>,
++					 <&topckgen CLK_TOP_AUD_1_SEL>,
++					 <&topckgen CLK_TOP_APLL1>,
++					 <&topckgen CLK_TOP_AUD_2_SEL>,
++					 <&topckgen CLK_TOP_APLL2>,
++					 <&topckgen CLK_TOP_AUD_ENGEN1_SEL>,
++					 <&topckgen CLK_TOP_APLL1_D4>,
++					 <&topckgen CLK_TOP_AUD_ENGEN2_SEL>,
++					 <&topckgen CLK_TOP_APLL2_D4>,
++					 <&topckgen CLK_TOP_AUDIO_H_SEL>,
++					 <&topckgen CLK_TOP_APLL1_D2>,
++					 <&topckgen CLK_TOP_APLL2_D2>,
++					 <&topckgen CLK_TOP_APLL_SI1_MCK_SEL>,
++					 <&topckgen CLK_TOP_APLL_FMI2S_MCK_SEL>,
++					 <&topckgen CLK_TOP_APLL12_DIV_SI1>,
++					 <&topckgen CLK_TOP_APLL12_DIV_FMI2S>,
++					 <&topckgen CLK_TOP_TCK_26M_MX9>,
++					 <&pericfg_ao CLK_PERAOP_AUDIO0>,
++					 <&pericfg_ao CLK_PERAOP_AUDIO1>,
++					 <&pericfg_ao CLK_PERAOP_AUDIO2>;
++				clock-names = "aud_hopping_clk",
++					      "aud_f26m_clk",
++					      "aud_dl0_dac_clk",
++					      "aud_dl0_dac_hires_clk",
++					      "aud_dl0_dac_predis_clk",
++					      "aud_ul0_adc_clk",
++					      "aud_ul0_adc_hires_clk",
++					      "aud_ul1_adc_clk",
++					      "aud_ul1_adc_hires_clk",
++					      "aud_apll1_clk",
++					      "aud_apll2_clk",
++					      "aud_apll_tuner1_clk",
++					      "aud_apll_tuner2_clk",
++					      "top_mux_audio_int",
++					      "top_mainpll_d4_d4",
++					      "top_mux_aud_1",
++					      "top_apll1_ck",
++					      "top_mux_aud_2",
++					      "top_apll2_ck",
++					      "top_mux_aud_eng1",
++					      "top_apll1_d4",
++					      "top_mux_aud_eng2",
++					      "top_apll2_d4",
++					      "top_mux_audio_h",
++					      "top_apll1_d2",
++					      "top_apll2_d2",
++					      "top_i2sin1_m_sel",
++					      "top_fmi2s_m_sel",
++					      "top_apll12_div_i2sin1",
++					      "top_apll12_div_fmi2s",
++					      "top_clk26m_clk",
++					      "aud_slv_ck_peri",
++					      "aud_mst_ck_peri",
++					      "aud_intbus_ck_peri";
++				status = "disabled";
++			};
++		};
++
+ 		ssusb: usb0@11201000 {
+ 			compatible = "mediatek,mtu3";
+ 			reg = <0x11201000 0x2e00>,
+diff --git a/drivers/clk/mediatek/Makefile b/drivers/clk/mediatek/Makefile
+index c022506..caecb67 100644
+--- a/drivers/clk/mediatek/Makefile
++++ b/drivers/clk/mediatek/Makefile
+@@ -34,7 +34,7 @@ obj-$(CONFIG_COMMON_CLK_MT6797_IMGSYS) += clk-mt6797-img.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_MMSYS) += clk-mt6797-mm.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VDECSYS) += clk-mt6797-vdec.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VENCSYS) += clk-mt6797-venc.o
+-obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-mfg.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o
++obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-mfg.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o clk-mt6878-audio.o
+ obj-$(CONFIG_COMMON_CLK_MT2701) += clk-mt2701.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_AUDSYS) += clk-mt2701-aud.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_BDPSYS) += clk-mt2701-bdp.o
+diff --git a/drivers/clk/mediatek/clk-mt6878-audio.c b/drivers/clk/mediatek/clk-mt6878-audio.c
+new file mode 100644
+index 0000000..9018d19
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6878-audio.c
+@@ -0,0 +1,139 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2023 MediaTek Inc.
++ * Copyright (c) 2026 Nothing CMF Phone 1 mainline contributors
++ */
++
++#include <dt-bindings/clock/mediatek,mt6878-clock.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs afe0_cg_regs = {
++	.set_ofs = 0x0,
++	.clr_ofs = 0x0,
++	.sta_ofs = 0x0,
++};
++
++static const struct mtk_gate_regs afe1_cg_regs = {
++	.set_ofs = 0x10,
++	.clr_ofs = 0x10,
++	.sta_ofs = 0x10,
++};
++
++static const struct mtk_gate_regs afe2_cg_regs = {
++	.set_ofs = 0x4,
++	.clr_ofs = 0x4,
++	.sta_ofs = 0x4,
++};
++
++static const struct mtk_gate_regs afe3_cg_regs = {
++	.set_ofs = 0x8,
++	.clr_ofs = 0x8,
++	.sta_ofs = 0x8,
++};
++
++static const struct mtk_gate_regs afe4_cg_regs = {
++	.set_ofs = 0xc,
++	.clr_ofs = 0xc,
++	.sta_ofs = 0xc,
++};
++
++#define GATE_AFE(_id, _name, _parent, _regs, _shift) \
++	GATE_MTK(_id, _name, _parent, _regs, _shift, \
++		 &mtk_clk_gate_ops_no_setclr)
++
++#define GATE_AFE0(_id, _name, _parent, _shift) \
++	GATE_AFE(_id, _name, _parent, &afe0_cg_regs, _shift)
++#define GATE_AFE1(_id, _name, _parent, _shift) \
++	GATE_AFE(_id, _name, _parent, &afe1_cg_regs, _shift)
++#define GATE_AFE2(_id, _name, _parent, _shift) \
++	GATE_AFE(_id, _name, _parent, &afe2_cg_regs, _shift)
++#define GATE_AFE3(_id, _name, _parent, _shift) \
++	GATE_AFE(_id, _name, _parent, &afe3_cg_regs, _shift)
++#define GATE_AFE4(_id, _name, _parent, _shift) \
++	GATE_AFE(_id, _name, _parent, &afe4_cg_regs, _shift)
++
++static const struct mtk_gate afe_clks[] = {
++	GATE_AFE0(CLK_AFE_DL0_DAC_TML, "afe_dl0_dac_tml", "f26m_ck", 7),
++	GATE_AFE0(CLK_AFE_DL0_DAC_HIRES, "afe_dl0_dac_hires",
++		  "audio_h_ck", 8),
++	GATE_AFE0(CLK_AFE_DL0_DAC, "afe_dl0_dac", "f26m_ck", 9),
++	GATE_AFE0(CLK_AFE_DL0_PREDIS, "afe_dl0_predis", "f26m_ck", 10),
++	GATE_AFE0(CLK_AFE_DL0_NLE, "afe_dl0_nle", "f26m_ck", 11),
++	GATE_AFE0(CLK_AFE_PCM1, "afe_pcm1", "f26m_ck", 13),
++	GATE_AFE0(CLK_AFE_PCM0, "afe_pcm0", "f26m_ck", 14),
++	GATE_AFE0(CLK_AFE_CM1, "afe_cm1", "f26m_ck", 17),
++	GATE_AFE0(CLK_AFE_CM0, "afe_cm0", "f26m_ck", 18),
++	GATE_AFE0(CLK_AFE_STF, "afe_stf", "f26m_ck", 19),
++	GATE_AFE0(CLK_AFE_HW_GAIN23, "afe_hw_gain23", "f26m_ck", 20),
++	GATE_AFE0(CLK_AFE_HW_GAIN01, "afe_hw_gain01", "f26m_ck", 21),
++	GATE_AFE0(CLK_AFE_FM_I2S, "afe_fm_i2s", "f26m_ck", 24),
++	GATE_AFE0(CLK_AFE_MTKAIFV4, "afe_mtkaifv4", "f26m_ck", 25),
++
++	GATE_AFE1(CLK_AFE_AUDIO_HOPPING, "afe_audio_hopping_ck",
++		  "f26m_ck", 0),
++	GATE_AFE1(CLK_AFE_AUDIO_F26M, "afe_audio_f26m_ck", "f26m_ck", 1),
++	GATE_AFE1(CLK_AFE_APLL1, "afe_apll1_ck", "aud_1_ck", 2),
++	GATE_AFE1(CLK_AFE_APLL2, "afe_apll2_ck", "aud_2_ck", 3),
++	GATE_AFE1(CLK_AFE_H208M, "afe_h208m_ck", "audio_h_ck", 4),
++	GATE_AFE1(CLK_AFE_APLL_TUNER2, "afe_apll_tuner2",
++		  "aud_engen2_ck", 12),
++	GATE_AFE1(CLK_AFE_APLL_TUNER1, "afe_apll_tuner1",
++		  "aud_engen1_ck", 13),
++
++	GATE_AFE2(CLK_AFE_UL1_ADC_HIRES_TML, "afe_ul1_aht",
++		  "audio_h_ck", 16),
++	GATE_AFE2(CLK_AFE_UL1_ADC_HIRES, "afe_ul1_adc_hires",
++		  "audio_h_ck", 17),
++	GATE_AFE2(CLK_AFE_UL1_TML, "afe_ul1_tml", "f26m_ck", 18),
++	GATE_AFE2(CLK_AFE_UL1_ADC, "afe_ul1_adc", "f26m_ck", 19),
++	GATE_AFE2(CLK_AFE_UL0_ADC_HIRES_TML, "afe_ul0_aht",
++		  "audio_h_ck", 20),
++	GATE_AFE2(CLK_AFE_UL0_ADC_HIRES, "afe_ul0_adc_hires",
++		  "audio_h_ck", 21),
++	GATE_AFE2(CLK_AFE_UL0_TML, "afe_ul0_tml", "f26m_ck", 22),
++	GATE_AFE2(CLK_AFE_UL0_ADC, "afe_ul0_adc", "f26m_ck", 23),
++
++	GATE_AFE3(CLK_AFE_ETDM_IN4, "afe_etdm_in4", "aud_engen1_ck", 9),
++	GATE_AFE3(CLK_AFE_ETDM_IN2, "afe_etdm_in2", "aud_engen1_ck", 11),
++	GATE_AFE3(CLK_AFE_ETDM_IN1, "afe_etdm_in1", "aud_engen1_ck", 12),
++	GATE_AFE3(CLK_AFE_ETDM_OUT4, "afe_etdm_out4", "aud_engen1_ck", 17),
++	GATE_AFE3(CLK_AFE_ETDM_OUT2, "afe_etdm_out2", "aud_engen1_ck", 19),
++	GATE_AFE3(CLK_AFE_ETDM_OUT1, "afe_etdm_out1", "aud_engen1_ck", 20),
++
++	GATE_AFE4(CLK_AFE_GENERAL2_ASRC, "afe_general2_asrc",
++		  "audio_h_ck", 22),
++	GATE_AFE4(CLK_AFE_GENERAL1_ASRC, "afe_general1_asrc",
++		  "audio_h_ck", 23),
++	GATE_AFE4(CLK_AFE_GENERAL0_ASRC, "afe_general0_asrc",
++		  "audio_h_ck", 24),
++	GATE_AFE4(CLK_AFE_CONNSYS_I2S_ASRC, "afe_connsys_i2s_asrc",
++		  "audio_h_ck", 25),
++};
++
++static const struct mtk_clk_desc afe_desc = {
++	.clks = afe_clks,
++	.num_clks = CLK_AFE_NR_CLK,
++};
++
++static const struct of_device_id of_match_clk_mt6878_audio[] = {
++	{ .compatible = "mediatek,mt6878-audiosys", .data = &afe_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6878_audio);
++
++static struct platform_driver clk_mt6878_audio_drv = {
++	.probe = mtk_clk_simple_probe,
++	.remove = mtk_clk_simple_remove,
++	.driver = {
++		.name = "clk-mt6878-audio",
++		.of_match_table = of_match_clk_mt6878_audio,
++	},
++};
++module_platform_driver(clk_mt6878_audio_drv);
++
++MODULE_DESCRIPTION("MediaTek MT6878 audio clock driver");
++MODULE_LICENSE("GPL");

@@ -1,0 +1,1121 @@
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -578,9 +578,13 @@
+ 			reg = <0x1cc04000 0x900>,
+ 			      <0x1cc01000 0x100>;
+ 			reg-names = "pmif", "spmimst";
+-			interrupts = <GIC_SPI 496 IRQ_TYPE_LEVEL_HIGH 0>;
++			interrupts-extended = <&pio 212 IRQ_TYPE_LEVEL_HIGH>;
++			interrupt-names = "rcs_irq";
++			interrupt-controller;
++			#interrupt-cells = <1>;
+ 			#address-cells = <2>;
+ 			#size-cells = <0>;
++#include "mt6363.dtsi"
+ #include "mt6369.dtsi"
+ 		};
+ 
+--- a/drivers/mfd/Kconfig
++++ b/drivers/mfd/Kconfig
+@@ -634,6 +634,18 @@
+ 	  menus in order to enable them.
+ 	  We communicate with the Hi6421v600 via a SPMI bus.
+ 
++config MFD_MT6363
++	tristate "MediaTek MT6363 SPMI PMIC"
++	depends on OF
++	depends on SPMI
++	select MFD_CORE
++	select REGMAP_SPMI
++	select IRQ_DOMAIN
++	help
++	  Enable the MediaTek MT6363 SPMI PMIC core and its nested
++	  interrupt controller. The initial implementation exposes only
++	  the PMIC power and volume-up keys.
++
+ config MFD_MT6369
+ 	tristate "MediaTek MT6369 SPMI PMIC"
+ 	depends on OF
+@@ -643,6 +655,15 @@
+ 	help
+ 	  Enable support for the MediaTek MT6369 PMIC core on SPMI.
+ 	  This core exposes sub-devices such as regulators.
++
++config MFD_MT6375
++	tristate "MediaTek MT6375 PMIC"
++	depends on OF && I2C
++	select REGMAP
++	help
++	  Enable the core regmap for the MediaTek MT6375 companion PMIC.
++	  The initial implementation exposes read-only telemetry children
++	  and does not enable charger or Type-C control.
+ 
+ config MFD_HI655X_PMIC
+ 	tristate "HiSilicon Hi655X series PMU/Codec IC"
+--- a/drivers/mfd/Makefile
++++ b/drivers/mfd/Makefile
+@@ -185,7 +185,9 @@
+ obj-$(CONFIG_MFD_MP2629)	+= mp2629.o
+ 
+ obj-$(CONFIG_MFD_MT6360)	+= mt6360-core.o
++obj-$(CONFIG_MFD_MT6363)	+= mt6363-spmi.o
+ obj-$(CONFIG_MFD_MT6369)	+= mt6369-spmi.o
++obj-$(CONFIG_MFD_MT6375)	+= mt6375.o
+ obj-$(CONFIG_MFD_MT6370)	+= mt6370.o
+ mt6397-objs			:= mt6397-core.o mt6397-irq.o mt6358-irq.o
+ obj-$(CONFIG_MFD_MT6397)	+= mt6397.o
+--- a/drivers/input/keyboard/mtk-pmic-keys.c
++++ b/drivers/input/keyboard/mtk-pmic-keys.c
+@@ -13,6 +13,7 @@
+ #include <linux/mfd/mt6357/registers.h>
+ #include <linux/mfd/mt6358/registers.h>
+ #include <linux/mfd/mt6359/registers.h>
++#include <linux/mfd/mt6363/registers.h>
+ #include <linux/mfd/mt6397/core.h>
+ #include <linux/mfd/mt6397/registers.h>
+ #include <linux/module.h>
+@@ -56,6 +57,7 @@
+ 	u32 pmic_rst_reg;
+ 	u32 rst_lprst_mask; /* Long-press reset timeout bitmask */
+ 	bool key_release_irq;
++	bool preserve_long_press_config;
+ };
+ 
+ static const struct mtk_pmic_regs mt6397_regs = {
+@@ -134,6 +136,17 @@
+ 	.key_release_irq = true,
+ };
+ 
++static const struct mtk_pmic_regs mt6363_regs = {
++	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
++		MTK_PMIC_KEYS_REGS(MT6363_TOPSTATUS, BIT(0),
++				   MT6363_PSC_TOP_INT_CON0, 0, 0),
++	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
++		MTK_PMIC_KEYS_REGS(MT6363_TOPSTATUS, BIT(1),
++				   MT6363_PSC_TOP_INT_CON0, BIT(1), 0),
++	.key_release_irq = true,
++	.preserve_long_press_config = true,
++};
++
+ struct mtk_pmic_keys_info {
+ 	struct mtk_pmic_keys *keys;
+ 	const struct mtk_pmic_keys_regs *regs;
+@@ -163,6 +176,9 @@
+ 	u32 long_press_mode, long_press_debounce;
+ 	u32 value, mask;
+ 	int error;
++
++	if (regs->preserve_long_press_config)
++		return;
+ 
+ 	kregs_home = &regs->keys_regs[MTK_PMIC_HOMEKEY_INDEX];
+ 	kregs_pwr = &regs->keys_regs[MTK_PMIC_PWRKEY_INDEX];
+@@ -317,6 +333,9 @@
+ 		.compatible = "mediatek,mt6359-keys",
+ 		.data = &mt6359_regs,
+ 	}, {
++		.compatible = "mediatek,mt6363-keys",
++		.data = &mt6363_regs,
++	}, {
+ 		/* sentinel */
+ 	}
+ };
+@@ -326,7 +345,7 @@
+ {
+ 	int error, index = 0;
+ 	unsigned int keycount;
+-	struct mt6397_chip *pmic_chip = dev_get_drvdata(pdev->dev.parent);
++	struct mt6397_chip *pmic_chip;
+ 	struct device_node *node = pdev->dev.of_node;
+ 	static const char *const irqnames[] = { "powerkey", "homekey" };
+ 	static const char *const irqnames_r[] = { "powerkey_r", "homekey_r" };
+@@ -341,7 +360,14 @@
+ 		return -ENOMEM;
+ 
+ 	keys->dev = &pdev->dev;
+-	keys->regmap = pmic_chip->regmap;
++	keys->regmap = dev_get_regmap(pdev->dev.parent, NULL);
++	if (!keys->regmap) {
++		pmic_chip = dev_get_drvdata(pdev->dev.parent);
++		if (!pmic_chip || !pmic_chip->regmap)
++			return dev_err_probe(keys->dev, -ENODEV,
++					     "failed to get parent regmap\n");
++		keys->regmap = pmic_chip->regmap;
++	}
+ 	mtk_pmic_regs = of_id->data;
+ 
+ 	keys->input_dev = input_dev = devm_input_allocate_device(keys->dev);
+--- a/drivers/spmi/spmi-mtk-pmif.c
++++ b/drivers/spmi/spmi-mtk-pmif.c
+@@ -3,8 +3,12 @@
+ // Copyright (c) 2021 MediaTek Inc.
+ 
+ #include <linux/clk.h>
++#include <linux/interrupt.h>
+ #include <linux/iopoll.h>
++#include <linux/irq.h>
++#include <linux/irqdomain.h>
+ #include <linux/module.h>
++#include <linux/mutex.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include <linux/property.h>
+@@ -28,6 +32,7 @@
+ #define PMIF_MAX_CLKS	3
+ 
+ #define SPMI_OP_ST_BUSY 1
++#define SPMI_MAX_SLAVE_ID 16
+ 
+ struct ch_reg {
+ 	u32 ch_sta;
+@@ -51,6 +56,11 @@
+ 	size_t nclks;
+ 	const struct pmif_data *data;
+ 	raw_spinlock_t lock;
++	struct irq_domain *rcs_domain;
++	struct irq_chip rcs_irq_chip;
++	struct mutex rcs_irq_lock;
++	bool rcs_irq_enabled[SPMI_MAX_SLAVE_ID];
++	int rcs_irq;
+ };
+ 
+ static const char * const pmif_clock_names[] = {
+@@ -275,6 +285,138 @@
+ static void mtk_spmi_writel(struct pmif *arb, u32 val, enum spmi_regs reg)
+ {
+ 	writel(val, arb->spmimst_base + arb->data->spmimst_regs[reg]);
++}
++
++static u32 mtk_spmi_readl(struct pmif *arb, enum spmi_regs reg)
++{
++	return readl(arb->spmimst_base + arb->data->spmimst_regs[reg]);
++}
++
++static void mtk_spmi_rcs_irq_enable(struct irq_data *data)
++{
++	struct pmif *arb = irq_data_get_irq_chip_data(data);
++
++	arb->rcs_irq_enabled[irqd_to_hwirq(data)] = true;
++}
++
++static void mtk_spmi_rcs_irq_disable(struct irq_data *data)
++{
++	struct pmif *arb = irq_data_get_irq_chip_data(data);
++
++	arb->rcs_irq_enabled[irqd_to_hwirq(data)] = false;
++}
++
++static void mtk_spmi_rcs_irq_lock(struct irq_data *data)
++{
++	struct pmif *arb = irq_data_get_irq_chip_data(data);
++
++	mutex_lock(&arb->rcs_irq_lock);
++}
++
++static void mtk_spmi_rcs_irq_sync_unlock(struct irq_data *data)
++{
++	struct pmif *arb = irq_data_get_irq_chip_data(data);
++
++	mutex_unlock(&arb->rcs_irq_lock);
++}
++
++static int mtk_spmi_rcs_irq_map(struct irq_domain *domain, unsigned int virq,
++				irq_hw_number_t hwirq)
++{
++	struct pmif *arb = domain->host_data;
++
++	irq_set_chip_data(virq, arb);
++	irq_set_chip_and_handler(virq, &arb->rcs_irq_chip,
++				 handle_level_irq);
++	irq_set_nested_thread(virq, true);
++	irq_set_parent(virq, arb->rcs_irq);
++	irq_set_noprobe(virq);
++
++	return 0;
++}
++
++static const struct irq_domain_ops mtk_spmi_rcs_irq_domain_ops = {
++	.map = mtk_spmi_rcs_irq_map,
++	.xlate = irq_domain_xlate_onetwocell,
++};
++
++static irqreturn_t mtk_spmi_rcs_irq_thread(int irq, void *data)
++{
++	struct pmif *arb = data;
++	bool handled = false;
++	unsigned int sid;
++
++	for (sid = 0; sid < SPMI_MAX_SLAVE_ID; sid++) {
++		enum spmi_regs reg = SPMI_SLV_3_0_EINT + sid / 4;
++		unsigned int shift = (sid % 4) * 8;
++		unsigned int status;
++		unsigned int virq;
++
++		status = (mtk_spmi_readl(arb, reg) >> shift) & 0xff;
++		if (!status)
++			continue;
++
++		mtk_spmi_writel(arb, 0xffU << shift, reg);
++		handled = true;
++
++		if (!arb->rcs_irq_enabled[sid])
++			continue;
++
++		virq = irq_find_mapping(arb->rcs_domain, sid);
++		if (virq)
++			handle_nested_irq(virq);
++	}
++
++	return handled ? IRQ_HANDLED : IRQ_NONE;
++}
++
++static void mtk_spmi_remove_rcs_domain(void *data)
++{
++	irq_domain_remove(data);
++}
++
++static int mtk_spmi_register_rcs_irq(struct platform_device *pdev,
++				     struct pmif *arb)
++{
++	unsigned int sid;
++	int ret;
++
++	arb->rcs_irq = platform_get_irq_byname(pdev, "rcs_irq");
++	if (arb->rcs_irq < 0)
++		return arb->rcs_irq;
++
++	mutex_init(&arb->rcs_irq_lock);
++	arb->rcs_irq_chip.name = "mtk-spmi-rcs";
++	arb->rcs_irq_chip.flags = IRQCHIP_SKIP_SET_WAKE;
++	arb->rcs_irq_chip.irq_enable = mtk_spmi_rcs_irq_enable;
++	arb->rcs_irq_chip.irq_disable = mtk_spmi_rcs_irq_disable;
++	arb->rcs_irq_chip.irq_bus_lock = mtk_spmi_rcs_irq_lock;
++	arb->rcs_irq_chip.irq_bus_sync_unlock =
++		mtk_spmi_rcs_irq_sync_unlock;
++
++	arb->rcs_domain = irq_domain_create_linear(dev_fwnode(&pdev->dev),
++						   SPMI_MAX_SLAVE_ID,
++						   &mtk_spmi_rcs_irq_domain_ops,
++						   arb);
++	if (!arb->rcs_domain)
++		return -ENOMEM;
++
++	ret = devm_add_action_or_reset(&pdev->dev,
++					mtk_spmi_remove_rcs_domain,
++					arb->rcs_domain);
++	if (ret)
++		return ret;
++
++	for (sid = 0; sid < SPMI_MAX_SLAVE_ID; sid++) {
++		enum spmi_regs reg = SPMI_SLV_3_0_EINT + sid / 4;
++		unsigned int shift = (sid % 4) * 8;
++
++		mtk_spmi_writel(arb, 0xffU << shift, reg);
++	}
++
++	return devm_request_threaded_irq(&pdev->dev, arb->rcs_irq, NULL,
++					 mtk_spmi_rcs_irq_thread,
++					 IRQF_ONESHOT, "mtk-spmi-rcs", arb);
+ }
+ 
+ static bool pmif_is_fsm_vldclr(struct pmif *arb)
+@@ -509,6 +651,10 @@
+ 
+ 	platform_set_drvdata(pdev, ctrl);
+ 
++	err = mtk_spmi_register_rcs_irq(pdev, arb);
++	if (err)
++		goto err_domain_remove;
++
+ 	err = spmi_controller_add(ctrl);
+ 	if (err)
+ 		goto err_domain_remove;
+--- a/drivers/iio/adc/Kconfig
++++ b/drivers/iio/adc/Kconfig
+@@ -1875,4 +1875,11 @@
+ 	  The driver can also be built as a module. If so, the module will be called
+ 	  xilinx-ams.
+ 
++config MT6375_ADC
++	tristate "MediaTek MT6375 ADC"
++	depends on MFD_MT6375
++	help
++	  Enable direct IIO telemetry for the MT6375 companion PMIC,
++	  including battery, system, USB voltage, current and temperature.
++
+ endmenu
+--- a/drivers/iio/adc/Makefile
++++ b/drivers/iio/adc/Makefile
+@@ -158,6 +158,7 @@
+ obj-$(CONFIG_TI_TSC2046) += ti-tsc2046.o
+ obj-$(CONFIG_TWL4030_MADC) += twl4030-madc.o
+ obj-$(CONFIG_TWL6030_GPADC) += twl6030-gpadc.o
++obj-$(CONFIG_MT6375_ADC) += mt6375-adc.o
+ obj-$(CONFIG_VF610_ADC) += vf610_adc.o
+ obj-$(CONFIG_VIPERBOARD_ADC) += viperboard_adc.o
+ obj-$(CONFIG_XILINX_AMS) += xilinx-ams.o
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6363.dtsi
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0 OR MIT
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/spmi/spmi.h>
++
++main_pmic: pmic@4 {
++	compatible = "mediatek,mt6363";
++	reg = <0x4 SPMI_USID>;
++	interrupts = <4>;
++	interrupt-controller;
++	#interrupt-cells = <2>;
++
++	mt6363_keys: keys {
++		compatible = "mediatek,mt6363-keys";
++
++		power {
++			linux,keycodes = <KEY_POWER>;
++			wakeup-source;
++		};
++
++		volume-up {
++			linux,keycodes = <KEY_VOLUMEUP>;
++			wakeup-source;
++		};
++	};
++};
+--- /dev/null
++++ b/include/linux/mfd/mt6363/registers.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef __LINUX_MFD_MT6363_REGISTERS_H
++#define __LINUX_MFD_MT6363_REGISTERS_H
++
++#define MT6363_TOPSTATUS			0x001e
++#define MT6363_TOP_INT_STATUS1			0x004e
++#define MT6363_RCS_INT_DONE			0x041b
++#define MT6363_PSC_TOP_INT_CON0			0x090f
++#define MT6363_PSC_TOP_INT_STATUS0		0x091b
++
++#endif
+--- /dev/null
++++ b/drivers/mfd/mt6363-spmi.c
+@@ -0,0 +1,261 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Minimal MT6363 SPMI PMIC core for the Nothing Tetris bring-up.
++ * Only the PMIC key interrupt group is exposed initially.
++ */
++
++#include <linux/bitops.h>
++#include <linux/interrupt.h>
++#include <linux/irq.h>
++#include <linux/irqdomain.h>
++#include <linux/mfd/core.h>
++#include <linux/mfd/mt6363/registers.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of_irq.h>
++#include <linux/regmap.h>
++#include <linux/spmi.h>
++
++#define MT6363_SWCID				0x000b
++#define MT6363_IRQ_COUNT			108
++#define MT6363_IRQ_PWRKEY			48
++#define MT6363_IRQ_HOMEKEY			49
++#define MT6363_IRQ_PWRKEY_R			51
++#define MT6363_IRQ_HOMEKEY_R			52
++#define MT6363_PSC_IRQ_COUNT			12
++#define MT6363_IRQ_REG_WIDTH			8
++#define MT6363_IRQ_ENABLE_STRIDE		3
++#define MT6363_PSC_TOP_BIT			2
++
++struct mt6363 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct irq_domain *domain;
++	bool enabled[MT6363_PSC_IRQ_COUNT];
++	bool cached[MT6363_PSC_IRQ_COUNT];
++	struct mutex irq_lock;
++};
++
++static const struct resource mt6363_key_resources[] = {
++	DEFINE_RES_IRQ_NAMED(MT6363_IRQ_PWRKEY, "powerkey"),
++	DEFINE_RES_IRQ_NAMED(MT6363_IRQ_HOMEKEY, "homekey"),
++	DEFINE_RES_IRQ_NAMED(MT6363_IRQ_PWRKEY_R, "powerkey_r"),
++	DEFINE_RES_IRQ_NAMED(MT6363_IRQ_HOMEKEY_R, "homekey_r"),
++};
++
++static const struct mfd_cell mt6363_cells[] = {
++	{
++		.name = "mtk-pmic-keys",
++		.of_compatible = "mediatek,mt6363-keys",
++		.resources = mt6363_key_resources,
++		.num_resources = ARRAY_SIZE(mt6363_key_resources),
++	},
++};
++
++static void mt6363_irq_enable(struct irq_data *data)
++{
++	struct mt6363 *pmic = irq_data_get_irq_chip_data(data);
++	unsigned int offset = irqd_to_hwirq(data) - MT6363_IRQ_PWRKEY;
++
++	if (offset < ARRAY_SIZE(pmic->enabled))
++		pmic->enabled[offset] = true;
++}
++
++static void mt6363_irq_disable(struct irq_data *data)
++{
++	struct mt6363 *pmic = irq_data_get_irq_chip_data(data);
++	unsigned int offset = irqd_to_hwirq(data) - MT6363_IRQ_PWRKEY;
++
++	if (offset < ARRAY_SIZE(pmic->enabled))
++		pmic->enabled[offset] = false;
++}
++
++static void mt6363_irq_bus_lock(struct irq_data *data)
++{
++	struct mt6363 *pmic = irq_data_get_irq_chip_data(data);
++
++	mutex_lock(&pmic->irq_lock);
++}
++
++static void mt6363_irq_bus_sync_unlock(struct irq_data *data)
++{
++	struct mt6363 *pmic = irq_data_get_irq_chip_data(data);
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(pmic->enabled); i++) {
++		unsigned int reg;
++		unsigned int bit;
++
++		if (pmic->enabled[i] == pmic->cached[i])
++			continue;
++
++		reg = MT6363_PSC_TOP_INT_CON0 +
++		      (i / MT6363_IRQ_REG_WIDTH) * MT6363_IRQ_ENABLE_STRIDE;
++		bit = BIT(i % MT6363_IRQ_REG_WIDTH);
++		regmap_update_bits(pmic->regmap, reg, bit,
++				   pmic->enabled[i] ? bit : 0);
++		pmic->cached[i] = pmic->enabled[i];
++	}
++
++	mutex_unlock(&pmic->irq_lock);
++}
++
++static struct irq_chip mt6363_irq_chip = {
++	.name = "mt6363-pmic",
++	.flags = IRQCHIP_SKIP_SET_WAKE,
++	.irq_enable = mt6363_irq_enable,
++	.irq_disable = mt6363_irq_disable,
++	.irq_bus_lock = mt6363_irq_bus_lock,
++	.irq_bus_sync_unlock = mt6363_irq_bus_sync_unlock,
++};
++
++static int mt6363_irq_domain_map(struct irq_domain *domain,
++				 unsigned int virq, irq_hw_number_t hwirq)
++{
++	struct mt6363 *pmic = domain->host_data;
++
++	irq_set_chip_data(virq, pmic);
++	irq_set_chip_and_handler(virq, &mt6363_irq_chip, handle_level_irq);
++	irq_set_nested_thread(virq, true);
++	irq_set_noprobe(virq);
++
++	return 0;
++}
++
++static const struct irq_domain_ops mt6363_irq_domain_ops = {
++	.map = mt6363_irq_domain_map,
++	.xlate = irq_domain_xlate_twocell,
++};
++
++static irqreturn_t mt6363_irq_thread(int irq, void *data)
++{
++	struct mt6363 *pmic = data;
++	unsigned int pending;
++	unsigned int status;
++	unsigned int top;
++	unsigned int i;
++	int ret;
++
++	ret = regmap_read(pmic->regmap, MT6363_TOP_INT_STATUS1, &top);
++	if (ret)
++		return IRQ_NONE;
++
++	if (top & BIT(MT6363_PSC_TOP_BIT)) {
++		ret = regmap_read(pmic->regmap, MT6363_PSC_TOP_INT_STATUS0,
++				  &status);
++		if (ret)
++			return IRQ_NONE;
++
++		pending = status;
++		while (pending) {
++			unsigned int virq;
++
++			i = __ffs(pending);
++			virq = irq_find_mapping(pmic->domain,
++						MT6363_IRQ_PWRKEY + i);
++			if (virq)
++				handle_nested_irq(virq);
++			pending &= ~BIT(i);
++		}
++
++		regmap_write(pmic->regmap, MT6363_PSC_TOP_INT_STATUS0,
++			     status);
++	}
++
++	regmap_write(pmic->regmap, MT6363_RCS_INT_DONE, 1);
++	return IRQ_HANDLED;
++}
++
++static void mt6363_remove_irq_domain(void *data)
++{
++	irq_domain_remove(data);
++}
++
++static int mt6363_spmi_probe(struct spmi_device *sdev)
++{
++	static const struct regmap_config regmap_config = {
++		.reg_bits = 16,
++		.val_bits = 8,
++		.max_register = 0xffff,
++		.fast_io = true,
++	};
++	struct mt6363 *pmic;
++	unsigned int chip_id;
++	int irq;
++	int ret;
++
++	pmic = devm_kzalloc(&sdev->dev, sizeof(*pmic), GFP_KERNEL);
++	if (!pmic)
++		return -ENOMEM;
++
++	pmic->dev = &sdev->dev;
++	mutex_init(&pmic->irq_lock);
++
++	pmic->regmap = devm_regmap_init_spmi_ext(sdev, &regmap_config);
++	if (IS_ERR(pmic->regmap))
++		return dev_err_probe(&sdev->dev, PTR_ERR(pmic->regmap),
++				     "failed to initialize regmap\n");
++
++	ret = regmap_read(pmic->regmap, MT6363_SWCID, &chip_id);
++	if (ret || !chip_id)
++		return dev_err_probe(&sdev->dev, ret ?: -ENODEV,
++				     "failed to read chip ID\n");
++
++	pmic->domain = irq_domain_create_linear(dev_fwnode(&sdev->dev),
++						MT6363_IRQ_COUNT,
++						&mt6363_irq_domain_ops, pmic);
++	if (!pmic->domain)
++		return -ENOMEM;
++
++	ret = devm_add_action_or_reset(&sdev->dev, mt6363_remove_irq_domain,
++					pmic->domain);
++	if (ret)
++		return ret;
++
++	irq = of_irq_get(sdev->dev.of_node, 0);
++	if (irq < 0)
++		return irq;
++
++	regmap_write(pmic->regmap, MT6363_PSC_TOP_INT_CON0, 0);
++	regmap_write(pmic->regmap,
++		     MT6363_PSC_TOP_INT_CON0 + MT6363_IRQ_ENABLE_STRIDE, 0);
++	regmap_write(pmic->regmap, MT6363_PSC_TOP_INT_STATUS0, 0xff);
++	regmap_write(pmic->regmap, MT6363_PSC_TOP_INT_STATUS0 + 1, 0xff);
++	regmap_write(pmic->regmap, MT6363_RCS_INT_DONE, 1);
++
++	ret = devm_request_threaded_irq(&sdev->dev, irq, NULL,
++					mt6363_irq_thread, IRQF_ONESHOT,
++					"mt6363-pmic", pmic);
++	if (ret)
++		return ret;
++
++	dev_set_drvdata(&sdev->dev, pmic);
++	ret = devm_mfd_add_devices(&sdev->dev, PLATFORM_DEVID_AUTO,
++				   mt6363_cells, ARRAY_SIZE(mt6363_cells),
++				   NULL, 0, pmic->domain);
++	if (ret)
++		return ret;
++
++	device_init_wakeup(&sdev->dev, true);
++	dev_info(&sdev->dev, "MT6363 chip ID 0x%x, PMIC keys enabled\n",
++		 chip_id);
++	return 0;
++}
++
++static const struct of_device_id mt6363_spmi_of_match[] = {
++	{ .compatible = "mediatek,mt6363" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6363_spmi_of_match);
++
++static struct spmi_driver mt6363_spmi_driver = {
++	.driver = {
++		.name = "mt6363-spmi",
++		.of_match_table = mt6363_spmi_of_match,
++	},
++	.probe = mt6363_spmi_probe,
++};
++module_spmi_driver(mt6363_spmi_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6363 SPMI PMIC key core");
++MODULE_LICENSE("GPL");
+--- /dev/null
++++ b/drivers/mfd/mt6375.c
+@@ -0,0 +1,206 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Minimal MT6375 multi-bank I2C regmap.
++ *
++ * Charger, Type-C and interrupt control are intentionally not exposed by
++ * this bring-up driver. Only explicitly described telemetry children probe.
++ */
++
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of_platform.h>
++#include <linux/regmap.h>
++
++#define MT6375_SLAVEID_TCPC	0x4e
++#define MT6375_SLAVEID_PMU	0x34
++#define MT6375_SLAVEID_BM	0x1a
++#define MT6375_SLAVEID_HK1	0x4a
++#define MT6375_SLAVEID_HK2	0x64
++#define MT6375_SLAVEID_TM	0x3f
++
++#define MT6375_VID		0x70
++#define MT6375_REG_DEV_INFO	0x0100
++#define MT6375_REG_HK2_END	0x04ff
++#define MT6375_BANK_TCPC_RT2	0xf2
++#define MT6375_REG_RT2_START	0xf200
++#define MT6375_REG_RT2_END	0xf2ff
++
++enum mt6375_slave {
++	MT6375_SLAVE_TCPC,
++	MT6375_SLAVE_PMU,
++	MT6375_SLAVE_BM,
++	MT6375_SLAVE_HK1,
++	MT6375_SLAVE_HK2,
++	MT6375_SLAVE_TM,
++	MT6375_SLAVE_MAX,
++};
++
++struct mt6375 {
++	struct i2c_client *clients[MT6375_SLAVE_MAX];
++};
++
++static const u8 mt6375_slave_addr[MT6375_SLAVE_MAX] = {
++	MT6375_SLAVEID_TCPC,
++	MT6375_SLAVEID_PMU,
++	MT6375_SLAVEID_BM,
++	MT6375_SLAVEID_HK1,
++	MT6375_SLAVEID_HK2,
++	MT6375_SLAVEID_TM,
++};
++
++static struct i2c_client *mt6375_bank_client(struct mt6375 *mt6375, u8 bank)
++{
++	if (bank == MT6375_BANK_TCPC_RT2)
++		return mt6375->clients[MT6375_SLAVE_TCPC];
++	if (bank >= MT6375_SLAVE_MAX)
++		return NULL;
++	return mt6375->clients[bank];
++}
++
++static int mt6375_regmap_write(void *context, const void *data, size_t count)
++{
++	struct mt6375 *mt6375 = context;
++	const u8 *buf = data;
++	struct i2c_client *client;
++	int ret;
++
++	if (count < 3)
++		return -EINVAL;
++
++	client = mt6375_bank_client(mt6375, buf[0]);
++	if (!client)
++		return -EINVAL;
++
++	if (buf[0] == MT6375_BANK_TCPC_RT2) {
++		ret = i2c_master_send(client, buf, count);
++		return ret < 0 ? ret : ret == count ? 0 : -EIO;
++	}
++
++	return i2c_smbus_write_i2c_block_data(client, buf[1], count - 2,
++					       buf + 2);
++}
++
++static int mt6375_regmap_read(void *context, const void *reg_buf,
++			      size_t reg_size, void *val_buf, size_t val_size)
++{
++	struct mt6375 *mt6375 = context;
++	const u8 *reg = reg_buf;
++	struct i2c_client *client;
++	int ret;
++
++	if (reg_size != 2)
++		return -EINVAL;
++
++	client = mt6375_bank_client(mt6375, reg[0]);
++	if (!client)
++		return -EINVAL;
++
++	if (reg[0] == MT6375_BANK_TCPC_RT2) {
++		u8 addr[2] = { reg[0], reg[1] };
++		struct i2c_msg msgs[] = {
++			{
++				.addr = client->addr,
++				.len = sizeof(addr),
++				.buf = addr,
++			}, {
++				.addr = client->addr,
++				.flags = I2C_M_RD,
++				.len = val_size,
++				.buf = val_buf,
++			},
++		};
++
++		ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++		return ret < 0 ? ret : ret == ARRAY_SIZE(msgs) ? 0 : -EIO;
++	}
++
++	ret = i2c_smbus_read_i2c_block_data(client, reg[1], val_size,
++					     val_buf);
++	return ret < 0 ? ret : ret == val_size ? 0 : -EIO;
++}
++
++static const struct regmap_bus mt6375_regmap_bus = {
++	.write = mt6375_regmap_write,
++	.read = mt6375_regmap_read,
++};
++
++static bool mt6375_accessible_reg(struct device *dev, unsigned int reg)
++{
++	return reg <= MT6375_REG_HK2_END ||
++	       (reg >= MT6375_REG_RT2_START && reg <= MT6375_REG_RT2_END);
++}
++
++static const struct regmap_config mt6375_regmap_config = {
++	.reg_bits = 16,
++	.val_bits = 8,
++	.reg_format_endian = REGMAP_ENDIAN_BIG,
++	.max_register = MT6375_REG_RT2_END,
++	.readable_reg = mt6375_accessible_reg,
++	.writeable_reg = mt6375_accessible_reg,
++};
++
++static int mt6375_probe(struct i2c_client *client)
++{
++	struct mt6375 *mt6375;
++	struct regmap *regmap;
++	unsigned int id;
++	unsigned int i;
++	int ret;
++
++	mt6375 = devm_kzalloc(&client->dev, sizeof(*mt6375), GFP_KERNEL);
++	if (!mt6375)
++		return -ENOMEM;
++
++	for (i = 0; i < MT6375_SLAVE_MAX; i++) {
++		if (i == MT6375_SLAVE_PMU) {
++			mt6375->clients[i] = client;
++			continue;
++		}
++
++		mt6375->clients[i] =
++			devm_i2c_new_dummy_device(&client->dev, client->adapter,
++						  mt6375_slave_addr[i]);
++		if (IS_ERR(mt6375->clients[i]))
++			return dev_err_probe(&client->dev,
++					     PTR_ERR(mt6375->clients[i]),
++					     "failed to claim bank 0x%02x\n",
++					     mt6375_slave_addr[i]);
++	}
++
++	regmap = devm_regmap_init(&client->dev, &mt6375_regmap_bus, mt6375,
++				  &mt6375_regmap_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++
++	ret = regmap_read(regmap, MT6375_REG_DEV_INFO, &id);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to read device ID\n");
++	if ((id & 0xf0) != MT6375_VID)
++		return dev_err_probe(&client->dev, -ENODEV,
++				     "unexpected device ID 0x%02x\n", id);
++
++	i2c_set_clientdata(client, mt6375);
++	dev_info(&client->dev, "MT6375 revision %u, telemetry-only mode\n",
++		 id & 0x0f);
++
++	return devm_of_platform_populate(&client->dev);
++}
++
++static const struct of_device_id mt6375_of_match[] = {
++	{ .compatible = "mediatek,mt6375" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6375_of_match);
++
++static struct i2c_driver mt6375_driver = {
++	.probe = mt6375_probe,
++	.driver = {
++		.name = "mt6375",
++		.of_match_table = mt6375_of_match,
++	},
++};
++module_i2c_driver(mt6375_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6375 telemetry-only PMIC core");
++MODULE_LICENSE("GPL");
+--- /dev/null
++++ b/include/dt-bindings/iio/adc/mediatek,mt6375-adc.h
+@@ -0,0 +1,24 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _DT_BINDINGS_IIO_ADC_MEDIATEK_MT6375_H
++#define _DT_BINDINGS_IIO_ADC_MEDIATEK_MT6375_H
++
++#define MT6375_ADC_VBATMON	0
++#define MT6375_ADC_CHGVIN	1
++#define MT6375_ADC_USBDP	2
++#define MT6375_ADC_VSYS		3
++#define MT6375_ADC_VBAT		4
++#define MT6375_ADC_IBUS		5
++#define MT6375_ADC_IBAT		6
++#define MT6375_ADC_USBDM	7
++#define MT6375_ADC_TEMPJC	8
++#define MT6375_ADC_VREFTS	9
++#define MT6375_ADC_TS		10
++#define MT6375_ADC_PDVBUS	11
++#define MT6375_ADC_CC1		12
++#define MT6375_ADC_CC2		13
++#define MT6375_ADC_SBU1		14
++#define MT6375_ADC_SBU2		15
++#define MT6375_ADC_FGCIC1	16
++#define MT6375_ADC_MAX_CHANNEL	17
++
++#endif
+--- /dev/null
++++ b/drivers/iio/adc/mt6375-adc.c
+@@ -0,0 +1,220 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * MT6375 direct-mode ADC telemetry.
++ */
++
++#include <dt-bindings/iio/adc/mediatek,mt6375-adc.h>
++#include <linux/iio/iio.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/pm_wakeup.h>
++#include <linux/regmap.h>
++
++#define MT6375_REG_ADC_MONRPTH	0x019c
++#define MT6375_REG_ADC_CFG1	0x01a4
++#define MT6375_REG_ADC_CFG3	0x01a6
++#define MT6375_REG_ADC_CHEN	0x01a7
++#define MT6375_REG_ADC_CH1RPTH	0x01aa
++
++#define MT6375_ADCEN_MASK	BIT(7)
++#define MT6375_ZCVEN_MASK	BIT(6)
++#define MT6375_ONESHOT_MASK	GENMASK(7, 4)
++#define MT6375_ONESHOT_SHIFT	4
++#define MT6375_CHANNEL_OFFSET	1
++
++struct mt6375_adc {
++	struct device *dev;
++	struct regmap *regmap;
++	struct mutex lock;
++};
++
++static int mt6375_adc_read_channel(struct mt6375_adc *adc,
++				   unsigned int channel, int *value)
++{
++	unsigned int addr = MT6375_REG_ADC_MONRPTH;
++	unsigned int regval;
++	__be16 raw;
++	int ret;
++
++	mutex_lock(&adc->lock);
++	pm_stay_awake(adc->dev);
++
++	if (channel != MT6375_ADC_FGCIC1) {
++		ret = regmap_write(adc->regmap, MT6375_REG_ADC_CFG3,
++				   channel << MT6375_ONESHOT_SHIFT);
++		if (ret)
++			goto out;
++
++		usleep_range(4400, 6600);
++	}
++
++	ret = regmap_read_poll_timeout(adc->regmap, MT6375_REG_ADC_CFG3,
++				       regval,
++				       !(regval & MT6375_ONESHOT_MASK),
++				       100, 2000);
++	if (ret && ret != -ETIMEDOUT)
++		goto out;
++
++	if (channel != MT6375_ADC_VBATMON)
++		addr = MT6375_REG_ADC_CH1RPTH +
++		       (channel - MT6375_CHANNEL_OFFSET) * 2;
++
++	ret = regmap_raw_read(adc->regmap, addr, &raw, sizeof(raw));
++	if (!ret) {
++		*value = be16_to_cpu(raw);
++		ret = IIO_VAL_INT;
++	}
++
++out:
++	pm_relax(adc->dev);
++	mutex_unlock(&adc->lock);
++	return ret;
++}
++
++static int mt6375_adc_scale(unsigned int channel, int *value)
++{
++	switch (channel) {
++	case MT6375_ADC_VBATMON:
++	case MT6375_ADC_VSYS:
++	case MT6375_ADC_VBAT:
++	case MT6375_ADC_VREFTS:
++	case MT6375_ADC_TS:
++		*value = 1250;
++		break;
++	case MT6375_ADC_CHGVIN:
++		*value = 6250;
++		break;
++	case MT6375_ADC_PDVBUS:
++		*value = 25000;
++		break;
++	case MT6375_ADC_TEMPJC:
++	case MT6375_ADC_FGCIC1:
++		*value = 1;
++		break;
++	default:
++		*value = 2500;
++		break;
++	}
++
++	return IIO_VAL_INT;
++}
++
++static int mt6375_adc_read_raw(struct iio_dev *indio_dev,
++			       const struct iio_chan_spec *channel,
++			       int *value, int *value2, long mask)
++{
++	struct mt6375_adc *adc = iio_priv(indio_dev);
++
++	switch (mask) {
++	case IIO_CHAN_INFO_RAW:
++		return mt6375_adc_read_channel(adc, channel->channel, value);
++	case IIO_CHAN_INFO_SCALE:
++		return mt6375_adc_scale(channel->channel, value);
++	case IIO_CHAN_INFO_OFFSET:
++		*value = channel->channel == MT6375_ADC_TEMPJC ? -56 : 0;
++		return IIO_VAL_INT;
++	default:
++		return -EINVAL;
++	}
++}
++
++static const struct iio_info mt6375_adc_info = {
++	.read_raw = mt6375_adc_read_raw,
++};
++
++static int mt6375_adc_reset(struct mt6375_adc *adc)
++{
++	__be16 channels = 0;
++	int ret;
++
++	ret = regmap_update_bits(adc->regmap, MT6375_REG_ADC_CFG1,
++				 MT6375_ADCEN_MASK | MT6375_ZCVEN_MASK,
++				 MT6375_ADCEN_MASK);
++	if (ret)
++		return ret;
++
++	return regmap_raw_write(adc->regmap, MT6375_REG_ADC_CHEN,
++				&channels, sizeof(channels));
++}
++
++#define MT6375_CHANNEL(_name, _type) {				\
++	.type = _type,							\
++	.channel = MT6375_ADC_##_name,					\
++	.datasheet_name = #_name,					\
++	.indexed = 1,							\
++	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW) |		\
++			      BIT(IIO_CHAN_INFO_SCALE) |		\
++			      BIT(IIO_CHAN_INFO_OFFSET),			\
++}
++
++static const struct iio_chan_spec mt6375_adc_channels[] = {
++	MT6375_CHANNEL(VBATMON, IIO_VOLTAGE),
++	MT6375_CHANNEL(CHGVIN, IIO_VOLTAGE),
++	MT6375_CHANNEL(USBDP, IIO_VOLTAGE),
++	MT6375_CHANNEL(VSYS, IIO_VOLTAGE),
++	MT6375_CHANNEL(VBAT, IIO_VOLTAGE),
++	MT6375_CHANNEL(IBUS, IIO_CURRENT),
++	MT6375_CHANNEL(IBAT, IIO_CURRENT),
++	MT6375_CHANNEL(USBDM, IIO_VOLTAGE),
++	MT6375_CHANNEL(TEMPJC, IIO_TEMP),
++	MT6375_CHANNEL(VREFTS, IIO_VOLTAGE),
++	MT6375_CHANNEL(TS, IIO_VOLTAGE),
++	MT6375_CHANNEL(PDVBUS, IIO_VOLTAGE),
++	MT6375_CHANNEL(CC1, IIO_VOLTAGE),
++	MT6375_CHANNEL(CC2, IIO_VOLTAGE),
++	MT6375_CHANNEL(SBU1, IIO_VOLTAGE),
++	MT6375_CHANNEL(SBU2, IIO_VOLTAGE),
++	MT6375_CHANNEL(FGCIC1, IIO_CURRENT),
++};
++
++static int mt6375_adc_probe(struct platform_device *pdev)
++{
++	struct mt6375_adc *adc;
++	struct iio_dev *indio_dev;
++	int ret;
++
++	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*adc));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	adc = iio_priv(indio_dev);
++	adc->dev = &pdev->dev;
++	adc->regmap = dev_get_regmap(pdev->dev.parent, NULL);
++	if (!adc->regmap)
++		return -ENODEV;
++
++	mutex_init(&adc->lock);
++	device_init_wakeup(&pdev->dev, true);
++
++	ret = mt6375_adc_reset(adc);
++	if (ret)
++		return ret;
++
++	indio_dev->name = "mt6375-adc";
++	indio_dev->info = &mt6375_adc_info;
++	indio_dev->modes = INDIO_DIRECT_MODE;
++	indio_dev->channels = mt6375_adc_channels;
++	indio_dev->num_channels = ARRAY_SIZE(mt6375_adc_channels);
++
++	return devm_iio_device_register(&pdev->dev, indio_dev);
++}
++
++static const struct of_device_id mt6375_adc_of_match[] = {
++	{ .compatible = "mediatek,mt6375-adc" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6375_adc_of_match);
++
++static struct platform_driver mt6375_adc_driver = {
++	.probe = mt6375_adc_probe,
++	.driver = {
++		.name = "mt6375-adc",
++		.of_match_table = mt6375_adc_of_match,
++	},
++};
++module_platform_driver(mt6375_adc_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6375 direct ADC telemetry");
++MODULE_LICENSE("GPL");

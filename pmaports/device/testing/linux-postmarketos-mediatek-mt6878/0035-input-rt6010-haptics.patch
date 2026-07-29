@@ -1,0 +1,627 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: postmarketOS Porting <porting@localhost>
+Date: Sun, 26 Jul 2026 00:00:00 +0300
+Subject: [PATCH] input: add RT6010 haptics driver
+
+Add a small Linux input driver for the RT6010 LRA controller found in
+the Nothing Tetris.
+
+The Android vendor driver exposes a RichTap/miscdevice interface and
+loads haptic_config.bin at runtime. For postmarketOS we only need the
+standard FF_RUMBLE path, so keep the driver compact and embed the
+validated vendor init pieces: efuse trim, RAM/list/wave layout, boost,
+gain and the short LRA waveform.
+
+Signed-off-by: postmarketOS Porting <porting@localhost>
+---
+ drivers/input/misc/Kconfig  |  16 ++
+ drivers/input/misc/Makefile |   1 +
+ drivers/input/misc/rt6010.c | 560 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 577 insertions(+)
+ create mode 100644 drivers/input/misc/rt6010.c
+
+diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
+index 6c0a451f09f6..9fbe276869c1 100644
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -137,6 +137,22 @@ config INPUT_AW86927
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called aw86927.
+ 
++config INPUT_RT6010_HAPTICS
++	tristate "RT6010 haptics support"
++	depends on I2C
++	select INPUT_FF_MEMLESS
++	select REGMAP_I2C
++	help
++	  Say Y here to enable support for the RT6010 LRA haptic
++	  controller.
++
++	  The driver exposes a standard FF_RUMBLE input device and uses a
++	  compact native initialization sequence derived from the vendor
++	  Android driver.
++
++	  To compile this driver as a module, choose M here: the module will
++	  be called rt6010.
++
+ config INPUT_BBNSM_PWRKEY
+ 	tristate "NXP BBNSM Power Key Driver"
+ 	depends on ARCH_MXC || COMPILE_TEST
+diff --git a/drivers/input/misc/Makefile b/drivers/input/misc/Makefile
+index 5f8b8b2fdd2e..f86602e4c70a 100644
+--- a/drivers/input/misc/Makefile
++++ b/drivers/input/misc/Makefile
+@@ -73,6 +73,7 @@ obj-$(CONFIG_INPUT_RAVE_SP_PWRBUTTON)	+= rave-sp-pwrbutton.o
+ obj-$(CONFIG_INPUT_RB532_BUTTON)	+= rb532_button.o
+ obj-$(CONFIG_INPUT_REGULATOR_HAPTIC)	+= regulator-haptic.o
+ obj-$(CONFIG_INPUT_RETU_PWRBUTTON)	+= retu-pwrbutton.o
++obj-$(CONFIG_INPUT_RT6010_HAPTICS)	+= rt6010.o
+ obj-$(CONFIG_INPUT_RT5120_PWRKEY)	+= rt5120-pwrkey.o
+ obj-$(CONFIG_INPUT_AXP20X_PEK)		+= axp20x-pek.o
+ obj-$(CONFIG_INPUT_GPIO_ROTARY_ENCODER)	+= rotary_encoder.o
+diff --git a/drivers/input/misc/rt6010.c b/drivers/input/misc/rt6010.c
+new file mode 100644
+index 000000000000..e0a625a1ef2d
+--- /dev/null
++++ b/drivers/input/misc/rt6010.c
+@@ -0,0 +1,560 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * RT6010 LRA haptic controller.
++ *
++ * This is a compact FF_RUMBLE frontend based on the vendor RT6010
++ * initialization sequence used by Nothing Tetris.
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/regmap.h>
++#include <linux/workqueue.h>
++
++#define RT6010_REG_DEV_ID		0x00
++#define RT6010_REG_REV_ID		0x01
++#define RT6010_REG_SOFT_RESET		0x02
++#define RT6010_REG_INT_STATUS		0x05
++#define RT6010_REG_RAM_CFG		0x07
++#define RT6010_REG_RAM_ADDR_L		0x08
++#define RT6010_REG_RAM_ADDR_H		0x09
++#define RT6010_REG_RAM_DATA		0x0a
++#define RT6010_REG_FIFO_AE_L		0x0c
++#define RT6010_REG_FIFO_AE_H		0x0d
++#define RT6010_REG_FIFO_AF_L		0x0e
++#define RT6010_REG_FIFO_AF_H		0x0f
++#define RT6010_REG_PLAY_MODE		0x11
++#define RT6010_REG_PLAY_CTRL		0x12
++#define RT6010_REG_WAVE_BASE_ADDR_L	0x1c
++#define RT6010_REG_WAVE_BASE_ADDR_H	0x1d
++#define RT6010_REG_LIST_BASE_ADDR_L	0x1e
++#define RT6010_REG_LIST_BASE_ADDR_H	0x1f
++#define RT6010_REG_GAIN_CFG		0x20
++#define RT6010_REG_MODULE_EN		0x24
++#define RT6010_REG_PROTECTION_STATUS1	0x26
++#define RT6010_REG_PROTECTION_STATUS2	0x27
++#define RT6010_REG_PROTECTION_MASK1	0x28
++#define RT6010_REG_PROTECTION_MASK2	0x29
++#define RT6010_REG_MANUAL		0x2b
++#define RT6010_REG_ERROR_CODE		0x2c
++#define RT6010_REG_LRA_F0_CFG1		0x2d
++#define RT6010_REG_LRA_F0_CFG2		0x2e
++#define RT6010_REG_BRAKE_CFG1		0x3a
++#define RT6010_REG_BEMF_CFG1		0x50
++#define RT6010_REG_BEMF_CFG2		0x51
++#define RT6010_REG_BOOST_CFG1		0x55
++#define RT6010_REG_BOOST_CFG2		0x56
++#define RT6010_REG_BOOST_CFG3		0x57
++#define RT6010_REG_BOOST_CFG4		0x58
++#define RT6010_REG_BOOST_CFG5		0x59
++#define RT6010_REG_PA_CFG1		0x5a
++#define RT6010_REG_PA_CFG2		0x5b
++#define RT6010_REG_PMU_CFG2		0x5d
++#define RT6010_REG_PMU_CFG3		0x5e
++#define RT6010_REG_PMU_CFG4		0x5f
++#define RT6010_REG_OSC_CFG1		0x60
++#define RT6010_REG_EFS_RD_DATA		0x67
++#define RT6010_REG_EFS_ADDR_INDEX	0x68
++#define RT6010_REG_EFS_MODE_CTRL	0x69
++
++#define RT6010_DEVICE_ID		0x6b
++#define RT6010_MAX_REGISTER		0xff
++#define RT6010_MAX_RAM_SIZE		1536
++#define RT6010_ENABLE_DELAY_US		2000
++#define RT6010_EFS_RETRIES		3
++#define RT6010_EFS_BYTES		4
++#define RT6010_PLAY_MODE_RAM		0x01
++#define RT6010_GO_START			0x01
++#define RT6010_GO_STOP			0x00
++
++#define RT6010_EFS_BIAS_1P2V_TRIM_OFFSET	0
++#define RT6010_EFS_BIAS_I_TRIM_OFFSET		4
++#define RT6010_EFS_PMU_LDO_TRIM_OFFSET		8
++#define RT6010_EFS_OSC_LDO_TRIM_OFFSET		9
++#define RT6010_EFS_OSC_TRIM_OFFSET		10
++#define RT6010_EFS_VERSION_OFFSET		30
++#define RT6010_EFS_BIAS_1P2V_TRIM_MASK		0x0000000f
++#define RT6010_EFS_BIAS_I_TRIM_MASK		0x000000f0
++#define RT6010_EFS_PMU_LDO_TRIM_MASK		0x00000100
++#define RT6010_EFS_OSC_LDO_TRIM_MASK		0x00000200
++#define RT6010_EFS_OSC_TRIM_MASK		0x0003fc00
++#define RT6010_EFS_VERSION_MASK			0xc0000000
++
++#define RT6010_LIST_BASE_ADDR		0x0000
++#define RT6010_WAVE_BASE_ADDR		0x0100
++#define RT6010_FIFO_AE			0x0080
++#define RT6010_FIFO_AF			0x00c0
++#define RT6010_PRE_F0			817
++#define RT6010_DEFAULT_GAIN		0x7f
++#define RT6010_DEFAULT_BOOST		0x0a
++
++static const u8 rt6010_waveform[] = {
++	0x00, 0x1f, 0x3c, 0x56, 0x6b, 0x79, 0x7f, 0x7f,
++	0x76, 0x66, 0x51, 0x36, 0x18, 0xf9, 0xda, 0xbd,
++	0xa5, 0x91, 0x85, 0x80, 0x83, 0x8d, 0x9e, 0xb5,
++	0xd1, 0xef, 0x0f, 0x2d, 0x49, 0x60, 0x72, 0x7d,
++	0x7f, 0x7b, 0x70, 0x5d, 0x45, 0x28, 0x09, 0xea,
++	0xcc, 0xb1, 0x9b, 0x8b, 0x82, 0x80, 0x87, 0x94,
++	0xa8, 0xc2, 0xdf, 0xfe, 0x1d, 0x3b, 0x55, 0x69,
++	0x78, 0x7f, 0x7f, 0x77, 0x68, 0x52, 0x38, 0x1a,
++	0xfb, 0xdc, 0xbf, 0xa6, 0x93, 0x86, 0x80, 0x82,
++	0x8c, 0x9d, 0xb4, 0xcf, 0xed, 0x0d, 0x2b, 0x47,
++	0x5f, 0x71, 0x7c, 0x7f, 0x7c, 0x70, 0x5e, 0x46,
++	0x2a, 0x0b, 0xec, 0xce, 0xb3, 0x9c, 0x8c, 0x82,
++	0x80, 0x86, 0x93, 0xa7, 0xc0, 0xdd, 0xfc, 0x1b,
++	0x39, 0x53, 0x68, 0x77, 0x7f, 0x7f, 0x77, 0x69,
++	0x54, 0x3a, 0x1c, 0xfd, 0xde, 0xc1, 0xa7, 0x94,
++	0x86, 0x80, 0x82, 0x8b, 0x9c, 0xb2, 0xcd, 0xeb,
++};
++
++struct rt6010 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct gpio_desc *enable_gpio;
++	struct input_dev *input;
++	struct mutex lock;
++	struct delayed_work stop_work;
++	u32 efs_data;
++	u8 efs_ver;
++	u8 revision;
++	bool initialized;
++};
++
++static const struct regmap_config rt6010_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = RT6010_MAX_REGISTER,
++	.cache_type = REGCACHE_NONE,
++};
++
++static int rt6010_write8(struct rt6010 *rt, unsigned int reg, unsigned int val)
++{
++	return regmap_write(rt->regmap, reg, val & 0xff);
++}
++
++static int rt6010_write16_regs(struct rt6010 *rt, unsigned int high_reg,
++			       unsigned int low_reg, u16 val)
++{
++	int error;
++
++	error = rt6010_write8(rt, high_reg, val >> 8);
++	if (error)
++		return error;
++
++	return rt6010_write8(rt, low_reg, val);
++}
++
++static int rt6010_efuse_read(struct rt6010 *rt, u8 index, u8 *data)
++{
++	unsigned int val;
++	int error;
++	int tries;
++
++	error = rt6010_write8(rt, RT6010_REG_EFS_ADDR_INDEX, index);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_EFS_MODE_CTRL, BIT(1));
++	if (error)
++		return error;
++
++	for (tries = 0; tries < RT6010_EFS_RETRIES; tries++) {
++		usleep_range(10, 20);
++
++		error = regmap_read(rt->regmap, RT6010_REG_EFS_MODE_CTRL, &val);
++		if (error)
++			return error;
++
++		if (!(val & BIT(1))) {
++			error = regmap_read(rt->regmap, RT6010_REG_EFS_RD_DATA,
++					    &val);
++			if (error)
++				return error;
++
++			*data = val;
++			return 0;
++		}
++	}
++
++	return -ETIMEDOUT;
++}
++
++static int rt6010_apply_trim(struct rt6010 *rt)
++{
++	u8 *efs = (u8 *)&rt->efs_data;
++	u8 trim;
++	unsigned int val;
++	int error;
++	int i;
++
++	error = rt6010_write8(rt, RT6010_REG_SOFT_RESET, 0x01);
++	if (error)
++		return error;
++
++	usleep_range(1000, 2000);
++
++	for (i = 0; i < RT6010_EFS_BYTES; i++) {
++		error = rt6010_efuse_read(rt, i, &efs[i]);
++		if (error)
++			return error;
++	}
++
++	rt->efs_ver = (rt->efs_data & RT6010_EFS_VERSION_MASK) >>
++		      RT6010_EFS_VERSION_OFFSET;
++
++	error = regmap_read(rt->regmap, RT6010_REG_PMU_CFG3, &val);
++	if (error)
++		return error;
++
++	val &= 0x4f;
++	trim = (rt->efs_data & RT6010_EFS_OSC_LDO_TRIM_MASK) >>
++	       RT6010_EFS_OSC_LDO_TRIM_OFFSET;
++	val |= trim << 7;
++	trim = (rt->efs_data & RT6010_EFS_PMU_LDO_TRIM_MASK) >>
++	       RT6010_EFS_PMU_LDO_TRIM_OFFSET;
++	val |= trim << 4;
++
++	error = rt6010_write8(rt, RT6010_REG_PMU_CFG3, val);
++	if (error)
++		return error;
++
++	trim = (rt->efs_data & RT6010_EFS_BIAS_1P2V_TRIM_MASK) >>
++	       RT6010_EFS_BIAS_1P2V_TRIM_OFFSET;
++	val = trim << 4;
++	trim = (rt->efs_data & RT6010_EFS_BIAS_I_TRIM_MASK) >>
++	       RT6010_EFS_BIAS_I_TRIM_OFFSET;
++	val |= trim;
++
++	error = rt6010_write8(rt, RT6010_REG_PMU_CFG4, val);
++	if (error)
++		return error;
++
++	trim = (rt->efs_data & RT6010_EFS_OSC_TRIM_MASK) >>
++	       RT6010_EFS_OSC_TRIM_OFFSET;
++	error = rt6010_write8(rt, RT6010_REG_OSC_CFG1, trim ^ 0x80);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_BEMF_CFG2, 0x03);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_BEMF_CFG2, 0x01);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_BOOST_CFG1, 0x01);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_BOOST_CFG2, 0x05);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_BOOST_CFG3, RT6010_DEFAULT_BOOST);
++	if (error)
++		return error;
++
++	if (rt->efs_ver == 0x01) {
++		error = rt6010_write8(rt, 0x2a, 0x0f);
++		if (error)
++			return error;
++		error = rt6010_write8(rt, RT6010_REG_BEMF_CFG1, 0x00);
++		if (error)
++			return error;
++		error = rt6010_write8(rt, RT6010_REG_BOOST_CFG4, 0x50);
++		if (error)
++			return error;
++	} else {
++		error = rt6010_write8(rt, 0x2a, 0x0b);
++		if (error)
++			return error;
++		error = rt6010_write8(rt, RT6010_REG_BEMF_CFG1, 0x06);
++		if (error)
++			return error;
++		error = rt6010_write8(rt, RT6010_REG_BOOST_CFG4, 0x58);
++		if (error)
++			return error;
++	}
++
++	error = rt6010_write8(rt, RT6010_REG_BOOST_CFG5, 0x1c);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_PA_CFG1, 0x2c);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_PA_CFG2, 0x03);
++	if (error)
++		return error;
++
++	return rt6010_write8(rt, RT6010_REG_PMU_CFG2, 0x1c);
++}
++
++static int rt6010_write_ram(struct rt6010 *rt, u16 addr, const u8 *data,
++			    size_t len)
++{
++	int error;
++
++	if (addr + len > RT6010_MAX_RAM_SIZE)
++		return -EINVAL;
++
++	error = rt6010_write16_regs(rt, RT6010_REG_RAM_ADDR_H,
++				    RT6010_REG_RAM_ADDR_L, addr);
++	if (error)
++		return error;
++
++	return regmap_raw_write(rt->regmap, RT6010_REG_RAM_DATA, data, len);
++}
++
++static int rt6010_init_chip(struct rt6010 *rt)
++{
++	unsigned int chip_id;
++	int error;
++
++	error = regmap_read(rt->regmap, RT6010_REG_DEV_ID, &chip_id);
++	if (error)
++		return error;
++
++	if (chip_id != RT6010_DEVICE_ID)
++		return dev_err_probe(rt->dev, -ENODEV,
++				     "unexpected device ID %#x\n", chip_id);
++
++	error = regmap_read(rt->regmap, RT6010_REG_REV_ID, &chip_id);
++	if (error)
++		return error;
++	rt->revision = chip_id;
++
++	error = rt6010_apply_trim(rt);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_RAM_CFG, 0x08);
++	if (error)
++		return error;
++
++	error = rt6010_write16_regs(rt, RT6010_REG_LIST_BASE_ADDR_H,
++				    RT6010_REG_LIST_BASE_ADDR_L,
++				    RT6010_LIST_BASE_ADDR);
++	if (error)
++		return error;
++	error = rt6010_write16_regs(rt, RT6010_REG_WAVE_BASE_ADDR_H,
++				    RT6010_REG_WAVE_BASE_ADDR_L,
++				    RT6010_WAVE_BASE_ADDR);
++	if (error)
++		return error;
++	error = rt6010_write16_regs(rt, RT6010_REG_FIFO_AE_H,
++				    RT6010_REG_FIFO_AE_L, RT6010_FIFO_AE);
++	if (error)
++		return error;
++	error = rt6010_write16_regs(rt, RT6010_REG_FIFO_AF_H,
++				    RT6010_REG_FIFO_AF_L, RT6010_FIFO_AF);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_GAIN_CFG, RT6010_DEFAULT_GAIN);
++	if (error)
++		return error;
++	error = rt6010_write16_regs(rt, RT6010_REG_LRA_F0_CFG2,
++				    RT6010_REG_LRA_F0_CFG1, RT6010_PRE_F0);
++	if (error)
++		return error;
++
++	error = rt6010_write_ram(rt, RT6010_WAVE_BASE_ADDR, rt6010_waveform,
++				 sizeof(rt6010_waveform));
++	if (error)
++		return error;
++
++	rt->initialized = true;
++	return 0;
++}
++
++static int rt6010_stop_locked(struct rt6010 *rt)
++{
++	int error;
++
++	error = rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_STOP);
++	if (error)
++		return error;
++
++	regmap_read(rt->regmap, RT6010_REG_INT_STATUS, &error);
++	regmap_write(rt->regmap, RT6010_REG_PROTECTION_MASK1, 0);
++	regmap_write(rt->regmap, RT6010_REG_PROTECTION_MASK2, 0);
++	regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS1, &error);
++	regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS2, &error);
++	regmap_read(rt->regmap, RT6010_REG_ERROR_CODE, &error);
++
++	return 0;
++}
++
++static void rt6010_stop_work(struct work_struct *work)
++{
++	struct rt6010 *rt = container_of(to_delayed_work(work), struct rt6010,
++					stop_work);
++
++	mutex_lock(&rt->lock);
++	rt6010_stop_locked(rt);
++	mutex_unlock(&rt->lock);
++}
++
++static int rt6010_start_locked(struct rt6010 *rt, u16 strong, u16 weak)
++{
++	u8 gain;
++	u8 playlist[6] = { 0x01, 0x00, 0x7f, 0x00, 0x00, 0x00 };
++	u32 level = max(strong, weak);
++	int error;
++
++	if (!rt->initialized)
++		return -ENODEV;
++
++	gain = clamp_t(u32, level >> 8, 0x20, 0x7f);
++	playlist[2] = gain;
++
++	error = rt6010_stop_locked(rt);
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_GAIN_CFG, gain);
++	if (error)
++		return error;
++	error = rt6010_write_ram(rt, RT6010_LIST_BASE_ADDR, playlist,
++				 sizeof(playlist));
++	if (error)
++		return error;
++	error = rt6010_write8(rt, RT6010_REG_PLAY_MODE, RT6010_PLAY_MODE_RAM);
++	if (error)
++		return error;
++
++	return rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_START);
++}
++
++static int rt6010_play_effect(struct input_dev *input, void *data,
++			      struct ff_effect *effect)
++{
++	struct rt6010 *rt = data;
++	u16 strong = effect->u.rumble.strong_magnitude;
++	u16 weak = effect->u.rumble.weak_magnitude;
++	unsigned int duration = effect->replay.length;
++	int error = 0;
++
++	cancel_delayed_work_sync(&rt->stop_work);
++
++	mutex_lock(&rt->lock);
++	if (!strong && !weak) {
++		error = rt6010_stop_locked(rt);
++		goto out_unlock;
++	}
++
++	error = rt6010_start_locked(rt, strong, weak);
++	if (!error) {
++		if (!duration)
++			duration = 40;
++		duration = clamp(duration, 10U, 500U);
++		schedule_delayed_work(&rt->stop_work, msecs_to_jiffies(duration));
++	}
++
++out_unlock:
++	mutex_unlock(&rt->lock);
++	return error;
++}
++
++static void rt6010_disable(void *data)
++{
++	struct rt6010 *rt = data;
++
++	cancel_delayed_work_sync(&rt->stop_work);
++	mutex_lock(&rt->lock);
++	rt6010_stop_locked(rt);
++	mutex_unlock(&rt->lock);
++	gpiod_set_value_cansleep(rt->enable_gpio, 0);
++}
++
++static int rt6010_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct rt6010 *rt;
++	int error;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
++		return dev_err_probe(dev, -EOPNOTSUPP,
++				     "byte register access is unavailable\n");
++
++	rt = devm_kzalloc(dev, sizeof(*rt), GFP_KERNEL);
++	if (!rt)
++		return -ENOMEM;
++
++	rt->dev = dev;
++	mutex_init(&rt->lock);
++	INIT_DELAYED_WORK(&rt->stop_work, rt6010_stop_work);
++	i2c_set_clientdata(client, rt);
++
++	rt->enable_gpio = devm_gpiod_get(dev, "enable", GPIOD_OUT_LOW);
++	if (IS_ERR(rt->enable_gpio))
++		return dev_err_probe(dev, PTR_ERR(rt->enable_gpio),
++				     "failed to acquire enable GPIO\n");
++
++	rt->regmap = devm_regmap_init_i2c(client, &rt6010_regmap_config);
++	if (IS_ERR(rt->regmap))
++		return dev_err_probe(dev, PTR_ERR(rt->regmap),
++				     "failed to initialize regmap\n");
++
++	gpiod_set_value_cansleep(rt->enable_gpio, 1);
++	usleep_range(RT6010_ENABLE_DELAY_US, RT6010_ENABLE_DELAY_US + 1000);
++
++	error = devm_add_action_or_reset(dev, rt6010_disable, rt);
++	if (error)
++		return error;
++
++	error = rt6010_init_chip(rt);
++	if (error)
++		return dev_err_probe(dev, error, "failed to initialize RT6010\n");
++
++	rt->input = devm_input_allocate_device(dev);
++	if (!rt->input)
++		return -ENOMEM;
++
++	rt->input->name = "RT6010 haptics";
++	rt->input->id.bustype = BUS_I2C;
++	input_set_capability(rt->input, EV_FF, FF_RUMBLE);
++
++	error = input_ff_create_memless(rt->input, rt, rt6010_play_effect);
++	if (error)
++		return dev_err_probe(dev, error,
++				     "failed to create FF_RUMBLE frontend\n");
++
++	error = input_register_device(rt->input);
++	if (error)
++		return dev_err_probe(dev, error,
++				     "failed to register input device\n");
++
++	dev_info(dev, "RT6010 revision %#02x initialized for FF_RUMBLE\n",
++		 rt->revision);
++
++	return 0;
++}
++
++static const struct of_device_id rt6010_of_match[] = {
++	{ .compatible = "richtek,rt6010" },
++	{ .compatible = "ics,haptic-rt6010" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, rt6010_of_match);
++
++static const struct i2c_device_id rt6010_i2c_id[] = {
++	{ "rt6010" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, rt6010_i2c_id);
++
++static struct i2c_driver rt6010_driver = {
++	.driver = {
++		.name = "rt6010-haptics",
++		.of_match_table = rt6010_of_match,
++	},
++	.probe = rt6010_probe,
++	.id_table = rt6010_i2c_id,
++};
++module_i2c_driver(rt6010_driver);
++
++MODULE_DESCRIPTION("RT6010 haptics driver");
++MODULE_AUTHOR("postmarketOS Porting <porting@localhost>");
++MODULE_LICENSE("GPL");

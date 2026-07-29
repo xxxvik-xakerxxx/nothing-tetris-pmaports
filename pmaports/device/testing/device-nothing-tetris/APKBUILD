@@ -1,0 +1,54 @@
+maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
+pkgname=device-nothing-tetris
+pkgdesc="Nothing CMF Phone 1"
+pkgver=5
+pkgrel=7
+url="https://postmarketos.org"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck"
+depends="
+	dtc
+	linux-postmarketos-mediatek-mt6878
+	postmarketos-base
+	u-boot-tools
+"
+makedepends="devicepkg-dev"
+source="
+	boot_image.its
+	deviceinfo
+	greetd-tetris-display.conf
+	phoc.ini
+	phrog-greetd-config.toml
+	tetris-phrog-greetd-session
+"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+
+	install -Dm644 "$srcdir"/greetd-tetris-display.conf \
+		"$pkgdir"/etc/systemd/system/greetd.service.d/override.conf
+	install -Dm644 "$srcdir"/phoc.ini \
+		"$pkgdir"/etc/phosh/phoc.ini
+	install -Dm644 "$srcdir"/phoc.ini \
+		"$pkgdir"/etc/phrog/phoc.ini
+	install -Dm644 "$srcdir"/phrog-greetd-config.toml \
+		"$pkgdir"/etc/phrog/tetris-greetd-config.toml
+	install -Dm755 "$srcdir"/tetris-phrog-greetd-session \
+		"$pkgdir"/usr/libexec/tetris-phrog-greetd-session
+	install -Dm644 "$srcdir"/boot_image.its \
+		"$pkgdir"/usr/share/u-boot/nothing-tetris/boot_image.its
+}
+
+sha512sums="
+06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
+a9a1daae5ca2cd328b65540213f4bbb581f8119df71b8e2b51d69301343a793c770a2e7750a68456d1829f8e6cd3364d683087bc773dd549c6d407b56dc19ceb  deviceinfo
+0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
+291488cf24bb4ecc515d5c44907f5899bf818bb148b4729da2257b5deadf113c65e3d2f228c730f1ce79250de94dd217b7da5d69abe71be5e707f966f4a80c2a  phoc.ini
+56a1000f12f4b2d61f1bbe08554a1707f6c75eea0603301aef084ebe8271d1ae42a76f1cf9e67bb5e47dee880f3a43ac4041bfafc4eab76f33718107a6b56085  phrog-greetd-config.toml
+27cbf6e7f0862098bcf0a614a5c97878e9452e682e494a5ff256ae5cd98a0bfa587b8803ef2019fea15e9b9a4f3ee47de78de5b93cb3d3080f8704e2089f6faa  tetris-phrog-greetd-session
+"

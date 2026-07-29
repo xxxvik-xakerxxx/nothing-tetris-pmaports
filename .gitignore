@@ -1,0 +1,12 @@
+# Local build outputs and captured artifacts.
+/artifacts/
+/local/
+/rescue/
+/build/
+/tools/
+
+# Large upstream source mirrors. The maintained pmaports overlay lives in
+# top-level pmaports/.
+/upstream/*
+
+.DS_Store

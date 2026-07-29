@@ -1,0 +1,336 @@
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -146,6 +146,12 @@
+ 			compatible = "mediatek,mt6375-adc";
+ 			#io-channel-cells = <1>;
+ 		};
++
++		battery-monitor {
++			compatible = "mediatek,mt6375-battery-monitor";
++			io-channels = <&mt6375_adc 4>, <&mt6375_adc 1>;
++			io-channel-names = "battery-voltage", "usb-voltage";
++		};
+ 	};
+ };
+ 
+--- a/drivers/iio/adc/mt6375-adc.c
++++ b/drivers/iio/adc/mt6375-adc.c
+@@ -73,7 +73,7 @@
+ 	return ret;
+ }
+ 
+-static int mt6375_adc_scale(unsigned int channel, int *value)
++static int mt6375_adc_scale(unsigned int channel, int *value, int *value2)
+ {
+ 	switch (channel) {
+ 	case MT6375_ADC_VBATMON:
+@@ -81,24 +81,25 @@
+ 	case MT6375_ADC_VBAT:
+ 	case MT6375_ADC_VREFTS:
+ 	case MT6375_ADC_TS:
+-		*value = 1250;
+-		break;
++		*value = 1;
++		*value2 = 250000;
++		return IIO_VAL_INT_PLUS_MICRO;
+ 	case MT6375_ADC_CHGVIN:
+-		*value = 6250;
+-		break;
++		*value = 6;
++		*value2 = 250000;
++		return IIO_VAL_INT_PLUS_MICRO;
+ 	case MT6375_ADC_PDVBUS:
+-		*value = 25000;
+-		break;
++		*value = 25;
++		return IIO_VAL_INT;
+ 	case MT6375_ADC_TEMPJC:
+ 	case MT6375_ADC_FGCIC1:
+ 		*value = 1;
+-		break;
++		return IIO_VAL_INT;
+ 	default:
+-		*value = 2500;
+-		break;
++		*value = 2;
++		*value2 = 500000;
++		return IIO_VAL_INT_PLUS_MICRO;
+ 	}
+-
+-	return IIO_VAL_INT;
+ }
+ 
+ static int mt6375_adc_read_raw(struct iio_dev *indio_dev,
+@@ -111,7 +112,7 @@
+ 	case IIO_CHAN_INFO_RAW:
+ 		return mt6375_adc_read_channel(adc, channel->channel, value);
+ 	case IIO_CHAN_INFO_SCALE:
+-		return mt6375_adc_scale(channel->channel, value);
++		return mt6375_adc_scale(channel->channel, value, value2);
+ 	case IIO_CHAN_INFO_OFFSET:
+ 		*value = channel->channel == MT6375_ADC_TEMPJC ? -56 : 0;
+ 		return IIO_VAL_INT;
+--- a/drivers/power/supply/Kconfig
++++ b/drivers/power/supply/Kconfig
+@@ -1097,4 +1097,12 @@
+ 	  the state of charge, temperature, cycle count, actual and design
+ 	  capacity, etc.
+ 
++config BATTERY_MT6375_MONITOR
++	tristate "MediaTek MT6375 read-only battery monitor"
++	depends on IIO
++	help
++	  Register read-only battery and USB power supplies using MT6375
++	  IIO voltage channels. This driver does not configure charging,
++	  Type-C roles, current limits or the fuel gauge.
++
+ endif # POWER_SUPPLY
+--- a/drivers/power/supply/Makefile
++++ b/drivers/power/supply/Makefile
+@@ -125,3 +125,4 @@
+ obj-$(CONFIG_BATTERY_UG3105)	+= ug3105_battery.o
+ obj-$(CONFIG_CHARGER_QCOM_SMB2)	+= qcom_smbx.o
+ obj-$(CONFIG_FUEL_GAUGE_MM8013)	+= mm8013.o
++obj-$(CONFIG_BATTERY_MT6375_MONITOR)	+= mt6375-monitor.o
+--- /dev/null
++++ b/drivers/power/supply/mt6375-monitor.c
+@@ -0,0 +1,239 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Read-only power-supply telemetry for the MediaTek MT6375.
++ */
++
++#include <linux/bits.h>
++#include <linux/iio/consumer.h>
++#include <linux/minmax.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/power_supply.h>
++
++#define MT6375_USB_ONLINE_MV	4000
++#define MT6375_BATTERY_EMPTY_UV	3300000
++#define MT6375_BATTERY_FULL_UV	4350000
++
++struct mt6375_monitor {
++	struct iio_channel *battery_voltage;
++	struct iio_channel *usb_voltage;
++	struct power_supply *battery;
++	struct power_supply *usb;
++};
++
++static enum power_supply_property mt6375_battery_properties[] = {
++	POWER_SUPPLY_PROP_STATUS,
++	POWER_SUPPLY_PROP_HEALTH,
++	POWER_SUPPLY_PROP_PRESENT,
++	POWER_SUPPLY_PROP_TECHNOLOGY,
++	POWER_SUPPLY_PROP_VOLTAGE_NOW,
++	POWER_SUPPLY_PROP_CAPACITY,
++	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
++	POWER_SUPPLY_PROP_MODEL_NAME,
++};
++
++static enum power_supply_property mt6375_usb_properties[] = {
++	POWER_SUPPLY_PROP_ONLINE,
++	POWER_SUPPLY_PROP_VOLTAGE_NOW,
++	POWER_SUPPLY_PROP_USB_TYPE,
++};
++
++static int mt6375_read_voltage_uv(struct iio_channel *channel, int *voltage)
++{
++	int ret;
++
++	ret = iio_read_channel_processed(channel, voltage);
++	if (ret)
++		return ret;
++
++	/* IIO voltage channels return millivolts to in-kernel consumers. */
++	*voltage *= 1000;
++	return 0;
++}
++
++static int mt6375_usb_online(struct mt6375_monitor *monitor, bool *online)
++{
++	int voltage;
++	int ret;
++
++	ret = mt6375_read_voltage_uv(monitor->usb_voltage, &voltage);
++	if (ret)
++		return ret;
++
++	*online = voltage >= MT6375_USB_ONLINE_MV * 1000;
++	return 0;
++}
++
++static int mt6375_capacity_from_voltage(int voltage_uv)
++{
++	int capacity;
++
++	if (voltage_uv <= MT6375_BATTERY_EMPTY_UV)
++		return 0;
++	if (voltage_uv >= MT6375_BATTERY_FULL_UV)
++		return 100;
++
++	capacity = (voltage_uv - MT6375_BATTERY_EMPTY_UV) * 100 /
++		   (MT6375_BATTERY_FULL_UV - MT6375_BATTERY_EMPTY_UV);
++
++	return clamp(capacity, 0, 100);
++}
++
++static int mt6375_battery_get_property(struct power_supply *psy,
++				       enum power_supply_property property,
++				       union power_supply_propval *value)
++{
++	struct mt6375_monitor *monitor = power_supply_get_drvdata(psy);
++	bool online;
++	int voltage;
++	int ret;
++
++	switch (property) {
++	case POWER_SUPPLY_PROP_STATUS:
++		ret = mt6375_usb_online(monitor, &online);
++		if (ret)
++			return ret;
++		value->intval = online ? POWER_SUPPLY_STATUS_CHARGING :
++					 POWER_SUPPLY_STATUS_DISCHARGING;
++		return 0;
++	case POWER_SUPPLY_PROP_HEALTH:
++		value->intval = POWER_SUPPLY_HEALTH_GOOD;
++		return 0;
++	case POWER_SUPPLY_PROP_PRESENT:
++		value->intval = 1;
++		return 0;
++	case POWER_SUPPLY_PROP_TECHNOLOGY:
++		value->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
++		return 0;
++	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
++		return mt6375_read_voltage_uv(monitor->battery_voltage,
++					      &value->intval);
++	case POWER_SUPPLY_PROP_CAPACITY:
++		ret = mt6375_read_voltage_uv(monitor->battery_voltage, &voltage);
++		if (ret)
++			return ret;
++		value->intval = mt6375_capacity_from_voltage(voltage);
++		return 0;
++	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
++		ret = mt6375_read_voltage_uv(monitor->battery_voltage, &voltage);
++		if (ret)
++			return ret;
++		if (voltage <= 3400000)
++			value->intval = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
++		else if (voltage <= 3600000)
++			value->intval = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
++		else if (voltage >= MT6375_BATTERY_FULL_UV)
++			value->intval = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
++		else
++			value->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
++		return 0;
++	case POWER_SUPPLY_PROP_MODEL_NAME:
++		value->strval = "CMF Phone 1 battery";
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int mt6375_usb_get_property(struct power_supply *psy,
++				   enum power_supply_property property,
++				   union power_supply_propval *value)
++{
++	struct mt6375_monitor *monitor = power_supply_get_drvdata(psy);
++	int voltage;
++	int ret;
++
++	ret = mt6375_read_voltage_uv(monitor->usb_voltage, &voltage);
++	if (ret)
++		return ret;
++
++	switch (property) {
++	case POWER_SUPPLY_PROP_ONLINE:
++		value->intval = voltage >= MT6375_USB_ONLINE_MV * 1000;
++		return 0;
++	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
++		value->intval = voltage;
++		return 0;
++	case POWER_SUPPLY_PROP_USB_TYPE:
++		value->intval = voltage >= MT6375_USB_ONLINE_MV * 1000 ?
++			POWER_SUPPLY_USB_TYPE_SDP : POWER_SUPPLY_USB_TYPE_UNKNOWN;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static const struct power_supply_desc mt6375_battery_desc = {
++	.name = "tetris-battery",
++	.type = POWER_SUPPLY_TYPE_BATTERY,
++	.properties = mt6375_battery_properties,
++	.num_properties = ARRAY_SIZE(mt6375_battery_properties),
++	.get_property = mt6375_battery_get_property,
++};
++
++static const struct power_supply_desc mt6375_usb_desc = {
++	.name = "mt6375-usb",
++	.type = POWER_SUPPLY_TYPE_USB,
++	.properties = mt6375_usb_properties,
++	.num_properties = ARRAY_SIZE(mt6375_usb_properties),
++	.usb_types = BIT(POWER_SUPPLY_USB_TYPE_UNKNOWN) |
++		     BIT(POWER_SUPPLY_USB_TYPE_SDP),
++	.get_property = mt6375_usb_get_property,
++};
++
++static int mt6375_monitor_probe(struct platform_device *pdev)
++{
++	struct power_supply_config config = {};
++	struct mt6375_monitor *monitor;
++
++	monitor = devm_kzalloc(&pdev->dev, sizeof(*monitor), GFP_KERNEL);
++	if (!monitor)
++		return -ENOMEM;
++
++	monitor->battery_voltage =
++		devm_iio_channel_get(&pdev->dev, "battery-voltage");
++	if (IS_ERR(monitor->battery_voltage))
++		return dev_err_probe(&pdev->dev,
++				     PTR_ERR(monitor->battery_voltage),
++				     "failed to get battery voltage\n");
++
++	monitor->usb_voltage = devm_iio_channel_get(&pdev->dev, "usb-voltage");
++	if (IS_ERR(monitor->usb_voltage))
++		return dev_err_probe(&pdev->dev, PTR_ERR(monitor->usb_voltage),
++				     "failed to get USB voltage\n");
++
++	config.drv_data = monitor;
++	monitor->battery = devm_power_supply_register(&pdev->dev,
++						      &mt6375_battery_desc,
++						      &config);
++	if (IS_ERR(monitor->battery))
++		return dev_err_probe(&pdev->dev, PTR_ERR(monitor->battery),
++				     "failed to register battery\n");
++
++	monitor->usb = devm_power_supply_register(&pdev->dev,
++						  &mt6375_usb_desc, &config);
++	if (IS_ERR(monitor->usb))
++		return dev_err_probe(&pdev->dev, PTR_ERR(monitor->usb),
++				     "failed to register USB supply\n");
++
++	return 0;
++}
++
++static const struct of_device_id mt6375_monitor_of_match[] = {
++	{ .compatible = "mediatek,mt6375-battery-monitor" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6375_monitor_of_match);
++
++static struct platform_driver mt6375_monitor_driver = {
++	.probe = mt6375_monitor_probe,
++	.driver = {
++		.name = "mt6375-battery-monitor",
++		.of_match_table = mt6375_monitor_of_match,
++	},
++};
++module_platform_driver(mt6375_monitor_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6375 read-only power supply monitor");
++MODULE_LICENSE("GPL");

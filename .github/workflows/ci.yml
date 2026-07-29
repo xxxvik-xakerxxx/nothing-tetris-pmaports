@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-overlay:
+    runs-on: ubuntu-latest
+    container: alpine:3.23.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: apk add --no-cache coreutils findutils git shellcheck
+      - name: Shellcheck
+        run: shellcheck -S error scripts/*.sh
+      - name: Validate pmaports overlay
+        run: ./scripts/validate-pmaports-overlay.sh
+
+  build-pmaports:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    container:
+      image: alpine:3.23.3
+      options: --privileged --ulimit nofile=1048576:1048576
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare /work checkout
+        run: |
+          mkdir -p /work
+          cp -a "$GITHUB_WORKSPACE"/. /work/
+      - name: Install build tools
+        run: |
+          apk add --no-cache \
+            build-base bzip2 coreutils cryptsetup dosfstools e2fsprogs-extra \
+            file findutils git linux-headers mtools multipath-tools openssl \
+            openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
+            util-linux xz zstd
+      - name: Fetch upstream pmaports and pmbootstrap
+        run: |
+          cd /work
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git upstream/pmbootstrap
+          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git upstream/pmaports
+          rm -rf \
+            upstream/pmaports/device/testing/device-nothing-tetris \
+            upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878
+          rsync -a \
+            pmaports/device/testing/device-nothing-tetris/ \
+            upstream/pmaports/device/testing/device-nothing-tetris/
+          rsync -a \
+            pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
+            upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
+      - name: Build device package
+        run: |
+          mkdir -p /pmwork/work/cache_distfiles
+          printf "8\n" > /pmwork/version
+          cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            checksum device-nothing-tetris
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force device-nothing-tetris --arch aarch64
+      - name: Build kernel package
+        run: |
+          cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            checksum linux-postmarketos-mediatek-mt6878
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64

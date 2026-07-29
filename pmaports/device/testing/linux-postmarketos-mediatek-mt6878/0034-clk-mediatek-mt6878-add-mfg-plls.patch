@@ -1,0 +1,223 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+index 898cd785b..cc0e66a18 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -835,6 +835,20 @@
+ 			};
+ 		};
+ 
++		mfgpll: clock-controller@13fa0000 {
++			compatible = "mediatek,mt6878-mfgpll-pll-ctrl",
++				     "syscon";
++			reg = <0x13fa0000 0x800>;
++			#clock-cells = <1>;
++		};
++
++		mfgscpll: clock-controller@13fa0c00 {
++			compatible = "mediatek,mt6878-mfgscpll-pll-ctrl",
++				     "syscon";
++			reg = <0x13fa0c00 0x1000>;
++			#clock-cells = <1>;
++		};
++
+ 		watchdog: watchdog@1c00a000 {
+ 			compatible = "mediatek,mt6878-wdt",
+ 				     "mediatek,mt6589-wdt",
+diff --git a/drivers/clk/mediatek/Makefile b/drivers/clk/mediatek/Makefile
+index c022506df..9b7f93f6b 100644
+--- a/drivers/clk/mediatek/Makefile
++++ b/drivers/clk/mediatek/Makefile
+@@ -34,7 +34,7 @@ obj-$(CONFIG_COMMON_CLK_MT6797_IMGSYS) += clk-mt6797-img.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_MMSYS) += clk-mt6797-mm.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VDECSYS) += clk-mt6797-vdec.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VENCSYS) += clk-mt6797-venc.o
+-obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o
++obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-mfg.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o
+ obj-$(CONFIG_COMMON_CLK_MT2701) += clk-mt2701.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_AUDSYS) += clk-mt2701-aud.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_BDPSYS) += clk-mt2701-bdp.o
+diff --git a/drivers/clk/mediatek/clk-mt6878-mfg.c b/drivers/clk/mediatek/clk-mt6878-mfg.c
+new file mode 100644
+index 000000000..fa910c1b1
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6878-mfg.c
+@@ -0,0 +1,137 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2026
++ */
++
++#include <dt-bindings/clock/mediatek,mt6878-clock.h>
++
++#include <linux/module.h>
++#include <linux/of_device.h>
++#include <linux/platform_device.h>
++
++#include "clk-mtk.h"
++#include "clk-pll.h"
++
++#define MFGPLL_CON0	0x008
++#define MFGPLL_CON1	0x00c
++
++#define MT6878_PLL_FMAX		(3800UL * MHZ)
++#define MT6878_PLL_FMIN		(1500UL * MHZ)
++#define MT6878_INTEGER_BITS	8
++
++#define PLL(_id, _name) {					\
++	.id = _id,						\
++	.name = _name,						\
++	.reg = MFGPLL_CON0,					\
++	.en_reg = MFGPLL_CON0,					\
++	.pll_en_bit = 0,					\
++	.rst_bar_mask = BIT(0),					\
++	.fmax = MT6878_PLL_FMAX,				\
++	.fmin = MT6878_PLL_FMIN,				\
++	.pd_reg = MFGPLL_CON1,					\
++	.pd_shift = 24,						\
++	.pcw_reg = MFGPLL_CON1,					\
++	.pcw_shift = 0,						\
++	.pcwbits = 22,						\
++	.pcwibits = MT6878_INTEGER_BITS,				\
++}
++
++struct mt6878_mfg_pll_desc {
++	const struct mtk_pll_data *plls;
++	unsigned int num_plls;
++	unsigned int num_clks;
++};
++
++static const struct mtk_pll_data mfg_plls[] = {
++	PLL(CLK_MFG_AO_MFGPLL, "mfg-ao-mfgpll"),
++};
++
++static const struct mt6878_mfg_pll_desc mfg_desc = {
++	.plls = mfg_plls,
++	.num_plls = ARRAY_SIZE(mfg_plls),
++	.num_clks = CLK_MFG_AO_NR_CLK,
++};
++
++static const struct mtk_pll_data mfgsc_plls[] = {
++	PLL(CLK_MFGSC_AO_MFGSCPLL, "mfgsc-ao-mfgscpll"),
++};
++
++static const struct mt6878_mfg_pll_desc mfgsc_desc = {
++	.plls = mfgsc_plls,
++	.num_plls = ARRAY_SIZE(mfgsc_plls),
++	.num_clks = CLK_MFGSC_AO_NR_CLK,
++};
++
++static int clk_mt6878_mfg_probe(struct platform_device *pdev)
++{
++	const struct mt6878_mfg_pll_desc *desc;
++	struct clk_hw_onecell_data *clk_data;
++	struct device_node *node = pdev->dev.of_node;
++	int ret;
++
++	desc = device_get_match_data(&pdev->dev);
++	if (!desc)
++		return -EINVAL;
++
++	clk_data = mtk_alloc_clk_data(desc->num_clks);
++	if (!clk_data)
++		return -ENOMEM;
++
++	ret = mtk_clk_register_plls(node, desc->plls, desc->num_plls,
++				    clk_data);
++	if (ret)
++		goto free_clk_data;
++
++	ret = of_clk_add_hw_provider(node, of_clk_hw_onecell_get, clk_data);
++	if (ret)
++		goto unregister_plls;
++
++	platform_set_drvdata(pdev, clk_data);
++
++	return 0;
++
++unregister_plls:
++	mtk_clk_unregister_plls(desc->plls, desc->num_plls, clk_data);
++free_clk_data:
++	mtk_free_clk_data(clk_data);
++
++	return ret;
++}
++
++static void clk_mt6878_mfg_remove(struct platform_device *pdev)
++{
++	const struct mt6878_mfg_pll_desc *desc;
++	struct clk_hw_onecell_data *clk_data = platform_get_drvdata(pdev);
++
++	desc = device_get_match_data(&pdev->dev);
++
++	of_clk_del_provider(pdev->dev.of_node);
++	mtk_clk_unregister_plls(desc->plls, desc->num_plls, clk_data);
++	mtk_free_clk_data(clk_data);
++}
++
++static const struct of_device_id of_match_clk_mt6878_mfg[] = {
++	{
++		.compatible = "mediatek,mt6878-mfgpll-pll-ctrl",
++		.data = &mfg_desc,
++	}, {
++		.compatible = "mediatek,mt6878-mfgscpll-pll-ctrl",
++		.data = &mfgsc_desc,
++	}, {
++		/* sentinel */
++	}
++};
++MODULE_DEVICE_TABLE(of, of_match_clk_mt6878_mfg);
++
++static struct platform_driver clk_mt6878_mfg_driver = {
++	.probe = clk_mt6878_mfg_probe,
++	.remove = clk_mt6878_mfg_remove,
++	.driver = {
++		.name = "clk-mt6878-mfg",
++		.of_match_table = of_match_clk_mt6878_mfg,
++	},
++};
++module_platform_driver(clk_mt6878_mfg_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6878 MFG PLL clock driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/clk/mediatek/clk-mux.h b/drivers/clk/mediatek/clk-mux.h
+index 75b923f5f..2234627c3 100644
+--- a/drivers/clk/mediatek/clk-mux.h
++++ b/drivers/clk/mediatek/clk-mux.h
+@@ -126,6 +126,12 @@ extern const struct clk_ops mtk_mux_gate_hwv_fenc_clr_set_upd_ops;
+ 			_width, _upd_ofs, _upd, CLK_SET_RATE_PARENT,	\
+ 			mtk_mux_clr_set_upd_ops)
+ 
++#define MUX_CLR_SET(_id, _name, _parents, _mux_ofs,			\
++			_mux_set_ofs, _mux_clr_ofs, _shift, _width)	\
++	GATE_CLR_SET_UPD_FLAGS(_id, _name, _parents, _mux_ofs,		\
++		_mux_set_ofs, _mux_clr_ofs, _shift, _width, 0, 0, -1,	\
++		CLK_SET_RATE_PARENT, mtk_mux_clr_set_upd_ops)
++
+ #define MUX_GATE_HWV_FENC_CLR_SET_UPD_FLAGS(_id, _name, _parents,			\
+ 				_mux_ofs, _mux_set_ofs, _mux_clr_ofs,			\
+ 				_hwv_sta_ofs, _hwv_set_ofs, _hwv_clr_ofs,		\
+diff --git a/drivers/clk/mediatek/clk-mt6878-topckgen.c b/drivers/clk/mediatek/clk-mt6878-topckgen.c
+index ee5d7819a..fe52c9cc1 100644
+--- a/drivers/clk/mediatek/clk-mt6878-topckgen.c
++++ b/drivers/clk/mediatek/clk-mt6878-topckgen.c
+@@ -1689,13 +1689,13 @@ static const struct mtk_mux top_muxes[] = {
+ 		CLK_CFG_18_CLR/* set parent */, 16/* lsb */, 2/* width */,
+ 		23/* pdn */, CLK_CFG_UPDATE2/* upd ofs */,
+ 		TOP_MUX_MFGSC_REF_SHIFT/* upd shift */),
+-	/* CLK_CFG_20  - TODO */
+-//	MUX_GATE(CLK_TOP_MFG_INT0_SEL/* dts */, "mfg_int0_sel",
+-//		mfg_int0_parents/* parent */, CLK_CFG_20, CLK_CFG_20_SET,
+-//		CLK_CFG_20_CLR/* set parent */, 16/* lsb */, 1/* width */),
+-//	MUX_GATE(CLK_TOP_MFG1_INT1_SEL/* dts */, "mfg1_int1_sel",
+-//		mfg1_int1_parents/* parent */, CLK_CFG_20, CLK_CFG_20_SET,
+-//		CLK_CFG_20_CLR/* set parent */, 17/* lsb */, 1/* width */),
++	/* CLK_CFG_20 */
++	MUX_CLR_SET(CLK_TOP_MFG_INT0_SEL/* dts */, "mfg_int0_sel",
++		    mfg_int0_parents/* parent */, CLK_CFG_20, CLK_CFG_20_SET,
++		    CLK_CFG_20_CLR/* set parent */, 16/* lsb */, 1/* width */),
++	MUX_CLR_SET(CLK_TOP_MFG1_INT1_SEL/* dts */, "mfg1_int1_sel",
++		    mfg1_int1_parents/* parent */, CLK_CFG_20, CLK_CFG_20_SET,
++		    CLK_CFG_20_CLR/* set parent */, 17/* lsb */, 1/* width */),
+ };
+ 
+ static const struct mtk_composite top_aud_divs[] = {
