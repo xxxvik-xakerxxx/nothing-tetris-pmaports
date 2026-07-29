@@ -13,11 +13,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=52`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=55`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r52 packages installed; that would make future packages look like
+r50-r55 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -31,7 +31,7 @@ normal Alpine/postmarketOS practice.
 | Patch | Purpose |
 | --- | --- |
 | `0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch` | Board DT for FT3519 touch and related pinctrl/regulator wiring. |
-| `0002-input-touchscreen-add-focaltech-ft3519t.patch` | Vendor-derived FT3519 touchscreen driver. Large and not upstream-quality yet, but required for working touch. |
+| `0002-input-touchscreen-add-focaltech-ft3519t.patch` | Vendor-derived FT3519 touchscreen driver with debug logging disabled by default. Large and not upstream-quality yet, but required for working touch. |
 | `0003-mt6878-add-mt6369-spmi-pmic.patch` | MT6369 SPMI PMIC/regulator foundation required by touch and peripheral rails. |
 | `0011-arm64-dts-mt6878-nothing-tetris-add-disabled-peripherals.patch` | Hardware inventory nodes kept disabled until drivers are ready. |
 | `0025-pinctrl-mediatek-mt6878-fill-eint-table-holes.patch` | EINT table fix needed by board interrupts. |
