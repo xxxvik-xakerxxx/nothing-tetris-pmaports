@@ -12,7 +12,7 @@
 +		regulator-always-on;
 +	};
 +
- 	// NOTE: Will be replaced by our firmware display handoff. Keep in for now.
+ 	// NOTE: Will be replaced by our to-be-bootloader. Keep in for now.
  	chosen {
  		bootargs = "clk_ignore_unused";
 @@ -62,14 +70,101 @@
