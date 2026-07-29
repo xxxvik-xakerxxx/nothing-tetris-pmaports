@@ -50,19 +50,10 @@ jobs:
           rsync -a \
             pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
             upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
-      - name: Build device package
+      - name: Prepare pmbootstrap workdir
         run: |
           mkdir -p /pmwork/work/cache_distfiles
           printf "8\n" > /pmwork/work/version
-          cd /work/upstream/pmbootstrap
-          ./pmbootstrap.py --as-root --no-ccache \
-            --work /pmwork/work \
-            -c /work/ci/pmbootstrap-aarch64.cfg \
-            checksum device-nothing-tetris
-          ./pmbootstrap.py --as-root --no-ccache \
-            --work /pmwork/work \
-            -c /work/ci/pmbootstrap-aarch64.cfg \
-            build --force device-nothing-tetris --arch aarch64
       - name: Build kernel package
         run: |
           cd /work/upstream/pmbootstrap
@@ -73,4 +64,17 @@ jobs:
           ./pmbootstrap.py --as-root --no-ccache \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
-            build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64
+            build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64 ||
+            { ./pmbootstrap.py --work /pmwork/work log; exit 1; }
+      - name: Build device package
+        run: |
+          cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            checksum device-nothing-tetris
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force --lax device-nothing-tetris --arch aarch64 ||
+            { ./pmbootstrap.py --work /pmwork/work log; exit 1; }
