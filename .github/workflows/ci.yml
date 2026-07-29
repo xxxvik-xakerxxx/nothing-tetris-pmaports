@@ -65,7 +65,7 @@ jobs:
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64 ||
-            { ./pmbootstrap.py --work /pmwork/work log; exit 1; }
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
       - name: Build device package
         run: |
           cd /work/upstream/pmbootstrap
@@ -77,4 +77,4 @@ jobs:
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax device-nothing-tetris --arch aarch64 ||
-            { ./pmbootstrap.py --work /pmwork/work log; exit 1; }
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
