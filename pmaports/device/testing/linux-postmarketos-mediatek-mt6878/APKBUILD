@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=70
+pkgrel=71
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -72,6 +72,7 @@ _connectivity_make() {
 		ARCH="$_carch" LLVM=1 \
 		KERNEL_SRC="$builddir" \
 		KERNEL_OUT="$builddir" \
+		KO_CODE_PATH="$_moddir" \
 		DEVICE_MODULES_PATH="$_devmods_dir" \
 		TOP="$_android_top" \
 		MTK_PLATFORM=mt6878 \
