@@ -60,7 +60,7 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `0033-asoc-aw88261-identify-tetris-speaker-amp.patch` | Identifies the AW88261 speaker amplifier. Does not create an ALSA card. |
 | `0034-clk-mediatek-mt6878-add-mfg-plls.patch` | Adds MFG PLL/top mux clock foundation for future GPU work. |
-| `0035-input-rt6010-haptics.patch` | Adds a compact RT6010 `FF_RUMBLE` driver using vendor init/trim/waveform logic. |
+| `0035-input-rt6010-haptics.patch` | Adds a conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback. |
 | `0036-arm64-dts-mt6878-tetris-enable-rt6010-haptics.patch` | Enables the RT6010 node for the haptics driver. |
 | `0037-clk-mediatek-mt6878-audiosys.patch` | Adds MT6878 audiosys clock foundation. Audio still needs AFE/machine-driver work. |
 | `0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch` | Adds disabled RT1711H Type-C inventory node. |

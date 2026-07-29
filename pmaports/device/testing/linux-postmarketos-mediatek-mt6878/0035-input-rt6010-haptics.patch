@@ -90,6 +90,7 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_REG_RAM_ADDR_L		0x08
 +#define RT6010_REG_RAM_ADDR_H		0x09
 +#define RT6010_REG_RAM_DATA		0x0a
++#define RT6010_REG_STREAM_DATA		0x0b
 +#define RT6010_REG_FIFO_AE_L		0x0c
 +#define RT6010_REG_FIFO_AE_H		0x0d
 +#define RT6010_REG_FIFO_AF_L		0x0e
@@ -134,7 +135,7 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_ENABLE_DELAY_US		2000
 +#define RT6010_EFS_RETRIES		3
 +#define RT6010_EFS_BYTES		4
-+#define RT6010_PLAY_MODE_RAM		0x01
++#define RT6010_PLAY_MODE_STREAM		0x02
 +#define RT6010_GO_START			0x01
 +#define RT6010_GO_STOP			0x00
 +
@@ -156,8 +157,9 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_FIFO_AE			0x0080
 +#define RT6010_FIFO_AF			0x00c0
 +#define RT6010_PRE_F0			817
-+#define RT6010_DEFAULT_GAIN		0x7f
-+#define RT6010_DEFAULT_BOOST		0x0a
++#define RT6010_DEFAULT_GAIN		0x20
++#define RT6010_MAX_GAIN			0x40
++#define RT6010_DEFAULT_BOOST		0x07
 +
 +static const u8 rt6010_waveform[] = {
 +	0x00, 0x1f, 0x3c, 0x56, 0x6b, 0x79, 0x7f, 0x7f,
@@ -374,6 +376,44 @@ index 000000000000..e0a625a1ef2d
 +	return regmap_raw_write(rt->regmap, RT6010_REG_RAM_DATA, data, len);
 +}
 +
++static int rt6010_clear_stream_fifo(struct rt6010 *rt)
++{
++	unsigned int val;
++	int error;
++	int tries;
++
++	error = rt6010_write8(rt, RT6010_REG_RAM_CFG, 0x01);
++	if (error)
++		return error;
++
++	for (tries = 0; tries < 10; tries++) {
++		error = regmap_read(rt->regmap, RT6010_REG_RAM_CFG, &val);
++		if (error)
++			return error;
++		if (!(val & BIT(0)))
++			return 0;
++		usleep_range(1000, 2000);
++	}
++
++	return -ETIMEDOUT;
++}
++
++static int rt6010_clear_protection_locked(struct rt6010 *rt)
++{
++	unsigned int val;
++	int error;
++
++	error = regmap_read(rt->regmap, RT6010_REG_BEMF_CFG2, &val);
++	if (error)
++		return error;
++
++	error = rt6010_write8(rt, RT6010_REG_BEMF_CFG2, val | BIT(1));
++	if (error)
++		return error;
++
++	return rt6010_write8(rt, RT6010_REG_BEMF_CFG2, val & ~BIT(1));
++}
++
 +static int rt6010_init_chip(struct rt6010 *rt)
 +{
 +	unsigned int chip_id;
@@ -432,6 +472,8 @@ index 000000000000..e0a625a1ef2d
 +	if (error)
 +		return error;
 +
++	rt6010_clear_protection_locked(rt);
++
 +	rt->initialized = true;
 +	return 0;
 +}
@@ -443,13 +485,6 @@ index 000000000000..e0a625a1ef2d
 +	error = rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_STOP);
 +	if (error)
 +		return error;
-+
-+	regmap_read(rt->regmap, RT6010_REG_INT_STATUS, &error);
-+	regmap_write(rt->regmap, RT6010_REG_PROTECTION_MASK1, 0);
-+	regmap_write(rt->regmap, RT6010_REG_PROTECTION_MASK2, 0);
-+	regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS1, &error);
-+	regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS2, &error);
-+	regmap_read(rt->regmap, RT6010_REG_ERROR_CODE, &error);
 +
 +	return 0;
 +}
@@ -467,31 +502,37 @@ index 000000000000..e0a625a1ef2d
 +static int rt6010_start_locked(struct rt6010 *rt, u16 strong, u16 weak)
 +{
 +	u8 gain;
-+	u8 playlist[6] = { 0x01, 0x00, 0x7f, 0x00, 0x00, 0x00 };
 +	u32 level = max(strong, weak);
 +	int error;
 +
 +	if (!rt->initialized)
 +		return -ENODEV;
 +
-+	gain = clamp_t(u32, level >> 8, 0x20, 0x7f);
-+	playlist[2] = gain;
++	gain = clamp_t(u32, level >> 8, RT6010_DEFAULT_GAIN,
++		       RT6010_MAX_GAIN);
 +
 +	error = rt6010_stop_locked(rt);
++	if (error)
++		return error;
++	error = rt6010_clear_protection_locked(rt);
++	if (error)
++		return error;
++	error = rt6010_clear_stream_fifo(rt);
 +	if (error)
 +		return error;
 +	error = rt6010_write8(rt, RT6010_REG_GAIN_CFG, gain);
 +	if (error)
 +		return error;
-+	error = rt6010_write_ram(rt, RT6010_LIST_BASE_ADDR, playlist,
-+				 sizeof(playlist));
++	error = rt6010_write8(rt, RT6010_REG_PLAY_MODE,
++			      RT6010_PLAY_MODE_STREAM);
 +	if (error)
 +		return error;
-+	error = rt6010_write8(rt, RT6010_REG_PLAY_MODE, RT6010_PLAY_MODE_RAM);
++	error = rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_START);
 +	if (error)
 +		return error;
 +
-+	return rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_START);
++	return regmap_raw_write(rt->regmap, RT6010_REG_STREAM_DATA,
++				rt6010_waveform, sizeof(rt6010_waveform));
 +}
 +
 +static int rt6010_play_effect(struct input_dev *input, void *data,
@@ -515,7 +556,7 @@ index 000000000000..e0a625a1ef2d
 +	if (!error) {
 +		if (!duration)
 +			duration = 40;
-+		duration = clamp(duration, 10U, 500U);
++		duration = clamp(duration, 10U, 150U);
 +		schedule_delayed_work(&rt->stop_work, msecs_to_jiffies(duration));
 +	}
 +
