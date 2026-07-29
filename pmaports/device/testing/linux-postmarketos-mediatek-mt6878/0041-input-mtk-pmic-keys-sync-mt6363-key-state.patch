@@ -1,0 +1,82 @@
+--- a/drivers/input/keyboard/mtk-pmic-keys.c
++++ b/drivers/input/keyboard/mtk-pmic-keys.c
+@@ -58,6 +58,7 @@ struct mtk_pmic_regs {
+ 	u32 rst_lprst_mask; /* Long-press reset timeout bitmask */
+ 	bool key_release_irq;
+ 	bool preserve_long_press_config;
++	bool sync_state_on_irq;
+ };
+ 
+ static const struct mtk_pmic_regs mt6397_regs = {
+@@ -145,6 +146,7 @@ static const struct mtk_pmic_regs mt6363_regs = {
+ 				   MT6363_PSC_TOP_INT_CON0, BIT(1), 0),
+ 	.key_release_irq = true,
+ 	.preserve_long_press_config = true,
++	.sync_state_on_irq = true,
+ };
+ 
+ struct mtk_pmic_keys_info {
+@@ -161,6 +163,7 @@ struct mtk_pmic_keys {
+ 	struct device *dev;
+ 	struct regmap *regmap;
+ 	struct mtk_pmic_keys_info keys[MTK_PMIC_MAX_KEY_COUNT];
++	bool sync_state_on_irq;
+ };
+ 
+ enum mtk_pmic_keys_lp_mode {
+@@ -218,11 +221,47 @@ static void mtk_pmic_keys_lp_reset_setup(struct mtk_pmic_keys *keys,
+ 	regmap_update_bits(keys->regmap, regs->pmic_rst_reg, mask, value);
+ }
+ 
++static void mtk_pmic_keys_sync_state(struct mtk_pmic_keys *keys)
++{
++	struct input_dev *input_dev = keys->input_dev;
++	u32 status;
++	int i;
++
++	for (i = 0; i < MTK_PMIC_MAX_KEY_COUNT; i++) {
++		struct mtk_pmic_keys_info *info = &keys->keys[i];
++		u32 key_deb;
++		u32 pressed;
++		int ret;
++
++		if (!info->regs)
++			continue;
++
++		ret = regmap_read(keys->regmap, info->regs->deb_reg, &status);
++		if (ret)
++			continue;
++
++		key_deb = status & info->regs->deb_mask;
++		pressed = !key_deb;
++
++		input_report_key(input_dev, info->keycode, pressed);
++		dev_dbg(keys->dev, "(%s) key =%d status=0x%x using PMIC\n",
++			pressed ? "pressed" : "released", info->keycode,
++			status);
++	}
++
++	input_sync(input_dev);
++}
++
+ static irqreturn_t mtk_pmic_keys_irq_handler_thread(int irq, void *data)
+ {
+ 	struct mtk_pmic_keys_info *info = data;
+ 	u32 key_deb, pressed;
+ 
++	if (info->keys->sync_state_on_irq) {
++		mtk_pmic_keys_sync_state(info->keys);
++		return IRQ_HANDLED;
++	}
++
+ 	regmap_read(info->keys->regmap, info->regs->deb_reg, &key_deb);
+ 
+ 	key_deb &= info->regs->deb_mask;
+@@ -369,6 +408,7 @@ static int mtk_pmic_keys_probe(struct platform_device *pdev)
+ 		keys->regmap = pmic_chip->regmap;
+ 	}
+ 	mtk_pmic_regs = of_id->data;
++	keys->sync_state_on_irq = mtk_pmic_regs->sync_state_on_irq;
+ 
+ 	keys->input_dev = input_dev = devm_input_allocate_device(keys->dev);
+ 	if (!input_dev) {
