@@ -2,7 +2,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=5
-pkgrel=7
+pkgrel=8
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -15,6 +15,7 @@ depends="
 "
 makedepends="devicepkg-dev"
 source="
+	80-nothing-tetris-udisks.rules
 	boot_image.its
 	deviceinfo
 	greetd-tetris-display.conf
@@ -42,9 +43,12 @@ package() {
 		"$pkgdir"/usr/libexec/tetris-phrog-greetd-session
 	install -Dm644 "$srcdir"/boot_image.its \
 		"$pkgdir"/usr/share/u-boot/nothing-tetris/boot_image.its
+	install -Dm644 "$srcdir"/80-nothing-tetris-udisks.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/80-nothing-tetris-udisks.rules
 }
 
 sha512sums="
+f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
 a9a1daae5ca2cd328b65540213f4bbb581f8119df71b8e2b51d69301343a793c770a2e7750a68456d1829f8e6cd3364d683087bc773dd549c6d407b56dc19ceb  deviceinfo
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
