@@ -87,9 +87,9 @@ jobs:
             install --password 147147 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
           mkdir -p /work/out
-          find /pmwork/work -type f \
-            \( -name "*.img" -o -name "*.img.xz" -o -name "*.itb" \) \
-            -size +1M -exec cp -v {} /work/out/ \;
+          cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-root.img /work/out/
+          cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-boot.img /work/out/
+          cp -v /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/boot/boot_image.itb /work/out/
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
       - name: Upload install images
