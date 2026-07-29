@@ -16,8 +16,8 @@ Signed-off-by: postmarketOS Porting <porting@localhost>
 ---
  drivers/input/misc/Kconfig  |  16 ++
  drivers/input/misc/Makefile |   1 +
- drivers/input/misc/rt6010.c | 560 +++++++++++++++++++++++++++++++++++
- 3 files changed, 577 insertions(+)
+ drivers/input/misc/rt6010.c | 634 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 651 insertions(+)
  create mode 100644 drivers/input/misc/rt6010.c
 
 diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
@@ -64,7 +64,7 @@ new file mode 100644
 index 000000000000..e0a625a1ef2d
 --- /dev/null
 +++ b/drivers/input/misc/rt6010.c
-@@ -0,0 +1,601 @@
+@@ -0,0 +1,634 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * RT6010 LRA haptic controller.
