@@ -78,3 +78,23 @@ jobs:
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax device-nothing-tetris --arch aarch64 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
+      - name: Build install images
+        run: |
+          cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root --no-ccache \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            install --password 147147 ||
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
+          mkdir -p /work/out
+          find /pmwork/work -type f \
+            \( -name "*.img" -o -name "*.img.xz" -o -name "*.itb" \) \
+            -size +1M -exec cp -v {} /work/out/ \;
+          find /work/out -maxdepth 1 -type f -print
+          test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
+      - name: Upload install images
+        uses: actions/upload-artifact@v4
+        with:
+          name: nothing-tetris-images
+          path: /work/out/*
+          if-no-files-found: error
