@@ -53,7 +53,7 @@ jobs:
       - name: Build device package
         run: |
           mkdir -p /pmwork/work/cache_distfiles
-          printf "8\n" > /pmwork/version
+          printf "8\n" > /pmwork/work/version
           cd /work/upstream/pmbootstrap
           ./pmbootstrap.py --as-root --no-ccache \
             --work /pmwork/work \
