@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=61
+pkgrel=62
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -111,5 +111,5 @@ e51ee3e68350eaebfc63b0c4f479c6791bd917459760a7f3c4d56ff2e6e6bb3cc363c3af14efd15b
 2823a1815438a48ae1b539a88c1c8f46b62737c25dd6febff19459de69d5b6bc84b11ed947a2013968cae4d71af189dc8a23c9c6dfb6c0492be2930aa79e4465  0037-clk-mediatek-mt6878-audiosys.patch
 53c684629a269eccb625e488008fad00d322d7cb7f99ec911d013c23f14f68dc957e38c163b544101cafafc05353432448eb9c5a61935774f5ed961d5d96c3a3  0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch
 9b138efc3b7af5a386fad8d1a37571b7df91417eeb305492cecd4ddb845e205d41f5c14d368a36ee2a886b9082187f6bf56264b37d711ce41d2dcac0a5764ed1  0039-usb-typec-mt6375-tcpc.patch
-34f34e4ff7d1b99f7d6d716ff0f7da69adf2337cc158aaa537c99dedc5912892facd3306f9902bd3deae92544889a65fa6e508a3720e55fa90263c5df5bf212d  0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch
+abcf649127de02d8030028b043ed97f0abfd76bb4f5b148005a96bf49cd621b23ea62226783bfb4fc3541db186654038ffef5098eb54a242a95c3c4cc747a918  0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch
 "

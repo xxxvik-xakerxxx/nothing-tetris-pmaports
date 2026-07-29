@@ -38,6 +38,7 @@
 +#include <linux/delay.h>
 +#include <linux/io.h>
 +#include <linux/kernel.h>
++#include <linux/kstrtox.h>
 +#include <linux/module.h>
 +#include <linux/mutex.h>
 +#include <linux/of.h>
@@ -46,6 +47,7 @@
 +#include <linux/regulator/consumer.h>
 +#include <linux/slab.h>
 +#include <linux/string.h>
++#include <linux/sysfs.h>
 +
 +enum mt6878_consys_reg {
 +	CONSYS_RGU_ON,
@@ -317,7 +319,7 @@
 +	return ret;
 +}
 +
-+static int mt6878_consys_remove(struct platform_device *pdev)
++static void mt6878_consys_remove(struct platform_device *pdev)
 +{
 +	struct mt6878_consys *cs = platform_get_drvdata(pdev);
 +
@@ -326,8 +328,6 @@
 +	mt6878_consys_power_off(cs);
 +	mutex_unlock(&cs->lock);
 +	pm_runtime_disable(&pdev->dev);
-+
-+	return 0;
 +}
 +
 +static const struct of_device_id mt6878_consys_of_match[] = {
