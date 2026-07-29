@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=72
+pkgrel=73
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -63,10 +63,20 @@ prepare() {
 		xargs sed -i 's/-Werror/-Wno-error/g'
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
-		"$_connmods_dir"/connectivity/conninfra/base/osal.c
-	sed -i 's/class_create(THIS_MODULE, \([^)]*\))/class_create(\1)/g' \
-		"$_connmods_dir"/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c \
-		"$_connmods_dir"/connectivity/conninfra/adaptor/conninfra_dev.c
+		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
+		"$_connmods_dir"/connectivity/common/common_main/linux/osal.c
+	find \
+		"$_connmods_dir"/connectivity/conninfra \
+		"$_connmods_dir"/connectivity/connfem \
+		"$_connmods_dir"/connectivity/common \
+		"$_connmods_dir"/connectivity/wlan/adaptor \
+		"$_connmods_dir"/connectivity/wlan/core/gen4m \
+		"$_connmods_dir"/connectivity/bt/linux_v2 \
+		-name '*.[ch]' -print0 |
+		xargs -0 perl -0pi -e \
+			's/class_create\(THIS_MODULE,\s*([^)]+?)\)/class_create($1)/g'
+	sed -i 's/strlcpy(event_string, src, sizeof(event_string))/strscpy(event_string, src, sizeof(event_string))/' \
+		"$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
 }
 
 _connectivity_make() {

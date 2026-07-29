@@ -15,11 +15,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=72`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=73`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r72 packages installed; that would make future packages look like
+r50-r73 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -60,7 +60,7 @@ normal Alpine/postmarketOS practice.
 | `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 
-The r72 package also stages Android MT6878 connectivity modules from the Nothing
+The r73 package also stages Android MT6878 connectivity modules from the Nothing
 kernel module releases and installs the MT6631 Wi-Fi firmware blob into the
 device package for on-device validation. This is a practical overlay bring-up
 step, not an upstream-ready replacement for native Linux connectivity support.
@@ -84,7 +84,7 @@ not a confirmed external RT1711H controller.
 
 1. Validate MT6375 Type-C attach/orientation/role events on device, then remove
    the disabled RT1711H inventory node if hardware confirms it is not populated.
-2. Validate r72 MT6631 vendor module loading on device: conninfra, WMT, Wi-Fi
+2. Validate r73 MT6631 vendor module loading on device: conninfra, WMT, Wi-Fi
    and Bluetooth.
 3. Flashlight as LED-class/V4L2 flash.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
