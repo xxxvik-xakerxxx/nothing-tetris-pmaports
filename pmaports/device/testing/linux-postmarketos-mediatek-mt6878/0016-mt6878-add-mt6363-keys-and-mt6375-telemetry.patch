@@ -88,11 +88,13 @@
  
 +static const struct mtk_pmic_regs mt6363_regs = {
 +	.keys_regs[MTK_PMIC_PWRKEY_INDEX] =
-+		MTK_PMIC_KEYS_REGS(MT6363_TOPSTATUS, BIT(0),
-+				   MT6363_PSC_TOP_INT_CON0, 0, 0),
++		MTK_PMIC_KEYS_REGS(MT6363_TOPSTATUS, BIT(3),
++				   MT6363_PSC_TOP_INT_CON0,
++				   BIT(0) | BIT(3), 0),
 +	.keys_regs[MTK_PMIC_HOMEKEY_INDEX] =
 +		MTK_PMIC_KEYS_REGS(MT6363_TOPSTATUS, BIT(1),
-+				   MT6363_PSC_TOP_INT_CON0, BIT(1), 0),
++				   MT6363_PSC_TOP_INT_CON0,
++				   BIT(1) | BIT(4), 0),
 +	.key_release_irq = true,
 +	.preserve_long_press_config = true,
 +};
@@ -144,7 +146,16 @@
 +	}
  	mtk_pmic_regs = of_id->data;
  
- 	keys->input_dev = input_dev = devm_input_allocate_device(keys->dev);
+ keys->input_dev = input_dev = devm_input_allocate_device(keys->dev);
+@@ -374,7 +400,7 @@
+ 			return keys->keys[index].irq;
+ 		}
+ 
+-		if (of_device_is_compatible(node, "mediatek,mt6358-keys")) {
++		if (mtk_pmic_regs->key_release_irq) {
+ 			keys->keys[index].irq_r = platform_get_irq_byname(pdev,
+ 									  irqnames_r[index]);
+ 
 --- a/drivers/spmi/spmi-mtk-pmif.c
 +++ b/drivers/spmi/spmi-mtk-pmif.c
 @@ -3,8 +3,12 @@
