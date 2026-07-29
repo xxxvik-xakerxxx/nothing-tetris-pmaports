@@ -334,3 +334,38 @@
 +
 +MODULE_DESCRIPTION("MediaTek MT6375 read-only power supply monitor");
 +MODULE_LICENSE("GPL");
+
+From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
+Subject: [PATCH] power: supply: mt6375: register monitor on platform bus
+
+The read-only MT6375 monitor is a platform driver. Keep the ADC child
+under the MT6375 device, but describe the monitor itself as a top-level
+platform device so it probes without relying on MT6375 MFD child
+enumeration.
+
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -61,6 +61,12 @@
+ 			gpios = <&pio 54 GPIO_ACTIVE_LOW>;
+ 		};
+ 	};
++
++	battery-monitor {
++		compatible = "mediatek,mt6375-battery-monitor";
++		io-channels = <&mt6375_adc 4>, <&mt6375_adc 1>;
++		io-channel-names = "battery-voltage", "usb-voltage";
++	};
+ };
+ 
+ &i2c2 {
+@@ -147,11 +153,6 @@
+ 			#io-channel-cells = <1>;
+ 		};
+ 
+-		battery-monitor {
+-			compatible = "mediatek,mt6375-battery-monitor";
+-			io-channels = <&mt6375_adc 4>, <&mt6375_adc 1>;
+-			io-channel-names = "battery-voltage", "usb-voltage";
+-		};
+ 	};
+ };
