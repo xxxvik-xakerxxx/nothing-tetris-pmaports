@@ -9,15 +9,17 @@ The current baseline is intentionally conservative:
 - native MediaTek DSI/DSC/panel support is not part of the active baseline;
 - charger and PMIC telemetry is read-only where possible;
 - risky Android vendor stacks stay disabled until they are split into small,
-  reviewable Linux-facing patches.
+  reviewable Linux-facing patches;
+- NFC is not tracked because CMF Phone 1 / `nothing-tetris` has no NFC
+  hardware.
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=61`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=66`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r61 packages installed; that would make future packages look like
+r50-r66 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -67,6 +69,11 @@ normal Alpine/postmarketOS practice.
 | `0039-usb-typec-mt6375-tcpc.patch` | Adds the MT6375 interrupt domain and a minimal Linux TCPM/TCPCI Type-C driver. |
 | `0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch` | Adds a minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 
+The r66 package also stages Android MT6878 connectivity modules from the Nothing
+kernel module releases and installs the MT6631 Wi-Fi firmware blob into the
+device package for on-device validation. This is a practical overlay bring-up
+step, not an upstream-ready replacement for native Linux connectivity support.
+
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
 not a confirmed external RT1711H controller.
@@ -87,9 +94,10 @@ not a confirmed external RT1711H controller.
 
 1. Validate MT6375 Type-C attach/orientation/role events on device, then remove
    the disabled RT1711H inventory node if hardware confirms it is not populated.
-2. Flashlight as LED-class/V4L2 flash.
-3. MT6631 connectivity foundation: conninfra power/reset/EMI and WMT.
-4. Wi-Fi/BT/GNSS clients after connectivity is stable.
+2. Validate r66 MT6631 vendor module loading on device: conninfra, WMT, Wi-Fi
+   and Bluetooth.
+3. Flashlight as LED-class/V4L2 flash.
+4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
 5. MT6878 AFE + MT6369 machine driver + AW88261 routing + UCM.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
 7. Modem/SIM and cameras as later large projects.

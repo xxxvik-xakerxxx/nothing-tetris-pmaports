@@ -25,6 +25,7 @@ logs, and device backups are not committed.
 | Memory | 6 GB in some markets, 8 GB common |
 | Architecture | `aarch64` |
 | Vendor OS | Android 14 / Nothing OS |
+| NFC | Not present |
 
 ## postmarketOS
 
@@ -36,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18-r61` |
+| Kernel version | `6.18-r66` |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -53,17 +54,18 @@ Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PA
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Partial | Volume-down works; power/volume-up behavior still needs MT6363 IRQ/key validation. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
-| USB-C | Type-C attach/orientation | Pending | r58 adds MT6375 IRQ domain and minimal TCPM/TCPCI driver; needs device validation. |
-| Haptics | RT6010 rumble | Pending | Driver and DT node are present; runtime stability still needs validation on r58+. |
-| Audio | Speaker amp identification | Partial | AW88261 is identified; no ALSA card/machine driver yet. |
+| USB-C | Type-C attach/orientation | Pending | MT6375 IRQ domain and minimal TCPM/TCPCI driver are present; live r63 reports vendor ID `0x0000`, so the TCPC register path still needs fixing. |
+| Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
+| Audio | Speaker amp identification | Partial | AW88261 probes on I2C; no ALSA card/machine driver yet. |
 | Audio | Playback/recording | Broken | Needs MT6878 AFE, MT6369 codec/machine routing, UCM. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
 | Camera | Flash | Broken | Needs LED-class/V4L2 flash bring-up. |
-| Connectivity | Connsys foundation | Pending | r61 adds an MT6878/MT6631 manual regulator/MMIO bring-up driver for on-device validation; MT6878 scpsys still needs porting. |
-| Connectivity | Wi-Fi | Broken | MT6631 DT inventory is present but disabled; needs WMT/firmware/WLAN client bring-up after connsys validation. |
-| Connectivity | Bluetooth | Broken | MT6631 BT inventory is present but disabled; depends on WMT and connectivity foundation. |
-| Connectivity | GPS/GNSS | Broken | MT6631 GNSS inventory is present but disabled; depends on WMT and connectivity foundation. |
+| Connectivity | Connsys foundation | Pending | MT6878/MT6631 manual regulator/MMIO bring-up driver is present; live r63 registers the device and can trigger power-on. |
+| Connectivity | Wi-Fi | Pending | r66 packages MT6631 firmware and vendor connectivity modules for CI/on-device validation. |
+| Connectivity | Bluetooth | Pending | r66 builds the MT6631 BT vendor module path; depends on WMT/conninfra loading cleanly. |
+| Connectivity | GPS/GNSS | Broken | Generic GNSS core registers; MT6631 GNSS client is not packaged yet. |
+| Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
 | Sensors | Rotation/accelerometer | Broken | Sensorhub/IIO path not started. |
 | Sensors | Ambient light/proximity | Broken | Sensorhub/IIO path not started. |
@@ -83,6 +85,17 @@ On the tested r53 userspace/kernel image:
 - UDisks sees the whole Android GPT with many small firmware partitions. The
   device package now installs `80-nothing-tetris-udisks.rules` to hide
   non-postmarketOS partitions from desktop storage UIs.
+
+Additional live checks on r63:
+
+- RT6010 haptics probes on I2C and registers an input force-feedback device.
+- AW88261 speaker amplifier probes on I2C, but the kernel still reports
+  `No soundcards found`.
+- MT6375 TCPC currently probes the wrong/empty register path and reports vendor
+  ID `0x0000`.
+- The phone exposes `connsys_wifi_a`, `connsys_bt_a` and `connsys_gnss_a`
+  firmware partitions, but the device package also ships these firmware blobs
+  so the rootfs does not depend on reading those partitions at runtime.
 
 Useful storage checks on a booted phone:
 
@@ -109,10 +122,10 @@ The next useful hardware targets, in roughly pragmatic order:
    USB data role, wake behavior.
 2. Stabilize RT6010 haptics on r58+ and confirm it no longer freezes/reboots.
 3. Fix MT6363 key handling for power and volume-up.
-4. Bring up flashlight as LED-class or V4L2 flash.
-5. Port the MT6631 connectivity foundation: conninfra power/reset/EMI first,
-   then WMT, then Wi-Fi/BT/GNSS clients.
-6. Add Bluetooth/GNSS after connectivity is stable.
+4. Validate r66 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
+   then Bluetooth.
+5. Bring up flashlight as LED-class or V4L2 flash.
+6. Add GNSS/FM clients after Wi-Fi/BT connectivity is stable.
 7. Bring up MT6878 AFE, MT6369 audio routing, AW88261 speaker path and UCM.
 8. Add sensorhub/IIO support for rotation, proximity and ambient light.
 9. Treat modem/SIM and cameras as later large projects.
