@@ -13,11 +13,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=56`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=57`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r56 packages installed; that would make future packages look like
+r50-r57 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -64,6 +64,11 @@ normal Alpine/postmarketOS practice.
 | `0036-arm64-dts-mt6878-tetris-enable-rt6010-haptics.patch` | Enables the RT6010 node for the haptics driver. |
 | `0037-clk-mediatek-mt6878-audiosys.patch` | Adds MT6878 audiosys clock foundation. Audio still needs AFE/machine-driver work. |
 | `0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch` | Adds disabled RT1711H Type-C inventory node. |
+| `0039-usb-typec-mt6375-tcpc.patch` | Adds the MT6375 interrupt domain and a minimal Linux TCPM/TCPCI Type-C driver. |
+
+The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
+detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
+not a confirmed external RT1711H controller.
 
 ## Known cleanup debt
 
@@ -79,9 +84,11 @@ normal Alpine/postmarketOS practice.
 
 ## Next clean patch targets
 
-1. Flashlight as LED-class/V4L2 flash.
-2. MT6631 Wi-Fi through the minimum conninfra/WMT/firmware path.
-3. Bluetooth/GNSS after connectivity is stable.
-4. MT6878 AFE + MT6369 machine driver + AW88261 routing + UCM.
-5. Sensorhub/IIO for rotation, proximity and ambient light.
-6. Modem/SIM and cameras as later large projects.
+1. Validate MT6375 Type-C attach/orientation/role events on device, then remove
+   the disabled RT1711H inventory node if hardware confirms it is not populated.
+2. Flashlight as LED-class/V4L2 flash.
+3. MT6631 Wi-Fi through the minimum conninfra/WMT/firmware path.
+4. Bluetooth/GNSS after connectivity is stable.
+5. MT6878 AFE + MT6369 machine driver + AW88261 routing + UCM.
+6. Sensorhub/IIO for rotation, proximity and ambient light.
+7. Modem/SIM and cameras as later large projects.
