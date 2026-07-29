@@ -60,7 +60,8 @@ prepare() {
 
 build() {
 	unset LDFLAGS
-	make -j4 ARCH="$_carch" LLVM=1 \
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" ARCH="$_carch" LLVM=1 \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
 		mediatek/mt6878-nothing-tetris.dtb
@@ -72,7 +73,8 @@ package() {
 	install -Dm644 "$builddir/arch/$_carch/boot/Image.gz" \
 				   "$pkgdir/boot/vmlinuz"
 
-	make -j4 modules_install \
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" modules_install \
 		ARCH="$_carch" \
 		INSTALL_PATH="$pkgdir"/boot/ \
 		INSTALL_MOD_PATH="$pkgdir" \

@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate-overlay:
     runs-on: ubuntu-latest
@@ -33,7 +37,7 @@ jobs:
         run: |
           apk add --no-cache \
             android-tools \
-            build-base bzip2 coreutils cryptsetup dosfstools e2fsprogs-extra \
+            build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
             file findutils git linux-headers mtools multipath-tools openssl \
             openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
             util-linux xz zstd
@@ -54,15 +58,27 @@ jobs:
       - name: Prepare pmbootstrap workdir
         run: |
           mkdir -p /pmwork/work/cache_distfiles
+          mkdir -p /pmwork/work/cache_ccache
+          mkdir -p /pmwork/work/packages
           printf "8\n" > /pmwork/work/version
+      - name: Restore pmbootstrap cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /pmwork/work/cache_distfiles
+            /pmwork/work/cache_ccache
+            /pmwork/work/packages
+          key: pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}
+          restore-keys: |
+            pmb-${{ runner.os }}-
       - name: Build kernel package
         run: |
           cd /work/upstream/pmbootstrap
-          ./pmbootstrap.py --as-root --no-ccache \
+          ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             checksum linux-postmarketos-mediatek-mt6878
-          ./pmbootstrap.py --as-root --no-ccache \
+          ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64 ||
@@ -70,11 +86,11 @@ jobs:
       - name: Build device package
         run: |
           cd /work/upstream/pmbootstrap
-          ./pmbootstrap.py --as-root --no-ccache \
+          ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             checksum device-nothing-tetris
-          ./pmbootstrap.py --as-root --no-ccache \
+          ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax device-nothing-tetris --arch aarch64 ||
@@ -82,7 +98,7 @@ jobs:
       - name: Build install images
         run: |
           cd /work/upstream/pmbootstrap
-          ./pmbootstrap.py --as-root --no-ccache \
+          ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
             install --password 147147 ||

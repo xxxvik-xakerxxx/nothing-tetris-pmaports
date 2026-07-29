@@ -14,9 +14,9 @@ docker run --rm --privileged \
 	sh -lc '
 		set -eu
 		ulimit -n 1048576
-		export CCACHE_DISABLE=1
-		export JOBS=1
-		export MAKEFLAGS=-j1
+		jobs=${JOBS:-$(nproc 2>/dev/null || echo 4)}
+		export JOBS="$jobs"
+		export MAKEFLAGS="-j$jobs"
 		pmbootstrap_work=/pmwork-arm64/work2
 		mkdir -p "$pmbootstrap_work"
 		test -f /pmwork-arm64/version || printf "8\n" > /pmwork-arm64/version
@@ -29,7 +29,7 @@ docker run --rm --privileged \
 		fi
 
 		apk add --no-cache \
-			build-base bzip2 coreutils cryptsetup dosfstools e2fsprogs-extra \
+			build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
 			file findutils git linux-headers mtools multipath-tools openssl \
 			openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
 			util-linux xz zstd >/dev/null
@@ -53,12 +53,10 @@ docker run --rm --privileged \
 
 		cd /work/upstream/pmbootstrap
 		./pmbootstrap.py --as-root \
-			--no-ccache \
 			--work "$pmbootstrap_work" \
 			-c /work/ci/pmbootstrap-aarch64.cfg \
 			checksum linux-postmarketos-mediatek-mt6878
 		./pmbootstrap.py --as-root \
-			--no-ccache \
 			--work "$pmbootstrap_work" \
 			-c /work/ci/pmbootstrap-aarch64.cfg \
 			build --lax --force \
