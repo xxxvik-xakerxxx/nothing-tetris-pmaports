@@ -28,7 +28,7 @@
 +obj-$(CONFIG_MTK_MT6878_CONSYS) += mtk-mt6878-consys.o
 --- /dev/null
 +++ b/drivers/soc/mediatek/mtk-mt6878-consys.c
-@@ -0,0 +1,319 @@
+@@ -0,0 +1,469 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Minimal MediaTek MT6878 / MT6631 connectivity subsystem bring-up.
@@ -51,10 +51,13 @@
 +
 +enum mt6878_consys_reg {
 +	CONSYS_RGU_ON,
++	CONSYS_INFRACFG_AO,
 +	CONSYS_CFG_ON,
 +	CONSYS_WT_SLP,
 +	CONSYS_BUS_CR_ON,
++	CONSYS_CFG,
 +	CONSYS_HOST_CSR,
++	CONSYS_SPM,
 +	CONSYS_REG_MAX,
 +};
 +
@@ -65,11 +68,24 @@
 +
 +static const struct mt6878_consys_regmap mt6878_consys_regs[] = {
 +	[CONSYS_RGU_ON] = { 0, "rgu_on" },
++	[CONSYS_INFRACFG_AO] = { 1, "infracfg_ao" },
 +	[CONSYS_CFG_ON] = { 4, "cfg_on" },
 +	[CONSYS_WT_SLP] = { 5, "wt_slp" },
 +	[CONSYS_BUS_CR_ON] = { 6, "bus_cr_on" },
++	[CONSYS_CFG] = { 7, "cfg" },
 +	[CONSYS_HOST_CSR] = { 20, "host_csr" },
++	[CONSYS_SPM] = { 22, "spm" },
 +};
++
++#define MT6878_CONSYS_POWERON_CONFIG_EN		0x000
++#define MT6878_CONSYS_CONN_PWR_CON		0xe04
++#define MT6878_CONSYS_INFRA_PROT_EN_CLR_0	0xc48
++#define MT6878_CONSYS_INFRA_PROT_RDY_STA_0	0xc4c
++#define MT6878_CONSYS_INFRA_PROT_EN_CLR_1	0xc58
++#define MT6878_CONSYS_INFRA_PROT_RDY_STA_1	0xc5c
++#define MT6878_CONSYS_MCU_PROT_EN_CLR_0		0xc98
++#define MT6878_CONSYS_MCU_PROT_RDY_STA_0		0xc9c
++#define MT6878_CONSYS_CONN_HW_VER		0x02050401
 +
 +struct mt6878_consys_supply {
 +	const char *name;
@@ -168,6 +184,125 @@
 +	return readl(cs->regs[reg] + offset);
 +}
 +
++static void mt6878_consys_write(struct mt6878_consys *cs,
++				enum mt6878_consys_reg reg, u32 offset, u32 val)
++{
++	writel(val, cs->regs[reg] + offset);
++}
++
++static void mt6878_consys_set_bits(struct mt6878_consys *cs,
++				   enum mt6878_consys_reg reg,
++				   u32 offset, u32 mask)
++{
++	mt6878_consys_write(cs, reg, offset,
++			    mt6878_consys_read(cs, reg, offset) | mask);
++}
++
++static void mt6878_consys_clear_bits(struct mt6878_consys *cs,
++				     enum mt6878_consys_reg reg,
++				     u32 offset, u32 mask)
++{
++	mt6878_consys_write(cs, reg, offset,
++			    mt6878_consys_read(cs, reg, offset) & ~mask);
++}
++
++static void mt6878_consys_update_bits(struct mt6878_consys *cs,
++				      enum mt6878_consys_reg reg,
++				      u32 offset, u32 mask, u32 val)
++{
++	u32 tmp = mt6878_consys_read(cs, reg, offset);
++
++	tmp &= ~mask;
++	tmp |= val & mask;
++	mt6878_consys_write(cs, reg, offset, tmp);
++}
++
++static int mt6878_consys_poll_bit(struct mt6878_consys *cs,
++				  enum mt6878_consys_reg reg,
++				  u32 offset, u32 bit, bool set,
++				  unsigned int tries, unsigned int delay_us)
++{
++	u32 val;
++
++	while (tries--) {
++		val = mt6878_consys_read(cs, reg, offset);
++		if (!!(val & BIT(bit)) == set)
++			return 0;
++
++		usleep_range(delay_us, delay_us + 100);
++	}
++
++	val = mt6878_consys_read(cs, reg, offset);
++	dev_err(cs->dev, "%s[0x%03x] bit %u did not become %u, val=0x%08x\n",
++		mt6878_consys_regs[reg].name, offset, bit, set, val);
++	return -ETIMEDOUT;
++}
++
++static int mt6878_consys_hw_power_on(struct mt6878_consys *cs)
++{
++	u32 chip_id;
++	int ret;
++
++	mt6878_consys_update_bits(cs, CONSYS_SPM,
++				  MT6878_CONSYS_POWERON_CONFIG_EN,
++				  0xffff0001, 0x0b160001);
++
++	mt6878_consys_set_bits(cs, CONSYS_SPM,
++			       MT6878_CONSYS_CONN_PWR_CON, BIT(2));
++	ret = mt6878_consys_poll_bit(cs, CONSYS_SPM,
++				     MT6878_CONSYS_CONN_PWR_CON,
++				     30, true, 10, 500);
++	if (ret)
++		return ret;
++
++	mt6878_consys_set_bits(cs, CONSYS_SPM,
++			       MT6878_CONSYS_CONN_PWR_CON, BIT(3));
++	ret = mt6878_consys_poll_bit(cs, CONSYS_SPM,
++				     MT6878_CONSYS_CONN_PWR_CON,
++				     31, true, 10, 500);
++	if (ret)
++		return ret;
++
++	mt6878_consys_clear_bits(cs, CONSYS_SPM,
++				 MT6878_CONSYS_CONN_PWR_CON, BIT(4));
++	udelay(1);
++	mt6878_consys_clear_bits(cs, CONSYS_SPM,
++				 MT6878_CONSYS_CONN_PWR_CON, BIT(1));
++	mt6878_consys_set_bits(cs, CONSYS_SPM,
++			       MT6878_CONSYS_CONN_PWR_CON, BIT(0));
++	usleep_range(500, 1000);
++
++	mt6878_consys_set_bits(cs, CONSYS_INFRACFG_AO,
++			       MT6878_CONSYS_MCU_PROT_EN_CLR_0, BIT(0));
++	ret = mt6878_consys_poll_bit(cs, CONSYS_INFRACFG_AO,
++				     MT6878_CONSYS_MCU_PROT_RDY_STA_0,
++				     0, false, 100, 500);
++	if (ret)
++		return ret;
++
++	mt6878_consys_set_bits(cs, CONSYS_INFRACFG_AO,
++			       MT6878_CONSYS_INFRA_PROT_EN_CLR_1, BIT(12));
++	ret = mt6878_consys_poll_bit(cs, CONSYS_INFRACFG_AO,
++				     MT6878_CONSYS_INFRA_PROT_RDY_STA_1,
++				     12, false, 100, 500);
++	if (ret)
++		return ret;
++
++	mt6878_consys_set_bits(cs, CONSYS_INFRACFG_AO,
++			       MT6878_CONSYS_INFRA_PROT_EN_CLR_0, BIT(8));
++	mt6878_consys_set_bits(cs, CONSYS_INFRACFG_AO,
++			       MT6878_CONSYS_MCU_PROT_EN_CLR_0, BIT(1));
++	msleep(5);
++
++	chip_id = mt6878_consys_read(cs, CONSYS_CFG, 0x0);
++	if (chip_id != MT6878_CONSYS_CONN_HW_VER)
++		return dev_err_probe(cs->dev, -ENODEV,
++				     "unexpected CONN HW version 0x%08x\n",
++				     chip_id);
++
++	return 0;
++}
++
 +static int mt6878_consys_power_on(struct mt6878_consys *cs)
 +{
 +	int ret;
@@ -183,17 +318,27 @@
 +	if (ret)
 +		goto err_supplies;
 +
++	ret = mt6878_consys_hw_power_on(cs);
++	if (ret)
++		goto err_runtime;
++
 +	usleep_range(2000, 3000);
 +
 +	dev_info(cs->dev,
-+		 "powered on: rgu=0x%08x cfg=0x%08x wt_slp=0x%08x host=0x%08x\n",
++		 "powered on: pwr=0x%08x rgu=0x%08x cfg=0x%08x chip=0x%08x wt_slp=0x%08x host=0x%08x\n",
++		 mt6878_consys_read(cs, CONSYS_SPM,
++				    MT6878_CONSYS_CONN_PWR_CON),
 +		 mt6878_consys_read(cs, CONSYS_RGU_ON, 0x0),
 +		 mt6878_consys_read(cs, CONSYS_CFG_ON, 0x0),
++		 mt6878_consys_read(cs, CONSYS_CFG, 0x0),
 +		 mt6878_consys_read(cs, CONSYS_WT_SLP, 0x0),
 +		 mt6878_consys_read(cs, CONSYS_HOST_CSR, 0x0));
 +
 +	cs->powered = true;
 +	return 0;
++
++err_runtime:
++	pm_runtime_put_sync(cs->dev);
 +
 +err_supplies:
 +	mt6878_consys_disable_supplies(cs);
@@ -255,6 +400,11 @@
 +				     mt6878_consys_read(cs, CONSYS_RGU_ON, 0x0));
 +		len += sysfs_emit_at(buf, len, "rgu_on[0x010]=0x%08x\n",
 +				     mt6878_consys_read(cs, CONSYS_RGU_ON, 0x10));
++		len += sysfs_emit_at(buf, len, "spm[0xe04]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_SPM,
++							MT6878_CONSYS_CONN_PWR_CON));
++		len += sysfs_emit_at(buf, len, "cfg[0x000]=0x%08x\n",
++				     mt6878_consys_read(cs, CONSYS_CFG, 0x0));
 +		len += sysfs_emit_at(buf, len, "cfg_on[0x000]=0x%08x\n",
 +				     mt6878_consys_read(cs, CONSYS_CFG_ON, 0x0));
 +		len += sysfs_emit_at(buf, len, "cfg_on[0x018]=0x%08x\n",

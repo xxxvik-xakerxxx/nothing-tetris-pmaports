@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=62
+pkgrel=66
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -16,6 +16,7 @@ makedepends="
 	clang
 	devicepkg-dev
 	flex
+	kmod
 	lld
 	llvm
 	openssl-dev
@@ -25,9 +26,13 @@ makedepends="
 
 _repository="linux"
 _commit="d84b264a54a37611f2f46bc19363cb9b41606205"
+_connmods_commit="5f75a3b13e8135d45b4b0b70ec893345144f70df"
+_devmods_commit="957dac185efe46cbf6336b0fff9516d84c8cd78f"
 _config="config-$_flavor.$arch"
 source="
 	$pkgname-$_commit.tar.gz::https://github.com/MT6878-mainline/$_repository/archive/$_commit.tar.gz
+	android-kernel-modules-$_connmods_commit.tar.gz::https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878/archive/$_connmods_commit.tar.gz
+	android-kernel-device-modules-$_devmods_commit.tar.gz::https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878/archive/$_devmods_commit.tar.gz
 	$_config
 	0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch
 	0002-input-touchscreen-add-focaltech-ft3519t.patch
@@ -52,10 +57,75 @@ source="
 	0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch
 "
 builddir="$srcdir/$_repository-$_commit"
+_connmods_dir="$srcdir/android_kernel_modules_nothing_mt6878-$_connmods_commit"
+_devmods_dir="$srcdir/android_kernel_device_modules_6.1_nothing_mt6878-$_devmods_commit"
+_android_top="$srcdir/android-top"
 
 prepare() {
 	default_prepare
 	cp "$srcdir/config-$_flavor.$arch" .config
+
+	mkdir -p "$_android_top"/vendor/mediatek/kernel_modules
+	ln -snf "$_connmods_dir"/connectivity \
+		"$_android_top"/vendor/mediatek/kernel_modules/connectivity
+	find "$_connmods_dir"/connectivity -name Kbuild -o -name Makefile |
+		xargs sed -i 's/-Werror/-Wno-error/g'
+}
+
+_connectivity_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		TOP="$_android_top" \
+		MTK_PLATFORM=mt6878 \
+		MTK_PLATFORM_WMT=mt6878 \
+		CONFIG_MTK_PLATFORM=mt6878 \
+		TARGET_BOARD_PLATFORM_WMT=mt6878 \
+		TARGET_BUILD_VARIANT=user \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_COMBO=y \
+		CONFIG_MTK_COMBO_WIFI=m \
+		CONFIG_MTK_COMBO_CHIP_CONSYS_6878=y \
+		CONFIG_MTK_COMBO_WIFI_HIF=axi \
+		CONFIG_MTK_CONNINFRA=m \
+		CONFIG_CONNINFRA_PLAT_BUILD_MODE=module \
+		CONFIG_WLAN_DRV_BUILD_IN=n \
+		MTK_CONSYS_ADIE=MT6631 \
+		"$@" modules
+}
+
+_build_connectivity_modules() {
+	_conn="$_connmods_dir"/connectivity
+	_symbols=""
+
+	_connectivity_make "$_conn"/conninfra
+	_symbols="$_conn/conninfra/Module.symvers"
+
+	_connectivity_make "$_conn"/connfem KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_conn/connfem/Module.symvers"
+
+	_connectivity_make "$_conn"/common KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_conn/common/Module.symvers"
+
+	_connectivity_make "$_conn"/wlan/adaptor \
+		CONNAC_VER=2_0 \
+		MODULE_NAME=wmtWifi \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_conn/wlan/adaptor/Module.symvers"
+
+	_connectivity_make "$_conn"/wlan/core/gen4m \
+		MODULE_NAME=wlan_drv_gen4m_6878 \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_conn/wlan/core/gen4m/Module.symvers"
+
+	_connectivity_make "$_conn"/bt/linux_v2 \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
 build() {
@@ -65,6 +135,7 @@ build() {
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
 		mediatek/mt6878-nothing-tetris.dtb
+	_build_connectivity_modules
 }
 
 package() {
@@ -84,12 +155,27 @@ package() {
 		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
+	_release="$(cat "$builddir"/include/config/kernel.release)"
+	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-connectivity"
+	for _module in \
+		"$_connmods_dir"/connectivity/conninfra/conninfra.ko \
+		"$_connmods_dir"/connectivity/connfem/connfem.ko \
+		"$_connmods_dir"/connectivity/common/wmt_drv.ko \
+		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
+		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
+		"$_connmods_dir"/connectivity/bt/linux_v2/btmtk_uart_unify.ko; do
+		install -Dm644 "$_module" "$_extra/${_module##*/}"
+	done
+	depmod -b "$pkgdir" "$_release"
+
 	install -D "$builddir"/include/config/kernel.release \
 		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
 }
 
 sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
+SKIP  android-kernel-modules-5f75a3b13e8135d45b4b0b70ec893345144f70df.tar.gz
+SKIP  android-kernel-device-modules-957dac185efe46cbf6336b0fff9516d84c8cd78f.tar.gz
 d9e3753e4bb50d5c7a204651d0bcb1391885591a5f07a9f3736fd13f5b243f9109dc026f75220ce16e4b5ab7f18825ae23be1e64f54abb4f824161c1c36380c1  config-postmarketos-mediatek-mt6878.aarch64
 744778fdb90e64344b3fb7f92a9cc53c4a1f8caf2f02a5df7f0e303a4c6604bb009b8dd552f3752e76fe08d9a319515310a78f498fb34f4cced16a71042d585b  0001-arm64-dts-mt6878-nothing-tetris-add-FT3519-touch.patch
 f816e8a404b3053c03b0befc7036612f88c00527b3f87e6494e468209a2dfd2530c82d8869604673e4538ad4d252ef050f97d5a86435c166e04b4afc1957f5fa  0002-input-touchscreen-add-focaltech-ft3519t.patch
@@ -99,17 +185,17 @@ d576f2391091498a049182dbaa36f57776c209ac0f258e01dc7bf18826074304597b97d935451197
 0c9836d242400a8faacc5ba644b7f822864f02011f5c85f0a125c6f76a86e1431cca54079f611458190ba5393bf4aa6d6331d4e46cabe6147928749d5ca17770  0013-drm-sysfb-flush-inherited-framebuffer-cache.patch
 8661069cb9a51eed5f8c3d8910d88a0e20bbc02038d9cee5d4328bc98b7df09e919b7734b88fa27b693ef1058fd3ad060801399e398765da1b78719e76a92ac7  0014-drm-sysfb-limit-cache-clean-to-damage.patch
 7c422125b04de6d25423c3a8bc8adc1c0ed4d4533078bddf4e969f5e967503e370d413a1c648368aca8e20956d8f68ff31904b50771af6be484521d538b4233a  0015-drm-sysfb-use-iomem-copy-for-tetris.patch
-39633e81a761af52fb74e512beb93257c64c61a5a17f965ec4f48c34294b67543e95b6d346413753a3b21274e9c65174af9a3041d6bf4e463ec51d211295c8cf  0016-mt6878-add-mt6363-keys-and-mt6375-telemetry.patch
+a90b6cf8dbd843b330d8096be18cd98fe5138a885d714e12f82ded0439f7dde592ceab59dd8830c7fca89ab72bc56312489c68c36614ca81b0fd3fd129edf97b  0016-mt6878-add-mt6363-keys-and-mt6375-telemetry.patch
 261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0025-pinctrl-mediatek-mt6878-fill-eint-table-holes.patch
 e91a650a198fdf7a847cbfc1b00c4de7d5740c0df4d110e881c997c941cb90734d248536a1aa6333cb304a18dc55d29cde541f3185c493d7673c3c3f46db6f5e  0029-power-supply-mt6375-add-read-only-monitor.patch
 d1cba3c08d57412b8db8e693345c30e4a7c7388eba6ada37cce25dac7ca4d1e248b26a3b6652bb9572177673cffb8bfc2375a50b5715b474c3af729bbe866f9f  0030-regulator-mt6363-add-connectivity-rails.patch
 0fd76968d4da6303c9d724dc96590f163f5c24da98b09ea5b75910945a36de160ad5a5923d82d6b6dffeb322d959c135eac6cfbf8c8c54cb64a6f5e3cb6d05ca  0032-power-supply-mt6375-register-monitor-on-platform-bus.patch
 f31c9a5fa0ef9ce19e43fdc5a1f6fee17aa9994c346c26f32c7fb4973d2decea7be4278d7388fa9345fa7d00a75cf5a293ac238ea29fd9d398089c2c0bcf3664  0033-asoc-aw88261-identify-tetris-speaker-amp.patch
 4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0034-clk-mediatek-mt6878-add-mfg-plls.patch
-22d0876d96f0e28be8391ac27e8d7ad02794e0a8efe9a3098295bdb9418748e18e441c2462d1da3c815c52d0db4be4f86d04f93d35bb5291028f32ec480439ec  0035-input-rt6010-haptics.patch
+c713ac46bf195fccec9994f12a3785e11e14c52d8853f5a6bc21d81628ee4fd52c700ff691d64bfceb0fb542bb8e6636467bfb87028fc5622a68415eacb2daa9  0035-input-rt6010-haptics.patch
 e51ee3e68350eaebfc63b0c4f479c6791bd917459760a7f3c4d56ff2e6e6bb3cc363c3af14efd15b2ac92115d02c86e5f1eb2c0a70326ace22e1855446c56767  0036-arm64-dts-mt6878-tetris-enable-rt6010-haptics.patch
 2823a1815438a48ae1b539a88c1c8f46b62737c25dd6febff19459de69d5b6bc84b11ed947a2013968cae4d71af189dc8a23c9c6dfb6c0492be2930aa79e4465  0037-clk-mediatek-mt6878-audiosys.patch
 53c684629a269eccb625e488008fad00d322d7cb7f99ec911d013c23f14f68dc957e38c163b544101cafafc05353432448eb9c5a61935774f5ed961d5d96c3a3  0038-arm64-dts-mt6878-tetris-add-rt1711h-typec-inventory.patch
-9b138efc3b7af5a386fad8d1a37571b7df91417eeb305492cecd4ddb845e205d41f5c14d368a36ee2a886b9082187f6bf56264b37d711ce41d2dcac0a5764ed1  0039-usb-typec-mt6375-tcpc.patch
-abcf649127de02d8030028b043ed97f0abfd76bb4f5b148005a96bf49cd621b23ea62226783bfb4fc3541db186654038ffef5098eb54a242a95c3c4cc747a918  0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch
+dfff59e9b15f02d37c3ed8fc4051846fd2ff53af6457cc19e60b59ee4c1853a76ab4a019759f732cf8c41748f298f0967556188b577c02164f6c6878586722d4  0039-usb-typec-mt6375-tcpc.patch
+6d543dce4b63b3ee3583878f411bcdd701fa2c6b17eabe2ff0978622855f7a6f022b4f0cfa3bb8a64b33ff8c45369cc2063a6b10d4a461fa0b30e8e523eec813  0040-soc-mediatek-mt6878-add-consys-bringup-driver.patch
 "

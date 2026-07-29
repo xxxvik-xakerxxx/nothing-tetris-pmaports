@@ -157,9 +157,12 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_FIFO_AE			0x0080
 +#define RT6010_FIFO_AF			0x00c0
 +#define RT6010_PRE_F0			817
-+#define RT6010_DEFAULT_GAIN		0x20
-+#define RT6010_MAX_GAIN			0x40
-+#define RT6010_DEFAULT_BOOST		0x07
++#define RT6010_MIN_GAIN			0x04
++#define RT6010_DEFAULT_GAIN		0x08
++#define RT6010_MAX_GAIN			0x18
++#define RT6010_DEFAULT_BOOST		0x04
++#define RT6010_DEFAULT_DURATION_MS	20
++#define RT6010_MAX_DURATION_MS		40
 +
 +static const u8 rt6010_waveform[] = {
 +	0x00, 0x1f, 0x3c, 0x56, 0x6b, 0x79, 0x7f, 0x7f,
@@ -414,6 +417,26 @@ index 000000000000..e0a625a1ef2d
 +	return rt6010_write8(rt, RT6010_REG_BEMF_CFG2, val & ~BIT(1));
 +}
 +
++static void rt6010_log_status(struct rt6010 *rt, const char *prefix)
++{
++	unsigned int int_status;
++	unsigned int prot1;
++	unsigned int prot2;
++	unsigned int error_code;
++
++	if (regmap_read(rt->regmap, RT6010_REG_INT_STATUS, &int_status))
++		int_status = 0xff;
++	if (regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS1, &prot1))
++		prot1 = 0xff;
++	if (regmap_read(rt->regmap, RT6010_REG_PROTECTION_STATUS2, &prot2))
++		prot2 = 0xff;
++	if (regmap_read(rt->regmap, RT6010_REG_ERROR_CODE, &error_code))
++		error_code = 0xff;
++
++	dev_info(rt->dev, "%s: int=%#02x prot=%#02x/%#02x error=%#02x\n",
++		 prefix, int_status, prot1, prot2, error_code);
++}
++
 +static int rt6010_init_chip(struct rt6010 *rt)
 +{
 +	unsigned int chip_id;
@@ -508,8 +531,8 @@ index 000000000000..e0a625a1ef2d
 +	if (!rt->initialized)
 +		return -ENODEV;
 +
-+	gain = clamp_t(u32, level >> 8, RT6010_DEFAULT_GAIN,
-+		       RT6010_MAX_GAIN);
++	gain = RT6010_MIN_GAIN +
++	       level * (RT6010_MAX_GAIN - RT6010_MIN_GAIN) / 0xffff;
 +
 +	error = rt6010_stop_locked(rt);
 +	if (error)
@@ -529,10 +552,20 @@ index 000000000000..e0a625a1ef2d
 +		return error;
 +	error = rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_START);
 +	if (error)
-+		return error;
++		goto out_stop;
 +
-+	return regmap_raw_write(rt->regmap, RT6010_REG_STREAM_DATA,
-+				rt6010_waveform, sizeof(rt6010_waveform));
++	error = regmap_raw_write(rt->regmap, RT6010_REG_STREAM_DATA,
++				 rt6010_waveform, sizeof(rt6010_waveform));
++	if (error)
++		goto out_stop;
++
++	rt6010_log_status(rt, "start");
++	return 0;
++
++out_stop:
++	rt6010_stop_locked(rt);
++	rt6010_log_status(rt, "start failed");
++	return error;
 +}
 +
 +static int rt6010_play_effect(struct input_dev *input, void *data,
@@ -555,8 +588,8 @@ index 000000000000..e0a625a1ef2d
 +	error = rt6010_start_locked(rt, strong, weak);
 +	if (!error) {
 +		if (!duration)
-+			duration = 40;
-+		duration = clamp(duration, 10U, 150U);
++			duration = RT6010_DEFAULT_DURATION_MS;
++		duration = clamp(duration, 5U, RT6010_MAX_DURATION_MS);
 +		schedule_delayed_work(&rt->stop_work, msecs_to_jiffies(duration));
 +	}
 +

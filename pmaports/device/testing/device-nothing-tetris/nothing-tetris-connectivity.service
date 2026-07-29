@@ -1,0 +1,12 @@
+[Unit]
+Description=Nothing Tetris connectivity bring-up
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-connectivity-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

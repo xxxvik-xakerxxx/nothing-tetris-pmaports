@@ -52,7 +52,7 @@
  
  #define MT6375_SLAVEID_TCPC	0x4e
  #define MT6375_SLAVEID_PMU	0x34
-@@ -20,6 +24,10 @@
+@@ -20,6 +24,11 @@
  
  #define MT6375_VID		0x70
  #define MT6375_REG_DEV_INFO	0x0100
@@ -60,6 +60,7 @@
 +#define MT6375_REG_PD_EVT	0x01df
 +#define MT6375_REG_CHG_MSK0	0x01f0
 +#define MT6375_IRQ_REGS		(MT6375_REG_PD_EVT - MT6375_REG_CHG_IRQ0 + 1)
++#define MT6375_GM30_EVT		104
  #define MT6375_REG_HK2_END	0x04ff
  #define MT6375_BANK_TCPC_RT2	0xf2
  #define MT6375_REG_RT2_START	0xf200
@@ -76,7 +77,7 @@
  };
  
  static const u8 mt6375_slave_addr[MT6375_SLAVE_MAX] = {
-@@ -138,11 +152,159 @@
+@@ -138,11 +152,177 @@
  	.readable_reg = mt6375_accessible_reg,
  	.writeable_reg = mt6375_accessible_reg,
  };
@@ -122,9 +123,14 @@
 +	struct mt6375 *mt6375 = domain->host_data;
 +
 +	irq_set_chip_data(virq, mt6375);
-+	irq_set_chip_and_handler(virq, &mt6375->irq_chip, handle_level_irq);
++	if (hwirq == MT6375_GM30_EVT)
++		irq_set_chip_and_handler(virq, &mt6375->irq_chip,
++					 handle_simple_irq);
++	else {
++		irq_set_chip(virq, &mt6375->irq_chip);
++		irq_set_nested_thread(virq, true);
++	}
 +	irq_set_parent(virq, mt6375->irq);
-+	irq_set_nested_thread(virq, true);
 +	irq_set_noprobe(virq);
 +
 +	return 0;
@@ -132,8 +138,20 @@
 +
 +static const struct irq_domain_ops mt6375_irq_domain_ops = {
 +	.map = mt6375_irq_map,
-+	.xlate = irq_domain_xlate_onecell,
++	.xlate = irq_domain_xlate_onetwocell,
 +};
++
++static irqreturn_t mt6375_irq_handler(int irq, void *data)
++{
++	struct mt6375 *mt6375 = data;
++	unsigned int virq;
++
++	virq = irq_find_mapping(mt6375->domain, MT6375_GM30_EVT);
++	if (virq)
++		generic_handle_irq(virq);
++
++	return IRQ_WAKE_THREAD;
++}
 +
 +static irqreturn_t mt6375_irq_thread(int irq, void *data)
 +{
@@ -158,7 +176,7 @@
 +		pr_warn("mt6375: failed to ack irq status: %d\n", ret);
  
 +	for (i = 0; i < MT6375_IRQ_REGS; i++) {
-+		if (!events[i])
++		if (!events[i] || i == MT6375_GM30_EVT / 8)
 +			continue;
 +
 +		for (bit = 0; bit < 8; bit++) {
@@ -213,10 +231,10 @@
 +	mt6375->irq_chip.irq_disable = mt6375_irq_disable;
 +	mt6375->irq_chip.flags = IRQCHIP_SKIP_SET_WAKE;
 +
-+	mt6375->domain = irq_domain_create_linear(dev_fwnode(&client->dev),
-+						  MT6375_IRQ_REGS * 8,
-+						  &mt6375_irq_domain_ops,
-+						  mt6375);
++	mt6375->domain = irq_domain_add_linear(client->dev.of_node,
++					       MT6375_IRQ_REGS * 8,
++					       &mt6375_irq_domain_ops,
++					       mt6375);
 +	if (!mt6375->domain)
 +		return -ENOMEM;
 +
@@ -225,7 +243,8 @@
 +	if (ret)
 +		return ret;
 +
-+	return devm_request_threaded_irq(&client->dev, client->irq, NULL,
++	return devm_request_threaded_irq(&client->dev, client->irq,
++					 mt6375_irq_handler,
 +					 mt6375_irq_thread, IRQF_ONESHOT,
 +					 dev_name(&client->dev), mt6375);
 +}
@@ -237,7 +256,7 @@
  	unsigned int id;
  	unsigned int i;
  	int ret;
-@@ -150,6 +312,7 @@
+@@ -150,6 +330,7 @@
  	mt6375 = devm_kzalloc(&client->dev, sizeof(*mt6375), GFP_KERNEL);
  	if (!mt6375)
  		return -ENOMEM;
@@ -245,7 +264,7 @@
  
  	for (i = 0; i < MT6375_SLAVE_MAX; i++) {
  		if (i == MT6375_SLAVE_PMU) {
-@@ -167,12 +330,12 @@
+@@ -167,12 +348,12 @@
  					     mt6375_slave_addr[i]);
  	}
  
@@ -263,7 +282,7 @@
  	if (ret)
  		return dev_err_probe(&client->dev, ret,
  				     "failed to read device ID\n");
-@@ -181,9 +344,12 @@
+@@ -181,9 +362,12 @@
  				     "unexpected device ID 0x%02x\n", id);
  
  	i2c_set_clientdata(client, mt6375);

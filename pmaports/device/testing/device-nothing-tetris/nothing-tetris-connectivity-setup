@@ -1,0 +1,78 @@
+#!/bin/sh
+set -eu
+
+log() {
+	printf '%s\n' "nothing-tetris-connectivity: $*"
+}
+
+firmware_dir=/lib/firmware
+packaged_blob=/usr/share/nothing-tetris/firmware/connsys_wifi_mt6878_mt6631.bin
+target_blob=$firmware_dir/connsys_wifi_mt6878_mt6631.bin
+
+install_firmware_aliases() {
+	mkdir -p "$firmware_dir"
+
+	if [ ! -s "$target_blob" ]; then
+		if [ -s "$packaged_blob" ]; then
+			cp -f "$packaged_blob" "$target_blob"
+		else
+			for part in \
+				/dev/disk/by-partlabel/connsys_wifi_a \
+				/dev/disk/by-partlabel/connsys_wifi_b; do
+				if [ -e "$part" ]; then
+					dd if="$part" of="$target_blob" bs=1M count=8 status=none
+					break
+				fi
+			done
+		fi
+	fi
+
+	if [ ! -s "$target_blob" ]; then
+		log "firmware blob is missing"
+		return 1
+	fi
+
+	for name in \
+		connsys_wifi_mt6878_mt6631 \
+		WIFI_RAM_CODE_soc7_0_1_1.bin \
+		WIFI_RAM_CODE_soc7_0_1_1 \
+		soc7_0_ram_wmmcu_1_1_hdr.bin \
+		soc7_0_ram_mcu_1_1_hdr.bin \
+		soc7_0_ram_bt_1_1_hdr.bin; do
+		ln -sf "${target_blob##*/}" "$firmware_dir/$name"
+	done
+}
+
+load_module() {
+	module=$1
+	if grep -qw "^$module" /proc/modules; then
+		return 0
+	fi
+	if modprobe "$module" 2>/dev/null; then
+		return 0
+	fi
+
+	release=$(uname -r)
+	path=/lib/modules/$release/extra/mediatek-connectivity/$module.ko
+	if [ -e "$path" ]; then
+		insmod "$path"
+	fi
+}
+
+install_firmware_aliases || true
+
+if [ -e /sys/bus/platform/devices/18000000.consys/power_on ]; then
+	printf '1\n' > /sys/bus/platform/devices/18000000.consys/power_on || true
+fi
+
+for module in \
+	conninfra \
+	connfem \
+	wmt_drv \
+	wmtWifi \
+	wlan_drv_gen4m_6878 \
+	btmtk_uart_unify; do
+	load_module "$module" || log "failed to load $module"
+done
+
+ip link show wlan0 >/dev/null 2>&1 && log "wlan0 is present" || log "wlan0 is not present yet"
