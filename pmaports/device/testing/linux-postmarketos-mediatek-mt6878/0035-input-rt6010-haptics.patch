@@ -64,7 +64,7 @@ new file mode 100644
 index 000000000000..e0a625a1ef2d
 --- /dev/null
 +++ b/drivers/input/misc/rt6010.c
-@@ -0,0 +1,560 @@
+@@ -0,0 +1,601 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * RT6010 LRA haptic controller.

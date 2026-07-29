@@ -309,7 +309,7 @@
  obj-$(CONFIG_TYPEC_QCOM_PMIC)		+= qcom/
 --- /dev/null
 +++ b/drivers/usb/typec/tcpm/tcpci_mt6375.c	2026-07-29 12:40:55
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,265 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * MediaTek MT6375 USB Type-C Port Controller Interface driver.
@@ -317,6 +317,7 @@
 +
 +#include <linux/bits.h>
 +#include <linux/interrupt.h>
++#include <linux/mod_devicetable.h>
 +#include <linux/module.h>
 +#include <linux/platform_device.h>
 +#include <linux/pm_wakeirq.h>
