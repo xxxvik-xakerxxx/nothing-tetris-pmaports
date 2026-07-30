@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=80
+pkgrel=81
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -130,6 +130,25 @@ prepare() {
 		"$_devmods_dir"/sound/soc/codecs/mt6369.c
 	sed -i '7481,7492{s/return ret;/priv->hp_efuse = NULL; return 0;/}' \
 		"$_devmods_dir"/sound/soc/codecs/mt6369.c
+	find "$_devmods_dir"/sound/soc -name '*.[ch]' -print0 |
+		xargs -0 perl -0pi -e \
+			's/class_create\(THIS_MODULE,\s*([^)]+?)\)/class_create($1)/g;
+			 s/\bdel_timer_sync\(/timer_delete_sync(/g;
+			 s/\bdel_timer\(/timer_delete(/g;
+			 s/\bstrlcpy\(/strscpy(/g'
+}
+
+_vendor_kcflags() {
+	printf '%s' \
+		'-Wno-error=format ' \
+		'-Wno-error=format-extra-args ' \
+		'-Wno-error=implicit-function-declaration ' \
+		'-Wno-error=incompatible-function-pointer-types ' \
+		'-Wno-error=incompatible-pointer-types ' \
+		'-Wno-error=int-conversion ' \
+		'-Wno-error=enum-conversion ' \
+		'-Wno-error=missing-prototypes ' \
+		'-Wno-error=return-type'
 }
 
 _connectivity_make() {
@@ -158,6 +177,7 @@ _connectivity_make() {
 		CONFIG_CONNINFRA_PLAT_BUILD_MODE=module \
 		CONFIG_WLAN_DRV_BUILD_IN=n \
 		MTK_CONSYS_ADIE=MT6631 \
+		KCFLAGS="$(_vendor_kcflags)" \
 		"$@" modules
 }
 
@@ -208,6 +228,7 @@ _audio_make() {
 		CONFIG_DEVICE_MODULES_SND_SOC_MT6878=m \
 		CONFIG_DEVICE_MODULES_SND_SOC_MT6878_MT6369=m \
 		CONFIG_SND_SOC_MT6369_ACCDET=n \
+		KCFLAGS="$(_vendor_kcflags)" \
 		"$@" modules
 }
 
