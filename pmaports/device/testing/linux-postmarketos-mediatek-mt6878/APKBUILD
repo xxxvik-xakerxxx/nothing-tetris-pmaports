@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=75
+pkgrel=76
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -61,6 +61,14 @@ prepare() {
 		"$_android_top"/vendor/mediatek/kernel_modules/connectivity
 	find "$_connmods_dir"/connectivity -name Kbuild -o -name Makefile |
 		xargs sed -i 's/-Werror/-Wno-error/g'
+	find \
+		"$_connmods_dir"/connectivity/conninfra \
+		"$_connmods_dir"/connectivity/common \
+		"$_connmods_dir"/connectivity/wlan/core/gen4m \
+		"$_connmods_dir"/connectivity/bt/linux_v2 \
+		-name '*.[ch]' -print0 |
+		xargs -0 perl -0pi -e \
+			's/#include <linux\/of_device.h>/#include <linux\/of_device.h>\n#include <linux\/mod_devicetable.h>/g'
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
 		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
