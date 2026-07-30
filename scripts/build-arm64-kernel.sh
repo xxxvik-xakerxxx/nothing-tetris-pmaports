@@ -45,9 +45,12 @@ docker run --rm --privileged \
 		fi
 		rm -rf \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris \
+			/work/upstream/pmaports/device/testing/firmware-nothing-tetris \
 			/work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878
 		rsync -a /work/pmaports/device/testing/device-nothing-tetris/ \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris/
+		rsync -a /work/pmaports/device/testing/firmware-nothing-tetris/ \
+			/work/upstream/pmaports/device/testing/firmware-nothing-tetris/
 		rsync -a /work/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
 			/work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
 
@@ -63,9 +66,7 @@ docker run --rm --privileged \
 			linux-postmarketos-mediatek-mt6878 --arch aarch64
 
 		mkdir -p /work/artifacts/apks
-		kernel_apk=$(find "$pmbootstrap_work/packages/edge/aarch64" \
-			-name "linux-postmarketos-mediatek-mt6878-*.apk" |
-			sort -V | tail -n 1)
-		test -n "$kernel_apk"
-		cp "$kernel_apk" /work/artifacts/apks/
+		find "$pmbootstrap_work/packages/edge/aarch64" \
+			-name "linux-postmarketos-mediatek-mt6878-*.apk" \
+			-exec cp {} /work/artifacts/apks/ \;
 	'

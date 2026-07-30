@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=78`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=84`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -62,15 +62,21 @@ normal Alpine/postmarketOS practice.
 | `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys clock foundation, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
 | `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
+| `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
+| `0014-mmc-mt6878-tetris-sdcard.patch` | Native MT6878 MSDC1 host support and the Tetris microSD slot wiring. |
+| `0015-leds-flash-lm3644-tetris.patch` | Native dual-channel LM3644 Linux LED flash-class driver and Tetris I2C/GPIO wiring. |
+| `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 
-The r78 package stages Tetris 16b Android MT6878 connectivity modules from the
-Nothing kernel module releases and installs the MT6631 Wi-Fi firmware blob into
-the device package for on-device validation. It also stages the official
+The r84 package stages Tetris 16b Android MT6878 connectivity modules from the
+Nothing kernel module releases. Connectivity firmware is isolated in
+`firmware-nothing-tetris`, and connectivity/audio modules are ABI-locked kernel
+subpackages. It also stages the official
 Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
 `snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369
 PMIC codec plus AW88261 speaker amplifier into the board DT. This is a
 practical overlay bring-up step, not an upstream-ready replacement for native
-Linux connectivity/audio support.
+Linux connectivity/audio support. Linux 6.18 compatibility changes are normal
+source patches instead of build-time source transformations.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
@@ -89,11 +95,13 @@ not a confirmed external RT1711H controller.
 
 ## Next clean patch targets
 
-1. Validate MT6375 Type-C attach/orientation/role events on device, then remove
-   the disabled RT1711H inventory node if hardware confirms it is not populated.
+1. Validate MT6375 attach/orientation/role handling after correcting the TCPCI
+   register window. The r63 live regmap confirms vendor ID `0x29cf` and product
+   ID `0x6375` in the main bank; the old `0xf200` mapping read only zeros.
 2. Validate r76 MT6631 vendor module loading on device: conninfra, WMT, Wi-Fi
    and Bluetooth.
-3. Flashlight as LED-class/V4L2 flash.
+3. Validate LM3644 torch/strobe channels and add the V4L2 flash bridge with
+   the camera stack.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
 5. Validate Tetris 16b vendor audio modules on device, then add UCM profiles
    for speaker and microphones.

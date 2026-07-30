@@ -1,0 +1,132 @@
+diff --git a/Documentation/devicetree/bindings/usb/fcs,fsa4480.yaml b/Documentation/devicetree/bindings/usb/fcs,fsa4480.yaml
+index 89b1fb9..28d9671 100644
+--- a/Documentation/devicetree/bindings/usb/fcs,fsa4480.yaml
++++ b/Documentation/devicetree/bindings/usb/fcs,fsa4480.yaml
+@@ -17,6 +17,7 @@ properties:
+           - enum:
+               - ocs,ocp96011
+           - const: fcs,fsa4480
++      - const: mediatek,hl5280
+ 
+   reg:
+     maxItems: 1
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+index 13719d7..0aba4ab 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -131,9 +131,16 @@
+ 	clock-frequency = <400000>;
+ 
+ 	audio-switch@42 {
+-		compatible = "mediatek,hl5280-audioswitch";
++		compatible = "mediatek,hl5280";
+ 		reg = <0x42>;
+-		status = "disabled";
++		mode-switch;
++		orientation-switch;
++
++		port {
++			hl5280_sbu_mux: endpoint {
++				remote-endpoint = <&typec_sbu_mux>;
++			};
++		};
+ 	};
+ };
+ 
+@@ -164,6 +171,19 @@
+ 			sink-pdos = <PDO_FIXED(5000, 2000,
+ 				PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP)>;
+ 			op-sink-microwatt = <10000000>;
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				port@2 {
++					reg = <2>;
++
++					typec_sbu_mux: endpoint {
++						remote-endpoint = <&hl5280_sbu_mux>;
++					};
++				};
++			};
+ 		};
+ 	};
+ };
+diff --git a/drivers/usb/typec/mux/fsa4480.c b/drivers/usb/typec/mux/fsa4480.c
+index c54e42c..fa1bf93 100644
+--- a/drivers/usb/typec/mux/fsa4480.c
++++ b/drivers/usb/typec/mux/fsa4480.c
+@@ -9,6 +9,7 @@
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
++#include <linux/property.h>
+ #include <linux/regmap.h>
+ #include <linux/usb/typec_dp.h>
+ #include <linux/usb/typec_mux.h>
+@@ -66,6 +67,7 @@ struct fsa4480 {
+ 
+ 	u8 cur_enable;
+ 	bool swap_sbu_lanes;
++	bool hl5280;
+ };
+ 
+ static const struct regmap_config fsa4480_regmap_config = {
+@@ -119,6 +121,9 @@ static int fsa4480_set(struct fsa4480 *fsa)
+ 	} else
+ 		return -EOPNOTSUPP;
+ 
++	if (fsa->hl5280 && (enable & FSA4480_ENABLE_AGND))
++		enable |= FSA4480_ENABLE_SENSE | FSA4480_ENABLE_MIC;
++
+ 	if (fsa->cur_enable & FSA4480_ENABLE_SBU) {
+ 		/* Disable SBU output while re-configuring the switch */
+ 		regmap_write(fsa->regmap, FSA4480_SWITCH_ENABLE,
+@@ -128,13 +133,27 @@ static int fsa4480_set(struct fsa4480 *fsa)
+ 		usleep_range(35, 1000);
+ 	}
+ 
+-	regmap_write(fsa->regmap, FSA4480_SWITCH_SELECT, sel);
+-	regmap_write(fsa->regmap, FSA4480_SWITCH_ENABLE, enable);
++	if (fsa->hl5280) {
++		/*
++		 * HL5280 requires the switch to be disabled before changing the
++		 * selection and at least 50 us before it is enabled again.
++		 */
++		regmap_write(fsa->regmap, FSA4480_SWITCH_ENABLE,
++			     FSA4480_ENABLE_DEVICE);
++		regmap_write(fsa->regmap, FSA4480_SWITCH_SELECT, sel);
++		usleep_range(50, 100);
++		regmap_write(fsa->regmap, FSA4480_SWITCH_ENABLE, enable);
++	} else {
++		regmap_write(fsa->regmap, FSA4480_SWITCH_SELECT, sel);
++		regmap_write(fsa->regmap, FSA4480_SWITCH_ENABLE, enable);
++	}
+ 
+ 	/* Start AUDIO JACK DETECTION to setup MIC, AGND & Sense muxes */
+-	if (enable & FSA4480_ENABLE_AGND)
++	if (enable & FSA4480_ENABLE_AGND) {
+ 		regmap_write(fsa->regmap, FSA4480_FUNCTION_ENABLE,
++			     fsa->hl5280 ? 0x09 :
+ 			     FSA4480_ENABLE_AUTO_JACK_DETECT);
++	}
+ 
+ 	if (enable & FSA4480_ENABLE_SBU) {
+ 		/* 15us to allow the SBU switch to turn on again */
+@@ -264,6 +283,7 @@ static int fsa4480_probe(struct i2c_client *client)
+ 		return -ENOMEM;
+ 
+ 	fsa->client = client;
++	fsa->hl5280 = device_is_compatible(dev, "mediatek,hl5280");
+ 	mutex_init(&fsa->lock);
+ 
+ 	ret = fsa4480_parse_data_lanes_mapping(fsa);
+@@ -343,6 +363,7 @@ MODULE_DEVICE_TABLE(i2c, fsa4480_table);
+ 
+ static const struct of_device_id fsa4480_of_table[] = {
+ 	{ .compatible = "fcs,fsa4480" },
++	{ .compatible = "mediatek,hl5280" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, fsa4480_of_table);

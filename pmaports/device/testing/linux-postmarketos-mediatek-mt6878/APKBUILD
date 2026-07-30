@@ -1,7 +1,8 @@
+# Co-Maintainer: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=81
+pkgrel=84
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -9,6 +10,11 @@ _flavor="postmarketos-mediatek-mt6878"
 url="https://github.com/MT6878-mainline/linux"
 license="GPL-2.0-only"
 options="!strip !check !tracedeps pmb:cross-native pmb:kconfigcheck-community"
+subpackages="
+	$pkgname-pmic:_pmic
+	$pkgname-connectivity:_connectivity
+	$pkgname-audio:_audio
+"
 makedepends="
 	bash
 	bc
@@ -46,6 +52,12 @@ source="
 	0010-audio-mt6878-aw88261.patch
 	0011-input-rt6010-haptics-tetris.patch
 	0012-usb-typec-mt6375-tcpc-tetris.patch
+	0013-iio-nvmem-mt6369-calibration.patch
+	0014-mmc-mt6878-tetris-sdcard.patch
+	0015-leds-flash-lm3644-tetris.patch
+	0016-usb-typec-hl5280-audio-switch.patch
+	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+	1101-vendor-audio-optional-calibration.patch.vendor
 "
 builddir="$srcdir/$_repository-$_commit"
 _connmods_dir="$srcdir/android_kernel_modules_nothing_mt6878-$_connmods_commit"
@@ -59,96 +71,18 @@ prepare() {
 	mkdir -p "$_android_top"/vendor/mediatek/kernel_modules
 	ln -snf "$_connmods_dir"/connectivity \
 		"$_android_top"/vendor/mediatek/kernel_modules/connectivity
-	find "$_connmods_dir"/connectivity -name Kbuild -o -name Makefile |
-		xargs sed -i 's/-Werror/-Wno-error/g'
-	find "$_devmods_dir"/sound -name Kbuild -o -name Makefile |
-		xargs sed -i 's/-Werror/-Wno-error/g'
-	find \
-		"$_connmods_dir"/connectivity/conninfra \
-		"$_connmods_dir"/connectivity/common \
-		"$_connmods_dir"/connectivity/wlan/core/gen4m \
-		"$_connmods_dir"/connectivity/bt/linux_v2 \
-		-name '*.[ch]' -print0 |
-		xargs -0 perl -0pi -e \
-			's/#include <linux\/of_device.h>/#include <linux\/of_device.h>\n#include <linux\/mod_devicetable.h>/g'
-	perl -0pi -e '
-		s/#include "plat_def.h"/#include "plat_def.h"\n\n#ifndef MTK_SIP_KERNEL_CONNSYS_CONTROL\n#define MTK_SIP_KERNEL_CONNSYS_CONTROL MTK_SIP_SMC_CMD(0x534)\n#endif/g;
-	' "$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
-	perl -0pi -e '
-		s@/\* For EMI MPU \*/\n#if \(LINUX_VERSION_CODE >= KERNEL_VERSION\(5, 4, 0\)\)\n#include <soc/mediatek/emi.h>\n#else\n#include <memory/mediatek/emi.h>\n#endif\n/\* For MCIF \*/\n#include <mtk_ccci_common.h>\n@@g;
-	' "$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
-	perl -0pi -e '
-		s/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>\n\n#ifndef MTK_SIP_KERNEL_WLAN_CONTROL\n#define MTK_SIP_KERNEL_WLAN_CONTROL MTK_SIP_SMC_CMD(0x535)\n#endif/g;
-	' "$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
-	perl -0pi -e '
-		s/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>\n\n#ifndef MTK_SIP_KERNEL_BT_CONTROL\n#define MTK_SIP_KERNEL_BT_CONTROL MTK_SIP_SMC_CMD(0x536)\n#endif/g;
-	' "$_connmods_dir"/connectivity/bt/mt66xx/include/btif/platform_base.h
-	sed -i '/#include <linux\/time.h>/a\
-#include <linux/timer.h>' \
-		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h \
-		"$_connmods_dir"/connectivity/common/common_main/linux/include/osal.h
-	sed -i '/#include <linux\/kfifo.h>/a\
-#include <linux/timer.h>' \
-		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
-		"$_connmods_dir"/connectivity/common/common_main/linux/osal.c
-	sed -i '/#include <linux\/slab.h>/a\
-#include <linux/vmalloc.h>' \
-		"$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c \
-		"$_connmods_dir"/connectivity/common/debug_utility/connsys_debug_utility.c
-	find \
-		"$_connmods_dir"/connectivity/conninfra \
-		"$_connmods_dir"/connectivity/connfem \
-		"$_connmods_dir"/connectivity/common \
-		"$_connmods_dir"/connectivity/wlan/adaptor \
-		"$_connmods_dir"/connectivity/wlan/core/gen4m \
-		"$_connmods_dir"/connectivity/bt/linux_v2 \
-		-name '*.[ch]' -print0 |
-		xargs -0 perl -0pi -e \
-			's/class_create\(THIS_MODULE,\s*([^)]+?)\)/class_create($1)/g'
-	find \
-		"$_connmods_dir"/connectivity/conninfra \
-		"$_connmods_dir"/connectivity/common \
-		"$_connmods_dir"/connectivity/wlan/core/gen4m \
-		"$_connmods_dir"/connectivity/bt/linux_v2 \
-		-name '*.[ch]' -print0 |
-		xargs -0 perl -0pi -e \
-			's/\bdel_timer_sync\(/timer_delete_sync(/g; s/\bdel_timer\(/timer_delete(/g'
-	find \
-		"$_connmods_dir"/connectivity/conninfra \
-		"$_connmods_dir"/connectivity/common \
-		"$_connmods_dir"/connectivity/wlan/core/gen4m \
-		"$_connmods_dir"/connectivity/bt/linux_v2 \
-		-name '*.[ch]' -print0 |
-		xargs -0 perl -0pi -e '
-			my $names = qr/mtk_conninfra_remove|mtk_connv3_remove|mtk_wmt_remove|wmt_detect_remove|mtk_axi_remove|btmtk_uart_driver_remove/;
-			s/\.remove\s*=\s*($names),/.remove = (void (*)(struct platform_device *))$1,/g;
-			s/(\.remove\s*=\s*)($names);/$1(void (*)(struct platform_device *))$2;/g;
-		'
-	sed -i 's/strlcpy(event_string, src, sizeof(event_string))/strscpy(event_string, src, sizeof(event_string))/' \
-		"$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
-	sed -i '7463,7478{s/return ret;/priv->hpofs_cal_auxadc = NULL; return 0;/}' \
-		"$_devmods_dir"/sound/soc/codecs/mt6369.c
-	sed -i '7481,7492{s/return ret;/priv->hp_efuse = NULL; return 0;/}' \
-		"$_devmods_dir"/sound/soc/codecs/mt6369.c
-	find "$_devmods_dir"/sound/soc -name '*.[ch]' -print0 |
-		xargs -0 perl -0pi -e \
-			's/class_create\(THIS_MODULE,\s*([^)]+?)\)/class_create($1)/g;
-			 s/\bdel_timer_sync\(/timer_delete_sync(/g;
-			 s/\bdel_timer\(/timer_delete(/g;
-			 s/\bstrlcpy\(/strscpy(/g'
+
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/1101-vendor-audio-optional-calibration.patch.vendor
 }
 
 _vendor_kcflags() {
 	printf '%s' \
 		'-Wno-error=format ' \
 		'-Wno-error=format-extra-args ' \
-		'-Wno-error=implicit-function-declaration ' \
-		'-Wno-error=incompatible-function-pointer-types ' \
-		'-Wno-error=incompatible-pointer-types ' \
-		'-Wno-error=int-conversion ' \
-		'-Wno-error=enum-conversion ' \
-		'-Wno-error=missing-prototypes ' \
-		'-Wno-error=return-type'
+		'-Wno-error=missing-prototypes'
 }
 
 _connectivity_make() {
@@ -205,8 +139,34 @@ _build_connectivity_modules() {
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_conn/wlan/core/gen4m/Module.symvers"
 
-	_connectivity_make "$_conn"/bt/linux_v2 \
+	_connectivity_make "$_conn"/bt/mt66xx/btif \
+		BT_PLATFORM=6878 \
+		LOG_TAG=bt_drv_6878 \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
+}
+
+_pmic_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags)" \
+		"$@" modules
+}
+
+_build_pmic_modules() {
+	_pmic="$_devmods_dir"/drivers
+
+	_pmic_make "$_pmic"/iio/adc \
+		CONFIG_MEDIATEK_SPMI_PMIC_ADC=m
+	_pmic_make "$_pmic"/nvmem \
+		CONFIG_MT635X_EFUSE=m
 }
 
 _audio_make() {
@@ -227,14 +187,17 @@ _audio_make() {
 		CONFIG_DEVICE_MODULES_SND_SOC_MT6369=m \
 		CONFIG_DEVICE_MODULES_SND_SOC_MT6878=m \
 		CONFIG_DEVICE_MODULES_SND_SOC_MT6878_MT6369=m \
+		CONFIG_MEDIATEK_SPMI_PMIC_ADC=m \
+		CONFIG_MT635X_EFUSE=m \
 		CONFIG_SND_SOC_MT6369_ACCDET=n \
-		KCFLAGS="$(_vendor_kcflags)" \
+		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags)" \
 		"$@" modules
 }
 
 _build_audio_modules() {
 	_audio="$_devmods_dir"/sound/soc
-	_symbols=""
+	_symbols="$_devmods_dir/drivers/iio/adc/Module.symvers"
+	_symbols="$_symbols $_devmods_dir/drivers/nvmem/Module.symvers"
 
 	_audio_make "$_audio"/mediatek/common
 	_symbols="$_audio/mediatek/common/Module.symvers"
@@ -253,6 +216,7 @@ build() {
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
 		mediatek/mt6878-nothing-tetris.dtb
+	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
 }
@@ -275,6 +239,12 @@ package() {
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
 	_release="$(cat "$builddir"/include/config/kernel.release)"
+	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-pmic"
+	for _module in \
+		"$_devmods_dir"/drivers/iio/adc/mtk-spmi-pmic-adc.ko \
+		"$_devmods_dir"/drivers/nvmem/nvmem-mt635x-efuse.ko; do
+		install -Dm644 "$_module" "$_extra/${_module##*/}"
+	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-connectivity"
 	for _module in \
 		"$_connmods_dir"/connectivity/conninfra/conninfra.ko \
@@ -282,7 +252,7 @@ package() {
 		"$_connmods_dir"/connectivity/common/wmt_drv.ko \
 		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
-		"$_connmods_dir"/connectivity/bt/linux_v2/btmtk_uart_unify.ko; do
+		"$_connmods_dir"/connectivity/bt/mt66xx/btif/bt_drv_6878.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-audio"
@@ -301,14 +271,38 @@ package() {
 		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
 }
 
+_connectivity() {
+	pkgdesc="Nothing Tetris MT6878/MT6631 vendor connectivity modules"
+	depends="$pkgname=$pkgver-r$pkgrel"
+
+	amove "lib/modules/*/extra/mediatek-connectivity"
+}
+
+_pmic() {
+	pkgdesc="Nothing Tetris MT6369 ADC and efuse calibration modules"
+	depends="$pkgname=$pkgver-r$pkgrel"
+
+	amove "lib/modules/*/extra/mediatek-pmic"
+}
+
+_audio() {
+	pkgdesc="Nothing Tetris MT6878 vendor ASoC modules"
+	depends="
+		$pkgname=$pkgver-r$pkgrel
+		$pkgname-pmic=$pkgver-r$pkgrel
+	"
+
+	amove "lib/modules/*/extra/mediatek-audio"
+}
+
 sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
-SKIP  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
-SKIP  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
-96e524d558b77e6964f97226a4aab05be65d88696bde6bfe536811bde0be4c650d35296860aae7e53176dc2f1357e9e36eabeb015b037269df9c18db3f70c16e  config-postmarketos-mediatek-mt6878.aarch64
+ac703d53b671d8dc4a798670e2b0f1b6f1d4b7c64be16e5ed331c4d8e01371279efa613cb45f87e8fed482a08cb9eb642bbce5d57d5b545313ba6e101b675dae  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
+829db7a368cf7a9b02e0f0e0a8406aa60f391018138809359373c3779ebadf26fc9fb3ab8aed94b2af4c2c0e21a6c661b9bfc5dfe74fe69ad95768cda7ee11dc  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
+6f06e30bf1a8f5b78f3e9b06ecf5ecfcdb9508448855fafa755970c5fa659b99d5f042138730cd01cb1ab0e5679f5bdd21bd7ae2960b579a7154a3657a6d0ef4  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
 33c57376ae157c012c3e64f0eea466bf7fc0042d3d3c6dfb5c7bc587f0568fe8d2b3fcc9fa91478209d54d5c892a72e9f27847bd86dcce2f85aaab9b30959a87  0002-mfd-mt6369-spmi-pmic.patch
-a6fef20ee45ba1b424124164a147e616663b9705e6a0a7325d3366d08781d5549c41e21823807d2562c72f3fdaa3e48dde41627c03b0565ed6444b0e4892b422  0003-mfd-mt6363-keys-mt6375-telemetry.patch
+e7a1c64278a887a7847b04e53a2e07c11eb42da1760e79f88d9883b2ec104eeb371b24060e4d59d89e30a833fb7f496276a429a83334eba85665b37571b43335  0003-mfd-mt6363-keys-mt6375-telemetry.patch
 60aad4c99ce65fe136f8489b11904a5a872ed802a847515cfced662ab9c19eb5ed736252b68807b9e19d11552af39a1bee574ae727bbfc8579102e18a1f3d6fe  0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch
 4dc6bd68565355553bbd126c7588ad1baafa0b0f21c3d4382c1aa2902726de256e304a1a5e792c0e27eb1f290b2703f47083d5b34adacc73b2acad526bca9c5d  0005-drm-sysfb-tetris-framebuffer.patch
 261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0006-pinctrl-mediatek-mt6878-eint.patch
@@ -317,6 +311,12 @@ a6fef20ee45ba1b424124164a147e616663b9705e6a0a7325d3366d08781d5549c41e21823807d25
 4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0009-clk-mediatek-mt6878-mfg.patch
 abeff486502121fcdc4b436f928eb9119533658f833948c757ce1d9497214b48710574003b4263169ddb4cd388f0b452d18f83abdd9b802f57a682188b2832c1  0010-audio-mt6878-aw88261.patch
 fbdb65423ec8fab0540d9eb6898e8fc558f1398c2871543452be86850db4efee396af461b9bef9a755c0b6a7f341a31ed782cec96d3eb3f2f4688f1bcf2e04d2  0011-input-rt6010-haptics-tetris.patch
-67f43aed079bcb4dd69cd4ba7d881c5ef9c42e6370f329cd9439f17f117edd809b0ef9441de4b25c22dfed6a7112070184e15451f62eb3c4cf6c6c7c769c8b9f  0012-usb-typec-mt6375-tcpc-tetris.patch
+04624aeaded67051582111130dc753b6222fdb8b345c265ec6d844b219fd11dd8788cb96cb651d300d2b19f1c4ee6c85913494d24841e960d6f015558cfbc520  0012-usb-typec-mt6375-tcpc-tetris.patch
+cccfa39e5150e25aa43fa9c9aa8ceb27fd3bad253c9f387bba50c734d5987aca7819f83af8cce59cd2eb5c562923ccc139606c5f72c524db1c0ccd202961c300  0013-iio-nvmem-mt6369-calibration.patch
+16e93ed8c05a90e231cfc4f8869da91abb0416bb72a5bffca0f1efbca3b1e020b9ba3f24bb620f996fe9d679d9bc9b73a8f25990d704ad26f30212480172c013  0014-mmc-mt6878-tetris-sdcard.patch
+98f17f4977dc23dc8455fcecb8c382b8a56f9fe2523fc92f1dc9f8ea2c5c0234817573502823c02fdcf171509fd5eb3561650570095e0f9074f805f5413c6cd9  0015-leds-flash-lm3644-tetris.patch
+beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
+252d748e996760db2df400ba0a778368728cf7c6672f833482cf90ba1c5eb0b72995247781e693928f441c15c8679400faf1cec79af9bffd11d40921bdb92fdc  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 
 "

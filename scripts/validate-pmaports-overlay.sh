@@ -4,6 +4,7 @@ set -eu
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 kernel_pkg="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
 device_pkg="$repo_root/pmaports/device/testing/device-nothing-tetris"
+firmware_pkg="$repo_root/pmaports/device/testing/firmware-nothing-tetris"
 
 validate_sums() {
 	pkgdir=$1
@@ -59,7 +60,9 @@ validate_source_files() {
 
 validate_sums "$kernel_pkg"
 validate_sums "$device_pkg"
+validate_sums "$firmware_pkg"
 validate_source_files "$kernel_pkg"
 validate_source_files "$device_pkg"
+validate_source_files "$firmware_pkg"
 
 echo "pmaports overlay validation passed"

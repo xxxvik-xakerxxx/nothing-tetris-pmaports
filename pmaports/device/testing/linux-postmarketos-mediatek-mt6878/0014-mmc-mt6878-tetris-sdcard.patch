@@ -1,0 +1,138 @@
+--- a/drivers/mmc/host/mtk-sd.c
++++ b/drivers/mmc/host/mtk-sd.c
+@@ -691,6 +691,24 @@
+ 	.support_new_rx = true,
+ };
+ 
++static const struct mtk_mmc_compatible mt6878_compat = {
++	.clk_div_bits = 12,
++	.recheck_sdio_irq = false,
++	.hs400_tune = false,
++	.needs_top_base = true,
++	.pad_tune_reg = MSDC_PAD_TUNE0,
++	.async_fifo = true,
++	.data_tune = true,
++	.busy_check = true,
++	.stop_clk_fix = true,
++	.stop_dly_sel = 3,
++	.pop_en_cnt = 8,
++	.enhance_rx = true,
++	.support_64g = true,
++	.support_new_tx = true,
++	.support_new_rx = true,
++};
++
+ static const struct of_device_id msdc_of_ids[] = {
+ 	{ .compatible = "mediatek,mt2701-mmc", .data = &mt2701_compat},
+ 	{ .compatible = "mediatek,mt2712-mmc", .data = &mt2712_compat},
+@@ -704,6 +722,7 @@
+ 	{ .compatible = "mediatek,mt8173-mmc", .data = &mt8173_compat},
+ 	{ .compatible = "mediatek,mt8183-mmc", .data = &mt8183_compat},
+ 	{ .compatible = "mediatek,mt8196-mmc", .data = &mt8196_compat},
++	{ .compatible = "mediatek,mt6878-mmc", .data = &mt6878_compat},
+ 	{ .compatible = "mediatek,mt8516-mmc", .data = &mt8516_compat},
+ 
+ 	{}
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -472,6 +472,18 @@
+ 					      "aud_intbus_ck_peri";
+ 				status = "disabled";
+ 			};
++		};
++
++		mmc1: mmc@11240000 {
++			compatible = "mediatek,mt6878-mmc";
++			reg = <0x11240000 0x1000>,
++			      <0x11d80000 0x1000>;
++			interrupts = <GIC_SPI 388 IRQ_TYPE_LEVEL_HIGH 0>;
++			clocks = <&topckgen CLK_TOP_MSDC30_1_SEL>,
++				 <&pericfg_ao CLK_PERAOP_MSDC1_H>,
++				 <&pericfg_ao CLK_PERAOP_MSDC1>;
++			clock-names = "source", "hclk", "source_cg";
++			status = "disabled";
+ 		};
+ 
+ 		ssusb: usb0@11201000 {
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -6,6 +6,7 @@
+ #include "mt6878.dtsi"
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/pinctrl/mt65xx.h>
+ #include <dt-bindings/usb/pd.h>
+ 
+ / {
+@@ -342,6 +343,26 @@
+ 	};
+ };
+ 
++&mmc1 {
++	bus-width = <4>;
++	max-frequency = <200000000>;
++	cap-sd-highspeed;
++	sd-uhs-sdr12;
++	sd-uhs-sdr25;
++	sd-uhs-sdr50;
++	sd-uhs-sdr104;
++	sd-uhs-ddr50;
++	cd-gpios = <&pio 14 GPIO_ACTIVE_HIGH>;
++	vmmc-supply = <&mt6369_vmch_eint_low>;
++	vqmmc-supply = <&mt6369_vmc>;
++	no-mmc;
++	no-sdio;
++	pinctrl-names = "default", "state_uhs";
++	pinctrl-0 = <&mmc1_pins_default>;
++	pinctrl-1 = <&mmc1_pins_uhs>;
++	status = "okay";
++};
++
+ &pio {
+ 	key_gpio_default: key-default {
+ 		pins-cmd1-dat {
+@@ -351,6 +372,44 @@
+ 		};
+ 	};
+ 
++	mmc1_pins_default: mmc1-default {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO79__FUNC_MSDC1_DAT0>,
++				 <PINMUX_GPIO80__FUNC_MSDC1_DAT1>,
++				 <PINMUX_GPIO81__FUNC_MSDC1_DAT2>,
++				 <PINMUX_GPIO82__FUNC_MSDC1_DAT3>,
++				 <PINMUX_GPIO78__FUNC_MSDC1_CMD>;
++			input-enable;
++			drive-strength = <4>;
++			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
++		};
++
++		pins-clk {
++			pinmux = <PINMUX_GPIO77__FUNC_MSDC1_CLK>;
++			drive-strength = <4>;
++			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
++		};
++	};
++
++	mmc1_pins_uhs: mmc1-uhs {
++		pins-cmd-dat {
++			pinmux = <PINMUX_GPIO79__FUNC_MSDC1_DAT0>,
++				 <PINMUX_GPIO80__FUNC_MSDC1_DAT1>,
++				 <PINMUX_GPIO81__FUNC_MSDC1_DAT2>,
++				 <PINMUX_GPIO82__FUNC_MSDC1_DAT3>,
++				 <PINMUX_GPIO78__FUNC_MSDC1_CMD>;
++			input-enable;
++			drive-strength = <4>;
++			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
++		};
++
++		pins-clk {
++			pinmux = <PINMUX_GPIO77__FUNC_MSDC1_CLK>;
++			drive-strength = <4>;
++			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
++		};
++	};
++
+ 	rt1711h_int_default: rt1711h-int-default {
+ 		pins-int {
+ 			pinmux = <PINMUX_GPIO41__FUNC_GPIO41>;

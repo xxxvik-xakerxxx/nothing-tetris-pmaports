@@ -12,8 +12,8 @@ fi
 cd "$repo_root/upstream/pmbootstrap"
 
 ./pmbootstrap.py init
-./pmbootstrap.py checksum device-nothing-tetris linux-postmarketos-mediatek-mt6878
+./pmbootstrap.py checksum device-nothing-tetris firmware-nothing-tetris linux-postmarketos-mediatek-mt6878
+./pmbootstrap.py build firmware-nothing-tetris
 ./pmbootstrap.py build device-nothing-tetris
 ./pmbootstrap.py build linux-postmarketos-mediatek-mt6878
 ./pmbootstrap.py install --android-recovery-zip
-

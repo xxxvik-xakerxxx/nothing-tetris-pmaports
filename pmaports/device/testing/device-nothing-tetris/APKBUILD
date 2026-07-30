@@ -1,15 +1,20 @@
+# Co-Maintainer: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
-pkgver=5
-pkgrel=10
+pkgver=6
+pkgrel=0
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
 options="!check !archcheck"
 depends="
 	dtc
+	firmware-nothing-tetris
 	linux-postmarketos-mediatek-mt6878
+	linux-postmarketos-mediatek-mt6878-audio
+	linux-postmarketos-mediatek-mt6878-connectivity
+	linux-postmarketos-mediatek-mt6878-pmic
 	postmarketos-base
 	u-boot-tools
 "
@@ -18,9 +23,6 @@ source="
 	80-nothing-tetris-udisks.rules
 	boot_image.its
 	deviceinfo
-	connsys_bt_mt6878_mt6631.bin
-	connsys_gnss_mt6878_mt6631.bin
-	connsys_wifi_mt6878_mt6631.bin
 	greetd-tetris-display.conf
 	nothing-tetris-connectivity.service
 	nothing-tetris-connectivity-setup
@@ -50,12 +52,6 @@ package() {
 		"$pkgdir"/usr/share/u-boot/nothing-tetris/boot_image.its
 	install -Dm644 "$srcdir"/80-nothing-tetris-udisks.rules \
 		"$pkgdir"/usr/lib/udev/rules.d/80-nothing-tetris-udisks.rules
-	install -Dm644 "$srcdir"/connsys_wifi_mt6878_mt6631.bin \
-		"$pkgdir"/usr/share/nothing-tetris/firmware/connsys_wifi_mt6878_mt6631.bin
-	install -Dm644 "$srcdir"/connsys_bt_mt6878_mt6631.bin \
-		"$pkgdir"/usr/share/nothing-tetris/firmware/connsys_bt_mt6878_mt6631.bin
-	install -Dm644 "$srcdir"/connsys_gnss_mt6878_mt6631.bin \
-		"$pkgdir"/usr/share/nothing-tetris/firmware/connsys_gnss_mt6878_mt6631.bin
 	install -Dm755 "$srcdir"/nothing-tetris-connectivity-setup \
 		"$pkgdir"/usr/libexec/nothing-tetris-connectivity-setup
 	install -Dm644 "$srcdir"/nothing-tetris-connectivity.service \
@@ -69,12 +65,9 @@ sha512sums="
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
 a9a1daae5ca2cd328b65540213f4bbb581f8119df71b8e2b51d69301343a793c770a2e7750a68456d1829f8e6cd3364d683087bc773dd549c6d407b56dc19ceb  deviceinfo
-4644b696e1cc137c91e6a97f6bdb4c7c236a1ee14bac7feaec47d37fcab720981ddfd0188375fd02cdcb7e6ef623a52ec8b252e6f8f130de430ca5e97c97dfc2  connsys_bt_mt6878_mt6631.bin
-30e57ecbabf43c278a153a3ad8941e4b756472418369a62ada74d40de9286b5a28a6c07d1c6c676808ec0bf6cc4e26fed96b143d2322c30152f18905244f1b91  connsys_gnss_mt6878_mt6631.bin
-f8550765bcfb57e1b3d388402155469a06a232bbfe2fc9ce7badfb140238fd9ec54b1486bc75160ec50a5c94f5d9ac9640117c9c0be3b7d135f6354171f4122f  connsys_wifi_mt6878_mt6631.bin
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
 83c652984298ec3cf5ba572aa53a19b1311554986e8ffaf58d012e6f399441ccd635c2d8e8fc68ce5895255afb68666fdf9e744141bec014443c091c3ff22ffe  nothing-tetris-connectivity.service
-286e58239cba4bcf2c27084311e0e79ec485f5e86dfcf02fe8f61d08373c5b1a4b71ae7d11d1e50d56121f749dab721de6e3390d53b4d68e95ebeed6539e9bb9  nothing-tetris-connectivity-setup
+11d17bfd70a5658668ce0ac75b0a00f7cc9e11bc87c41f7e74caa54dc2b1be651d8c87b77e4597389b4faa960860b98f5bc75f19f3ed407bf3d5a1b84080d490  nothing-tetris-connectivity-setup
 291488cf24bb4ecc515d5c44907f5899bf818bb148b4729da2257b5deadf113c65e3d2f228c730f1ce79250de94dd217b7da5d69abe71be5e707f966f4a80c2a  phoc.ini
 56a1000f12f4b2d61f1bbe08554a1707f6c75eea0603301aef084ebe8271d1ae42a76f1cf9e67bb5e47dee880f3a43ac4041bfafc4eab76f33718107a6b56085  phrog-greetd-config.toml
 27cbf6e7f0862098bcf0a614a5c97878e9452e682e494a5ff256ae5cd98a0bfa587b8803ef2019fea15e9b9a4f3ee47de78de5b93cb3d3080f8704e2089f6faa  tetris-phrog-greetd-session

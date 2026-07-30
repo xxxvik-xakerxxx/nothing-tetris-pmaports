@@ -1,0 +1,59 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] vendor: audio: allow bring-up without optional PMIC calibration
+
+The MT6369 codec can provide basic playback and capture without the headphone
+offset ADC and efuse calibration providers when those kernel options are
+disabled. Keep probe deferral intact and continue only when the corresponding
+calibration feature is not built.
+
+diff --git a/sound/soc/codecs/mt6369.c b/sound/soc/codecs/mt6369.c
+index baaa346..526c710 100644
+--- a/sound/soc/codecs/mt6369.c
++++ b/sound/soc/codecs/mt6369.c
+@@ -7465,30 +7465,30 @@ static int mt6369_parse_dt(struct mt6369_priv *priv)
+ 
+ 	ret = PTR_ERR_OR_ZERO(priv->hpofs_cal_auxadc);
+ 	if (ret) {
+-		if (ret != -EPROBE_DEFER)/* EPROBE_DEFER:517 */
+-			dev_err(dev,
+-				"%s() Get pmic_hpofs_cal iio ch failed (%d)\n",
+-				__func__, ret);
+-		else
+-			dev_err(dev,
+-				"%s() Get pmic_hpofs_cal iio ch failed (%d), will retry ...\n",
+-				__func__, ret);
+-
++		if (ret == -EPROBE_DEFER)
++			return ret;
++#if IS_ENABLED(CONFIG_MEDIATEK_SPMI_PMIC_ADC)
+ 		return ret;
++#else
++		dev_warn(dev,
++			 "%s() pmic_hpofs_cal unavailable (%d), calibration disabled\n",
++			 __func__, ret);
++#endif
+ 	}
+ 
+ 	/* get pmic efuse handler */
+ 	priv->hp_efuse = devm_nvmem_device_get(dev, "pmic-hp-efuse");
+ 	ret = PTR_ERR_OR_ZERO(priv->hp_efuse);
+ 	if (ret) {
+-		if (ret != -EPROBE_DEFER)
+-			dev_err(dev, "%s() Get efuse failed (%d)\n",
+-				__func__, ret);
+-		else
+-			dev_err(dev, "%s() Get efuse failed (%d), will retry ...\n",
+-				__func__, ret);
+-
++		if (ret == -EPROBE_DEFER)
++			return ret;
++#if IS_ENABLED(CONFIG_MT635X_EFUSE)
+ 		return ret;
++#else
++		dev_warn(dev,
++			 "%s() pmic-hp-efuse unavailable (%d), calibration disabled\n",
++			 __func__, ret);
++#endif
+ 	}
+ 
+ 	if (!bypass_vant18) {

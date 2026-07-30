@@ -1,0 +1,418 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+index ba0eb30..c69431f 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -7,6 +7,7 @@
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/pinctrl/mt65xx.h>
++#include <dt-bindings/leds/common.h>
+ #include <dt-bindings/usb/pd.h>
+ 
+ / {
+@@ -220,6 +221,25 @@
+ 		#sound-dai-cells = <0>;
+ 		awinic,audio-channel = <0>;
+ 	};
++
++	flash-led-controller@63 {
++		compatible = "ti,lm3644";
++		reg = <0x63>;
++		enable-gpios = <&pio 155 GPIO_ACTIVE_HIGH>,
++			       <&pio 151 GPIO_ACTIVE_HIGH>;
++
++		led-0 {
++			function = LED_FUNCTION_FLASH;
++			color = <LED_COLOR_ID_WHITE>;
++			label = "white:flash-rear-wide";
++		};
++
++		led-1 {
++			function = LED_FUNCTION_FLASH;
++			color = <LED_COLOR_ID_WHITE>;
++			label = "white:flash-rear-main";
++		};
++	};
+ };
+ 
+ &afe {
+diff --git a/drivers/leds/flash/Kconfig b/drivers/leds/flash/Kconfig
+index 5e08102..e161ff9 100644
+--- a/drivers/leds/flash/Kconfig
++++ b/drivers/leds/flash/Kconfig
+@@ -39,6 +39,16 @@ config LEDS_LM3601X
+ 	  This option enables support for the TI LM3601x family
+ 	  of flash, torch and indicator classes.
+ 
++config LEDS_LM3644
++	tristate "LED support for the TI LM3644"
++	depends on I2C && OF
++	depends on GPIOLIB
++	select REGMAP_I2C
++	help
++	  Enable support for the dual-channel TI LM3644 flash LED
++	  controller. Both channels support programmable torch and flash
++	  current, flash timeout and fault reporting.
++
+ config LEDS_MAX77693
+ 	tristate "LED support for MAX77693 Flash"
+ 	depends on V4L2_FLASH_LED_CLASS || !V4L2_FLASH_LED_CLASS
+diff --git a/drivers/leds/flash/Makefile b/drivers/leds/flash/Makefile
+index 712fb73..466cf83 100644
+--- a/drivers/leds/flash/Makefile
++++ b/drivers/leds/flash/Makefile
+@@ -6,6 +6,7 @@ obj-$(CONFIG_LEDS_AAT1290)	+= leds-aat1290.o
+ obj-$(CONFIG_LEDS_AS3645A)	+= leds-as3645a.o
+ obj-$(CONFIG_LEDS_KTD2692)	+= leds-ktd2692.o
+ obj-$(CONFIG_LEDS_LM3601X)	+= leds-lm3601x.o
++obj-$(CONFIG_LEDS_LM3644)	+= leds-lm3644.o
+ obj-$(CONFIG_LEDS_MAX77693)	+= leds-max77693.o
+ obj-$(CONFIG_LEDS_QCOM_FLASH)	+= leds-qcom-flash.o
+ obj-$(CONFIG_LEDS_RT4505)	+= leds-rt4505.o
+diff --git a/tmp/lm3644-work/drivers/leds/flash/leds-lm3644.c b/drivers/leds/flash/leds-lm3644.c
+new file mode 100644
+index 0000000..0d9e968
+--- /dev/null
++++ b/drivers/leds/flash/leds-lm3644.c
+@@ -0,0 +1,341 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * TI LM3644 dual flash LED controller
++ *
++ * Register layout and current ranges are based on the Nothing/MediaTek
++ * shipping driver. This implementation uses the standard LED flash class.
++ */
++
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/led-class-flash.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/regmap.h>
++
++#define LM3644_MAX_LEDS			2
++
++#define LM3644_REG_ENABLE		0x01
++#define LM3644_REG_FLASH_CURRENT(id)	(0x03 + (id))
++#define LM3644_REG_TORCH_CURRENT(id)	(0x05 + (id))
++#define LM3644_REG_FLASH_TIMEOUT		0x08
++#define LM3644_REG_FLAG1		0x0a
++#define LM3644_REG_FLAG2		0x0b
++
++#define LM3644_ENABLE_LED(id)		BIT(id)
++#define LM3644_ENABLE_MODE_MASK		GENMASK(3, 2)
++#define LM3644_ENABLE_MODE_TORCH		BIT(3)
++#define LM3644_ENABLE_MODE_FLASH		GENMASK(3, 2)
++
++#define LM3644_FLASH_MIN_UA		2940U
++#define LM3644_FLASH_STEP_UA		5870U
++#define LM3644_FLASH_MAX_UA		1500000U
++#define LM3644_FLASH_DEFAULT_UA		100000U
++#define LM3644_TORCH_LEVELS		256
++
++#define LM3644_TIMEOUT_MIN_US		200000U
++#define LM3644_TIMEOUT_STEP_US		200000U
++#define LM3644_TIMEOUT_MAX_US		1600000U
++#define LM3644_TIMEOUT_DEFAULT_US	400000U
++
++#define LM3644_FLAG_TIMEOUT		BIT(0)
++#define LM3644_FLAG_THERMAL_SHUTDOWN	BIT(2)
++#define LM3644_FLAG_LED1_SHORT		BIT(4)
++#define LM3644_FLAG_LED0_SHORT		BIT(5)
++#define LM3644_FLAG_INPUT_VOLTAGE	BIT(0)
++
++struct lm3644;
++
++struct lm3644_led {
++	struct led_classdev_flash flash;
++	struct lm3644 *chip;
++	u8 id;
++};
++
++struct lm3644 {
++	struct device *dev;
++	struct regmap *regmap;
++	struct gpio_descs *enable_gpios;
++	struct mutex lock;
++	unsigned long torch_mask;
++	unsigned long flash_mask;
++	unsigned int num_leds;
++	struct lm3644_led leds[] __counted_by(num_leds);
++};
++
++static int lm3644_set_mode(struct lm3644 *chip)
++{
++	u8 mode = 0;
++
++	if (chip->flash_mask)
++		mode = LM3644_ENABLE_MODE_FLASH;
++	else if (chip->torch_mask)
++		mode = LM3644_ENABLE_MODE_TORCH;
++
++	return regmap_update_bits(chip->regmap, LM3644_REG_ENABLE,
++				  LM3644_ENABLE_MODE_MASK, mode);
++}
++
++static int lm3644_torch_set(struct led_classdev *cdev,
++			    enum led_brightness brightness)
++{
++	struct lm3644_led *led =
++		container_of(cdev, struct lm3644_led, flash.led_cdev);
++	struct lm3644 *chip = led->chip;
++	unsigned long new_mask;
++	int ret;
++
++	mutex_lock(&chip->lock);
++
++	if (brightness && chip->flash_mask) {
++		ret = -EBUSY;
++		goto unlock;
++	}
++
++	new_mask = brightness ? chip->torch_mask | BIT(led->id) :
++				chip->torch_mask & ~BIT(led->id);
++
++	if (brightness) {
++		ret = regmap_write(chip->regmap,
++				   LM3644_REG_TORCH_CURRENT(led->id),
++				   brightness - 1);
++		if (ret)
++			goto unlock;
++	}
++
++	ret = regmap_update_bits(chip->regmap, LM3644_REG_ENABLE,
++				 LM3644_ENABLE_LED(led->id),
++				 brightness ? LM3644_ENABLE_LED(led->id) : 0);
++	if (ret)
++		goto unlock;
++
++	chip->torch_mask = new_mask;
++	ret = lm3644_set_mode(chip);
++
++unlock:
++	mutex_unlock(&chip->lock);
++	return ret;
++}
++
++static int lm3644_flash_brightness_set(struct led_classdev_flash *fled,
++				       u32 brightness)
++{
++	struct lm3644_led *led = container_of(fled, struct lm3644_led, flash);
++	struct led_flash_setting *setting = &fled->brightness;
++	u8 level = (brightness - setting->min) / setting->step;
++
++	return regmap_write(led->chip->regmap,
++			    LM3644_REG_FLASH_CURRENT(led->id), level);
++}
++
++static int lm3644_strobe_set(struct led_classdev_flash *fled, bool state)
++{
++	struct lm3644_led *led = container_of(fled, struct lm3644_led, flash);
++	struct lm3644 *chip = led->chip;
++	unsigned long new_mask;
++	int ret;
++
++	mutex_lock(&chip->lock);
++
++	if (state && chip->torch_mask) {
++		ret = -EBUSY;
++		goto unlock;
++	}
++
++	new_mask = state ? chip->flash_mask | BIT(led->id) :
++			   chip->flash_mask & ~BIT(led->id);
++	ret = regmap_update_bits(chip->regmap, LM3644_REG_ENABLE,
++				 LM3644_ENABLE_LED(led->id),
++				 state ? LM3644_ENABLE_LED(led->id) : 0);
++	if (ret)
++		goto unlock;
++
++	chip->flash_mask = new_mask;
++	ret = lm3644_set_mode(chip);
++
++unlock:
++	mutex_unlock(&chip->lock);
++	return ret;
++}
++
++static int lm3644_strobe_get(struct led_classdev_flash *fled, bool *state)
++{
++	struct lm3644_led *led = container_of(fled, struct lm3644_led, flash);
++	struct lm3644 *chip = led->chip;
++
++	mutex_lock(&chip->lock);
++	*state = !!(chip->flash_mask & BIT(led->id));
++	mutex_unlock(&chip->lock);
++
++	return 0;
++}
++
++static int lm3644_timeout_set(struct led_classdev_flash *fled, u32 timeout)
++{
++	struct lm3644_led *led = container_of(fled, struct lm3644_led, flash);
++	u8 value;
++
++	if (timeout == LM3644_TIMEOUT_MIN_US)
++		value = 0x04;
++	else
++		value = 0x07 + timeout / LM3644_TIMEOUT_STEP_US;
++
++	return regmap_update_bits(led->chip->regmap,
++				  LM3644_REG_FLASH_TIMEOUT, GENMASK(3, 0),
++				  value);
++}
++
++static int lm3644_fault_get(struct led_classdev_flash *fled, u32 *fault)
++{
++	struct lm3644_led *led = container_of(fled, struct lm3644_led, flash);
++	unsigned int flag1, flag2;
++	int ret;
++
++	ret = regmap_read(led->chip->regmap, LM3644_REG_FLAG1, &flag1);
++	if (ret)
++		return ret;
++	ret = regmap_read(led->chip->regmap, LM3644_REG_FLAG2, &flag2);
++	if (ret)
++		return ret;
++
++	*fault = 0;
++	if (flag1 & LM3644_FLAG_TIMEOUT)
++		*fault |= LED_FAULT_TIMEOUT;
++	if (flag1 & LM3644_FLAG_THERMAL_SHUTDOWN)
++		*fault |= LED_FAULT_OVER_TEMPERATURE;
++	if (flag1 & (led->id ? LM3644_FLAG_LED1_SHORT :
++			       LM3644_FLAG_LED0_SHORT))
++		*fault |= LED_FAULT_SHORT_CIRCUIT;
++	if (flag2 & LM3644_FLAG_INPUT_VOLTAGE)
++		*fault |= LED_FAULT_INPUT_VOLTAGE;
++
++	return 0;
++}
++
++static const struct led_flash_ops lm3644_flash_ops = {
++	.flash_brightness_set = lm3644_flash_brightness_set,
++	.strobe_set = lm3644_strobe_set,
++	.strobe_get = lm3644_strobe_get,
++	.timeout_set = lm3644_timeout_set,
++	.fault_get = lm3644_fault_get,
++};
++
++static int lm3644_register_led(struct lm3644 *chip,
++			       struct lm3644_led *led,
++			       struct device_node *node)
++{
++	struct led_classdev_flash *fled = &led->flash;
++	struct led_classdev *cdev = &fled->led_cdev;
++	struct led_init_data init_data = {
++		.fwnode = of_fwnode_handle(node),
++	};
++
++	led->chip = chip;
++	cdev->max_brightness = LM3644_TORCH_LEVELS;
++	cdev->brightness_set_blocking = lm3644_torch_set;
++	cdev->flags |= LED_DEV_CAP_FLASH;
++	fled->ops = &lm3644_flash_ops;
++
++	fled->brightness.min = LM3644_FLASH_MIN_UA;
++	fled->brightness.max = LM3644_FLASH_MAX_UA;
++	fled->brightness.step = LM3644_FLASH_STEP_UA;
++	fled->brightness.val = LM3644_FLASH_DEFAULT_UA;
++	fled->timeout.min = LM3644_TIMEOUT_MIN_US;
++	fled->timeout.max = LM3644_TIMEOUT_MAX_US;
++	fled->timeout.step = LM3644_TIMEOUT_STEP_US;
++	fled->timeout.val = LM3644_TIMEOUT_DEFAULT_US;
++
++	return devm_led_classdev_flash_register_ext(chip->dev, fled,
++						    &init_data);
++}
++
++static void lm3644_disable(void *data)
++{
++	struct lm3644 *chip = data;
++	unsigned int i;
++
++	regmap_write(chip->regmap, LM3644_REG_ENABLE, 0);
++	for (i = 0; i < chip->enable_gpios->ndescs; i++)
++		gpiod_set_value_cansleep(chip->enable_gpios->desc[i], 0);
++}
++
++static const struct regmap_config lm3644_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0x0c,
++};
++
++static int lm3644_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct lm3644 *chip;
++	unsigned int count;
++	int ret;
++
++	count = device_get_child_node_count(dev);
++	if (!count || count > LM3644_MAX_LEDS)
++		return dev_err_probe(dev, -EINVAL,
++				     "expected one or two LED child nodes\n");
++
++	chip = devm_kzalloc(dev, struct_size(chip, leds, count), GFP_KERNEL);
++	if (!chip)
++		return -ENOMEM;
++
++	chip->dev = dev;
++	chip->num_leds = count;
++	i2c_set_clientdata(client, chip);
++
++	ret = devm_mutex_init(dev, &chip->lock);
++	if (ret)
++		return ret;
++
++	chip->enable_gpios = devm_gpiod_get_array(dev, "enable", GPIOD_OUT_HIGH);
++	if (IS_ERR(chip->enable_gpios))
++		return dev_err_probe(dev, PTR_ERR(chip->enable_gpios),
++				     "failed to request enable GPIOs\n");
++	usleep_range(200, 300);
++
++	chip->regmap = devm_regmap_init_i2c(client, &lm3644_regmap_config);
++	if (IS_ERR(chip->regmap))
++		return dev_err_probe(dev, PTR_ERR(chip->regmap),
++				     "failed to initialize regmap\n");
++
++	ret = regmap_write(chip->regmap, LM3644_REG_ENABLE, 0);
++	if (ret)
++		return dev_err_probe(dev, ret, "controller did not respond\n");
++
++	ret = devm_add_action_or_reset(dev, lm3644_disable, chip);
++	if (ret)
++		return ret;
++
++	count = 0;
++	for_each_available_child_of_node_scoped(dev_of_node(dev), child) {
++		chip->leds[count].id = count;
++		ret = lm3644_register_led(chip, &chip->leds[count], child);
++		if (ret)
++			return dev_err_probe(dev, ret,
++					     "failed to register LED %u\n", count);
++		count++;
++	}
++
++	return 0;
++}
++
++static const struct of_device_id lm3644_of_match[] = {
++	{ .compatible = "ti,lm3644" },
++	{ .compatible = "mediatek,lm3644" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, lm3644_of_match);
++
++static struct i2c_driver lm3644_driver = {
++	.driver = {
++		.name = "lm3644",
++		.of_match_table = lm3644_of_match,
++	},
++	.probe = lm3644_probe,
++};
++module_i2c_driver(lm3644_driver);
++
++MODULE_DESCRIPTION("TI LM3644 dual flash LED controller");
++MODULE_LICENSE("GPL");

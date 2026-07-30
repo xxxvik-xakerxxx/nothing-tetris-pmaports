@@ -1,0 +1,43 @@
+maintainer="xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>"
+pkgname=firmware-nothing-tetris
+pkgver=1
+pkgrel=0
+pkgdesc="Connectivity firmware for Nothing CMF Phone 1"
+url="https://github.com/NothingOSS"
+arch="aarch64"
+license="proprietary"
+options="!check !strip !archcheck !tracedeps pmb:cross-native"
+source="
+	connsys_bt_mt6878_mt6631.bin
+	connsys_gnss_mt6878_mt6631.bin
+	connsys_wifi_mt6878_mt6631.bin
+"
+
+package() {
+	_fwdir="$pkgdir/usr/lib/firmware"
+	install -Dm644 "$srcdir"/connsys_wifi_mt6878_mt6631.bin \
+		"$_fwdir"/connsys_wifi_mt6878_mt6631.bin
+	install -Dm644 "$srcdir"/connsys_bt_mt6878_mt6631.bin \
+		"$_fwdir"/connsys_bt_mt6878_mt6631.bin
+	install -Dm644 "$srcdir"/connsys_gnss_mt6878_mt6631.bin \
+		"$_fwdir"/connsys_gnss_mt6878_mt6631.bin
+
+	for _name in \
+		WIFI_RAM_CODE_soc7_0_1_1.bin \
+		WIFI_RAM_CODE_soc7_0_1_1 \
+		soc7_0_ram_wmmcu_1_1_hdr.bin \
+		soc7_0_ram_mcu_1_1_hdr.bin; do
+		ln -s connsys_wifi_mt6878_mt6631.bin "$_fwdir/$_name"
+	done
+	ln -s connsys_bt_mt6878_mt6631.bin \
+		"$_fwdir"/soc7_0_ram_bt_1_1_hdr.bin
+	for _name in connsys_gnss connsys_gnss.bin; do
+		ln -s connsys_gnss_mt6878_mt6631.bin "$_fwdir/$_name"
+	done
+}
+
+sha512sums="
+4644b696e1cc137c91e6a97f6bdb4c7c236a1ee14bac7feaec47d37fcab720981ddfd0188375fd02cdcb7e6ef623a52ec8b252e6f8f130de430ca5e97c97dfc2  connsys_bt_mt6878_mt6631.bin
+30e57ecbabf43c278a153a3ad8941e4b756472418369a62ada74d40de9286b5a28a6c07d1c6c676808ec0bf6cc4e26fed96b143d2322c30152f18905244f1b91  connsys_gnss_mt6878_mt6631.bin
+f8550765bcfb57e1b3d388402155469a06a232bbfe2fc9ce7badfb140238fd9ec54b1486bc75160ec50a5c94f5d9ac9640117c9c0be3b7d135f6354171f4122f  connsys_wifi_mt6878_mt6631.bin
+"

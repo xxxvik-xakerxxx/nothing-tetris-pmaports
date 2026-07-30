@@ -1,10 +1,9 @@
 # NothingOSS source map for Tetris
 
-This port should prefer official NothingOSS Tetris module sources over local
-driver rewrites during hardware bring-up. Local kernel patches should mostly
-provide the postmarketOS glue: pinned source commits, module build wiring,
-small Linux API shims, devicetree nodes, MFD cells, firmware packaging and
-UCM/userspace integration.
+This port uses official NothingOSS Tetris module sources as a temporary bridge
+for complex hardware and as a register/topology reference for native drivers.
+Package boundaries, compatibility rules and promotion gates are documented in
+`docs/DRIVER_STRATEGY.md`.
 
 ## Authoritative Tetris repositories
 
@@ -85,7 +84,7 @@ time:
 
 1. pin official NothingOSS source commit;
 2. build only the needed `M=...` module directories;
-3. add minimal API shims in `prepare()`;
+3. carry Linux API compatibility as explicit vendor patch files;
 4. install the resulting `.ko` files under `extra/mediatek-*`;
 5. add only the DT/MFD/UCM glue needed for probe and testing;
 6. validate on hardware before enabling the next block.

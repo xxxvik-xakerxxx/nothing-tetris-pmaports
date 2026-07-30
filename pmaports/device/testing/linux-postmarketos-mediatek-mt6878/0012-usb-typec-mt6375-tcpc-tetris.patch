@@ -411,7 +411,7 @@
 +#include <linux/usb/tcpci.h>
 +#include <linux/usb/tcpm.h>
 +
-+#define MT6375_TCPC_REG(reg)		(0xf200 + (reg))
++#define MT6375_TCPC_REG(reg)		(reg)
 +
 +#define MT6375_VENDOR_ID		0x29cf
 +#define MT6375_PRODUCT_ID		0x6375

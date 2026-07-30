@@ -45,13 +45,20 @@ docker run --rm --privileged \
 		fi
 		rm -rf \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris \
+			/work/upstream/pmaports/device/testing/firmware-nothing-tetris \
 			/work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878
 		rsync -a /work/pmaports/device/testing/device-nothing-tetris/ \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris/
+		rsync -a /work/pmaports/device/testing/firmware-nothing-tetris/ \
+			/work/upstream/pmaports/device/testing/firmware-nothing-tetris/
 		rsync -a /work/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
 			/work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
 
 		cd /work/upstream/pmbootstrap
+		./pmbootstrap.py --as-root \
+			--work "$pmbootstrap_work" \
+			-c /work/ci/pmbootstrap-aarch64.cfg \
+			checksum firmware-nothing-tetris
 		./pmbootstrap.py --as-root \
 			--work "$pmbootstrap_work" \
 			-c /work/ci/pmbootstrap-aarch64.cfg \

@@ -1,0 +1,928 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] vendor: connectivity: adapt Tetris 16b modules to Linux 6.18
+
+Keep the official Nothing MT6878 connectivity implementation buildable against
+the postmarketOS kernel without mutating sources from APKBUILD. This updates
+removed kernel APIs, supplies the MT6878 SMC IDs, drops unavailable Android EMI
+and CCCI integration, and uses the current platform remove callback contract.
+
+This is a downstream compatibility patch for the module-first bring-up path.
+The individual hardware blocks remain candidates for native subsystem ports.
+
+diff --git a/connectivity/bt/linux_v2/Kbuild b/connectivity/bt/linux_v2/Kbuild
+index 19c762f..420cc82 100644
+--- a/connectivity/bt/linux_v2/Kbuild
++++ b/connectivity/bt/linux_v2/Kbuild
+@@ -178,7 +178,7 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+   ccflags-y += -I$(CONN_FEM_SRC)/include
+ endif
+ 
+-ccflags-y += -Werror
++ccflags-y += -Wno-error
+ 
+ $(MOD_NAME)-objs := $(CFILES:.c=.o)
+ 
+diff --git a/connectivity/bt/linux_v2/btmtk_char_dev.c b/connectivity/bt/linux_v2/btmtk_char_dev.c
+index 2d2d062..c2de4f2 100644
+--- a/connectivity/bt/linux_v2/btmtk_char_dev.c
++++ b/connectivity/bt/linux_v2/btmtk_char_dev.c
+@@ -636,7 +636,7 @@ int BT_init(void)
+ 	if (cdv_err)
+ 		goto cdv_error;
+ 
+-	BT_class = class_create(THIS_MODULE, BT_DRIVER_NODE_NAME);
++	BT_class = class_create(BT_DRIVER_NODE_NAME);
+ 	if (IS_ERR(BT_class))
+ 		goto create_node_error;
+ 	BT_dev = device_create(BT_class, NULL, dev, NULL, BT_DRIVER_NODE_NAME);
+diff --git a/connectivity/bt/linux_v2/btmtk_chip_reset.c b/connectivity/bt/linux_v2/btmtk_chip_reset.c
+index 4eacbf3..558b31c 100644
+--- a/connectivity/bt/linux_v2/btmtk_chip_reset.c
++++ b/connectivity/bt/linux_v2/btmtk_chip_reset.c
+@@ -53,7 +53,7 @@ void btmtk_reset_timer_update(struct btmtk_dev *bdev)
+ void btmtk_reset_timer_del(struct btmtk_dev *bdev)
+ {
+ 	if (timer_pending(&bdev->chip_reset_timer)) {
+-		del_timer_sync(&bdev->chip_reset_timer);
++		timer_delete_sync(&bdev->chip_reset_timer);
+ 		BTMTK_INFO("%s exit", __func__);
+ 	}
+ }
+diff --git a/connectivity/bt/linux_v2/btmtk_fw_log.c b/connectivity/bt/linux_v2/btmtk_fw_log.c
+index f2346ae..c205a96 100644
+--- a/connectivity/bt/linux_v2/btmtk_fw_log.c
++++ b/connectivity/bt/linux_v2/btmtk_fw_log.c
+@@ -295,7 +295,7 @@ static int btmtk_fops_initfwlog(void)
+ 	if (cdevErr)
+ 		goto cdv_error;
+ 
+-	g_fwlog->pBTClass = class_create(THIS_MODULE, BT_FWLOG_DEV_NODE);
++	g_fwlog->pBTClass = class_create(BT_FWLOG_DEV_NODE);
+ 	if (IS_ERR(g_fwlog->pBTClass)) {
+ 		BTMTK_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
+ 		goto create_node_error;
+diff --git a/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h b/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
+index 1e9dffd..74aa7cd 100755
+--- a/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
++++ b/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
+@@ -23,6 +23,7 @@
+ #include <linux/tty_driver.h>
+ #include <linux/serial.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/pinctrl/consumer.h>
+diff --git a/connectivity/bt/linux_v2/makefile_example/DTV/Makefile b/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
+index 5963a79..3df17ce 100644
+--- a/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
++++ b/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
+@@ -97,7 +97,7 @@ CFILES += btmtk_main.c btmtk_fw_log.c
+ 
+ ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
+ 
+-ccflags-y += -Werror
++ccflags-y += -Wno-error
+ 
+ $(MOD_NAME)-objs := $(CFILES:.c=.o)
+ 
+diff --git a/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c b/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
+index a468425..d7adab5 100644
+--- a/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
++++ b/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
+@@ -12,6 +12,7 @@
+  */
+ #include <linux/gpio/consumer.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+@@ -124,9 +125,8 @@ static int btmtk_uart_driver_probe(struct platform_device *pdev) {
+ 	return 0;
+ }
+ 
+-static int btmtk_uart_driver_remove(struct platform_device *pdev) {
++static void btmtk_uart_driver_remove(struct platform_device *pdev) {
+ 	BTMTK_DBG("%s", __func__);
+-	return 0;
+ }
+ 
+ static struct platform_driver btmtk_uart_driver = {
+@@ -2272,4 +2272,3 @@ int btmtk_uart_launcher_deinit(void)
+ }
+ 
+ #endif // (USE_DEVICE_NODE == 1)
+-
+diff --git a/connectivity/bt/linux_v2/sdio/btmtksdio.c b/connectivity/bt/linux_v2/sdio/btmtksdio.c
+index e902d8b..40e4a43 100644
+--- a/connectivity/bt/linux_v2/sdio/btmtksdio.c
++++ b/connectivity/bt/linux_v2/sdio/btmtksdio.c
+@@ -383,7 +383,7 @@ static void btmtk_sdio_create_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
+ 
+ static void btmtk_sdio_delete_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
+ {
+-	del_timer_sync(&cif_dev->fw_own_timer);
++	timer_delete_sync(&cif_dev->fw_own_timer);
+ 	BTMTK_INFO("%s end", __func__);
+ }
+ 
+diff --git a/connectivity/bt/linux_v2/uart/btmtktty.c b/connectivity/bt/linux_v2/uart/btmtktty.c
+index e282b54..a86f8d1 100644
+--- a/connectivity/bt/linux_v2/uart/btmtktty.c
++++ b/connectivity/bt/linux_v2/uart/btmtktty.c
+@@ -25,6 +25,7 @@
+ #include "btmtk_proj_sp.h"
+ #include <linux/platform_device.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include "btmtk_fw_log.h"
+ #include "btmtk_queue.h"
+ extern void bthost_debug_print(void);
+@@ -131,7 +132,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
+ 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
+ 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
+ 		BTMTK_WARN("%s: timer deleted", __func__);
+-		del_timer_sync(&cif_dev->fw_own_timer);
++		timer_delete_sync(&cif_dev->fw_own_timer);
+ 	} else
+ 		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
+ }
+diff --git a/connectivity/bt/linux_v2/uart_daemon/Makefile b/connectivity/bt/linux_v2/uart_daemon/Makefile
+index 26bb445..9cbffe1 100755
+--- a/connectivity/bt/linux_v2/uart_daemon/Makefile
++++ b/connectivity/bt/linux_v2/uart_daemon/Makefile
+@@ -8,7 +8,7 @@ OBJECT = \
+ CFLAGS = \
+ 		 -g \
+ 		 -Wall \
+-		 -Werror \
++		 -Wno-error \
+ 		 $(NULL)
+ 
+ #---------------------------------------------------------------------------
+diff --git a/connectivity/bt/mt66xx/include/btif/platform_base.h b/connectivity/bt/mt66xx/include/btif/platform_base.h
+index a0b2fb0..6ef6777 100644
+--- a/connectivity/bt/mt66xx/include/btif/platform_base.h
++++ b/connectivity/bt/mt66xx/include/btif/platform_base.h
+@@ -10,6 +10,10 @@
+ #include <linux/arm-smccc.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
+ 
++#ifndef MTK_SIP_KERNEL_BT_CONTROL
++#define MTK_SIP_KERNEL_BT_CONTROL MTK_SIP_SMC_CMD(0x536)
++#endif
++
+ #define BT_CR_DUMP_BUF_SIZE	(1024)
+ #define FW_NAME_LEN		(64)
+ #define PATCH_FILE_NUM		2
+diff --git a/connectivity/common/Kbuild b/connectivity/common/Kbuild
+index d767814..2cea447 100644
+--- a/connectivity/common/Kbuild
++++ b/connectivity/common/Kbuild
+@@ -94,7 +94,7 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
+ ###############################################################################
+ 
+ 
+-ccflags-y += -Werror $(call cc-disable-warning,unused-but-set-variable)
++ccflags-y += -Wno-error $(call cc-disable-warning,unused-but-set-variable)
+ 
+ ifeq ($(CONFIG_MTK_COMBO_CHIP_MT6628),y)
+     ccflags-y += -D MT6628
+diff --git a/connectivity/common/common_detect/wmt_detect.c b/connectivity/common/common_detect/wmt_detect.c
+index 7a17aa0..3be1bec 100644
+--- a/connectivity/common/common_detect/wmt_detect.c
++++ b/connectivity/common/common_detect/wmt_detect.c
+@@ -251,10 +251,9 @@ static int wmt_detect_probe(struct platform_device *pdev)
+ 	return ret;
+ }
+ 
+-static int wmt_detect_remove(struct platform_device *pdev)
++static void wmt_detect_remove(struct platform_device *pdev)
+ {
+ 	wmt_gpio_deinit();
+-	return 0;
+ }
+ #endif
+ 
+@@ -330,7 +329,7 @@ static int wmt_detect_driver_init(void)
+ 		goto err1;
+ 	}
+ 
+-	pDetectClass = class_create(THIS_MODULE, WMT_DETECT_DEVICE_NAME);
++	pDetectClass = class_create(WMT_DETECT_DEVICE_NAME);
+ 	if (IS_ERR(pDetectClass)) {
+ 		WMT_DETECT_PR_ERR("class create fail, error code(%ld)\n", PTR_ERR(pDetectClass));
+ 		goto err1;
+diff --git a/connectivity/common/common_main/linux/fw_log_wmt.c b/connectivity/common/common_main/linux/fw_log_wmt.c
+index bf495f8..c54c43d 100644
+--- a/connectivity/common/common_main/linux/fw_log_wmt.c
++++ b/connectivity/common/common_main/linux/fw_log_wmt.c
+@@ -136,7 +136,7 @@ int fw_log_wmt_init(void)
+ 		goto error;
+ 	}
+ 
+-	fw_log_wmt_class = class_create(THIS_MODULE, DRIVER_NAME);
++	fw_log_wmt_class = class_create(DRIVER_NAME);
+ 	if (IS_ERR(fw_log_wmt_class)) {
+ 		pr_err("class_create fail\n");
+ 		goto error;
+diff --git a/connectivity/common/common_main/linux/osal.c b/connectivity/common/common_main/linux/osal.c
+index 9ff0abf..5a418f3 100644
+--- a/connectivity/common/common_main/linux/osal.c
++++ b/connectivity/common/common_main/linux/osal.c
+@@ -858,7 +858,7 @@ INT32 osal_timer_stop(P_OSAL_TIMER pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer(timer);
++	timer_delete(timer);
+ 	return 0;
+ }
+ 
+@@ -866,7 +866,7 @@ INT32 osal_timer_stop_sync(P_OSAL_TIMER pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer_sync(timer);
++	timer_delete_sync(timer);
+ 	return 0;
+ }
+ 
+diff --git a/connectivity/common/common_main/linux/wmt_dev.c b/connectivity/common/common_main/linux/wmt_dev.c
+index 23f24db..97559c5 100644
+--- a/connectivity/common/common_main/linux/wmt_dev.c
++++ b/connectivity/common/common_main/linux/wmt_dev.c
+@@ -1645,7 +1645,7 @@ static INT32 WMT_init(VOID)
+ 	WMT_INFO_FUNC("driver(major %d) installed\n", gWmtMajor);
+ 
+ #if WMT_CREATE_NODE_DYNAMIC
+-	wmt_class = class_create(THIS_MODULE, "stpwmt");
++	wmt_class = class_create("stpwmt");
+ 	if (IS_ERR(wmt_class))
+ 		goto error;
+ 	wmt_dev = device_create(wmt_class, NULL, devID, NULL, "stpwmt");
+diff --git a/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c b/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
+index 472413a..4881080 100644
+--- a/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
++++ b/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
+@@ -72,7 +72,7 @@
+ ********************************************************************************
+ */
+ static INT32 mtk_wmt_probe(struct platform_device *pdev);
+-static INT32 mtk_wmt_remove(struct platform_device *pdev);
++static void mtk_wmt_remove(struct platform_device *pdev);
+ static INT32 mtk_wmt_suspend(struct device *dev);
+ static INT32 mtk_wmt_resume(struct device *dev);
+ 
+@@ -501,7 +501,7 @@ static INT32 mtk_wmt_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-static INT32 mtk_wmt_remove(struct platform_device *pdev)
++static void mtk_wmt_remove(struct platform_device *pdev)
+ {
+ 	if (wmt_consys_ic_ops->consys_ic_need_store_pdev) {
+ 		if (wmt_consys_ic_ops->consys_ic_need_store_pdev() == MTK_WCN_BOOL_TRUE)
+@@ -522,7 +522,6 @@ static INT32 mtk_wmt_remove(struct platform_device *pdev)
+ 	osal_sleepable_lock_deinit(&g_adie_chipid_lock);
+ 
+ 	atomic_set(&g_probe_called, 0);
+-	return 0;
+ }
+ 
+ static INT32 mtk_wmt_suspend(struct device *dev)
+diff --git a/connectivity/common/debug_utility/connsys_debug_utility.c b/connectivity/common/debug_utility/connsys_debug_utility.c
+index adee61b..da154df 100644
+--- a/connectivity/common/debug_utility/connsys_debug_utility.c
++++ b/connectivity/common/debug_utility/connsys_debug_utility.c
+@@ -18,6 +18,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/spinlock.h>
+ #include <linux/slab.h>
++#include <linux/vmalloc.h>
+ #include <linux/uaccess.h>
+ #include <linux/workqueue.h>
+ #include <linux/ratelimit.h>
+diff --git a/connectivity/connfem/Kbuild b/connectivity/connfem/Kbuild
+index a0d6f2f..5254eee 100644
+--- a/connectivity/connfem/Kbuild
++++ b/connectivity/connfem/Kbuild
+@@ -25,7 +25,7 @@ KBUILD_MODPOST_FAIL_ON_WARNINGS := y
+ # GCC Options
+ ###############################################################################
+ ccflags-y += -Wall
+-ccflags-y += -Werror
++ccflags-y += -Wno-error
+ 
+ 
+ ###############################################################################
+diff --git a/connectivity/connfem/connfem_module.c b/connectivity/connfem/connfem_module.c
+index c1e1927..cf63f24 100644
+--- a/connectivity/connfem/connfem_module.c
++++ b/connectivity/connfem/connfem_module.c
+@@ -990,7 +990,7 @@ static int __init connfem_mod_init(void)
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0))
+ 	connfem_cdev_ctx.class = class_create(CONNFEM_DRIVER_NAME);
+ #else
+-	connfem_cdev_ctx.class = class_create(THIS_MODULE, CONNFEM_DRIVER_NAME);
++	connfem_cdev_ctx.class = class_create(CONNFEM_DRIVER_NAME);
+ #endif
+ 	if (IS_ERR(connfem_cdev_ctx.class)) {
+ 		pr_info("ConnFem create class failed");
+diff --git a/connectivity/conninfra/Kbuild b/connectivity/conninfra/Kbuild
+index c9c41a6..da01f25 100644
+--- a/connectivity/conninfra/Kbuild
++++ b/connectivity/conninfra/Kbuild
+@@ -41,7 +41,7 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/memory/mediatek/
+ 
+ ###############################################################################
+-ccflags-y += -Werror
++ccflags-y += -Wno-error
+ ccflags-y += -Wno-error=format
+ ccflags-y += -Wno-error=format-extra-args
+ 
+diff --git a/connectivity/conninfra/adaptor/conninfra_dev.c b/connectivity/conninfra/adaptor/conninfra_dev.c
+index 5b93cb4..a213467 100755
+--- a/connectivity/conninfra/adaptor/conninfra_dev.c
++++ b/connectivity/conninfra/adaptor/conninfra_dev.c
+@@ -587,7 +587,7 @@ static int conninfra_dev_init(void)
+ 		goto err1;
+ 	}
+ 
+-	p_conn_adaptor_class = class_create(THIS_MODULE, CONNINFRA_DEVICE_NAME);
++	p_conn_adaptor_class = class_create(CONNINFRA_DEVICE_NAME);
+ 	if (IS_ERR(p_conn_adaptor_class)) {
+ 		pr_err("class create fail, error code(%ld)\n",
+ 						PTR_ERR(p_conn_adaptor_class));
+diff --git a/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c b/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
+index b9cf13b..513de03 100644
+--- a/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
++++ b/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
+@@ -46,7 +46,7 @@ int fw_log_mcu_init(struct fw_log_mcu_info *info, const struct file_operations *
+ 		goto error;
+ 	}
+ 
+-	info->mcu_class = class_create(THIS_MODULE, info->driver_name);
++	info->mcu_class = class_create(info->driver_name);
+ 	if (IS_ERR(info->mcu_class)) {
+ 		pr_notice("[%s] class_create fail, conn_type=[%d]\n", __func__, info->conn_type);
+ 		goto error;
+diff --git a/connectivity/conninfra/base/include/osal.h b/connectivity/conninfra/base/include/osal.h
+index 4f4b38a..9ce6ae4 100755
+--- a/connectivity/conninfra/base/include/osal.h
++++ b/connectivity/conninfra/base/include/osal.h
+@@ -26,6 +26,7 @@
+ #include <linux/completion.h>
+ #include <linux/wait.h>
+ #include <linux/time.h>
++#include <linux/timer.h>
+ #include "ring.h"
+ /*******************************************************************************
+ *                         C O M P I L E R   F L A G S
+diff --git a/connectivity/conninfra/base/osal.c b/connectivity/conninfra/base/osal.c
+index eea66c5..d988bf5 100755
+--- a/connectivity/conninfra/base/osal.c
++++ b/connectivity/conninfra/base/osal.c
+@@ -41,6 +41,7 @@
+ #include <linux/vmalloc.h>
+ #include <asm/current.h>
+ #include <linux/kfifo.h>
++#include <linux/timer.h>
+ #if defined(CONNINFRA_PLAT_ALPS) && CONNINFRA_PLAT_ALPS
+ #include "connectivity_build_in_adapter.h"
+ #endif
+@@ -724,7 +725,7 @@ int osal_timer_stop(P_OSAL_TIMER pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer(timer);
++	timer_delete(timer);
+ 	return 0;
+ }
+ 
+@@ -732,7 +733,7 @@ int osal_timer_stop_sync(P_OSAL_TIMER pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer_sync(timer);
++	timer_delete_sync(timer);
+ 	return 0;
+ }
+ 
+diff --git a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
+index fd6ac70..460dc7c 100644
+--- a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
++++ b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
+@@ -8,6 +8,7 @@
+ */
+ #include <linux/spinlock.h>
+ #include <linux/slab.h>
++#include <linux/vmalloc.h>
+ #include <linux/uaccess.h>
+ #include <linux/workqueue.h>
+ #include <linux/ratelimit.h>
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c b/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
+index 7d57f34..bec3b41 100755
+--- a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
++++ b/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/regmap.h>
+ #include "conninfra.h"
+ #include "clock_mng.h"
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c b/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
+index d4c380a..14d3e40 100644
+--- a/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
++++ b/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
+@@ -7,6 +7,7 @@
+ ********************************************************************************
+ */
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ 
+ #include "consys_hw.h"
+ 
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
+index 1416af9..f24788c 100644
+--- a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
++++ b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
+@@ -8,6 +8,10 @@
+ 
+ #include "plat_def.h"
+ 
++#ifndef MTK_SIP_KERNEL_CONNSYS_CONTROL
++#define MTK_SIP_KERNEL_CONNSYS_CONTROL MTK_SIP_SMC_CMD(0x534)
++#endif
++
+ #define CONNSYS_SMC_CALL_VOID(OPID, x2, x3, x4, x5, x6, x7) \
+ struct arm_smccc_res res; \
+ arm_smccc_smc(MTK_SIP_KERNEL_CONNSYS_CONTROL, OPID, \
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h b/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
+index 2433733..18e8660 100644
+--- a/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
++++ b/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
+@@ -18,6 +18,7 @@
+ #include <linux/of.h>
+ #include <linux/of_address.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
+index a8c9797..061c4f9 100644
+--- a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
++++ b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
+@@ -10,14 +10,6 @@
+ #include "include/mt6878_emi.h"
+ #include "include/mt6878_pos.h"
+ 
+-/* For EMI MPU */
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+-#include <soc/mediatek/emi.h>
+-#else
+-#include <memory/mediatek/emi.h>
+-#endif
+-/* For MCIF */
+-#include <mtk_ccci_common.h>
+ /*******************************************************************************
+ *                         C O M P I L E R   F L A G S
+ ********************************************************************************
+diff --git a/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c b/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
+index 4ad8dc1..9b220ab 100755
+--- a/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
++++ b/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
+@@ -6,6 +6,7 @@
+ #include <linux/delay.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+@@ -74,7 +75,7 @@
+ extern const struct of_device_id apconninfra_of_ids[];
+ 
+ static int mtk_conninfra_probe(struct platform_device *pdev);
+-static int mtk_conninfra_remove(struct platform_device *pdev);
++static void mtk_conninfra_remove(struct platform_device *pdev);
+ 
+ static struct platform_driver mtk_conninfra_dev_drv = {
+ 	.probe = mtk_conninfra_probe,
+@@ -626,14 +627,13 @@ int mtk_conninfra_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-int mtk_conninfra_remove(struct platform_device *pdev)
++void mtk_conninfra_remove(struct platform_device *pdev)
+ {
+ 	atomic_set(&g_connv2_hw_init_done, 0);
+ 	consys_hw_deinit();
+ 	if (g_drv_dev)
+ 		g_drv_dev = NULL;
+ 
+-	return 0;
+ }
+ 
+ 
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
+index 871353f..a00b2be 100755
+--- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
+@@ -6,6 +6,7 @@
+ #include <linux/delay.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/suspend.h>
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
+index bea8daf..e2228f2 100644
+--- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
+@@ -7,6 +7,7 @@
+ ********************************************************************************
+ */
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include "connv3_hw.h"
+ 
+ /*******************************************************************************
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
+index 5e55d2e..6354373 100755
+--- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
+@@ -4,8 +4,10 @@
+  */
+ 
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/pinctrl/consumer.h>
+ 
+ #include "connv3_hw.h"
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
+index be55f86..61b1f77 100755
+--- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/regmap.h>
+ 
+ #include "connv3_hw.h"
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c b/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
+index 62de69c..915c2f4 100644
+--- a/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
+@@ -7,8 +7,10 @@
+ 
+ #include <linux/gpio/consumer.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+ 
+diff --git a/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c b/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
+index be88a71..85a5561 100644
+--- a/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
++++ b/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
+@@ -7,8 +7,10 @@
+ 
+ #include <linux/gpio/consumer.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+ 
+diff --git a/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c b/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
+index f2db24d..2ac1e23 100755
+--- a/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
++++ b/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
+@@ -6,6 +6,7 @@
+ #include <linux/delay.h>
+ #include <linux/of.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
+@@ -62,7 +63,7 @@
+ extern const struct of_device_id connv3_of_ids[];
+ 
+ static int mtk_connv3_probe(struct platform_device *pdev);
+-static int mtk_connv3_remove(struct platform_device *pdev);
++static void mtk_connv3_remove(struct platform_device *pdev);
+ 
+ static struct platform_driver g_mtk_connv3_dev_drv = {
+ 	.probe = mtk_connv3_probe,
+@@ -291,7 +292,7 @@ int mtk_connv3_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-int mtk_connv3_remove(struct platform_device *pdev)
++void mtk_connv3_remove(struct platform_device *pdev)
+ {
+ 	atomic_set(&g_connv3_hw_init_done, 0);
+ 
+@@ -300,7 +301,6 @@ int mtk_connv3_remove(struct platform_device *pdev)
+ 	if (g_connv3_drv_dev)
+ 		g_connv3_drv_dev = NULL;
+ 
+-	return 0;
+ }
+ 
+ /* put log/variable to file node */
+diff --git a/connectivity/wlan/adaptor/wmt_cdev_wifi.c b/connectivity/wlan/adaptor/wmt_cdev_wifi.c
+index dd29365..6fb84ac 100644
+--- a/connectivity/wlan/adaptor/wmt_cdev_wifi.c
++++ b/connectivity/wlan/adaptor/wmt_cdev_wifi.c
+@@ -829,7 +829,7 @@ static int WIFI_init(void)
+ 		goto error;
+ 
+ #if CREATE_NODE_DYNAMIC	/* mknod replace */
+-	wmtwifi_class = class_create(THIS_MODULE, "wmtWifi");
++	wmtwifi_class = class_create("wmtWifi");
+ 	if (IS_ERR(wmtwifi_class))
+ 		goto error;
+ 	wmtwifi_dev = device_create(wmtwifi_class, NULL, wifi_devno, NULL,
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c b/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
+index dc8a8f9..006a6c2 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
+@@ -200,8 +200,7 @@ static int coredump_add_cdev(struct coredump_ctx *ctx)
+ 		goto unregister_chrdev_region;
+ 	}
+ 
+-	ctx->driver_class = class_create(THIS_MODULE,
+-		COREDUMP_WIFI_INF_NAME);
++	ctx->driver_class = class_create(COREDUMP_WIFI_INF_NAME);
+ 	if (IS_ERR(ctx->driver_class)) {
+ 		DBGLOG(INIT, ERROR,
+ 			"class_create failed, ret: %d\n",
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c b/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
+index 94201cd..35c910c 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
+@@ -239,8 +239,7 @@ int FwLogDevInit(void)
+ 	if (result < 0)
+ 		goto free_dev;
+ 
+-	gIndexDev->driver_class = class_create(THIS_MODULE,
+-		FW_INDEX_LOG_DRIVER_NAME);
++	gIndexDev->driver_class = class_create(FW_INDEX_LOG_DRIVER_NAME);
+ 
+ 	if (KAL_IS_ERR(gIndexDev->driver_class)) {
+ 		result = -ENOMEM;
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c b/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
+index ef9299c..b8a03a5 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
+@@ -263,8 +263,7 @@ int fw_log_wifi_inf_init(void)
+ 		goto unregister_chrdev_region;
+ 	}
+ 
+-	prInf->driver_class = class_create(THIS_MODULE,
+-					   FW_LOG_WIFI_INF_NAME);
++	prInf->driver_class = class_create(FW_LOG_WIFI_INF_NAME);
+ 	if (IS_ERR(prInf->driver_class)) {
+ 		DBGLOG(INIT, ERROR,
+ 			"class_create failed, ret: %d\n",
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_ics.c b/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
+index 218a25d..69c9cf7 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
+@@ -359,8 +359,7 @@ int IcsInit(void)
+ 	if (result < 0)
+ 		goto free_dev;
+ 
+-	gIcsDev->driver_class = class_create(THIS_MODULE,
+-		FW_LOG_ICS_DRIVER_NAME);
++	gIcsDev->driver_class = class_create(FW_LOG_ICS_DRIVER_NAME);
+ 
+ 	if (KAL_IS_ERR(gIcsDev->driver_class)) {
+ 		result = -ENOMEM;
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
+index 9e32e13..f150f0a 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
+@@ -70,6 +70,10 @@
+ #if (CFG_WLAN_ATF_SUPPORT == 1)
+ #include <linux/arm-smccc.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
++
++#ifndef MTK_SIP_KERNEL_WLAN_CONTROL
++#define MTK_SIP_KERNEL_WLAN_CONTROL MTK_SIP_SMC_CMD(0x535)
++#endif
+ #endif
+ 
+ #if (CFG_SUPPORT_TX_PWR_ENV == 1)
+@@ -6697,7 +6701,7 @@ u_int8_t kalSetTimer(struct GLUE_INFO *prGlueInfo,
+ 		mod_timer(&prGlueInfo->tickfn,
+ 			  jiffies + u4Interval * HZ / MSEC_PER_SEC);
+ 	} else {
+-		del_timer_sync(&(prGlueInfo->tickfn));
++		timer_delete_sync(&(prGlueInfo->tickfn));
+ 
+ 		prGlueInfo->tickfn.expires = jiffies + u4Interval * HZ /
+ 					     MSEC_PER_SEC;
+@@ -6723,7 +6727,7 @@ u_int8_t kalCancelTimer(struct GLUE_INFO *prGlueInfo)
+ 
+ 	clear_bit(GLUE_FLAG_TIMEOUT_BIT, &prGlueInfo->ulFlag);
+ 
+-	if (del_timer_sync(&(prGlueInfo->tickfn)) >= 0)
++	if (timer_delete_sync(&(prGlueInfo->tickfn)) >= 0)
+ 		return TRUE;
+ 	else
+ 		return FALSE;
+@@ -8483,7 +8487,7 @@ u_int8_t kalSendUevent(const char *src)
+ 	DBGLOG(INIT, INFO, "Send UEvent = %s", src);
+ 
+ 	/*send uevent*/
+-	strlcpy(event_string, src, sizeof(event_string));
++	strscpy(event_string, src, sizeof(event_string));
+ 	if (event_string[0] == '\0') { /*string is null*/
+ 		return FALSE;
+ 	}
+@@ -14181,7 +14185,7 @@ void kalTpeUninit(struct GLUE_INFO *prGlueInfo)
+ 	if (!prAdapter->rWifiVar.ucTpEnhanceEnable)
+ 		return;
+ 
+-	del_timer_sync(&(prGlueInfo->rTpeTimer));
++	timer_delete_sync(&(prGlueInfo->rTpeTimer));
+ }
+ 
+ int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
+@@ -14274,7 +14278,7 @@ int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
+ 			prGlueInfo->u4TpeTimeout) {
+ 			/* Timeout already, flush out directly. */
+ 			if (timer_pending(&prGlueInfo->rTpeTimer))
+-				del_timer(&prGlueInfo->rTpeTimer);
++				timer_delete(&prGlueInfo->rTpeTimer);
+ 			kalTpeFlush(prGlueInfo);
+ 			kalSetEvent(prGlueInfo);
+ 		} else {
+@@ -15939,8 +15943,8 @@ void kalTxDirectUninit(struct GLUE_INFO *prGlueInfo)
+ 
+ 	if (HAL_IS_TX_DIRECT(prAdapter)) {
+ 		if (prAdapter->fgTxDirectInited) {
+-			del_timer_sync(&prGlueInfo->rTxDirectSkbTimer);
+-			del_timer_sync(&prGlueInfo->rTxDirectHifTimer);
++			timer_delete_sync(&prGlueInfo->rTxDirectSkbTimer);
++			timer_delete_sync(&prGlueInfo->rTxDirectHifTimer);
+ 			kalTxDirectClearSkbQ(prGlueInfo);
+ 		}
+ 	}
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c b/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
+index 8165a3f..66790dc 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
+@@ -382,8 +382,7 @@ int SalogInit(void)
+ 	if (result < 0)
+ 		goto free_dev;
+ 
+-	gSaDev->driver_class = class_create(THIS_MODULE,
+-		SA_DRIVER_NAME);
++	gSaDev->driver_class = class_create(SA_DRIVER_NAME);
+ 
+ 	if (KAL_IS_ERR(gSaDev->driver_class)) {
+ 		result = -ENOMEM;
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c b/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
+index 4d94750..e1c2c5c 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
+@@ -71,7 +71,7 @@ static void wfsys_lock_release_trace(void)
+ 	uint64_t end_time_nsec;
+ 	uint64_t timeout;
+ 
+-	del_timer_sync(&wfsys_lock_timer);
++	timer_delete_sync(&wfsys_lock_timer);
+ 
+ 	end_time_sec = local_clock();
+ 	end_time_nsec = do_div(end_time_sec, NSEC_PER_SEC) / MSEC_PER_SEC;
+diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c b/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
+index 8a4a7b2..04ff5d5 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
++++ b/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
+@@ -39,6 +39,7 @@
+ #include <asm/memory.h>
+ #endif
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ 
+ #include "mt66xx_reg.h"
+@@ -455,7 +456,7 @@ exit:
+ 	return ret;
+ }
+ 
+-static int mtk_axi_remove(struct platform_device *pdev)
++static void mtk_axi_remove(struct platform_device *pdev)
+ {
+ 	struct mt66xx_hif_driver_data *prDriverData =
+ 		platform_get_drvdata(pdev);
+@@ -465,7 +466,6 @@ static int mtk_axi_remove(struct platform_device *pdev)
+ 	halFreeHifMem(pdev);
+ 	emi_mem_uninit(prChipInfo, pdev);
+ 	platform_set_drvdata(pdev, NULL);
+-	return 0;
+ }
+ 
+ static int mtk_axi_suspend(struct platform_device *pdev,
+@@ -821,4 +821,3 @@ void glBusFuncOff(void)
+ 	hifAxiRemove();
+ 	g_fgDriverProbed = FALSE;
+ }
+-
+diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
+index 4f43491..b54287c 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
++++ b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
+@@ -1715,7 +1715,7 @@ void halHifSwInfoUnInit(struct GLUE_INFO *prGlueInfo)
+ 	prBusInfo = prChipInfo->bus_info;
+ 	prSwWfdmaInfo = &prBusInfo->rSwWfdmaInfo;
+ 
+-	del_timer_sync(&prHifInfo->rSerTimer);
++	timer_delete_sync(&prHifInfo->rSerTimer);
+ #if (CFG_SUPPORT_TX_DATA_DELAY == 1)
+ 	hrtimer_cancel(&prHifInfo->rTxDelayTimer);
+ #endif
+@@ -4638,7 +4638,7 @@ void halHwRecoveryFromError(struct ADAPTER *prAdapter)
+ 
+ 	case ERR_RECOV_WAIT_MCU_NORMAL:
+ 		if (u4Status & ERROR_DETECT_MCU_NORMAL_STATE) {
+-			del_timer_sync(&prHifInfo->rSerTimer);
++			timer_delete_sync(&prHifInfo->rSerTimer);
+ #if (CFG_SUPPORT_ADHOC) || (CFG_ENABLE_WIFI_DIRECT)
+ 			/* update Beacon frame if operating in AP mode. */
+ 			DBGLOG(HAL, INFO, "SER(T) Host re-initialize BCN\n");
+diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c b/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
+index ae09007..c485f80 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
++++ b/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
+@@ -25,6 +25,7 @@
+ #include <linux/irq.h>
+ #include <linux/platform_device.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/of_irq.h>
+ #include <linux/of_address.h>
+diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c b/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
+index a5aae0b..db19f3d 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
++++ b/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
+@@ -39,6 +39,7 @@
+ #include <linux/irq.h>
+ #include <linux/platform_device.h>
+ #include <linux/of_device.h>
++#include <linux/mod_devicetable.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/of_irq.h>
+ #include <linux/of_address.h>
+@@ -1026,7 +1027,7 @@ exit:
+ 	return ret;
+ }
+ 
+-static int mtk_axi_remove(struct platform_device *pdev)
++static void mtk_axi_remove(struct platform_device *pdev)
+ {
+ #if (CFG_MTK_ANDROID_WMT == 1)
+ 	struct mt66xx_hif_driver_data *prDriverData =
+@@ -1045,7 +1046,6 @@ static int mtk_axi_remove(struct platform_device *pdev)
+ 	kalReleaseHifSkbList();
+ #endif
+ 	platform_set_drvdata(pdev, NULL);
+-	return 0;
+ }
+ 
+ /*----------------------------------------------------------------------------*/
+diff --git a/connectivity/wlan/core/gen4m/reset/reset.c b/connectivity/wlan/core/gen4m/reset/reset.c
+index b5c1f5a..8098643 100644
+--- a/connectivity/wlan/core/gen4m/reset/reset.c
++++ b/connectivity/wlan/core/gen4m/reset/reset.c
+@@ -377,7 +377,7 @@ void resetkoCancleTimer(struct FsmEntity *fsm)
+ 	}
+ 	MR_Info("[%s] %s\n", fsm->name, __func__);
+ 
+-	del_timer(&fsm->resetTimer);
++	timer_delete(&fsm->resetTimer);
+ 	removeResetEvent(fsm->eModuleType, RFSM_EVENT_TIMEOUT);
+ }
+ 

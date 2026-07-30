@@ -48,10 +48,14 @@ jobs:
           git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git upstream/pmaports
           rm -rf \
             upstream/pmaports/device/testing/device-nothing-tetris \
+            upstream/pmaports/device/testing/firmware-nothing-tetris \
             upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878
           rsync -a \
             pmaports/device/testing/device-nothing-tetris/ \
             upstream/pmaports/device/testing/device-nothing-tetris/
+          rsync -a \
+            pmaports/device/testing/firmware-nothing-tetris/ \
+            upstream/pmaports/device/testing/firmware-nothing-tetris/
           rsync -a \
             pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
             upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
@@ -68,7 +72,7 @@ jobs:
             /pmwork/work/cache_distfiles
             /pmwork/work/cache_ccache
             /pmwork/work/packages
-          key: pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}
+          key: pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}
           restore-keys: |
             pmb-${{ runner.os }}-
       - name: Build kernel package
@@ -86,6 +90,15 @@ jobs:
       - name: Build device package
         run: |
           cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            checksum firmware-nothing-tetris
+          ./pmbootstrap.py --as-root \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force --lax firmware-nothing-tetris --arch aarch64 ||
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
           ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
@@ -110,13 +123,28 @@ jobs:
           cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-boot.img /work/out/
           cp -v /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/boot/boot_image.itb /work/out/
           test -e /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/usr/libexec/nothing-tetris-connectivity-setup
-          test -e /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/usr/share/nothing-tetris/firmware/connsys_wifi_mt6878_mt6631.bin
-          find /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/lib/modules \
-            -path '*/extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko' -print -quit |
-            grep -q .
-          find /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/lib/modules \
-            -path '*/extra/mediatek-connectivity/conninfra.ko' -print -quit |
-            grep -q .
+          test -e /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/usr/lib/firmware/connsys_wifi_mt6878_mt6631.bin
+          rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
+          for module in \
+            extra/mediatek-pmic/mtk-spmi-pmic-adc.ko \
+            extra/mediatek-pmic/nvmem-mt635x-efuse.ko \
+            extra/mediatek-connectivity/conninfra.ko \
+            extra/mediatek-connectivity/connfem.ko \
+            extra/mediatek-connectivity/wmt_drv.ko \
+            extra/mediatek-connectivity/wmtWifi.ko \
+            extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko \
+            extra/mediatek-connectivity/bt_drv_6878.ko \
+            extra/mediatek-audio/snd-soc-mtk-common.ko \
+            extra/mediatek-audio/snd-soc-mt6369.ko \
+            extra/mediatek-audio/snd-soc-mt6878-afe.ko \
+            extra/mediatek-audio/mt6878-mt6369.ko; do
+            find "$rootfs/lib/modules" -path "*/$module" -print -quit |
+              grep -q . || { echo "missing module: $module"; exit 1; }
+          done
+          test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+          test -s /work/out/nothing-tetris-root.sparse.img
+          test -s /work/out/nothing-tetris-boot.img
+          test -s /work/out/boot_image.itb
           file /work/out/nothing-tetris-root.sparse.img
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"

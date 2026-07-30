@@ -37,11 +37,13 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18-r66` |
+| Kernel version | `6.18-r84` candidate |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
+Driver packaging and vendor-to-native migration are documented in
+[docs/DRIVER_STRATEGY.md](docs/DRIVER_STRATEGY.md).
 
 ## Feature Status
 
@@ -52,18 +54,19 @@ Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PA
 | Display | Simple framebuffer | Works | Stable inherited framebuffer through `simpledrm`. |
 | Display | Native DSI/panel | Broken | Native display bring-up is intentionally not in the active baseline. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
-| Input | Hardware keys | Partial | Volume-down works; power/volume-up behavior still needs MT6363 IRQ/key validation. |
+| Input | Hardware keys | Pending validation | r84 uses the official MT6363 debounce and interrupt-select masks for power and volume-up. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
-| USB-C | Type-C attach/orientation | Pending | MT6375 IRQ domain and minimal TCPM/TCPCI driver are present; live r63 reports vendor ID `0x0000`, so the TCPC register path still needs fixing. |
+| USB-C | Type-C attach/orientation | Pending validation | r84 maps the hardware-confirmed TCPCI register bank directly; r63 used the wrong empty window. |
+| USB-C | Analog audio switch | Pending validation | r84 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
-| Audio | Speaker amp identification | Partial | AW88261 probes on I2C; no ALSA card/machine driver yet. |
-| Audio | Playback/recording | Broken | Needs MT6878 AFE, MT6369 codec/machine routing, UCM. |
+| Audio | Speaker amp identification | Partial | AW88261 probes on I2C. |
+| Audio | Playback/recording | Pending validation | r84 packages the official MT6878 AFE, MT6369 codec and machine modules; routing/UCM still needs hardware validation. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
-| Camera | Flash | Broken | Needs LED-class/V4L2 flash bring-up. |
+| Camera | Flash | Pending validation | r84 adds a native dual-channel LM3644 LED flash-class driver and the confirmed GPIO wiring. |
 | Connectivity | Connsys foundation | Pending | MT6878/MT6631 manual regulator/MMIO bring-up driver is present; live r63 registers the device and can trigger power-on. |
-| Connectivity | Wi-Fi | Pending | r66 packages MT6631 firmware and vendor connectivity modules for CI/on-device validation. |
-| Connectivity | Bluetooth | Pending | r66 builds the MT6631 BT vendor module path; depends on WMT/conninfra loading cleanly. |
+| Connectivity | Wi-Fi | Pending validation | r84 packages ABI-locked MT6631 modules and dedicated firmware. |
+| Connectivity | Bluetooth | Pending validation | r84 packages the MT6878 BEIF Bluetooth module after conninfra/WMT. |
 | Connectivity | GPS/GNSS | Broken | Generic GNSS core registers; MT6631 GNSS client is not packaged yet. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
@@ -94,8 +97,8 @@ Additional live checks on r63:
 - MT6375 TCPC currently probes the wrong/empty register path and reports vendor
   ID `0x0000`.
 - The phone exposes `connsys_wifi_a`, `connsys_bt_a` and `connsys_gnss_a`
-  firmware partitions, but the device package also ships these firmware blobs
-  so the rootfs does not depend on reading those partitions at runtime.
+  partitions, but `firmware-nothing-tetris` ships the required blobs so the
+  rootfs does not depend on reading Android partitions at runtime.
 
 Useful storage checks on a booted phone:
 
@@ -122,7 +125,7 @@ The next useful hardware targets, in roughly pragmatic order:
    USB data role, wake behavior.
 2. Stabilize RT6010 haptics on r58+ and confirm it no longer freezes/reboots.
 3. Fix MT6363 key handling for power and volume-up.
-4. Validate r66 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
+4. Validate r84 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
    then Bluetooth.
 5. Bring up flashlight as LED-class or V4L2 flash.
 6. Add GNSS/FM clients after Wi-Fi/BT connectivity is stable.
