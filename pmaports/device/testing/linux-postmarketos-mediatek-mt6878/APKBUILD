@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=76
+pkgrel=77
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -69,6 +69,18 @@ prepare() {
 		-name '*.[ch]' -print0 |
 		xargs -0 perl -0pi -e \
 			's/#include <linux\/of_device.h>/#include <linux\/of_device.h>\n#include <linux\/mod_devicetable.h>/g'
+	perl -0pi -e '
+		s/#include "plat_def.h"/#include "plat_def.h"\n\n#ifndef MTK_SIP_KERNEL_CONNSYS_CONTROL\n#define MTK_SIP_KERNEL_CONNSYS_CONTROL MTK_SIP_SMC_CMD(0x534)\n#endif/g;
+	' "$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
+	perl -0pi -e '
+		s@/\* For EMI MPU \*/\n#if \(LINUX_VERSION_CODE >= KERNEL_VERSION\(5, 4, 0\)\)\n#include <soc/mediatek/emi.h>\n#else\n#include <memory/mediatek/emi.h>\n#endif\n/\* For MCIF \*/\n#include <mtk_ccci_common.h>\n@@g;
+	' "$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
+	perl -0pi -e '
+		s/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>\n\n#ifndef MTK_SIP_KERNEL_WLAN_CONTROL\n#define MTK_SIP_KERNEL_WLAN_CONTROL MTK_SIP_SMC_CMD(0x535)\n#endif/g;
+	' "$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
+	perl -0pi -e '
+		s/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>\n\n#ifndef MTK_SIP_KERNEL_BT_CONTROL\n#define MTK_SIP_KERNEL_BT_CONTROL MTK_SIP_SMC_CMD(0x536)\n#endif/g;
+	' "$_connmods_dir"/connectivity/bt/mt66xx/include/btif/platform_base.h
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
 		"$_connmods_dir"/connectivity/conninfra/base/osal.c \

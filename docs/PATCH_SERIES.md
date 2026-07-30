@@ -15,11 +15,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=76`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=77`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
-r50-r76 packages installed; that would make future packages look like
+r50-r77 packages installed; that would make future packages look like
 downgrades. For public releases, tag the repository with `v0.x.y` and keep the
 APK package version monotonic.
 
@@ -60,7 +60,7 @@ normal Alpine/postmarketOS practice.
 | `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 
-The r76 package also stages Android MT6878 connectivity modules from the Nothing
+The r77 package also stages Android MT6878 connectivity modules from the Nothing
 kernel module releases and installs the MT6631 Wi-Fi firmware blob into the
 device package for on-device validation. This is a practical overlay bring-up
 step, not an upstream-ready replacement for native Linux connectivity support.
