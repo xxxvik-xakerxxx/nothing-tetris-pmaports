@@ -277,7 +277,17 @@ does not load firmware or power the amplifier.
  	.id_table = aw88261_i2c_id,
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -54,6 +54,17 @@
+@@ -51,15 +51,26 @@
+ 	gpio_keys: gpio-keys {
+ 		compatible = "gpio-keys";
+ 
+ 		pinctrl-0 = <&key_gpio_default>;
+ 		pinctrl-names = "default";
+ 
+ 		voldown-key {
+ 			label = "Volume Down";
+ 			linux,code = <KEY_VOLUMEDOWN>;
+ 
  			gpios = <&pio 54 GPIO_ACTIVE_LOW>;
  		};
  	};
@@ -292,9 +302,8 @@ does not load firmware or power the amplifier.
 +			sound-dai = <&speaker_amp>;
 +		};
 +	};
- };
  
- &i2c2 {
+ 	battery-monitor {
 @@ -160,22 +160,18 @@
  	#address-cells = <1>;
  	#size-cells = <0>;
@@ -325,4 +334,4 @@ does not load firmware or power the amplifier.
 +	status = "okay";
 +};
 +
- &dsi0 {
+ &{/} {
