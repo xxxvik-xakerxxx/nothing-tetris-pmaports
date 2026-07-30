@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=79
+pkgrel=80
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -85,14 +85,16 @@ prepare() {
 	' "$_connmods_dir"/connectivity/bt/mt66xx/include/btif/platform_base.h
 	sed -i '/#include <linux\/time.h>/a\
 #include <linux/timer.h>' \
-		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h
+		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h \
+		"$_connmods_dir"/connectivity/common/common_main/linux/include/osal.h
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
 		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
 		"$_connmods_dir"/connectivity/common/common_main/linux/osal.c
 	sed -i '/#include <linux\/slab.h>/a\
 #include <linux/vmalloc.h>' \
-		"$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
+		"$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c \
+		"$_connmods_dir"/connectivity/common/debug_utility/connsys_debug_utility.c
 	find \
 		"$_connmods_dir"/connectivity/conninfra \
 		"$_connmods_dir"/connectivity/connfem \
