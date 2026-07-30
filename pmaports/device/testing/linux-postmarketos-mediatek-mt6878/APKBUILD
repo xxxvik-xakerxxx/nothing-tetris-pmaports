@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=77
+pkgrel=78
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -26,8 +26,8 @@ makedepends="
 
 _repository="linux"
 _commit="d84b264a54a37611f2f46bc19363cb9b41606205"
-_connmods_commit="5f75a3b13e8135d45b4b0b70ec893345144f70df"
-_devmods_commit="957dac185efe46cbf6336b0fff9516d84c8cd78f"
+_connmods_commit="e96f60dc081ae3525ef43d4bcf0ee5ee97e53835"
+_devmods_commit="ee2be53cb75670b548948636a0db1d1ff112bf12"
 _config="config-$_flavor.$arch"
 source="
 	$pkgname-$_commit.tar.gz::https://github.com/MT6878-mainline/$_repository/archive/$_commit.tar.gz
@@ -60,6 +60,8 @@ prepare() {
 	ln -snf "$_connmods_dir"/connectivity \
 		"$_android_top"/vendor/mediatek/kernel_modules/connectivity
 	find "$_connmods_dir"/connectivity -name Kbuild -o -name Makefile |
+		xargs sed -i 's/-Werror/-Wno-error/g'
+	find "$_devmods_dir"/sound -name Kbuild -o -name Makefile |
 		xargs sed -i 's/-Werror/-Wno-error/g'
 	find \
 		"$_connmods_dir"/connectivity/conninfra \
@@ -116,6 +118,10 @@ prepare() {
 		'
 	sed -i 's/strlcpy(event_string, src, sizeof(event_string))/strscpy(event_string, src, sizeof(event_string))/' \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
+	sed -i '7463,7478{s/return ret;/priv->hpofs_cal_auxadc = NULL; return 0;/}' \
+		"$_devmods_dir"/sound/soc/codecs/mt6369.c
+	sed -i '7481,7492{s/return ret;/priv->hp_efuse = NULL; return 0;/}' \
+		"$_devmods_dir"/sound/soc/codecs/mt6369.c
 }
 
 _connectivity_make() {
@@ -175,6 +181,42 @@ _build_connectivity_modules() {
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
+_audio_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		MTK_PLATFORM=mt6878 \
+		CONFIG_ARM64=y \
+		CONFIG_DEVICE_MODULES_SND_SOC_MEDIATEK=m \
+		CONFIG_SND_SOC_MTK_SRAM=m \
+		CONFIG_SND_SOC_MTK_SMART_PHONE=m \
+		CONFIG_DEVICE_MODULES_SND_SOC_MT6369=m \
+		CONFIG_DEVICE_MODULES_SND_SOC_MT6878=m \
+		CONFIG_DEVICE_MODULES_SND_SOC_MT6878_MT6369=m \
+		CONFIG_SND_SOC_MT6369_ACCDET=n \
+		"$@" modules
+}
+
+_build_audio_modules() {
+	_audio="$_devmods_dir"/sound/soc
+	_symbols=""
+
+	_audio_make "$_audio"/mediatek/common
+	_symbols="$_audio/mediatek/common/Module.symvers"
+
+	_audio_make "$_audio"/codecs KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_audio/codecs/Module.symvers"
+
+	_audio_make "$_audio"/mediatek/mt6878 \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+}
+
 build() {
 	unset LDFLAGS
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -183,6 +225,7 @@ build() {
 		Image.gz modules \
 		mediatek/mt6878-nothing-tetris.dtb
 	_build_connectivity_modules
+	_build_audio_modules
 }
 
 package() {
@@ -213,6 +256,16 @@ package() {
 		"$_connmods_dir"/connectivity/bt/linux_v2/btmtk_uart_unify.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
+	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-audio"
+	for _module in \
+		"$_devmods_dir"/sound/soc/mediatek/common/snd-soc-mtk-common.ko \
+		"$_devmods_dir"/sound/soc/mediatek/common/mtk-afe-external.ko \
+		"$_devmods_dir"/sound/soc/mediatek/common/mtk-sp-spk-amp.ko \
+		"$_devmods_dir"/sound/soc/codecs/snd-soc-mt6369.ko \
+		"$_devmods_dir"/sound/soc/mediatek/mt6878/snd-soc-mt6878-afe.ko \
+		"$_devmods_dir"/sound/soc/mediatek/mt6878/mt6878-mt6369.ko; do
+		install -Dm644 "$_module" "$_extra/${_module##*/}"
+	done
 	depmod -b "$pkgdir" "$_release"
 
 	install -D "$builddir"/include/config/kernel.release \
@@ -221,11 +274,11 @@ package() {
 
 sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
-SKIP  android-kernel-modules-5f75a3b13e8135d45b4b0b70ec893345144f70df.tar.gz
-SKIP  android-kernel-device-modules-957dac185efe46cbf6336b0fff9516d84c8cd78f.tar.gz
+SKIP  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
+SKIP  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
 d9e3753e4bb50d5c7a204651d0bcb1391885591a5f07a9f3736fd13f5b243f9109dc026f75220ce16e4b5ab7f18825ae23be1e64f54abb4f824161c1c36380c1  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
-d576f2391091498a049182dbaa36f57776c209ac0f258e01dc7bf18826074304597b97d93545119792a58ba1e7c1641f42b43649c689e6055b3ce47e2bac760a  0002-mfd-mt6369-spmi-pmic.patch
+33c57376ae157c012c3e64f0eea466bf7fc0042d3d3c6dfb5c7bc587f0568fe8d2b3fcc9fa91478209d54d5c892a72e9f27847bd86dcce2f85aaab9b30959a87  0002-mfd-mt6369-spmi-pmic.patch
 a6fef20ee45ba1b424124164a147e616663b9705e6a0a7325d3366d08781d5549c41e21823807d2562c72f3fdaa3e48dde41627c03b0565ed6444b0e4892b422  0003-mfd-mt6363-keys-mt6375-telemetry.patch
 60aad4c99ce65fe136f8489b11904a5a872ed802a847515cfced662ab9c19eb5ed736252b68807b9e19d11552af39a1bee574ae727bbfc8579102e18a1f3d6fe  0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch
 4dc6bd68565355553bbd126c7588ad1baafa0b0f21c3d4382c1aa2902726de256e304a1a5e792c0e27eb1f290b2703f47083d5b34adacc73b2acad526bca9c5d  0005-drm-sysfb-tetris-framebuffer.patch
@@ -233,7 +286,7 @@ a6fef20ee45ba1b424124164a147e616663b9705e6a0a7325d3366d08781d5549c41e21823807d25
 2d00776c2f409dbc76dc412e41f343279e0f7c8e16340071fd71771b9fb5b883cb65262be64d923fc8600d55db5ad45220f8b12870a0c377c9f2236ec9d2f575  0007-power-supply-mt6375-monitor.patch
 1f34c790726bd24e0385e4c10541e61391b9232e0b4d3d873098e2df0e2c26fce8a8fa8233cb260b3c1d6605db9ddd24810ba353efb5b2d3391a985704278be8  0008-connectivity-mt6878-mt6631-connsys.patch
 4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0009-clk-mediatek-mt6878-mfg.patch
-226c063c86539aa80de75977356eedc69593c57f8fa3070b19a6e11c269544f2c52101fc13ff4fbac24ac394bf9af099b6d67317032c19e8abbc5ffe4ae9b7b2  0010-audio-mt6878-aw88261.patch
+fbd109c0ba90d359404ece056711d256d216bc24a5bd10b4e0a24414fc0537ab2b1fc9699aeb2ffc06c4266350e5f58327ef5539242dc1e0ed4c2e972e30a55b  0010-audio-mt6878-aw88261.patch
 fbdb65423ec8fab0540d9eb6898e8fc558f1398c2871543452be86850db4efee396af461b9bef9a755c0b6a7f341a31ed782cec96d3eb3f2f4688f1bcf2e04d2  0011-input-rt6010-haptics-tetris.patch
 67f43aed079bcb4dd69cd4ba7d881c5ef9c42e6370f329cd9439f17f117edd809b0ef9441de4b25c22dfed6a7112070184e15451f62eb3c4cf6c6c7c769c8b9f  0012-usb-typec-mt6375-tcpc-tetris.patch
 

@@ -3,6 +3,9 @@
 This repository carries a postmarketOS overlay for the Nothing CMF Phone 1
 (`nothing-tetris`) on top of the MT6878 mainline kernel fork.
 
+Official NothingOSS source selection and the module-first bring-up policy are
+tracked in `docs/NOTHINGOSS_SOURCES.md`.
+
 The current baseline is intentionally conservative:
 
 - display uses the inherited framebuffer through `simpledrm`;
@@ -15,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=77`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=78`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -56,14 +59,18 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `0008-connectivity-mt6878-mt6631-connsys.patch` | MT6363 connectivity rails plus minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 | `0009-clk-mediatek-mt6878-mfg.patch` | MFG PLL/top mux clock foundation for future GPU work. |
-| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys clock foundation plus AW88261 speaker amplifier identification. Audio still needs AFE/machine-driver work. |
+| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys clock foundation, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
 | `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 
-The r77 package also stages Android MT6878 connectivity modules from the Nothing
-kernel module releases and installs the MT6631 Wi-Fi firmware blob into the
-device package for on-device validation. This is a practical overlay bring-up
-step, not an upstream-ready replacement for native Linux connectivity support.
+The r78 package stages Tetris 16b Android MT6878 connectivity modules from the
+Nothing kernel module releases and installs the MT6631 Wi-Fi firmware blob into
+the device package for on-device validation. It also stages the official
+Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
+`snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369
+PMIC codec plus AW88261 speaker amplifier into the board DT. This is a
+practical overlay bring-up step, not an upstream-ready replacement for native
+Linux connectivity/audio support.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
@@ -88,6 +95,7 @@ not a confirmed external RT1711H controller.
    and Bluetooth.
 3. Flashlight as LED-class/V4L2 flash.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
-5. MT6878 AFE + MT6369 machine driver + AW88261 routing + UCM.
+5. Validate Tetris 16b vendor audio modules on device, then add UCM profiles
+   for speaker and microphones.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
 7. Modem/SIM and cameras as later large projects.

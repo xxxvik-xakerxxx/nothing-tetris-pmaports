@@ -12,7 +12,7 @@ index 898cd78..2c7ba4a 100644
 +			#clock-cells = <1>;
 +
 +			afe: audio-controller {
-+				compatible = "mediatek,mt6878-afe";
++				compatible = "mediatek,mt6878-sound", "mediatek,mt6878-afe";
 +				interrupts = <GIC_SPI 392 IRQ_TYPE_LEVEL_HIGH 0>;
 +				clocks = <&audiosys CLK_AFE_AUDIO_HOPPING>,
 +					 <&audiosys CLK_AFE_AUDIO_F26M>,
@@ -277,7 +277,25 @@ does not load firmware or power the amplifier.
  	.id_table = aw88261_i2c_id,
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -160,22 +160,14 @@
+@@ -54,6 +54,17 @@
+ 			gpios = <&pio 54 GPIO_ACTIVE_LOW>;
+ 		};
+ 	};
++
++	sound {
++		compatible = "mediatek,mt6878-mt6369-sound";
++		mediatek,platform = <&afe>;
++		mediatek,ipm = <1>;
++		mediatek,spk-i2s = <25 24>;
++
++		mediatek,speaker-codec {
++			sound-dai = <&speaker_amp>;
++		};
++	};
+ };
+ 
+ &i2c2 {
+@@ -160,22 +160,17 @@
  	#address-cells = <1>;
  	#size-cells = <0>;
  	clock-frequency = <400000>;
@@ -285,7 +303,7 @@ does not load firmware or power the amplifier.
  
 -	speaker-amp@34 {
 -		compatible = "awinic,aw882xx_smartpa";
-+	audio-codec@34 {
++	speaker_amp: audio-codec@34 {
 +		compatible = "awinic,aw88261";
  		reg = <0x34>;
 -		interrupt-parent = <&pio>;
@@ -303,4 +321,8 @@ does not load firmware or power the amplifier.
 -	};
  };
  
++&afe {
++	status = "okay";
++};
++
  &pio {
