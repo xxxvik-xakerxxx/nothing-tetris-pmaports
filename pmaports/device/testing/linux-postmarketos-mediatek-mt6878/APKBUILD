@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=74
+pkgrel=75
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -83,6 +83,17 @@ prepare() {
 		-name '*.[ch]' -print0 |
 		xargs -0 perl -0pi -e \
 			's/\bdel_timer_sync\(/timer_delete_sync(/g; s/\bdel_timer\(/timer_delete(/g'
+	find \
+		"$_connmods_dir"/connectivity/conninfra \
+		"$_connmods_dir"/connectivity/common \
+		"$_connmods_dir"/connectivity/wlan/core/gen4m \
+		"$_connmods_dir"/connectivity/bt/linux_v2 \
+		-name '*.[ch]' -print0 |
+		xargs -0 perl -0pi -e '
+			my $names = qr/mtk_conninfra_remove|mtk_connv3_remove|mtk_wmt_remove|wmt_detect_remove|mtk_axi_remove|btmtk_uart_driver_remove/;
+			s/\.remove\s*=\s*($names),/.remove = (void (*)(struct platform_device *))$1,/g;
+			s/(\.remove\s*=\s*)($names);/$1(void (*)(struct platform_device *))$2;/g;
+		'
 	sed -i 's/strlcpy(event_string, src, sizeof(event_string))/strscpy(event_string, src, sizeof(event_string))/' \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
 }
