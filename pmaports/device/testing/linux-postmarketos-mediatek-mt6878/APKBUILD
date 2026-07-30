@@ -1,7 +1,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=78
+pkgrel=79
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -83,11 +83,16 @@ prepare() {
 	perl -0pi -e '
 		s/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>/#include <linux\/soc\/mediatek\/mtk_sip_svc.h>\n\n#ifndef MTK_SIP_KERNEL_BT_CONTROL\n#define MTK_SIP_KERNEL_BT_CONTROL MTK_SIP_SMC_CMD(0x536)\n#endif/g;
 	' "$_connmods_dir"/connectivity/bt/mt66xx/include/btif/platform_base.h
+	sed -i '/#include <linux\/time.h>/a\
+#include <linux/timer.h>' \
+		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
 		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
-		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h \
 		"$_connmods_dir"/connectivity/common/common_main/linux/osal.c
+	sed -i '/#include <linux\/slab.h>/a\
+#include <linux/vmalloc.h>' \
+		"$_connmods_dir"/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
 	find \
 		"$_connmods_dir"/connectivity/conninfra \
 		"$_connmods_dir"/connectivity/connfem \
@@ -277,7 +282,7 @@ sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
 SKIP  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
 SKIP  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
-d9e3753e4bb50d5c7a204651d0bcb1391885591a5f07a9f3736fd13f5b243f9109dc026f75220ce16e4b5ab7f18825ae23be1e64f54abb4f824161c1c36380c1  config-postmarketos-mediatek-mt6878.aarch64
+96e524d558b77e6964f97226a4aab05be65d88696bde6bfe536811bde0be4c650d35296860aae7e53176dc2f1357e9e36eabeb015b037269df9c18db3f70c16e  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
 33c57376ae157c012c3e64f0eea466bf7fc0042d3d3c6dfb5c7bc587f0568fe8d2b3fcc9fa91478209d54d5c892a72e9f27847bd86dcce2f85aaab9b30959a87  0002-mfd-mt6369-spmi-pmic.patch
 a6fef20ee45ba1b424124164a147e616663b9705e6a0a7325d3366d08781d5549c41e21823807d2562c72f3fdaa3e48dde41627c03b0565ed6444b0e4892b422  0003-mfd-mt6363-keys-mt6375-telemetry.patch
