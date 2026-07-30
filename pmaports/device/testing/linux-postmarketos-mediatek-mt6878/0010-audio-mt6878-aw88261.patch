@@ -295,7 +295,7 @@ does not load firmware or power the amplifier.
  };
  
  &i2c2 {
-@@ -160,22 +160,17 @@
+@@ -160,22 +160,18 @@
  	#address-cells = <1>;
  	#size-cells = <0>;
  	clock-frequency = <400000>;

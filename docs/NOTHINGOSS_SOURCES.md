@@ -38,8 +38,44 @@ builds must be reproducible.
 | PMIC ADC / efuse | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/iio`, `drivers/nvmem` | Stage vendor PMIC ADC/efuse modules or port the small parts natively. | Needed to remove temporary optional audio calibration fallback. |
 | Flashlight / LEDs | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/leds` | Prefer vendor modules first, then expose LED/V4L2 flash class cleanly. | Likely a better near-term target than full camera. |
 | Thermal / hwinfo | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/thermal`, `drivers/chino-e` | Stage small modules where dependencies are limited. | Useful for status page and device diagnostics. |
+| Native display | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/gpu/drm` | Keep the working framebuffer path in the stable build. Test the official DRM v2 stack as a separate experiment. | Tetris uses `samsung,s6e8fc3x02`; Nothing builds `panel-samsung-s6e8fc3x02.ko` together with `mediatek_v2/mediatek-drm.ko` and helper modules. |
 | Camera | `android_kernel_modules_nothing_mt6878/mtkcam` plus `device_modules/drivers/media` and camera misc drivers | Treat as a large staged stack, not one giant patch. Start with sensor inventory, cam_cal, VCM/OIS/flash, then ISP/media graph. | Kernel probe alone will not make a usable camera without DT, media pipeline and userspace stack. |
 | GPU | `android_kernel_modules_nothing_mt6878/gpu` and `device_modules/drivers/gpu` | Large staged stack. Requires power domains, clocks, firmware/userspace and careful ABI work. | Do after core phone features unless CI capacity is available. |
+
+## Official Tetris 16b module inventory
+
+Nothing's `mgk_64_k61.bzl` confirms these hardware groups are intended to be
+built for this MT6878 family:
+
+- connectivity: `conninfra`, `connfem`, WMT/common, Wi-Fi, Bluetooth, GNSS and
+  FM radio;
+- input: PMIC keys, FocalTech/Goodix/Novatek touch modules and Goodix
+  fingerprint support;
+- power and PMIC support: MT6375/MT6379 MFD, charger/supply, IIO ADC,
+  SPMI-PMIC ADC and NVMEM/efuse support;
+- multimedia: MT6878 AFE, MT6369 codec, AW88261 speaker path, JPEG/VDEC/VENC,
+  camera calibration, sensors, ISP, VCM/OIS and flash modules;
+- display/GPU: MediaTek DRM v2, `panel-samsung-s6e8fc3x02`, MML, display
+  notifier/security/AOD helpers, Mali GPU modules and MediaTek GED/GPUEB/QoS;
+- platform diagnostics: thermal, hwinfo/board-id, EMI/MMQoS, USB/Type-C,
+  haptics, LEDs, flashlight and logging/debug helpers.
+
+The stable port should not enable this whole list at once. Keep already working
+local patches for framebuffer display, touchscreen and the currently proven
+PMIC/peripheral glue. For hardware that is still broken or missing, prefer the
+official module implementation, added in small package-level groups with one
+clear owner per patch.
+
+## Display finding
+
+The official native display implementation exists, but it is not only a panel
+driver. The Tetris device tree uses `compatible = "samsung,s6e8fc3x02"`, and
+Nothing builds `drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko`. That panel
+depends on MediaTek DRM v2 helpers such as `mtk_panel_ext`, DDP/DSI, MML and
+display notifier modules. Because the framebuffer handoff is currently the
+known-good display path, native DRM should be developed as a separate patch set
+or branch and only merged into the stable build after it shows a real userspace
+KMS framebuffer on hardware.
 
 ## Maintenance rule
 
