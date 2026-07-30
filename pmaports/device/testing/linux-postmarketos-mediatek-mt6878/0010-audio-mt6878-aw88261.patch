@@ -277,34 +277,7 @@ does not load firmware or power the amplifier.
  	.id_table = aw88261_i2c_id,
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -51,15 +51,26 @@
- 	gpio_keys: gpio-keys {
- 		compatible = "gpio-keys";
- 
- 		pinctrl-0 = <&key_gpio_default>;
- 		pinctrl-names = "default";
- 
- 		voldown-key {
- 			label = "Volume Down";
- 			linux,code = <KEY_VOLUMEDOWN>;
- 
- 			gpios = <&pio 54 GPIO_ACTIVE_LOW>;
- 		};
- 	};
-+
-+	sound {
-+		compatible = "mediatek,mt6878-mt6369-sound";
-+		mediatek,platform = <&afe>;
-+		mediatek,ipm = <1>;
-+		mediatek,spk-i2s = <25 24>;
-+
-+		mediatek,speaker-codec {
-+			sound-dai = <&speaker_amp>;
-+		};
-+	};
- 
- 	battery-monitor {
-@@ -160,22 +160,18 @@
+@@ -160,22 +160,31 @@
  	#address-cells = <1>;
  	#size-cells = <0>;
  	clock-frequency = <400000>;
@@ -332,6 +305,19 @@ does not load firmware or power the amplifier.
  
 +&afe {
 +	status = "okay";
++};
++
++&{/} {
++	sound {
++		compatible = "mediatek,mt6878-mt6369-sound";
++		mediatek,platform = <&afe>;
++		mediatek,ipm = <1>;
++		mediatek,spk-i2s = <25 24>;
++
++		mediatek,speaker-codec {
++			sound-dai = <&speaker_amp>;
++		};
++	};
 +};
 +
  &{/} {
