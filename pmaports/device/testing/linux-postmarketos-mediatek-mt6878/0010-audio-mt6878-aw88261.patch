@@ -325,4 +325,4 @@ does not load firmware or power the amplifier.
 +	status = "okay";
 +};
 +
- &pio {
+ &dsi0 {
