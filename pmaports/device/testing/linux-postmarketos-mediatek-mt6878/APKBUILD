@@ -86,6 +86,7 @@ prepare() {
 	sed -i '/#include <linux\/kfifo.h>/a\
 #include <linux/timer.h>' \
 		"$_connmods_dir"/connectivity/conninfra/base/osal.c \
+		"$_connmods_dir"/connectivity/conninfra/base/include/osal.h \
 		"$_connmods_dir"/connectivity/common/common_main/linux/osal.c
 	find \
 		"$_connmods_dir"/connectivity/conninfra \
