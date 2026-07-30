@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=84`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=85`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -66,8 +66,9 @@ normal Alpine/postmarketOS practice.
 | `0014-mmc-mt6878-tetris-sdcard.patch` | Native MT6878 MSDC1 host support and the Tetris microSD slot wiring. |
 | `0015-leds-flash-lm3644-tetris.patch` | Native dual-channel LM3644 Linux LED flash-class driver and Tetris I2C/GPIO wiring. |
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
+| `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 
-The r84 package stages Tetris 16b Android MT6878 connectivity modules from the
+The r85 package stages Tetris 16b Android MT6878 connectivity modules from the
 Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are ABI-locked kernel
 subpackages. It also stages the official
@@ -76,7 +77,9 @@ Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
 PMIC codec plus AW88261 speaker amplifier into the board DT. This is a
 practical overlay bring-up step, not an upstream-ready replacement for native
 Linux connectivity/audio support. Linux 6.18 compatibility changes are normal
-source patches instead of build-time source transformations.
+source patches instead of build-time source transformations. The audio bridge
+uses `1101` for optional calibration handling and `1102` for Linux 6.18 ASoC
+helper and namespace API changes.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,

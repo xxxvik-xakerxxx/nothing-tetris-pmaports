@@ -1,0 +1,29 @@
+diff --git a/include/linux/mfd/mt6363/registers.h b/include/linux/mfd/mt6363/registers.h
+index 38cfec1..afda1d7 100644
+--- a/include/linux/mfd/mt6363/registers.h
++++ b/include/linux/mfd/mt6363/registers.h
+@@ -8,6 +8,24 @@
+ #define MT6363_PSC_TOP_INT_CON0			0x090f
+ #define MT6363_PSC_TOP_INT_STATUS0		0x091b
+ 
++#define MT6363_AUXADC_ADC0_L			0x1088
++#define MT6363_AUXADC_ADC3_L			0x108e
++#define MT6363_AUXADC_ADC4_L			0x1090
++#define MT6363_AUXADC_ADC11_L			0x109e
++#define MT6363_AUXADC_ADC38_L			0x10c4
++#define MT6363_AUXADC_ADC39_L			0x10c6
++#define MT6363_AUXADC_ADC40_L			0x10c8
++#define MT6363_AUXADC_ADC_CH12_L			0x10d2
++#define MT6363_AUXADC_ADC_CH14_L			0x10d8
++#define MT6363_AUXADC_ADC42_L			0x10dc
++#define MT6363_AUXADC_RQST0			0x1108
++#define MT6363_AUXADC_RQST1			0x1109
++#define MT6363_AUXADC_RQST3			0x110c
++#define MT6363_SDMADC_RQST0			0x110e
++#define MT6363_SDMADC_CON0			0x11c4
++#define MT6363_AUXADC_IMP0			0x1208
++#define MT6363_AUXADC_IMP1			0x1209
++
+ #define MT6363_VCN13_VSEL			0x1b3f
+ #define MT6363_VRFIO18_ENABLE			0x1bcd
+ #define MT6363_VCN13_ENABLE			0x1d07

@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=84
+pkgrel=85
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -56,8 +56,10 @@ source="
 	0014-mmc-mt6878-tetris-sdcard.patch
 	0015-leds-flash-lm3644-tetris.patch
 	0016-usb-typec-hl5280-audio-switch.patch
+	0017-mfd-mt6363-auxadc-registers.patch
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
+	1102-vendor-audio-linux-6.18-api.patch.vendor
 "
 builddir="$srcdir/$_repository-$_commit"
 _connmods_dir="$srcdir/android_kernel_modules_nothing_mt6878-$_connmods_commit"
@@ -76,6 +78,8 @@ prepare() {
 		< "$srcdir"/1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1101-vendor-audio-optional-calibration.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/1102-vendor-audio-linux-6.18-api.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -136,10 +140,15 @@ _build_connectivity_modules() {
 
 	_connectivity_make "$_conn"/wlan/core/gen4m \
 		MODULE_NAME=wlan_drv_gen4m_6878 \
+		WLAN_CHIP_ID=6878 \
+		MTK_COMBO_CHIP=CONNAC2X2_SOC7_0 \
+		WIFI_IP_SET=1 \
+		MTK_ANDROID_WMT=y \
+		MTK_ANDROID_EMI=n \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_conn/wlan/core/gen4m/Module.symvers"
 
-	_connectivity_make "$_conn"/bt/mt66xx/btif \
+	_connectivity_make "$_conn"/bt/mt66xx/6878 \
 		BT_PLATFORM=6878 \
 		LOG_TAG=bt_drv_6878 \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
@@ -190,7 +199,9 @@ _audio_make() {
 		CONFIG_MEDIATEK_SPMI_PMIC_ADC=m \
 		CONFIG_MT635X_EFUSE=m \
 		CONFIG_SND_SOC_MT6369_ACCDET=n \
-		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags)" \
+		KCFLAGS="-I$_devmods_dir/include \
+			-I$_devmods_dir/drivers/misc/mediatek/include \
+			$(_vendor_kcflags)" \
 		"$@" modules
 }
 
@@ -200,7 +211,7 @@ _build_audio_modules() {
 	_symbols="$_symbols $_devmods_dir/drivers/nvmem/Module.symvers"
 
 	_audio_make "$_audio"/mediatek/common
-	_symbols="$_audio/mediatek/common/Module.symvers"
+	_symbols="$_symbols $_audio/mediatek/common/Module.symvers"
 
 	_audio_make "$_audio"/codecs KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_audio/codecs/Module.symvers"
@@ -252,7 +263,7 @@ package() {
 		"$_connmods_dir"/connectivity/common/wmt_drv.ko \
 		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
-		"$_connmods_dir"/connectivity/bt/mt66xx/btif/bt_drv_6878.ko; do
+		"$_connmods_dir"/connectivity/bt/mt66xx/6878/bt_drv_6878.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-audio"
@@ -316,7 +327,9 @@ cccfa39e5150e25aa43fa9c9aa8ceb27fd3bad253c9f387bba50c734d5987aca7819f83af8cce59c
 16e93ed8c05a90e231cfc4f8869da91abb0416bb72a5bffca0f1efbca3b1e020b9ba3f24bb620f996fe9d679d9bc9b73a8f25990d704ad26f30212480172c013  0014-mmc-mt6878-tetris-sdcard.patch
 98f17f4977dc23dc8455fcecb8c382b8a56f9fe2523fc92f1dc9f8ea2c5c0234817573502823c02fdcf171509fd5eb3561650570095e0f9074f805f5413c6cd9  0015-leds-flash-lm3644-tetris.patch
 beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
-252d748e996760db2df400ba0a778368728cf7c6672f833482cf90ba1c5eb0b72995247781e693928f441c15c8679400faf1cec79af9bffd11d40921bdb92fdc  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
+f94f421c00807f835eed2753594f86e34806a29fb0aed90313e6c3c8016e0df844bfa86f4cb1e8c30d72ee83c28783f290ba311b7d2862b495fa876f38f1bd3d  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
+cfc0184fe120fa66d2f031322486afa803c303be0ad5c4d71bb15f78137b2f917d4e961965795a1a0adb9c630b2ea69f2ff24e94cfb14199af8a08ef11c0dea3  1102-vendor-audio-linux-6.18-api.patch.vendor
 
 "

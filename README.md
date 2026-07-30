@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18-r84` candidate |
+| Kernel version | `6.18-r85` candidate |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -54,19 +54,19 @@ Driver packaging and vendor-to-native migration are documented in
 | Display | Simple framebuffer | Works | Stable inherited framebuffer through `simpledrm`. |
 | Display | Native DSI/panel | Broken | Native display bring-up is intentionally not in the active baseline. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
-| Input | Hardware keys | Pending validation | r84 uses the official MT6363 debounce and interrupt-select masks for power and volume-up. |
+| Input | Hardware keys | Pending validation | r85 uses the official MT6363 debounce and interrupt-select masks for power and volume-up. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
-| USB-C | Type-C attach/orientation | Pending validation | r84 maps the hardware-confirmed TCPCI register bank directly; r63 used the wrong empty window. |
-| USB-C | Analog audio switch | Pending validation | r84 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
+| USB-C | Type-C attach/orientation | Pending validation | r85 maps the hardware-confirmed TCPCI register bank directly; r63 used the wrong empty window. |
+| USB-C | Analog audio switch | Pending validation | r85 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
 | Audio | Speaker amp identification | Partial | AW88261 probes on I2C. |
-| Audio | Playback/recording | Pending validation | r84 packages the official MT6878 AFE, MT6369 codec and machine modules; routing/UCM still needs hardware validation. |
+| Audio | Playback/recording | Pending validation | r85 packages the official MT6878 AFE, MT6369 codec and machine modules; routing/UCM still needs hardware validation. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
-| Camera | Flash | Pending validation | r84 adds a native dual-channel LM3644 LED flash-class driver and the confirmed GPIO wiring. |
+| Camera | Flash | Pending validation | r85 adds a native dual-channel LM3644 LED flash-class driver and the confirmed GPIO wiring. |
 | Connectivity | Connsys foundation | Pending | MT6878/MT6631 manual regulator/MMIO bring-up driver is present; live r63 registers the device and can trigger power-on. |
-| Connectivity | Wi-Fi | Pending validation | r84 packages ABI-locked MT6631 modules and dedicated firmware. |
-| Connectivity | Bluetooth | Pending validation | r84 packages the MT6878 BEIF Bluetooth module after conninfra/WMT. |
+| Connectivity | Wi-Fi | Pending validation | r85 packages ABI-locked MT6631 modules and dedicated firmware. |
+| Connectivity | Bluetooth | Pending validation | r85 packages the MT6878 BEIF Bluetooth module after conninfra/WMT. |
 | Connectivity | GPS/GNSS | Broken | Generic GNSS core registers; MT6631 GNSS client is not packaged yet. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
@@ -125,7 +125,7 @@ The next useful hardware targets, in roughly pragmatic order:
    USB data role, wake behavior.
 2. Stabilize RT6010 haptics on r58+ and confirm it no longer freezes/reboots.
 3. Fix MT6363 key handling for power and volume-up.
-4. Validate r84 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
+4. Validate r85 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
    then Bluetooth.
 5. Bring up flashlight as LED-class or V4L2 flash.
 6. Add GNSS/FM clients after Wi-Fi/BT connectivity is stable.

@@ -2,12 +2,13 @@ From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 Subject: [PATCH] vendor: connectivity: adapt Tetris 16b modules to Linux 6.18
 
 Keep the official Nothing MT6878 connectivity implementation buildable against
-the postmarketOS kernel without mutating sources from APKBUILD. This updates
-removed kernel APIs, supplies the MT6878 SMC IDs, drops unavailable Android EMI
-and CCCI integration, and uses the current platform remove callback contract.
+the postmarketOS kernel without mutating sources from APKBUILD. Update removed
+timer, alarm, platform, TTY, cfg80211, NAPI/GRO, crypto namespace, Bluetooth,
+and external-module Kbuild APIs. Select the MT6878/MT6631 Wi-Fi profile and the
+official MT6878 BTIF profile.
 
-This is a downstream compatibility patch for the module-first bring-up path.
-The individual hardware blocks remain candidates for native subsystem ports.
+This remains a downstream compatibility bridge for module-first bring-up while
+native mainline drivers are developed.
 
 diff --git a/connectivity/bt/linux_v2/Kbuild b/connectivity/bt/linux_v2/Kbuild
 index 19c762f..420cc82 100644
@@ -36,9 +37,18 @@ index 2d2d062..c2de4f2 100644
  		goto create_node_error;
  	BT_dev = device_create(BT_class, NULL, dev, NULL, BT_DRIVER_NODE_NAME);
 diff --git a/connectivity/bt/linux_v2/btmtk_chip_reset.c b/connectivity/bt/linux_v2/btmtk_chip_reset.c
-index 4eacbf3..558b31c 100644
+index 4eacbf3..f166bff 100644
 --- a/connectivity/bt/linux_v2/btmtk_chip_reset.c
 +++ b/connectivity/bt/linux_v2/btmtk_chip_reset.c
+@@ -25,7 +25,7 @@ static void btmtk_reset_timer(unsigned long arg)
+ #else
+ static void btmtk_reset_timer(struct timer_list *timer)
+ {
+-	struct btmtk_dev *bdev = from_timer(bdev, timer, chip_reset_timer);
++	struct btmtk_dev *bdev = timer_container_of(bdev, timer, chip_reset_timer);
+ 
+ 	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
+ 		__func__, CHIP_RESET_TIMEOUT);
 @@ -53,7 +53,7 @@ void btmtk_reset_timer_update(struct btmtk_dev *bdev)
  void btmtk_reset_timer_del(struct btmtk_dev *bdev)
  {
@@ -115,9 +125,18 @@ index a468425..d7adab5 100644
  #endif // (USE_DEVICE_NODE == 1)
 -
 diff --git a/connectivity/bt/linux_v2/sdio/btmtksdio.c b/connectivity/bt/linux_v2/sdio/btmtksdio.c
-index e902d8b..40e4a43 100644
+index e902d8b..2477c8e 100644
 --- a/connectivity/bt/linux_v2/sdio/btmtksdio.c
 +++ b/connectivity/bt/linux_v2/sdio/btmtksdio.c
+@@ -355,7 +355,7 @@ static void btmtk_fw_own_timer(unsigned long arg)
+ #else
+ static void btmtk_fw_own_timer(struct timer_list *timer)
+ {
+-	struct btmtk_sdio_dev *cif_dev = from_timer(cif_dev, timer, fw_own_timer);
++	struct btmtk_sdio_dev *cif_dev = timer_container_of(cif_dev, timer, fw_own_timer);
+ 
+ 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
+ 	wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
 @@ -383,7 +383,7 @@ static void btmtk_sdio_create_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
  
  static void btmtk_sdio_delete_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
@@ -128,7 +147,7 @@ index e902d8b..40e4a43 100644
  }
  
 diff --git a/connectivity/bt/linux_v2/uart/btmtktty.c b/connectivity/bt/linux_v2/uart/btmtktty.c
-index e282b54..a86f8d1 100644
+index e282b54..207348b 100644
 --- a/connectivity/bt/linux_v2/uart/btmtktty.c
 +++ b/connectivity/bt/linux_v2/uart/btmtktty.c
 @@ -25,6 +25,7 @@
@@ -139,6 +158,15 @@ index e282b54..a86f8d1 100644
  #include "btmtk_fw_log.h"
  #include "btmtk_queue.h"
  extern void bthost_debug_print(void);
+@@ -85,7 +86,7 @@ static void btmtk_fw_own_timer(unsigned long arg)
+ #else
+ static void btmtk_fw_own_timer(struct timer_list *timer)
+ {
+-	struct btmtk_uart_dev *cif_dev = from_timer(cif_dev, timer, fw_own_timer);
++	struct btmtk_uart_dev *cif_dev = timer_container_of(cif_dev, timer, fw_own_timer);
+ 
+ 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
+ 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
 @@ -131,7 +132,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
  	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
  		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
@@ -161,6 +189,146 @@ index 26bb445..9cbffe1 100755
  		 $(NULL)
  
  #---------------------------------------------------------------------------
+diff --git a/connectivity/bt/mt66xx/6878/Kbuild b/connectivity/bt/mt66xx/6878/Kbuild
+index 32ff3a6..8426d31 100644
+--- a/connectivity/bt/mt66xx/6878/Kbuild
++++ b/connectivity/bt/mt66xx/6878/Kbuild
+@@ -1,4 +1,4 @@
+ BT_PLATFORM := 6878
+ LOG_TAG := [BT_Drv][btif]
+ 
+-include $(srctree)/$(src)/../btif/Kbuild
++include $(M)/../btif/Kbuild
+diff --git a/connectivity/bt/mt66xx/btif/Kbuild b/connectivity/bt/mt66xx/btif/Kbuild
+index 218506c..ea1869b 100644
+--- a/connectivity/bt/mt66xx/btif/Kbuild
++++ b/connectivity/bt/mt66xx/btif/Kbuild
+@@ -13,7 +13,11 @@ else
+ LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+ TOP := $(srctree)/..
+ endif
++ifneq ($(KBUILD_EXTMOD),)
++KO_PATH := $(M)
++else
+ KO_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
++endif
+ $(info [bt_drv] btif/Kbuild KO_PATH=$(KO_PATH) DEVICE_MODULES_PATH=$(DEVICE_MODULES_PATH))
+ 
+ ifndef TOP
+diff --git a/connectivity/bt/mt66xx/btif/btmtk_beif.c b/connectivity/bt/mt66xx/btif/btmtk_beif.c
+index 25c97fb..07d3e8a 100644
+--- a/connectivity/bt/mt66xx/btif/btmtk_beif.c
++++ b/connectivity/bt/mt66xx/btif/btmtk_beif.c
+@@ -3,6 +3,8 @@
+  * Copyright (c) 2019 MediaTek Inc.
+  */
+ #if SUPPORT_BEIF
++#include <linux/vmalloc.h>
++
+ #include "btmtk_beif_plat.h"
+ #include "btmtk_beif.h"
+ 
+diff --git a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c b/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
+index 47fbeac..f1ade34 100644
+--- a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
++++ b/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
+@@ -1756,7 +1756,7 @@ static int btmtk_cif_probe(struct platform_device *pdev)
+  * Return Value:
+  *     0 if success, otherwise error code
+  */
+-static int btmtk_cif_remove(struct platform_device *pdev)
++static void btmtk_cif_remove(struct platform_device *pdev)
+ {
+ 	struct btmtk_btif_dev *cif_dev = (struct btmtk_btif_dev *)g_sbdev->cif_dev;
+ 
+@@ -1787,7 +1787,6 @@ static int btmtk_cif_remove(struct platform_device *pdev)
+ 
+ 	bt_reg_deinit();
+ 
+-	return 0;
+ }
+ 
+ /* btmtk_cif_register
+diff --git a/connectivity/bt/mt66xx/btif/btmtk_char_dev.c b/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
+index 24bbdaa..7b379b0 100644
+--- a/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
++++ b/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
+@@ -554,7 +554,7 @@ int BT_init(void)
+ 	if (cdv_err)
+ 		goto cdv_error;
+ 
+-	BT_class = class_create(THIS_MODULE, BT_DRIVER_NODE_NAME);
++	BT_class = class_create(BT_DRIVER_NODE_NAME);
+ 	if (IS_ERR(BT_class))
+ 		goto create_node_error;
+ 	BT_dev = device_create(BT_class, NULL, dev, NULL, BT_DRIVER_NODE_NAME);
+diff --git a/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c b/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
+index 0c9f213..e510708 100644
+--- a/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
++++ b/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
+@@ -9,6 +9,7 @@
+ #include <linux/of_address.h>
+ #include <linux/of.h>
+ #include <linux/rtc.h>
++#include <linux/vmalloc.h>
+ 
+ #include "btmtk_define.h"
+ #include "btmtk_chip_if.h"
+diff --git a/connectivity/bt/mt66xx/btmtk_fw_log.c b/connectivity/bt/mt66xx/btmtk_fw_log.c
+index 0f1b60c..0c2446b 100644
+--- a/connectivity/bt/mt66xx/btmtk_fw_log.c
++++ b/connectivity/bt/mt66xx/btmtk_fw_log.c
+@@ -128,7 +128,7 @@ int btmtk_fops_initfwlog(void)
+ 	if (cdevErr)
+ 		goto cdv_error;
+ 
+-	g_fwlog->pBTClass = class_create(THIS_MODULE, BT_FWLOG_DEV_NODE);
++	g_fwlog->pBTClass = class_create(BT_FWLOG_DEV_NODE);
+ 	if (IS_ERR(g_fwlog->pBTClass)) {
+ 		BTMTK_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
+ 		goto create_node_error;
+@@ -758,4 +758,3 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
+ 	}
+ 	return 0;
+ }
+-
+diff --git a/connectivity/bt/mt66xx/btmtk_main.c b/connectivity/bt/mt66xx/btmtk_main.c
+index 0c620bc..da70d01 100644
+--- a/connectivity/bt/mt66xx/btmtk_main.c
++++ b/connectivity/bt/mt66xx/btmtk_main.c
+@@ -10,6 +10,7 @@
+ #include <linux/pm_wakeup.h>
+ #include <linux/reboot.h>
+ #include <linux/string.h>
++#include <linux/vmalloc.h>
+ 
+ #include "btmtk_define.h"
+ #include "btmtk_main.h"
+@@ -3737,9 +3738,6 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
+ 	hdev->bus = hci_bus_type;
+ 	hci_set_drvdata(hdev, bdev);
+ 
+-	/* HCI_PRIMARY = 0x00 */
+-	hdev->dev_type = 0x00;
+-
+ 	bdev->hdev = hdev;
+ 
+ 	/* register hci callback */
+diff --git a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h b/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
+index 9b968a5..549f972 100644
+--- a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
++++ b/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
+@@ -205,10 +205,6 @@ struct bt_dump_queue {
+ #define BT_BTIF_DUMP_DMA		0x08
+ #define BT_BTIF_DUMP_ALL		0x0F
+ 
+-struct sched_param {
+-	int sched_priority;
+-};
+-
+ struct bt_dbg_st {
+ 	bool rt_thd_enable;
+ 	uint8_t rx_buf_ctrl;
 diff --git a/connectivity/bt/mt66xx/include/btif/platform_base.h b/connectivity/bt/mt66xx/include/btif/platform_base.h
 index a0b2fb0..6ef6777 100644
 --- a/connectivity/bt/mt66xx/include/btif/platform_base.h
@@ -176,6 +344,19 @@ index a0b2fb0..6ef6777 100644
  #define BT_CR_DUMP_BUF_SIZE	(1024)
  #define FW_NAME_LEN		(64)
  #define PATCH_FILE_NUM		2
+diff --git a/connectivity/bt/mt66xx/include/btmtk_define.h b/connectivity/bt/mt66xx/include/btmtk_define.h
+index 3b76cd2..c5f730e 100644
+--- a/connectivity/bt/mt66xx/include/btmtk_define.h
++++ b/connectivity/bt/mt66xx/include/btmtk_define.h
+@@ -20,7 +20,7 @@
+ #include <linux/spinlock.h>
+ #include <linux/kallsyms.h>
+ #include <linux/device.h>
+-#include <asm/unaligned.h>
++#include <linux/unaligned.h>
+ 
+ /* Define for proce node */
+ #include <linux/proc_fs.h>
 diff --git a/connectivity/common/Kbuild b/connectivity/common/Kbuild
 index d767814..2cea447 100644
 --- a/connectivity/common/Kbuild
@@ -227,6 +408,19 @@ index bf495f8..c54c43d 100644
  	if (IS_ERR(fw_log_wmt_class)) {
  		pr_err("class_create fail\n");
  		goto error;
+diff --git a/connectivity/common/common_main/linux/include/osal.h b/connectivity/common/common_main/linux/include/osal.h
+index fd067fb..e23c788 100644
+--- a/connectivity/common/common_main/linux/include/osal.h
++++ b/connectivity/common/common_main/linux/include/osal.h
+@@ -139,7 +139,7 @@ typedef VOID(*P_TIMEOUT_HANDLER) (struct timer_list *t);
+ typedef struct timer_list *timer_handler_arg;
+ #define GET_HANDLER_DATA(arg, data) \
+ do { \
+-	P_OSAL_TIMER osal_timer = from_timer(osal_timer, arg, timer); \
++	P_OSAL_TIMER osal_timer = timer_container_of(osal_timer, arg, timer); \
+ 	data = osal_timer->timeroutHandlerData; \
+ } while (0)
+ #else
 diff --git a/connectivity/common/common_main/linux/osal.c b/connectivity/common/common_main/linux/osal.c
 index 9ff0abf..5a418f3 100644
 --- a/connectivity/common/common_main/linux/osal.c
@@ -249,6 +443,68 @@ index 9ff0abf..5a418f3 100644
  	return 0;
  }
  
+diff --git a/connectivity/common/common_main/linux/stp_uart.c b/connectivity/common/common_main/linux/stp_uart.c
+index 595a47e..7593ed7 100644
+--- a/connectivity/common/common_main/linux/stp_uart.c
++++ b/connectivity/common/common_main/linux/stp_uart.c
+@@ -348,9 +348,9 @@ static VOID stp_uart_tty_receive(
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
+ 	PINT8 flags,
+ #else
+-	const char *flags,
++	const unsigned char *flags,
+ #endif
+-	INT32 count)
++	size_t count)
+ {
+ 	UINT32 fifo_avail_len = LDISC_RX_FIFO_SIZE - kfifo_len(g_stp_uart_rx_fifo);
+ 	UINT32 how_much_put = 0;
+@@ -504,9 +504,9 @@ static VOID stp_uart_tty_receive(
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
+ 	PINT8 flags,
+ #else
+-	const char *flags,
++	const unsigned char *flags,
+ #endif
+-	INT32 count)
++	size_t count)
+ {
+ 	UINT32 written;
+ 
+@@ -542,9 +542,9 @@ static VOID stp_uart_tty_receive(
+ #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
+ 	PINT8 flags,
+ #else
+-	const char *flags,
++	const unsigned char *flags,
+ #endif
+-	INT32 count)
++	size_t count)
+ {
+ 
+ #if 0
+diff --git a/connectivity/common/common_main/linux/wmt_alarm.c b/connectivity/common/common_main/linux/wmt_alarm.c
+index 1ad1c26..4814c27 100644
+--- a/connectivity/common/common_main/linux/wmt_alarm.c
++++ b/connectivity/common/common_main/linux/wmt_alarm.c
+@@ -64,8 +64,7 @@ static void wmt_alarm_dmp_info_handler(struct work_struct *work)
+ 	}
+ }
+ 
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+-	ktime_t now)
++static void alarm_timer_handler(struct alarm *alarm, ktime_t now)
+ {
+ 	ktime_t kt;
+ 
+@@ -77,7 +76,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+ 
+ 	spin_unlock_irqrestore(&g_wmt_alarm.alarm_lock, g_wmt_alarm.flags);
+ 
+-	return ALARMTIMER_NORESTART;
+ }
+ 
+ static int _wmt_alarm_start_timer_nolock(unsigned int sec)
 diff --git a/connectivity/common/common_main/linux/wmt_dev.c b/connectivity/common/common_main/linux/wmt_dev.c
 index 23f24db..97559c5 100644
 --- a/connectivity/common/common_main/linux/wmt_dev.c
@@ -293,7 +549,7 @@ index 472413a..4881080 100644
  
  static INT32 mtk_wmt_suspend(struct device *dev)
 diff --git a/connectivity/common/debug_utility/connsys_debug_utility.c b/connectivity/common/debug_utility/connsys_debug_utility.c
-index adee61b..da154df 100644
+index adee61b..6b436f7 100644
 --- a/connectivity/common/debug_utility/connsys_debug_utility.c
 +++ b/connectivity/common/debug_utility/connsys_debug_utility.c
 @@ -18,6 +18,7 @@
@@ -304,6 +560,38 @@ index adee61b..da154df 100644
  #include <linux/uaccess.h>
  #include <linux/workqueue.h>
  #include <linux/ratelimit.h>
+@@ -132,7 +133,7 @@ static void connlog_emi_status_dump(void);
+ 
+ /* connlog when suspend */
+ static int connlog_alarm_init(void);
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm, ktime_t);
++static void alarm_timer_handler(struct alarm *alarm, ktime_t);
+ static inline bool connlog_is_alarm_enable(void);
+ static int connlog_set_alarm_timer(void);
+ static int connlog_cancel_alarm_timer(void);
+@@ -677,8 +678,7 @@ EXPORT_SYMBOL(connsys_log_blank_state_changed);
+ * RETURNS
+ *  void
+ *****************************************************************************/
+-static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+-	ktime_t now)
++static void alarm_timer_handler(struct alarm *alarm, ktime_t now)
+ {
+ 	ktime_t kt;
+ 	struct rtc_time tm;
+@@ -697,7 +697,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+ 	alarm_start_relative(&gDev.log_alarm.alarm_timer, kt);
+ 	spin_unlock_irqrestore(&gDev.log_alarm.alarm_lock, gDev.log_alarm.flags);
+ 
+-	return ALARMTIMER_NORESTART;
+ }
+ 
+ /*****************************************************************************
+@@ -1376,4 +1375,3 @@ int connsys_dedicated_log_set_ap_state(int state)
+ 	pr_info("%s state: %d\n", __func__, state);
+ 	return 0;
+ }
+-
 diff --git a/connectivity/connfem/Kbuild b/connectivity/connfem/Kbuild
 index a0d6f2f..5254eee 100644
 --- a/connectivity/connfem/Kbuild
@@ -318,10 +606,50 @@ index a0d6f2f..5254eee 100644
  
  ###############################################################################
 diff --git a/connectivity/connfem/connfem_module.c b/connectivity/connfem/connfem_module.c
-index c1e1927..cf63f24 100644
+index c1e1927..9ea9696 100644
 --- a/connectivity/connfem/connfem_module.c
 +++ b/connectivity/connfem/connfem_module.c
-@@ -990,7 +990,7 @@ static int __init connfem_mod_init(void)
+@@ -42,7 +42,7 @@ struct connfem_cdev_context {
+  *		    F U N C T I O N   D E C L A R A T I O N S
+  ******************************************************************************/
+ static int connfem_plat_probe(struct platform_device *pdev);
+-static int connfem_plat_remove(struct platform_device *pdev);
++static void connfem_plat_remove(struct platform_device *pdev);
+ static void connfem_cfg_dt_check(struct platform_device *pdev,
+ 		void *ctx, struct connfem_context_ops *ops);
+ static enum connfem_type connfem_type_get(struct device_node *dn);
+@@ -921,27 +921,26 @@ probe_end:
+ 	return err;
+ }
+ 
+-static int connfem_plat_remove(struct platform_device *pdev)
++static void connfem_plat_remove(struct platform_device *pdev)
+ {
+ 	struct connfem_context_ops *ops = NULL;
+ 
+ 	if (!of_match_device(of_match_ptr(connfem_of_ids), &pdev->dev)) {
+ 		pr_info("Remove, missing platform device data for '%s'",
+ 			pdev->name);
+-		return -EOPNOTSUPP;
++		return;
+ 	}
+ 
+ 	if (!connfem_ctx) {
+ 		pr_info("Remove, no connfem_ctx alive for '%s'",
+ 			pdev->name);
+-		return 0;
++		return;
+ 	}
+ 
+ 	ops = (struct connfem_context_ops *)connfem_ctx;
+ 	ops->free(connfem_ctx);
+ 	connfem_ctx = NULL;
+ 
+-	return 0;
+ }
+ 
+ static int __init connfem_mod_init(void)
+@@ -990,7 +989,7 @@ static int __init connfem_mod_init(void)
  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0))
  	connfem_cdev_ctx.class = class_create(CONNFEM_DRIVER_NAME);
  #else
@@ -330,6 +658,58 @@ index c1e1927..cf63f24 100644
  #endif
  	if (IS_ERR(connfem_cdev_ctx.class)) {
  		pr_info("ConnFem create class failed");
+diff --git a/connectivity/connfem/connfem_sku.c b/connectivity/connfem/connfem_sku.c
+index 5fe1069..5af71b3 100644
+--- a/connectivity/connfem/connfem_sku.c
++++ b/connectivity/connfem/connfem_sku.c
+@@ -731,7 +731,6 @@ static int cfm_sku_fem_state_populate(struct device_node *np,
+ {
+ 	int err = 0;
+ 	unsigned int value = 0;
+-	const __be32 *p;
+ 	struct property *prop;
+ 	unsigned int bk_cnt = 0;
+ 
+@@ -759,13 +758,7 @@ static int cfm_sku_fem_state_populate(struct device_node *np,
+ 		goto dt_fem_states_err;
+ 	}
+ 
+-	of_property_for_each_u32(np, CFM_DT_PROP_STATES, prop, p, value) {
+-		if (!p) {
+-			pr_info("Error when iterating property '%s'",
+-				CFM_DT_PROP_STATES);
+-			goto dt_fem_states_err;
+-		}
+-
++	of_property_for_each_u32(np, CFM_DT_PROP_STATES, value) {
+ 		cat->op[cat->op_count] = value;
+ 		cat->op_count++;
+ 	}
+@@ -791,7 +784,6 @@ int cfm_sku_fem_ctrl_pin_populate(struct device_node *np,
+ 		struct connfem_sku_fem_ctrlpin *ctrl_pin)
+ {
+ 	unsigned int value = 0;
+-	const __be32 *p;
+ 	struct property *prop;
+ 	unsigned int bk_cnt = 0;
+ 
+@@ -808,15 +800,7 @@ int cfm_sku_fem_ctrl_pin_populate(struct device_node *np,
+ 	}
+ 
+ 	/* Iterate pins elements and populate */
+-	of_property_for_each_u32(np, CFM_DT_PROP_PINS, prop, p, value) {
+-		if (!p) {
+-			pr_info("Error when iterating property '%s', "
+-				"idx '%d'",
+-				CFM_DT_PROP_PINS,
+-				ctrl_pin->count);
+-			goto dt_fem_ctrl_pin_err;
+-		}
+-
++	of_property_for_each_u32(np, CFM_DT_PROP_PINS, value) {
+ 		if (ctrl_pin->count >= CONNFEM_FEM_PIN_COUNT) {
+ 			pr_info("Over max supportable number %d of %s",
+ 				CONNFEM_FEM_PIN_COUNT,
 diff --git a/connectivity/conninfra/Kbuild b/connectivity/conninfra/Kbuild
 index c9c41a6..da01f25 100644
 --- a/connectivity/conninfra/Kbuild
@@ -370,7 +750,7 @@ index b9cf13b..513de03 100644
  		pr_notice("[%s] class_create fail, conn_type=[%d]\n", __func__, info->conn_type);
  		goto error;
 diff --git a/connectivity/conninfra/base/include/osal.h b/connectivity/conninfra/base/include/osal.h
-index 4f4b38a..9ce6ae4 100755
+index 4f4b38a..cad84ea 100755
 --- a/connectivity/conninfra/base/include/osal.h
 +++ b/connectivity/conninfra/base/include/osal.h
 @@ -26,6 +26,7 @@
@@ -381,6 +761,15 @@ index 4f4b38a..9ce6ae4 100755
  #include "ring.h"
  /*******************************************************************************
  *                         C O M P I L E R   F L A G S
+@@ -132,7 +133,7 @@ typedef void(*P_TIMEOUT_HANDLER) (struct timer_list *t);
+ typedef struct timer_list *timer_handler_arg;
+ #define GET_HANDLER_DATA(arg, data) \
+ do { \
+-	P_OSAL_TIMER osal_timer = from_timer(osal_timer, arg, timer); \
++	P_OSAL_TIMER osal_timer = timer_container_of(osal_timer, arg, timer); \
+ 	data = osal_timer->timeroutHandlerData; \
+ } while (0)
+ #else
 diff --git a/connectivity/conninfra/base/osal.c b/connectivity/conninfra/base/osal.c
 index eea66c5..d988bf5 100755
 --- a/connectivity/conninfra/base/osal.c
@@ -412,7 +801,7 @@ index eea66c5..d988bf5 100755
  }
  
 diff --git a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
-index fd6ac70..460dc7c 100644
+index fd6ac70..4ad7fd7 100644
 --- a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
 +++ b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
 @@ -8,6 +8,7 @@
@@ -423,6 +812,41 @@ index fd6ac70..460dc7c 100644
  #include <linux/uaccess.h>
  #include <linux/workqueue.h>
  #include <linux/ratelimit.h>
+@@ -1386,8 +1387,7 @@ static int connlog_cancel_alarm_timer(void)
+ }
+ 
+ 
+-static enum alarmtimer_restart connlog_alarm_timer_handler(struct alarm *alarm,
+-	ktime_t now)
++static void connlog_alarm_timer_handler(struct alarm *alarm, ktime_t now)
+ {
+ 	ktime_t kt;
+ 	struct rtc_time tm;
+@@ -1411,7 +1411,6 @@ static enum alarmtimer_restart connlog_alarm_timer_handler(struct alarm *alarm,
+ 	alarm_start_relative(&gLogAlarm.alarm_timer, kt);
+ 	spin_unlock_irqrestore(&gLogAlarm.alarm_lock, gLogAlarm.flags);
+ 
+-	return ALARMTIMER_NORESTART;
+ }
+ 
+ static int connlog_alarm_init(void)
+@@ -1614,4 +1613,3 @@ int connsys_dedicated_log_set_ap_state(int state)
+ 
+ 	return 0;
+ }
+-
+diff --git a/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c b/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
+index 3632cbe..6c402e5 100755
+--- a/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
++++ b/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
+@@ -16,6 +16,7 @@
+ #include <linux/slab.h>
+ #include <linux/time.h>
+ #include <linux/timer.h>
++#include <linux/vmalloc.h>
+ 
+ #include "conninfra.h"
+ #include "connsys_debug_utility.h"
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c b/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
 index 7d57f34..bec3b41 100755
 --- a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
@@ -662,6 +1086,252 @@ index dd29365..6fb84ac 100644
  	if (IS_ERR(wmtwifi_class))
  		goto error;
  	wmtwifi_dev = device_create(wmtwifi_class, NULL, wifi_devno, NULL,
+diff --git a/connectivity/wlan/core/gen4m/Kbuild.main b/connectivity/wlan/core/gen4m/Kbuild.main
+index d819cdc..1169471 100644
+--- a/connectivity/wlan/core/gen4m/Kbuild.main
++++ b/connectivity/wlan/core/gen4m/Kbuild.main
+@@ -138,7 +138,7 @@ ccflags-y += -DCFG_SUPPORT_PASSPOINT=1
+ ccflags-y += -DCFG_HS20_DEBUG=1
+ endif
+ 
+-ccflags-y += -Werror $(call cc-disable-warning, unused-but-set-variable)
++ccflags-y += -Wno-error $(call cc-disable-warning, unused-but-set-variable)
+ ccflags-y += $(call cc-disable-warning, attribute-warning)
+ #ccflags-y:=$(filter-out -U$(WLAN_CHIP_ID),$(ccflags-y))
+ #ccflags-y += -DLINUX -D$(WLAN_CHIP_ID)
+diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
+index e7949db..7e17bc5 100644
+--- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
++++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
+@@ -18,7 +18,7 @@
+ 
+ int hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+ 		       const u8 *addr[], const size_t *len, u8 *mac);
+-int hmac_sha256(const u8 *key, size_t key_len, const u8 *data,
++int wpas_hmac_sha256(const u8 *key, size_t key_len, const u8 *data,
+ 		size_t data_len, u8 *mac);
+ int sha256_prf(const u8 *key, size_t key_len, const char *label,
+ 	       const u8 *data, size_t data_len, u8 *buf, size_t buf_len);
+diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
+index afce2b3..f6907b7 100644
+--- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
++++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
+@@ -18,7 +18,7 @@
+ 
+ int hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
+ 		       const u8 *addr[], const size_t *len, u8 *mac);
+-int hmac_sha384(const u8 *key, size_t key_len, const u8 *data,
++int wpas_hmac_sha384(const u8 *key, size_t key_len, const u8 *data,
+ 		size_t data_len, u8 *mac);
+ int sha384_prf(const u8 *key, size_t key_len, const char *label,
+ 	       const u8 *data, size_t data_len, u8 *buf, size_t buf_len);
+diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
+index 2cfa063..38fee3b 100644
+--- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
++++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
+@@ -20,7 +20,7 @@
+ 
+ #define sha384_state nan_rdf_sha512_state
+ 
+-void sha384_init(struct sha384_state *md);
++void wpas_sha384_init(struct sha384_state *md);
+ int sha384_process(struct sha384_state *md, const unsigned char *in,
+ 		   unsigned long inlen);
+ int sha384_done(struct sha384_state *md, unsigned char *out);
+diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
+index 26765c3..ac4a75a 100644
+--- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
++++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
+@@ -22,7 +22,7 @@ struct nan_rdf_sha512_state {
+ 	u8 buf[SHA512_BLOCK_SIZE];
+ };
+ 
+-void sha512_init(struct nan_rdf_sha512_state *md);
++void wpas_sha512_init(struct nan_rdf_sha512_state *md);
+ int sha512_process(struct nan_rdf_sha512_state *md, const unsigned char *in,
+ 		   unsigned long inlen);
+ int sha512_done(struct nan_rdf_sha512_state *md, unsigned char *out);
+diff --git a/connectivity/wlan/core/gen4m/mgmt/fils.c b/connectivity/wlan/core/gen4m/mgmt/fils.c
+index e6bece7..7e40fa1 100644
+--- a/connectivity/wlan/core/gen4m/mgmt/fils.c
++++ b/connectivity/wlan/core/gen4m/mgmt/fils.c
+@@ -217,7 +217,7 @@ uint32_t filsBuildErpReauthStart(struct ADAPTER *ad, struct FILS_INFO *fils,
+ 	*cp = EAP_ERP_CS_HMAC_SHA256_128;
+ 	cp++;
+ 
+-	if (hmac_sha256(erp->rIK, erp->rIKLen, buf, cp - buf, hash) < 0) {
++	if (wpas_hmac_sha256(erp->rIK, erp->rIKLen, buf, cp - buf, hash) < 0) {
+ 		DBGLOG(FILS, ERROR, "sha256 failed\n");
+ 		return 0;
+ 	}
+@@ -914,10 +914,10 @@ uint32_t filsProcessErpFinish(struct ADAPTER *ad, struct FILS_INFO *fils,
+ 		return WLAN_STATUS_FAILURE;
+ 	}
+ 
+-	if (hmac_sha256(erp->rIK, erp->rIKLen, (const u8 *) hdr,
++	if (wpas_hmac_sha256(erp->rIK, erp->rIKLen, (const u8 *) hdr,
+ 			end - ((const u8 *) hdr) - hash_len, hash) < 0) {
+ 		DBGLOG(FILS, ERROR,
+-			   "EAP: hmac_sha256 failed\n");
++			   "EAP: wpas_hmac_sha256 failed\n");
+ 		return WLAN_STATUS_FAILURE;
+ 	}
+ 
+diff --git a/connectivity/wlan/core/gen4m/nan/nan_sec.c b/connectivity/wlan/core/gen4m/nan/nan_sec.c
+index 1cc0e40..f50eaa6 100644
+--- a/connectivity/wlan/core/gen4m/nan/nan_sec.c
++++ b/connectivity/wlan/core/gen4m/nan/nan_sec.c
+@@ -637,8 +637,8 @@ nan_sec_wpa_eapol_key_mic(const u8 *key, size_t key_len, u32 cipher,
+ 	dumpMemory8((uint8_t *)buf, len);
+ 
+ 	if (cipher == NAN_CIPHER_SUITE_ID_NCS_SK_GCM_256) {
+-		if (hmac_sha384(key, key_len, buf, len, hash)) {
+-			DBGLOG(NAN, INFO, "[%s] ERROR! hmac_sha384() failed",
++		if (wpas_hmac_sha384(key, key_len, buf, len, hash)) {
++			DBGLOG(NAN, INFO, "[%s] ERROR! wpas_hmac_sha384() failed",
+ 			       __func__);
+ 			return WLAN_STATUS_FAILURE;
+ 		}
+@@ -648,8 +648,8 @@ nan_sec_wpa_eapol_key_mic(const u8 *key, size_t key_len, u32 cipher,
+ 		dumpMemory8(mic, NCS_SK_256_MIC_LEN);
+ 	} else {
+ 		/* NAN_CIPHER_SUITE_ID_NCS_SK_CCM_128 */
+-		if (hmac_sha256(key, key_len, buf, len, hash)) {
+-			DBGLOG(NAN, INFO, "[%s] ERROR! hmac_sha256() failed",
++		if (wpas_hmac_sha256(key, key_len, buf, len, hash)) {
++			DBGLOG(NAN, INFO, "[%s] ERROR! wpas_hmac_sha256() failed",
+ 			       __func__);
+ 			return WLAN_STATUS_FAILURE;
+ 		}
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c b/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
+index 4a1e3b4..c190dde 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
+@@ -6353,10 +6353,18 @@ int mtk_uninit_ap_role(struct GLUE_INFO *prGlueInfo,
+ 
+ #if (CFG_SUPPORT_DFS_MASTER == 1)
+ #if KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
++				  struct net_device *dev,
++				  struct cfg80211_chan_def *chandef,
++				  unsigned int cac_time_ms,
++				  int link_id)
++#else
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+ 				  struct net_device *dev,
+ 				  struct cfg80211_chan_def *chandef,
+ 				  unsigned int cac_time_ms)
++#endif
+ {
+ #if CFG_ENABLE_WIFI_DIRECT && CFG_ENABLE_WIFI_DIRECT_CFG_80211
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+@@ -7312,7 +7320,14 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+ 	return mtk_cfg80211_tdls_oper(wiphy, ndev, peer, oper);
+ }
+ 
+-#if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
++		      struct net_device *dev,
++		      const u8 *peer, int link_id,
++		      u8 action_code, u8 dialog_token,
++		      u16 status_code, u32 peer_capability,
++		      bool initiator, const u8 *buf, size_t len)
++#elif KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
+ 		      struct net_device *dev,
+ 		      const u8 *peer, u8 action_code, u8 dialog_token,
+@@ -8394,9 +8409,15 @@ int mtk_cfg_start_ap(struct wiphy *wiphy,
+ 	return mtk_p2p_cfg80211_start_ap(wiphy, dev, settings);
+ }
+ 
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
++			  struct cfg80211_ap_update *info)
++#else
+ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ 			  struct net_device *dev,
+ 			  struct cfg80211_beacon_data *info)
++#endif
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+@@ -8413,10 +8434,15 @@ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ 		return -EFAULT;
+ 	}
+ #endif
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++	return mtk_p2p_cfg80211_change_beacon(wiphy, dev, &info->beacon);
++#else
+ 	return mtk_p2p_cfg80211_change_beacon(wiphy, dev, info);
++#endif
+ }
+ 
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+ 	unsigned int link_id)
+ #else
+@@ -8441,8 +8467,12 @@ int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev)
+ 	return mtk_p2p_cfg80211_stop_ap(wiphy, dev);
+ }
+ 
+-int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_set_wiphy_params(struct wiphy *wiphy, int radio_idx,
+ 			     u32 changed)
++#else
++int mtk_cfg_set_wiphy_params(struct wiphy *wiphy, u32 changed)
++#endif
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+@@ -8458,7 +8488,8 @@ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+ 	return mtk_p2p_cfg80211_set_wiphy_params(wiphy, changed);
+ }
+ 
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     struct net_device *dev,
+ 			     unsigned int link_id,
+@@ -8490,9 +8521,15 @@ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			mask);
+ }
+ 
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_set_txpower(struct wiphy *wiphy,
++			struct wireless_dev *wdev, int radio_idx,
++			enum nl80211_tx_power_setting type, int mbm)
++#else
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
+ 			enum nl80211_tx_power_setting type, int mbm)
++#endif
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
+@@ -8512,9 +8549,14 @@ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 	return mtk_p2p_cfg80211_set_txpower(wiphy, wdev, type, mbm);
+ }
+ 
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+-			struct wireless_dev *wdev,
+-			int *dbm)
++			struct wireless_dev *wdev, int radio_idx,
++			unsigned int link_id, int *dbm)
++#else
++int mtk_cfg_get_txpower(struct wiphy *wiphy,
++			struct wireless_dev *wdev, int *dbm)
++#endif
+ {
+ 	struct GLUE_INFO *prGlueInfo = NULL;
+ 
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c b/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
 index dc8a8f9..006a6c2 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
@@ -719,10 +1389,20 @@ index 218a25d..69c9cf7 100644
  	if (KAL_IS_ERR(gIcsDev->driver_class)) {
  		result = -ENOMEM;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
-index 9e32e13..f150f0a 100644
+index 9e32e13..a41fad9 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
-@@ -70,6 +70,10 @@
+@@ -43,6 +43,9 @@
+ #include <linux/tcp.h>
+ #include <linux/ipv6.h>
+ #include <net/ipv6.h>
++#include <net/gro.h>
++#include <net/netdev_rx_queue.h>
++#include <net/rps.h>
+ #include <net/sch_generic.h>
+ #include <linux/skbuff.h>
+ #include <linux/module.h>
+@@ -70,6 +73,10 @@
  #if (CFG_WLAN_ATF_SUPPORT == 1)
  #include <linux/arm-smccc.h>
  #include <linux/soc/mediatek/mtk_sip_svc.h>
@@ -733,7 +1413,30 @@ index 9e32e13..f150f0a 100644
  #endif
  
  #if (CFG_SUPPORT_TX_PWR_ENV == 1)
-@@ -6697,7 +6701,7 @@ u_int8_t kalSetTimer(struct GLUE_INFO *prGlueInfo,
+@@ -1878,7 +1885,9 @@ uint32_t kal_is_skb_gro(struct ADAPTER *prAdapter, uint8_t ucBssIdx)
+ static inline void napi_gro_flush_list(struct napi_struct *napi)
+ {
+ 	napi_gro_flush(napi, false);
+-#if KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++	gro_normal_list(&napi->gro);
++#elif KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ 	if (napi->rx_count) {
+ 		netif_receive_skb_list(&napi->rx_list);
+ 		INIT_LIST_HEAD(&napi->rx_list);
+@@ -1921,7 +1930,10 @@ void kal_gro_flush(struct ADAPTER *prAdapter)
+ 		prWifiVar->ucGROFlushTimeout)) {
+ 		napi_gro_flush(&prGlueInfo->napi, false);
+ 		DBGLOG_LIMITED(INIT, TRACE, "napi_gro_flush.\n");
+-#if KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++		prGlueInfo->u4PendingFlushNum =
++			prGlueInfo->napi.gro.rx_count;
++#elif KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ 		prGlueInfo->u4PendingFlushNum =
+ 			prGlueInfo->napi.rx_count;
+ #else
+@@ -6697,7 +6709,7 @@ u_int8_t kalSetTimer(struct GLUE_INFO *prGlueInfo,
  		mod_timer(&prGlueInfo->tickfn,
  			  jiffies + u4Interval * HZ / MSEC_PER_SEC);
  	} else {
@@ -742,7 +1445,7 @@ index 9e32e13..f150f0a 100644
  
  		prGlueInfo->tickfn.expires = jiffies + u4Interval * HZ /
  					     MSEC_PER_SEC;
-@@ -6723,7 +6727,7 @@ u_int8_t kalCancelTimer(struct GLUE_INFO *prGlueInfo)
+@@ -6723,7 +6735,7 @@ u_int8_t kalCancelTimer(struct GLUE_INFO *prGlueInfo)
  
  	clear_bit(GLUE_FLAG_TIMEOUT_BIT, &prGlueInfo->ulFlag);
  
@@ -751,7 +1454,16 @@ index 9e32e13..f150f0a 100644
  		return TRUE;
  	else
  		return FALSE;
-@@ -8483,7 +8487,7 @@ u_int8_t kalSendUevent(const char *src)
+@@ -6849,7 +6861,7 @@ void kalTimeoutHandler(unsigned long arg)
+ {
+ #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
+ 	struct GLUE_INFO *prGlueInfo =
+-		from_timer(prGlueInfo, timer, tickfn);
++		timer_container_of(prGlueInfo, timer, tickfn);
+ #else
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)arg;
+ #endif
+@@ -8483,7 +8495,7 @@ u_int8_t kalSendUevent(const char *src)
  	DBGLOG(INIT, INFO, "Send UEvent = %s", src);
  
  	/*send uevent*/
@@ -760,7 +1472,70 @@ index 9e32e13..f150f0a 100644
  	if (event_string[0] == '\0') { /*string is null*/
  		return FALSE;
  	}
-@@ -14181,7 +14185,7 @@ void kalTpeUninit(struct GLUE_INFO *prGlueInfo)
+@@ -11727,7 +11739,7 @@ void kalIndicateChannelSwitch(struct GLUE_INFO *prGlueInfo,
+ 		linkIdx, 0);
+ #endif
+ #else
+-	cfg80211_ch_switch_notify(prDevHandler, &chandef);
++	cfg80211_ch_switch_notify(prDevHandler, &chandef, 0);
+ #endif
+ 	/* Check SAP channel */
+ 	p2pFuncSwitchSapChannel(prGlueInfo->prAdapter);
+@@ -13355,7 +13367,7 @@ void kalSetThreadSchPolicyPriority(struct GLUE_INFO *prGlueInfo)
+ }
+ 
+ #if KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
++MODULE_IMPORT_NS("VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver");
+ #endif
+ 
+ #if CFG_SUPPORT_RX_GRO
+@@ -13405,7 +13417,7 @@ uint8_t kalRxGroInit(struct net_device *prDev)
+ void kalNapiThreadedInit(struct GLUE_INFO *prGlueInfo)
+ {
+ #if KERNEL_VERSION(5, 15, 0) <= CFG80211_VERSION_CODE
+-	if (dev_set_threaded(&prGlueInfo->dummy_dev, TRUE) != 0) {
++	if (dev_set_threaded(prGlueInfo->dummy_dev, TRUE) != 0) {
+ 		prGlueInfo->napi_thread = NULL;
+ 		DBGLOG(INIT, ERROR, "Napi Threaded Init Fail\n");
+ 	} else {
+@@ -13429,12 +13441,14 @@ uint8_t kalNapiInit(struct GLUE_INFO *prGlueInfo)
+ 	spin_lock_init(&prGlueInfo->napi_spinlock);
+ 	skb_queue_head_init(&prGlueInfo->rRxNapiSkbQ);
+ 	/* use dummy device to register napi */
+-	init_dummy_netdev(&prGlueInfo->dummy_dev);
++	prGlueInfo->dummy_dev = alloc_netdev_dummy(0);
++	if (!prGlueInfo->dummy_dev)
++		return WLAN_STATUS_FAILURE;
+ #if (KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE)
+-	netif_napi_add(&prGlueInfo->dummy_dev, &prGlueInfo->napi,
++	netif_napi_add(prGlueInfo->dummy_dev, &prGlueInfo->napi,
+ 			kalNapiPoll);
+ #else
+-	netif_napi_add(&prGlueInfo->dummy_dev, &prGlueInfo->napi,
++	netif_napi_add(prGlueInfo->dummy_dev, &prGlueInfo->napi,
+ 			kalNapiPoll, NAPI_POLL_WEIGHT);
+ #endif
+ #if CFG_SUPPORT_RX_NAPI_THREADED
+@@ -13447,6 +13461,8 @@ uint8_t kalNapiInit(struct GLUE_INFO *prGlueInfo)
+ uint8_t kalNapiUninit(struct GLUE_INFO *prGlueInfo)
+ {
+ 	netif_napi_del(&prGlueInfo->napi);
++	free_netdev(prGlueInfo->dummy_dev);
++	prGlueInfo->dummy_dev = NULL;
+ #if CFG_SUPPORT_RX_NAPI_THREADED
+ 	kalNapiThreadedUninit(prGlueInfo);
+ #endif /* CFG_SUPPORT_RX_NAPI_THREADED */
+@@ -14111,7 +14127,7 @@ void kalTpeTimeoutHandler(unsigned long ulData)
+ #endif
+ {
+ #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
+-	struct GLUE_INFO *prGlueInfo = from_timer(prGlueInfo, timer, rTpeTimer);
++	struct GLUE_INFO *prGlueInfo = timer_container_of(prGlueInfo, timer, rTpeTimer);
+ #else
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)ulData;
+ #endif
+@@ -14181,7 +14197,7 @@ void kalTpeUninit(struct GLUE_INFO *prGlueInfo)
  	if (!prAdapter->rWifiVar.ucTpEnhanceEnable)
  		return;
  
@@ -769,7 +1544,7 @@ index 9e32e13..f150f0a 100644
  }
  
  int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
-@@ -14274,7 +14278,7 @@ int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
+@@ -14274,7 +14290,7 @@ int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
  			prGlueInfo->u4TpeTimeout) {
  			/* Timeout already, flush out directly. */
  			if (timer_pending(&prGlueInfo->rTpeTimer))
@@ -778,7 +1553,25 @@ index 9e32e13..f150f0a 100644
  			kalTpeFlush(prGlueInfo);
  			kalSetEvent(prGlueInfo);
  		} else {
-@@ -15939,8 +15943,8 @@ void kalTxDirectUninit(struct GLUE_INFO *prGlueInfo)
+@@ -14371,7 +14387,7 @@ void kalTxDirectTimerCheckSkbQ(unsigned long data)
+ {
+ #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
+ 	struct GLUE_INFO *prGlueInfo =
+-		from_timer(prGlueInfo, timer, rTxDirectSkbTimer);
++		timer_container_of(prGlueInfo, timer, rTxDirectSkbTimer);
+ #else
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)data;
+ #endif
+@@ -14390,7 +14406,7 @@ void kalTxDirectTimerCheckHifQ(unsigned long data)
+ 
+ #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
+ 	struct GLUE_INFO *prGlueInfo =
+-		from_timer(prGlueInfo, timer, rTxDirectHifTimer);
++		timer_container_of(prGlueInfo, timer, rTxDirectHifTimer);
+ #else
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)data;
+ #endif
+@@ -15939,8 +15955,8 @@ void kalTxDirectUninit(struct GLUE_INFO *prGlueInfo)
  
  	if (HAL_IS_TX_DIRECT(prAdapter)) {
  		if (prAdapter->fgTxDirectInited) {
@@ -789,6 +1582,31 @@ index 9e32e13..f150f0a 100644
  			kalTxDirectClearSkbQ(prGlueInfo);
  		}
  	}
+diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c b/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
+index 2581c37..064bc2e 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
++++ b/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
+@@ -2712,7 +2712,10 @@ void kalP2pIndicateChnlSwitchStarted(struct ADAPTER *prAdapter,
+ 		chandef.center_freq1,
+ 		chandef.center_freq2);
+ 
+-#if (KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE)
++#if (KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
++	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
++				  ucLinkIdx, ucCsaCount, fgQuiet);
++#elif (KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE)
+ 	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
+ 				  ucLinkIdx, ucCsaCount, fgQuiet, 0);
+ #elif (KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE) && \
+@@ -2886,7 +2889,7 @@ void kalP2pIndicateChnlSwitch(struct ADAPTER *prAdapter,
+ 		linkIdx, 0);
+ #endif
+ #else
+-	cfg80211_ch_switch_notify(prNetdevice, &chandef);
++	cfg80211_ch_switch_notify(prNetdevice, &chandef, 0);
+ #endif
+ 	netif_carrier_on(prNetdevice);
+ 	netif_tx_wake_all_queues(prNetdevice);
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c b/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
 index 8165a3f..66790dc 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
@@ -851,7 +1669,7 @@ index 8a4a7b2..04ff5d5 100644
  }
 -
 diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
-index 4f43491..b54287c 100644
+index 4f43491..4783815 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
 @@ -1715,7 +1715,7 @@ void halHifSwInfoUnInit(struct GLUE_INFO *prGlueInfo)
@@ -863,6 +1681,15 @@ index 4f43491..b54287c 100644
  #if (CFG_SUPPORT_TX_DATA_DELAY == 1)
  	hrtimer_cancel(&prHifInfo->rTxDelayTimer);
  #endif
+@@ -4390,7 +4390,7 @@ void halHwRecoveryTimeout(unsigned long arg)
+ #endif
+ {
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+-	struct GL_HIF_INFO *prHif = from_timer(prHif, timer, rSerTimer);
++	struct GL_HIF_INFO *prHif = timer_container_of(prHif, timer, rSerTimer);
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)prHif->rSerTimerData;
+ #else
+ 	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)arg;
 @@ -4638,7 +4638,7 @@ void halHwRecoveryFromError(struct ADAPTER *prAdapter)
  
  	case ERR_RECOV_WAIT_MCU_NORMAL:
@@ -913,10 +1740,168 @@ index a5aae0b..db19f3d 100644
  }
  
  /*----------------------------------------------------------------------------*/
+diff --git a/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h b/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
+index 17a58b1..f3181ef 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
++++ b/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
+@@ -467,7 +467,8 @@ int mtk_cfg_change_iface(struct wiphy *wiphy,
+ 			 enum nl80211_iftype type, u32 *flags,
+ 			 struct vif_params *params);
+ #endif
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_add_key(struct wiphy *wiphy,
+ 		    struct net_device *ndev, int link_id, u8 key_index,
+ 		    bool pairwise, const u8 *mac_addr,
+@@ -503,7 +504,8 @@ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+ 		struct net_device *ndev, u8 key_index);
+ #endif
+ 
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_set_default_beacon_key(struct wiphy *wiphy,
+ 		struct net_device *ndev, int link_id, u8 key_index);
+ #else
+@@ -557,7 +559,15 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+ 		      struct net_device *ndev,
+ 		      u8 *peer, enum nl80211_tdls_operation oper);
+ #endif
+-#if KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
++		      struct net_device *ndev,
++		      const u8 *peer, int link_id,
++		      u8 action_code, u8 dialog_token,
++		      u16 status_code,
++		      u32 peer_capability, bool initiator, const u8 *buf,
++		      size_t len);
++#elif KERNEL_VERSION(3, 18, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
+ 		      struct net_device *ndev,
+ 		      const u8 *peer, u8 action_code, u8 dialog_token,
+@@ -711,7 +721,13 @@ int mtk_cfg_testmode_cmd(struct wiphy *wiphy, void *data,
+ #endif	/* CONFIG_NL80211_TESTMODE */
+ 
+ #if (CFG_SUPPORT_DFS_MASTER == 1)
+-#if KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
++				  struct net_device *dev,
++				  struct cfg80211_chan_def *chandef,
++				  unsigned int cac_time_ms,
++				  int link_id);
++#elif KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+ 				  struct net_device *dev,
+ 				  struct cfg80211_chan_def *chandef,
+@@ -747,18 +763,30 @@ int mtk_cfg_disassoc(struct wiphy *wiphy,
+ int mtk_cfg_start_ap(struct wiphy *wiphy,
+ 		     struct net_device *dev,
+ 		     struct cfg80211_ap_settings *settings);
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
++			  struct cfg80211_ap_update *info);
++#else
+ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+ 			  struct net_device *dev,
+ 			  struct cfg80211_beacon_data *info);
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#endif
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev,
+ 	unsigned int link_id);
+ #else
+ int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev);
+ #endif
+-int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_set_wiphy_params(struct wiphy *wiphy, int radio_idx,
+ 			     u32 changed);
+-#if (CFG_ADVANCED_80211_MLO == 1)
++#else
++int mtk_cfg_set_wiphy_params(struct wiphy *wiphy, u32 changed);
++#endif
++#if (CFG_ADVANCED_80211_MLO == 1) || \
++	(KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
+ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     struct net_device *dev,
+ 			     unsigned int link_id,
+@@ -770,12 +798,21 @@ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+ 			     const u8 *peer,
+ 			     const struct cfg80211_bitrate_mask *mask);
+ #endif
++#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_set_txpower(struct wiphy *wiphy,
++			struct wireless_dev *wdev, int radio_idx,
++			enum nl80211_tx_power_setting type, int mbm);
++int mtk_cfg_get_txpower(struct wiphy *wiphy,
++			struct wireless_dev *wdev, int radio_idx,
++			unsigned int link_id, int *dbm);
++#else
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
+ 			enum nl80211_tx_power_setting type, int mbm);
+ int mtk_cfg_get_txpower(struct wiphy *wiphy,
+ 			struct wireless_dev *wdev,
+ 			int *dbm);
++#endif
+ #endif /* (CFG_ENABLE_WIFI_DIRECT_CFG_80211 != 0) */
+ 
+ int mtk_cfg80211_update_ft_ies(struct wiphy *wiphy, struct net_device *dev,
+diff --git a/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h b/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
+index 9e2ee22..a8290d0 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
++++ b/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
+@@ -876,7 +876,7 @@ struct GLUE_INFO {
+ #endif /* CFG_SUPPORT_TASKLET_FREE_MSDU */
+ 
+ #if CFG_SUPPORT_RX_GRO
+-	struct net_device dummy_dev;
++	struct net_device *dummy_dev;
+ 	struct napi_struct napi;
+ 	OS_SYSTIME tmGROFlushTimeout;
+ 	spinlock_t napi_spinlock;
+diff --git a/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c b/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
+index f07e41c..8e99682 100644
+--- a/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
++++ b/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
+@@ -119,16 +119,12 @@ void kalSetTaskUtilMinPct(int pid, unsigned int min)
+ 		attr.sched_util_max = (blc_1024 << 10) / 1280;
+ 	}
+ 
+-	/* get task_struct */
+-	rcu_read_lock();
+-	p = find_task_by_vpid(pid);
+-	if (likely(p))
+-		get_task_struct(p);
+-	rcu_read_unlock();
++	/* get_pid_task() pins the task while the scheduler attributes change. */
++	p = get_pid_task(find_vpid(pid), PIDTYPE_PID);
+ 
+ 	/* sched_setattr */
+ 	if (likely(p)) {
+-		ret = sched_setattr(p, &attr);
++		ret = sched_setattr_nocheck(p, &attr);
+ 		put_task_struct(p);
+ 	}
+ }
 diff --git a/connectivity/wlan/core/gen4m/reset/reset.c b/connectivity/wlan/core/gen4m/reset/reset.c
-index b5c1f5a..8098643 100644
+index b5c1f5a..e1d750c 100644
 --- a/connectivity/wlan/core/gen4m/reset/reset.c
 +++ b/connectivity/wlan/core/gen4m/reset/reset.c
+@@ -343,7 +343,7 @@ static void resetkoTimeoutHandler(unsigned long arg)
+ #endif
+ {
+ #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
+-	struct FsmEntity *fsm = from_timer(fsm, timer, resetTimer);
++	struct FsmEntity *fsm = timer_container_of(fsm, timer, resetTimer);
+ #else
+ 	struct FsmEntity *fsm = (struct FsmEntity *)arg;
+ #endif
 @@ -377,7 +377,7 @@ void resetkoCancleTimer(struct FsmEntity *fsm)
  	}
  	MR_Info("[%s] %s\n", fsm->name, __func__);
@@ -926,3 +1911,100 @@ index b5c1f5a..8098643 100644
  	removeResetEvent(fsm->eModuleType, RFSM_EVENT_TIMEOUT);
  }
  
+diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
+index 72e22a9..d3330fa 100644
+--- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
++++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
+@@ -123,7 +123,7 @@ hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+ }
+ 
+ /**
+- * hmac_sha256 - HMAC-SHA256 over data buffer (RFC 2104)
++ * wpas_hmac_sha256 - HMAC-SHA256 over data buffer (RFC 2104)
+  * @key: Key for HMAC operations
+  * @key_len: Length of the key in bytes
+  * @data: Pointers to the data area
+@@ -132,7 +132,7 @@ hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+  * Returns: 0 on success, -1 on failure
+  */
+ int
+-hmac_sha256(const u8 *key, size_t key_len, const u8 *data, size_t data_len,
++wpas_hmac_sha256(const u8 *key, size_t key_len, const u8 *data, size_t data_len,
+ 	    u8 *mac) {
+ 	return hmac_sha256_vector(key, key_len, 1, &data, &data_len, mac);
+ }
+@@ -172,7 +172,7 @@ void caculate_pmkid(u8 *key, u8 *IMAC, u8 *RMAC, u8 *serviceName, u8 *pmkid)
+ 	os_memcpy(pmkIdSrc+post, RMAC, 6);
+ 	post += 6;
+ 	os_memcpy(pmkIdSrc+post, aucServiceID, 6);
+-	hmac_sha256(key, 32, pmkIdSrc, pmkIdSrcLen, pmkid);
++	wpas_hmac_sha256(key, 32, pmkIdSrc, pmkIdSrcLen, pmkid);
+ 	os_free(pmkIdSrc);
+ 
+ }
+diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
+index 7e5402d..c0d5e0c 100644
+--- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
++++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
+@@ -30,7 +30,7 @@ sha384_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+ 	struct sha384_state ctx;
+ 	size_t i;
+ 
+-	sha384_init(&ctx);
++	wpas_sha384_init(&ctx);
+ 	for (i = 0; i < num_elem; i++)
+ 		if (sha384_process(&ctx, addr[i], len[i]))
+ 			return -1;
+@@ -52,7 +52,7 @@ sha384_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+  *   @return CRYPT_OK if successful
+  */
+ void
+-sha384_init(struct sha384_state *md) {
++wpas_sha384_init(struct sha384_state *md) {
+ 	md->curlen = 0;
+ 	md->length = 0;
+ 	md->state[0] = CONST64(0xcbbb9d5dc1059ed8);
+diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
+index 73b633a..cce750e 100644
+--- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
++++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
+@@ -81,7 +81,7 @@ hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
+ }
+ 
+ /**
+- * hmac_sha384 - HMAC-SHA384 over data buffer (RFC 2104)
++ * wpas_hmac_sha384 - HMAC-SHA384 over data buffer (RFC 2104)
+  * @key: Key for HMAC operations
+  * @key_len: Length of the key in bytes
+  * @data: Pointers to the data area
+@@ -90,7 +90,7 @@ hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
+  * Returns: 0 on success, -1 on failure
+  */
+ int
+-hmac_sha384(const u8 *key, size_t key_len, const u8 *data, size_t data_len,
++wpas_hmac_sha384(const u8 *key, size_t key_len, const u8 *data, size_t data_len,
+ 	    u8 *mac) {
+ 	return hmac_sha384_vector(key, key_len, 1, &data, &data_len, mac);
+ }
+diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
+index 995cc3a..41e3d0b 100644
+--- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
++++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
+@@ -30,7 +30,7 @@ sha512_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+ 	struct nan_rdf_sha512_state ctx;
+ 	size_t i;
+ 
+-	sha512_init(&ctx);
++	wpas_sha512_init(&ctx);
+ 	for (i = 0; i < num_elem; i++)
+ 		if (sha512_process(&ctx, addr[i], len[i]))
+ 			return -1;
+@@ -156,7 +156,7 @@ sha512_compress(struct nan_rdf_sha512_state *md, unsigned char *buf) {
+  *   @return CRYPT_OK if successful
+  */
+ void
+-sha512_init(struct nan_rdf_sha512_state *md) {
++wpas_sha512_init(struct nan_rdf_sha512_state *md) {
+ 	md->curlen = 0;
+ 	md->length = 0;
+ 	md->state[0] = CONST64(0x6a09e667f3bcc908);
