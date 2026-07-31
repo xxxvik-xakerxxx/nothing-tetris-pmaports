@@ -30,6 +30,7 @@ for firmware in \
 done
 
 for module in \
+	connadp \
 	conninfra \
 	connfem \
 	wmt_drv \

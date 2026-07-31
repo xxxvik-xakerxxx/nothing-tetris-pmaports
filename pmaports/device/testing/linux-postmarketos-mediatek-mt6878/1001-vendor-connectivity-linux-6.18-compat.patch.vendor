@@ -11,10 +11,9 @@ This remains a downstream compatibility bridge for module-first bring-up while
 native mainline drivers are developed.
 
 diff --git a/connectivity/bt/linux_v2/Kbuild b/connectivity/bt/linux_v2/Kbuild
-index 19c762f..420cc82 100644
 --- a/connectivity/bt/linux_v2/Kbuild
 +++ b/connectivity/bt/linux_v2/Kbuild
-@@ -178,7 +178,7 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+@@ -178,7 +178,7 @@
    ccflags-y += -I$(CONN_FEM_SRC)/include
  endif
  
@@ -24,10 +23,9 @@ index 19c762f..420cc82 100644
  $(MOD_NAME)-objs := $(CFILES:.c=.o)
  
 diff --git a/connectivity/bt/linux_v2/btmtk_char_dev.c b/connectivity/bt/linux_v2/btmtk_char_dev.c
-index 2d2d062..c2de4f2 100644
 --- a/connectivity/bt/linux_v2/btmtk_char_dev.c
 +++ b/connectivity/bt/linux_v2/btmtk_char_dev.c
-@@ -636,7 +636,7 @@ int BT_init(void)
+@@ -636,7 +636,7 @@
  	if (cdv_err)
  		goto cdv_error;
  
@@ -37,10 +35,9 @@ index 2d2d062..c2de4f2 100644
  		goto create_node_error;
  	BT_dev = device_create(BT_class, NULL, dev, NULL, BT_DRIVER_NODE_NAME);
 diff --git a/connectivity/bt/linux_v2/btmtk_chip_reset.c b/connectivity/bt/linux_v2/btmtk_chip_reset.c
-index 4eacbf3..f166bff 100644
 --- a/connectivity/bt/linux_v2/btmtk_chip_reset.c
 +++ b/connectivity/bt/linux_v2/btmtk_chip_reset.c
-@@ -25,7 +25,7 @@ static void btmtk_reset_timer(unsigned long arg)
+@@ -25,7 +25,7 @@
  #else
  static void btmtk_reset_timer(struct timer_list *timer)
  {
@@ -49,7 +46,7 @@ index 4eacbf3..f166bff 100644
  
  	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
  		__func__, CHIP_RESET_TIMEOUT);
-@@ -53,7 +53,7 @@ void btmtk_reset_timer_update(struct btmtk_dev *bdev)
+@@ -53,7 +53,7 @@
  void btmtk_reset_timer_del(struct btmtk_dev *bdev)
  {
  	if (timer_pending(&bdev->chip_reset_timer)) {
@@ -59,10 +56,9 @@ index 4eacbf3..f166bff 100644
  	}
  }
 diff --git a/connectivity/bt/linux_v2/btmtk_fw_log.c b/connectivity/bt/linux_v2/btmtk_fw_log.c
-index f2346ae..c205a96 100644
 --- a/connectivity/bt/linux_v2/btmtk_fw_log.c
 +++ b/connectivity/bt/linux_v2/btmtk_fw_log.c
-@@ -295,7 +295,7 @@ static int btmtk_fops_initfwlog(void)
+@@ -295,7 +295,7 @@
  	if (cdevErr)
  		goto cdv_error;
  
@@ -72,7 +68,6 @@ index f2346ae..c205a96 100644
  		BTMTK_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
  		goto create_node_error;
 diff --git a/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h b/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
-index 1e9dffd..74aa7cd 100755
 --- a/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
 +++ b/connectivity/bt/linux_v2/include/uart/tty/btmtk_uart_tty.h
 @@ -23,6 +23,7 @@
@@ -84,10 +79,9 @@ index 1e9dffd..74aa7cd 100755
  #include <linux/gpio/consumer.h>
  #include <linux/pinctrl/consumer.h>
 diff --git a/connectivity/bt/linux_v2/makefile_example/DTV/Makefile b/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
-index 5963a79..3df17ce 100644
 --- a/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
 +++ b/connectivity/bt/linux_v2/makefile_example/DTV/Makefile
-@@ -97,7 +97,7 @@ CFILES += btmtk_main.c btmtk_fw_log.c
+@@ -97,7 +97,7 @@
  
  ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
  
@@ -97,7 +91,6 @@ index 5963a79..3df17ce 100644
  $(MOD_NAME)-objs := $(CFILES:.c=.o)
  
 diff --git a/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c b/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
-index a468425..d7adab5 100644
 --- a/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
 +++ b/connectivity/bt/linux_v2/proj/btmtk_proj_sp.c
 @@ -12,6 +12,7 @@
@@ -108,7 +101,7 @@ index a468425..d7adab5 100644
  #include <linux/of.h>
  #include <linux/pinctrl/consumer.h>
  #include <linux/platform_device.h>
-@@ -124,9 +125,8 @@ static int btmtk_uart_driver_probe(struct platform_device *pdev) {
+@@ -124,9 +125,8 @@
  	return 0;
  }
  
@@ -119,16 +112,15 @@ index a468425..d7adab5 100644
  }
  
  static struct platform_driver btmtk_uart_driver = {
-@@ -2272,4 +2272,3 @@ int btmtk_uart_launcher_deinit(void)
+@@ -2272,4 +2272,3 @@
  }
  
  #endif // (USE_DEVICE_NODE == 1)
 -
 diff --git a/connectivity/bt/linux_v2/sdio/btmtksdio.c b/connectivity/bt/linux_v2/sdio/btmtksdio.c
-index e902d8b..2477c8e 100644
 --- a/connectivity/bt/linux_v2/sdio/btmtksdio.c
 +++ b/connectivity/bt/linux_v2/sdio/btmtksdio.c
-@@ -355,7 +355,7 @@ static void btmtk_fw_own_timer(unsigned long arg)
+@@ -355,7 +355,7 @@
  #else
  static void btmtk_fw_own_timer(struct timer_list *timer)
  {
@@ -137,7 +129,7 @@ index e902d8b..2477c8e 100644
  
  	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
  	wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
-@@ -383,7 +383,7 @@ static void btmtk_sdio_create_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
+@@ -383,7 +383,7 @@
  
  static void btmtk_sdio_delete_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
  {
@@ -147,7 +139,6 @@ index e902d8b..2477c8e 100644
  }
  
 diff --git a/connectivity/bt/linux_v2/uart/btmtktty.c b/connectivity/bt/linux_v2/uart/btmtktty.c
-index e282b54..207348b 100644
 --- a/connectivity/bt/linux_v2/uart/btmtktty.c
 +++ b/connectivity/bt/linux_v2/uart/btmtktty.c
 @@ -25,6 +25,7 @@
@@ -158,7 +149,7 @@ index e282b54..207348b 100644
  #include "btmtk_fw_log.h"
  #include "btmtk_queue.h"
  extern void bthost_debug_print(void);
-@@ -85,7 +86,7 @@ static void btmtk_fw_own_timer(unsigned long arg)
+@@ -85,7 +86,7 @@
  #else
  static void btmtk_fw_own_timer(struct timer_list *timer)
  {
@@ -167,7 +158,7 @@ index e282b54..207348b 100644
  
  	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
  		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
-@@ -131,7 +132,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
+@@ -131,7 +132,7 @@
  	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
  		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
  		BTMTK_WARN("%s: timer deleted", __func__);
@@ -177,10 +168,9 @@ index e282b54..207348b 100644
  		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
  }
 diff --git a/connectivity/bt/linux_v2/uart_daemon/Makefile b/connectivity/bt/linux_v2/uart_daemon/Makefile
-index 26bb445..9cbffe1 100755
 --- a/connectivity/bt/linux_v2/uart_daemon/Makefile
 +++ b/connectivity/bt/linux_v2/uart_daemon/Makefile
-@@ -8,7 +8,7 @@ OBJECT = \
+@@ -8,7 +8,7 @@
  CFLAGS = \
  		 -g \
  		 -Wall \
@@ -190,7 +180,6 @@ index 26bb445..9cbffe1 100755
  
  #---------------------------------------------------------------------------
 diff --git a/connectivity/bt/mt66xx/6878/Kbuild b/connectivity/bt/mt66xx/6878/Kbuild
-index 32ff3a6..8426d31 100644
 --- a/connectivity/bt/mt66xx/6878/Kbuild
 +++ b/connectivity/bt/mt66xx/6878/Kbuild
 @@ -1,4 +1,4 @@
@@ -200,10 +189,9 @@ index 32ff3a6..8426d31 100644
 -include $(srctree)/$(src)/../btif/Kbuild
 +include $(M)/../btif/Kbuild
 diff --git a/connectivity/bt/mt66xx/btif/Kbuild b/connectivity/bt/mt66xx/btif/Kbuild
-index 218506c..ea1869b 100644
 --- a/connectivity/bt/mt66xx/btif/Kbuild
 +++ b/connectivity/bt/mt66xx/btif/Kbuild
-@@ -13,7 +13,11 @@ else
+@@ -13,7 +13,11 @@
  LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
  TOP := $(srctree)/..
  endif
@@ -216,7 +204,6 @@ index 218506c..ea1869b 100644
  
  ifndef TOP
 diff --git a/connectivity/bt/mt66xx/btif/btmtk_beif.c b/connectivity/bt/mt66xx/btif/btmtk_beif.c
-index 25c97fb..07d3e8a 100644
 --- a/connectivity/bt/mt66xx/btif/btmtk_beif.c
 +++ b/connectivity/bt/mt66xx/btif/btmtk_beif.c
 @@ -3,6 +3,8 @@
@@ -228,11 +215,65 @@ index 25c97fb..07d3e8a 100644
  #include "btmtk_beif_plat.h"
  #include "btmtk_beif.h"
  
+@@ -613,12 +615,8 @@
+ #ifndef BEIF_CTP_LOAD
+ static int beif_rx_thread(void *p_data)
+ {
+-	struct sched_param sch_param;
+-	int ret;
+-
+-	sch_param.sched_priority = MAX_RT_PRIO - 10;
+-	ret = sched_setscheduler(current, SCHED_RR, &sch_param);
+-	pr_info("%s prio = %d, ret = %d\n", __func__, sch_param.sched_priority, ret);
++	sched_set_fifo(current);
++	pr_info("%s running with FIFO scheduling\n", __func__);
+ 
+ 	while (1) {
+ 		wait_for_completion_interruptible(&rx_comp);
 diff --git a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c b/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
-index 47fbeac..f1ade34 100644
 --- a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
 +++ b/connectivity/bt/mt66xx/btif/btmtk_btif_main.c
-@@ -1756,7 +1756,7 @@ static int btmtk_cif_probe(struct platform_device *pdev)
+@@ -10,6 +10,9 @@
+ #include <linux/of.h>
+ #include <linux/notifier.h>
+ #include <linux/fb.h>
++#ifndef FB_EVENT_BLANK
++#define FB_EVENT_BLANK 0x09
++#endif
+ #include <linux/timer.h>
+ #include <linux/suspend.h>
+ #include <linux/module.h>
+@@ -25,7 +28,8 @@
+ #endif
+ #include "connectivity_build_in_adapter.h"
+ #include "connsys_debug_utility.h"
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ #include "mtk_disp_notify.h"
+ #endif
+ 
+@@ -160,7 +164,8 @@
+ 	return 0;
+ }
+ 
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v)
+ {
+ 	int *data = (int *)v;
+@@ -1708,7 +1713,8 @@
+ 
+ 	/* 8. Register screen on/off & suspend/wakup notify callback */
+ 	cif_dev->blank_state = WMT_PARA_SCREEN_ON;
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ 	if (mtk_disp_notifier_register("btmtk_disp_notifier", &btmtk_disp_notifier)) {
+                 BTMTK_ERR("Register mtk_disp_notifier failed\n");
+ 	}
+@@ -1756,7 +1762,7 @@
   * Return Value:
   *     0 if success, otherwise error code
   */
@@ -241,7 +282,17 @@ index 47fbeac..f1ade34 100644
  {
  	struct btmtk_btif_dev *cif_dev = (struct btmtk_btif_dev *)g_sbdev->cif_dev;
  
-@@ -1787,7 +1787,6 @@ static int btmtk_cif_remove(struct platform_device *pdev)
+@@ -1766,7 +1772,8 @@
+ 
+ 	/* Unregister screen on/off & suspend/wakup notify callback */
+ 
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ 	mtk_disp_notifier_unregister(&btmtk_disp_notifier);
+ #else
+ 	btmtk_fb_notify_unregister();
+@@ -1787,7 +1794,6 @@
  
  	bt_reg_deinit();
  
@@ -250,10 +301,9 @@ index 47fbeac..f1ade34 100644
  
  /* btmtk_cif_register
 diff --git a/connectivity/bt/mt66xx/btif/btmtk_char_dev.c b/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
-index 24bbdaa..7b379b0 100644
 --- a/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
 +++ b/connectivity/bt/mt66xx/btif/btmtk_char_dev.c
-@@ -554,7 +554,7 @@ int BT_init(void)
+@@ -554,7 +554,7 @@
  	if (cdv_err)
  		goto cdv_error;
  
@@ -263,7 +313,6 @@ index 24bbdaa..7b379b0 100644
  		goto create_node_error;
  	BT_dev = device_create(BT_class, NULL, dev, NULL, BT_DRIVER_NODE_NAME);
 diff --git a/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c b/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
-index 0c9f213..e510708 100644
 --- a/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
 +++ b/connectivity/bt/mt66xx/btif/btmtk_mt66xx.c
 @@ -9,6 +9,7 @@
@@ -274,11 +323,38 @@ index 0c9f213..e510708 100644
  
  #include "btmtk_define.h"
  #include "btmtk_chip_if.h"
+@@ -1792,11 +1793,9 @@
+ int32_t btmtk_set_power_on(struct hci_dev *hdev, u_int8_t for_precal)
+ {
+ 	int ret;
+-	int sch_ret = -1;
+ 	unsigned int chip_id = 0, adie_id = 0;
+ 	bool is_wmt_power_on_fail = FALSE;
+ 
+-	struct sched_param sch_param;
+ 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+ 	struct btmtk_btif_dev *cif_dev = (struct btmtk_btif_dev *)g_sbdev->cif_dev;
+ 
+@@ -1905,13 +1904,8 @@
+ 	}
+ 
+ 	if(g_bt_dbg_st.rt_thd_enable) {
+-		sch_param.sched_priority = MAX_RT_PRIO - 20;
+-		sch_ret = sched_setscheduler(cif_dev->tx_thread, SCHED_FIFO, &sch_param);
+-		BTMTK_INFO("sch_ret = %d", sch_ret);
+-		if (sch_ret != 0)
+-			BTMTK_INFO("set RT thread failed");
+-		else
+-			BTMTK_INFO("set RT thread succeed");
++		sched_set_fifo(cif_dev->tx_thread);
++		BTMTK_INFO("set RT thread");
+ 	}
+ 	wake_up_process(cif_dev->tx_thread);
+ #endif
 diff --git a/connectivity/bt/mt66xx/btmtk_fw_log.c b/connectivity/bt/mt66xx/btmtk_fw_log.c
-index 0f1b60c..0c2446b 100644
 --- a/connectivity/bt/mt66xx/btmtk_fw_log.c
 +++ b/connectivity/bt/mt66xx/btmtk_fw_log.c
-@@ -128,7 +128,7 @@ int btmtk_fops_initfwlog(void)
+@@ -128,7 +128,7 @@
  	if (cdevErr)
  		goto cdv_error;
  
@@ -287,13 +363,12 @@ index 0f1b60c..0c2446b 100644
  	if (IS_ERR(g_fwlog->pBTClass)) {
  		BTMTK_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
  		goto create_node_error;
-@@ -758,4 +758,3 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
+@@ -758,4 +758,3 @@
  	}
  	return 0;
  }
 -
 diff --git a/connectivity/bt/mt66xx/btmtk_main.c b/connectivity/bt/mt66xx/btmtk_main.c
-index 0c620bc..da70d01 100644
 --- a/connectivity/bt/mt66xx/btmtk_main.c
 +++ b/connectivity/bt/mt66xx/btmtk_main.c
 @@ -10,6 +10,7 @@
@@ -304,48 +379,45 @@ index 0c620bc..da70d01 100644
  
  #include "btmtk_define.h"
  #include "btmtk_main.h"
-@@ -3737,9 +3738,6 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
+@@ -3736,9 +3737,6 @@
+ 
  	hdev->bus = hci_bus_type;
  	hci_set_drvdata(hdev, bdev);
- 
+-
 -	/* HCI_PRIMARY = 0x00 */
 -	hdev->dev_type = 0x00;
--
+ 
  	bdev->hdev = hdev;
  
- 	/* register hci callback */
 diff --git a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h b/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
-index 9b968a5..549f972 100644
 --- a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
 +++ b/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
-@@ -205,10 +205,6 @@ struct bt_dump_queue {
+@@ -204,10 +204,6 @@
+ #define BT_BTIF_DUMP_LOG		0x04
  #define BT_BTIF_DUMP_DMA		0x08
  #define BT_BTIF_DUMP_ALL		0x0F
- 
+-
 -struct sched_param {
 -	int sched_priority;
 -};
--
+ 
  struct bt_dbg_st {
  	bool rt_thd_enable;
- 	uint8_t rx_buf_ctrl;
 diff --git a/connectivity/bt/mt66xx/include/btif/platform_base.h b/connectivity/bt/mt66xx/include/btif/platform_base.h
-index a0b2fb0..6ef6777 100644
 --- a/connectivity/bt/mt66xx/include/btif/platform_base.h
 +++ b/connectivity/bt/mt66xx/include/btif/platform_base.h
-@@ -10,6 +10,10 @@
+@@ -9,6 +9,10 @@
+ #include "conninfra.h"
  #include <linux/arm-smccc.h>
  #include <linux/soc/mediatek/mtk_sip_svc.h>
- 
++
 +#ifndef MTK_SIP_KERNEL_BT_CONTROL
 +#define MTK_SIP_KERNEL_BT_CONTROL MTK_SIP_SMC_CMD(0x536)
 +#endif
-+
+ 
  #define BT_CR_DUMP_BUF_SIZE	(1024)
  #define FW_NAME_LEN		(64)
- #define PATCH_FILE_NUM		2
 diff --git a/connectivity/bt/mt66xx/include/btmtk_define.h b/connectivity/bt/mt66xx/include/btmtk_define.h
-index 3b76cd2..c5f730e 100644
 --- a/connectivity/bt/mt66xx/include/btmtk_define.h
 +++ b/connectivity/bt/mt66xx/include/btmtk_define.h
 @@ -20,7 +20,7 @@
@@ -358,10 +430,9 @@ index 3b76cd2..c5f730e 100644
  /* Define for proce node */
  #include <linux/proc_fs.h>
 diff --git a/connectivity/common/Kbuild b/connectivity/common/Kbuild
-index d767814..2cea447 100644
 --- a/connectivity/common/Kbuild
 +++ b/connectivity/common/Kbuild
-@@ -94,7 +94,7 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
+@@ -94,7 +94,7 @@
  ###############################################################################
  
  
@@ -371,10 +442,9 @@ index d767814..2cea447 100644
  ifeq ($(CONFIG_MTK_COMBO_CHIP_MT6628),y)
      ccflags-y += -D MT6628
 diff --git a/connectivity/common/common_detect/wmt_detect.c b/connectivity/common/common_detect/wmt_detect.c
-index 7a17aa0..3be1bec 100644
 --- a/connectivity/common/common_detect/wmt_detect.c
 +++ b/connectivity/common/common_detect/wmt_detect.c
-@@ -251,10 +251,9 @@ static int wmt_detect_probe(struct platform_device *pdev)
+@@ -251,10 +251,9 @@
  	return ret;
  }
  
@@ -386,7 +456,7 @@ index 7a17aa0..3be1bec 100644
  }
  #endif
  
-@@ -330,7 +329,7 @@ static int wmt_detect_driver_init(void)
+@@ -330,7 +329,7 @@
  		goto err1;
  	}
  
@@ -396,10 +466,9 @@ index 7a17aa0..3be1bec 100644
  		WMT_DETECT_PR_ERR("class create fail, error code(%ld)\n", PTR_ERR(pDetectClass));
  		goto err1;
 diff --git a/connectivity/common/common_main/linux/fw_log_wmt.c b/connectivity/common/common_main/linux/fw_log_wmt.c
-index bf495f8..c54c43d 100644
 --- a/connectivity/common/common_main/linux/fw_log_wmt.c
 +++ b/connectivity/common/common_main/linux/fw_log_wmt.c
-@@ -136,7 +136,7 @@ int fw_log_wmt_init(void)
+@@ -136,7 +136,7 @@
  		goto error;
  	}
  
@@ -409,10 +478,9 @@ index bf495f8..c54c43d 100644
  		pr_err("class_create fail\n");
  		goto error;
 diff --git a/connectivity/common/common_main/linux/include/osal.h b/connectivity/common/common_main/linux/include/osal.h
-index fd067fb..e23c788 100644
 --- a/connectivity/common/common_main/linux/include/osal.h
 +++ b/connectivity/common/common_main/linux/include/osal.h
-@@ -139,7 +139,7 @@ typedef VOID(*P_TIMEOUT_HANDLER) (struct timer_list *t);
+@@ -139,7 +139,7 @@
  typedef struct timer_list *timer_handler_arg;
  #define GET_HANDLER_DATA(arg, data) \
  do { \
@@ -422,10 +490,9 @@ index fd067fb..e23c788 100644
  } while (0)
  #else
 diff --git a/connectivity/common/common_main/linux/osal.c b/connectivity/common/common_main/linux/osal.c
-index 9ff0abf..5a418f3 100644
 --- a/connectivity/common/common_main/linux/osal.c
 +++ b/connectivity/common/common_main/linux/osal.c
-@@ -858,7 +858,7 @@ INT32 osal_timer_stop(P_OSAL_TIMER pTimer)
+@@ -858,7 +858,7 @@
  {
  	struct timer_list *timer = &pTimer->timer;
  
@@ -434,7 +501,7 @@ index 9ff0abf..5a418f3 100644
  	return 0;
  }
  
-@@ -866,7 +866,7 @@ INT32 osal_timer_stop_sync(P_OSAL_TIMER pTimer)
+@@ -866,7 +866,7 @@
  {
  	struct timer_list *timer = &pTimer->timer;
  
@@ -444,10 +511,9 @@ index 9ff0abf..5a418f3 100644
  }
  
 diff --git a/connectivity/common/common_main/linux/stp_uart.c b/connectivity/common/common_main/linux/stp_uart.c
-index 595a47e..7593ed7 100644
 --- a/connectivity/common/common_main/linux/stp_uart.c
 +++ b/connectivity/common/common_main/linux/stp_uart.c
-@@ -348,9 +348,9 @@ static VOID stp_uart_tty_receive(
+@@ -348,9 +348,9 @@
  #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
  	PINT8 flags,
  #else
@@ -459,7 +525,7 @@ index 595a47e..7593ed7 100644
  {
  	UINT32 fifo_avail_len = LDISC_RX_FIFO_SIZE - kfifo_len(g_stp_uart_rx_fifo);
  	UINT32 how_much_put = 0;
-@@ -504,9 +504,9 @@ static VOID stp_uart_tty_receive(
+@@ -504,9 +504,9 @@
  #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
  	PINT8 flags,
  #else
@@ -471,7 +537,7 @@ index 595a47e..7593ed7 100644
  {
  	UINT32 written;
  
-@@ -542,9 +542,9 @@ static VOID stp_uart_tty_receive(
+@@ -542,9 +542,9 @@
  #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
  	PINT8 flags,
  #else
@@ -484,10 +550,9 @@ index 595a47e..7593ed7 100644
  
  #if 0
 diff --git a/connectivity/common/common_main/linux/wmt_alarm.c b/connectivity/common/common_main/linux/wmt_alarm.c
-index 1ad1c26..4814c27 100644
 --- a/connectivity/common/common_main/linux/wmt_alarm.c
 +++ b/connectivity/common/common_main/linux/wmt_alarm.c
-@@ -64,8 +64,7 @@ static void wmt_alarm_dmp_info_handler(struct work_struct *work)
+@@ -64,8 +64,7 @@
  	}
  }
  
@@ -497,7 +562,7 @@ index 1ad1c26..4814c27 100644
  {
  	ktime_t kt;
  
-@@ -77,7 +76,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+@@ -77,7 +76,6 @@
  
  	spin_unlock_irqrestore(&g_wmt_alarm.alarm_lock, g_wmt_alarm.flags);
  
@@ -506,10 +571,38 @@ index 1ad1c26..4814c27 100644
  
  static int _wmt_alarm_start_timer_nolock(unsigned int sec)
 diff --git a/connectivity/common/common_main/linux/wmt_dev.c b/connectivity/common/common_main/linux/wmt_dev.c
-index 23f24db..97559c5 100644
 --- a/connectivity/common/common_main/linux/wmt_dev.c
 +++ b/connectivity/common/common_main/linux/wmt_dev.c
-@@ -1645,7 +1645,7 @@ static INT32 WMT_init(VOID)
+@@ -48,13 +48,17 @@
+ #ifdef CONFIG_EARLYSUSPEND
+ #include <linux/earlysuspend.h>
+ #else
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ #include <linux/of.h>
+ #include "mtk_disp_notify.h"
+ #else
+ #include <linux/fb.h>
++#ifndef FB_EVENT_BLANK
++#define FB_EVENT_BLANK 0x09
+ #endif
+ #endif
++#endif
+ #include <linux/proc_fs.h>
+ #include <mtk_wcn_cmb_stub.h>
+ #include "osal_typedef.h"
+@@ -220,7 +224,8 @@
+ #else
+ 
+ static struct notifier_block wmt_fb_notifier;
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ static INT32 wmt_fb_notifier_callback(struct notifier_block *nb, ULONG value, PVOID v)
+ {
+ 	int data = 0;
+@@ -1645,7 +1650,7 @@
  	WMT_INFO_FUNC("driver(major %d) installed\n", gWmtMajor);
  
  #if WMT_CREATE_NODE_DYNAMIC
@@ -518,8 +611,32 @@ index 23f24db..97559c5 100644
  	if (IS_ERR(wmt_class))
  		goto error;
  	wmt_dev = device_create(wmt_class, NULL, devID, NULL, "stpwmt");
+@@ -1709,7 +1714,8 @@
+ 	WMT_INFO_FUNC("register_early_suspend finished\n");
+ #else
+ 	wmt_fb_notifier.notifier_call = wmt_fb_notifier_callback;
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ 	ret = mtk_disp_notifier_register("wmt_driver", &wmt_fb_notifier);
+ #else
+ 	ret = fb_register_client(&wmt_fb_notifier);
+@@ -1772,7 +1778,8 @@
+ 	unregister_early_suspend(&wmt_early_suspend_handler);
+ 	WMT_INFO_FUNC("unregister_early_suspend finished\n");
+ #else
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) && \
++	defined(CONFIG_MTK_DISP_NOTIFIER)
+ 	mtk_disp_notifier_unregister(&wmt_fb_notifier);
+ #else
+ 	fb_unregister_client(&wmt_fb_notifier);
+@@ -1828,4 +1835,3 @@
+ 	WMT_exit();
+ }
+ EXPORT_SYMBOL(mtk_wcn_common_drv_exit);
+-
 diff --git a/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c b/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
-index 472413a..4881080 100644
 --- a/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
 +++ b/connectivity/common/common_main/platform/mtk_wcn_consys_hw.c
 @@ -72,7 +72,7 @@
@@ -531,7 +648,7 @@ index 472413a..4881080 100644
  static INT32 mtk_wmt_suspend(struct device *dev);
  static INT32 mtk_wmt_resume(struct device *dev);
  
-@@ -501,7 +501,7 @@ static INT32 mtk_wmt_probe(struct platform_device *pdev)
+@@ -501,7 +501,7 @@
  	return 0;
  }
  
@@ -540,7 +657,7 @@ index 472413a..4881080 100644
  {
  	if (wmt_consys_ic_ops->consys_ic_need_store_pdev) {
  		if (wmt_consys_ic_ops->consys_ic_need_store_pdev() == MTK_WCN_BOOL_TRUE)
-@@ -522,7 +522,6 @@ static INT32 mtk_wmt_remove(struct platform_device *pdev)
+@@ -522,7 +522,6 @@
  	osal_sleepable_lock_deinit(&g_adie_chipid_lock);
  
  	atomic_set(&g_probe_called, 0);
@@ -549,7 +666,6 @@ index 472413a..4881080 100644
  
  static INT32 mtk_wmt_suspend(struct device *dev)
 diff --git a/connectivity/common/debug_utility/connsys_debug_utility.c b/connectivity/common/debug_utility/connsys_debug_utility.c
-index adee61b..6b436f7 100644
 --- a/connectivity/common/debug_utility/connsys_debug_utility.c
 +++ b/connectivity/common/debug_utility/connsys_debug_utility.c
 @@ -18,6 +18,7 @@
@@ -560,7 +676,7 @@ index adee61b..6b436f7 100644
  #include <linux/uaccess.h>
  #include <linux/workqueue.h>
  #include <linux/ratelimit.h>
-@@ -132,7 +133,7 @@ static void connlog_emi_status_dump(void);
+@@ -132,7 +133,7 @@
  
  /* connlog when suspend */
  static int connlog_alarm_init(void);
@@ -569,7 +685,7 @@ index adee61b..6b436f7 100644
  static inline bool connlog_is_alarm_enable(void);
  static int connlog_set_alarm_timer(void);
  static int connlog_cancel_alarm_timer(void);
-@@ -677,8 +678,7 @@ EXPORT_SYMBOL(connsys_log_blank_state_changed);
+@@ -677,8 +678,7 @@
  * RETURNS
  *  void
  *****************************************************************************/
@@ -579,7 +695,7 @@ index adee61b..6b436f7 100644
  {
  	ktime_t kt;
  	struct rtc_time tm;
-@@ -697,7 +697,6 @@ static enum alarmtimer_restart alarm_timer_handler(struct alarm *alarm,
+@@ -697,7 +697,6 @@
  	alarm_start_relative(&gDev.log_alarm.alarm_timer, kt);
  	spin_unlock_irqrestore(&gDev.log_alarm.alarm_lock, gDev.log_alarm.flags);
  
@@ -587,16 +703,15 @@ index adee61b..6b436f7 100644
  }
  
  /*****************************************************************************
-@@ -1376,4 +1375,3 @@ int connsys_dedicated_log_set_ap_state(int state)
+@@ -1376,4 +1375,3 @@
  	pr_info("%s state: %d\n", __func__, state);
  	return 0;
  }
 -
 diff --git a/connectivity/connfem/Kbuild b/connectivity/connfem/Kbuild
-index a0d6f2f..5254eee 100644
 --- a/connectivity/connfem/Kbuild
 +++ b/connectivity/connfem/Kbuild
-@@ -25,7 +25,7 @@ KBUILD_MODPOST_FAIL_ON_WARNINGS := y
+@@ -25,7 +25,7 @@
  # GCC Options
  ###############################################################################
  ccflags-y += -Wall
@@ -606,10 +721,9 @@ index a0d6f2f..5254eee 100644
  
  ###############################################################################
 diff --git a/connectivity/connfem/connfem_module.c b/connectivity/connfem/connfem_module.c
-index c1e1927..9ea9696 100644
 --- a/connectivity/connfem/connfem_module.c
 +++ b/connectivity/connfem/connfem_module.c
-@@ -42,7 +42,7 @@ struct connfem_cdev_context {
+@@ -42,7 +42,7 @@
   *		    F U N C T I O N   D E C L A R A T I O N S
   ******************************************************************************/
  static int connfem_plat_probe(struct platform_device *pdev);
@@ -618,7 +732,7 @@ index c1e1927..9ea9696 100644
  static void connfem_cfg_dt_check(struct platform_device *pdev,
  		void *ctx, struct connfem_context_ops *ops);
  static enum connfem_type connfem_type_get(struct device_node *dn);
-@@ -921,27 +921,26 @@ probe_end:
+@@ -921,27 +921,26 @@
  	return err;
  }
  
@@ -649,7 +763,7 @@ index c1e1927..9ea9696 100644
  }
  
  static int __init connfem_mod_init(void)
-@@ -990,7 +989,7 @@ static int __init connfem_mod_init(void)
+@@ -990,7 +989,7 @@
  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,4,0))
  	connfem_cdev_ctx.class = class_create(CONNFEM_DRIVER_NAME);
  #else
@@ -659,10 +773,9 @@ index c1e1927..9ea9696 100644
  	if (IS_ERR(connfem_cdev_ctx.class)) {
  		pr_info("ConnFem create class failed");
 diff --git a/connectivity/connfem/connfem_sku.c b/connectivity/connfem/connfem_sku.c
-index 5fe1069..5af71b3 100644
 --- a/connectivity/connfem/connfem_sku.c
 +++ b/connectivity/connfem/connfem_sku.c
-@@ -731,7 +731,6 @@ static int cfm_sku_fem_state_populate(struct device_node *np,
+@@ -731,7 +731,6 @@
  {
  	int err = 0;
  	unsigned int value = 0;
@@ -670,7 +783,7 @@ index 5fe1069..5af71b3 100644
  	struct property *prop;
  	unsigned int bk_cnt = 0;
  
-@@ -759,13 +758,7 @@ static int cfm_sku_fem_state_populate(struct device_node *np,
+@@ -759,13 +758,7 @@
  		goto dt_fem_states_err;
  	}
  
@@ -685,7 +798,7 @@ index 5fe1069..5af71b3 100644
  		cat->op[cat->op_count] = value;
  		cat->op_count++;
  	}
-@@ -791,7 +784,6 @@ int cfm_sku_fem_ctrl_pin_populate(struct device_node *np,
+@@ -791,7 +784,6 @@
  		struct connfem_sku_fem_ctrlpin *ctrl_pin)
  {
  	unsigned int value = 0;
@@ -693,7 +806,7 @@ index 5fe1069..5af71b3 100644
  	struct property *prop;
  	unsigned int bk_cnt = 0;
  
-@@ -808,15 +800,7 @@ int cfm_sku_fem_ctrl_pin_populate(struct device_node *np,
+@@ -808,15 +800,7 @@
  	}
  
  	/* Iterate pins elements and populate */
@@ -711,10 +824,9 @@ index 5fe1069..5af71b3 100644
  			pr_info("Over max supportable number %d of %s",
  				CONNFEM_FEM_PIN_COUNT,
 diff --git a/connectivity/conninfra/Kbuild b/connectivity/conninfra/Kbuild
-index c9c41a6..da01f25 100644
 --- a/connectivity/conninfra/Kbuild
 +++ b/connectivity/conninfra/Kbuild
-@@ -41,7 +41,7 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
+@@ -41,7 +41,7 @@
  ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/memory/mediatek/
  
  ###############################################################################
@@ -724,10 +836,9 @@ index c9c41a6..da01f25 100644
  ccflags-y += -Wno-error=format-extra-args
  
 diff --git a/connectivity/conninfra/adaptor/conninfra_dev.c b/connectivity/conninfra/adaptor/conninfra_dev.c
-index 5b93cb4..a213467 100755
 --- a/connectivity/conninfra/adaptor/conninfra_dev.c
 +++ b/connectivity/conninfra/adaptor/conninfra_dev.c
-@@ -587,7 +587,7 @@ static int conninfra_dev_init(void)
+@@ -587,7 +587,7 @@
  		goto err1;
  	}
  
@@ -737,10 +848,9 @@ index 5b93cb4..a213467 100755
  		pr_err("class create fail, error code(%ld)\n",
  						PTR_ERR(p_conn_adaptor_class));
 diff --git a/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c b/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
-index b9cf13b..513de03 100644
 --- a/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
 +++ b/connectivity/conninfra/adaptor/connsyslog/fw_log_mcu.c
-@@ -46,7 +46,7 @@ int fw_log_mcu_init(struct fw_log_mcu_info *info, const struct file_operations *
+@@ -46,7 +46,7 @@
  		goto error;
  	}
  
@@ -750,7 +860,6 @@ index b9cf13b..513de03 100644
  		pr_notice("[%s] class_create fail, conn_type=[%d]\n", __func__, info->conn_type);
  		goto error;
 diff --git a/connectivity/conninfra/base/include/osal.h b/connectivity/conninfra/base/include/osal.h
-index 4f4b38a..cad84ea 100755
 --- a/connectivity/conninfra/base/include/osal.h
 +++ b/connectivity/conninfra/base/include/osal.h
 @@ -26,6 +26,7 @@
@@ -761,7 +870,7 @@ index 4f4b38a..cad84ea 100755
  #include "ring.h"
  /*******************************************************************************
  *                         C O M P I L E R   F L A G S
-@@ -132,7 +133,7 @@ typedef void(*P_TIMEOUT_HANDLER) (struct timer_list *t);
+@@ -132,7 +133,7 @@
  typedef struct timer_list *timer_handler_arg;
  #define GET_HANDLER_DATA(arg, data) \
  do { \
@@ -771,7 +880,6 @@ index 4f4b38a..cad84ea 100755
  } while (0)
  #else
 diff --git a/connectivity/conninfra/base/osal.c b/connectivity/conninfra/base/osal.c
-index eea66c5..d988bf5 100755
 --- a/connectivity/conninfra/base/osal.c
 +++ b/connectivity/conninfra/base/osal.c
 @@ -41,6 +41,7 @@
@@ -782,7 +890,7 @@ index eea66c5..d988bf5 100755
  #if defined(CONNINFRA_PLAT_ALPS) && CONNINFRA_PLAT_ALPS
  #include "connectivity_build_in_adapter.h"
  #endif
-@@ -724,7 +725,7 @@ int osal_timer_stop(P_OSAL_TIMER pTimer)
+@@ -724,7 +725,7 @@
  {
  	struct timer_list *timer = &pTimer->timer;
  
@@ -791,7 +899,7 @@ index eea66c5..d988bf5 100755
  	return 0;
  }
  
-@@ -732,7 +733,7 @@ int osal_timer_stop_sync(P_OSAL_TIMER pTimer)
+@@ -732,7 +733,7 @@
  {
  	struct timer_list *timer = &pTimer->timer;
  
@@ -801,7 +909,6 @@ index eea66c5..d988bf5 100755
  }
  
 diff --git a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
-index fd6ac70..4ad7fd7 100644
 --- a/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
 +++ b/connectivity/conninfra/conn_drv/connv2/debug_utility/connsyslog/connsyslog.c
 @@ -8,6 +8,7 @@
@@ -812,7 +919,7 @@ index fd6ac70..4ad7fd7 100644
  #include <linux/uaccess.h>
  #include <linux/workqueue.h>
  #include <linux/ratelimit.h>
-@@ -1386,8 +1387,7 @@ static int connlog_cancel_alarm_timer(void)
+@@ -1386,8 +1387,7 @@
  }
  
  
@@ -822,7 +929,7 @@ index fd6ac70..4ad7fd7 100644
  {
  	ktime_t kt;
  	struct rtc_time tm;
-@@ -1411,7 +1411,6 @@ static enum alarmtimer_restart connlog_alarm_timer_handler(struct alarm *alarm,
+@@ -1411,7 +1411,6 @@
  	alarm_start_relative(&gLogAlarm.alarm_timer, kt);
  	spin_unlock_irqrestore(&gLogAlarm.alarm_lock, gLogAlarm.flags);
  
@@ -830,13 +937,12 @@ index fd6ac70..4ad7fd7 100644
  }
  
  static int connlog_alarm_init(void)
-@@ -1614,4 +1613,3 @@ int connsys_dedicated_log_set_ap_state(int state)
+@@ -1614,4 +1613,3 @@
  
  	return 0;
  }
 -
 diff --git a/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c b/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
-index 3632cbe..6c402e5 100755
 --- a/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
 +++ b/connectivity/conninfra/conn_drv/connv2/debug_utility/coredump/connsys_coredump.c
 @@ -16,6 +16,7 @@
@@ -848,7 +954,6 @@ index 3632cbe..6c402e5 100755
  #include "conninfra.h"
  #include "connsys_debug_utility.h"
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c b/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
-index 7d57f34..bec3b41 100755
 --- a/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/clock_mng.c
 @@ -4,6 +4,7 @@
@@ -860,7 +965,6 @@ index 7d57f34..bec3b41 100755
  #include "conninfra.h"
  #include "clock_mng.h"
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c b/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
-index d4c380a..14d3e40 100644
 --- a/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data.c
 @@ -7,6 +7,7 @@
@@ -872,7 +976,6 @@ index d4c380a..14d3e40 100644
  #include "consys_hw.h"
  
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
-index 1416af9..f24788c 100644
 --- a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
 @@ -8,6 +8,10 @@
@@ -887,7 +990,6 @@ index 1416af9..f24788c 100644
  struct arm_smccc_res res; \
  arm_smccc_smc(MTK_SIP_KERNEL_CONNSYS_CONTROL, OPID, \
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h b/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
-index 2433733..18e8660 100644
 --- a/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/include/plat_library.h
 @@ -18,6 +18,7 @@
@@ -899,7 +1001,6 @@ index 2433733..18e8660 100644
  #include <linux/pinctrl/consumer.h>
  #include <linux/platform_device.h>
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
-index a8c9797..061c4f9 100644
 --- a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_emi.c
 @@ -10,14 +10,6 @@
@@ -918,7 +1019,6 @@ index a8c9797..061c4f9 100644
  *                         C O M P I L E R   F L A G S
  ********************************************************************************
 diff --git a/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c b/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
-index 4ad8dc1..9b220ab 100755
 --- a/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
 +++ b/connectivity/conninfra/conn_drv/connv2/src/connv2_drv.c
 @@ -6,6 +6,7 @@
@@ -938,7 +1038,7 @@ index 4ad8dc1..9b220ab 100755
  
  static struct platform_driver mtk_conninfra_dev_drv = {
  	.probe = mtk_conninfra_probe,
-@@ -626,14 +627,13 @@ int mtk_conninfra_probe(struct platform_device *pdev)
+@@ -626,14 +627,13 @@
  	return 0;
  }
  
@@ -955,7 +1055,6 @@ index 4ad8dc1..9b220ab 100755
  
  
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
-index 871353f..a00b2be 100755
 --- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw.c
 @@ -6,6 +6,7 @@
@@ -967,7 +1066,6 @@ index 871353f..a00b2be 100755
  #include <linux/pinctrl/consumer.h>
  #include <linux/suspend.h>
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
-index bea8daf..e2228f2 100644
 --- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_hw_plat_data.c
 @@ -7,6 +7,7 @@
@@ -979,7 +1077,6 @@ index bea8daf..e2228f2 100644
  
  /*******************************************************************************
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
-index 5e55d2e..6354373 100755
 --- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pinctrl_mng.c
 @@ -4,8 +4,10 @@
@@ -994,7 +1091,6 @@ index 5e55d2e..6354373 100755
  
  #include "connv3_hw.h"
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
-index be55f86..61b1f77 100755
 --- a/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/connv3_pmic_mng.c
 @@ -4,6 +4,7 @@
@@ -1006,7 +1102,6 @@ index be55f86..61b1f77 100755
  
  #include "connv3_hw.h"
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c b/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
-index 62de69c..915c2f4 100644
 --- a/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/mt6985/mt6985_pinctrl.c
 @@ -7,8 +7,10 @@
@@ -1021,7 +1116,6 @@ index 62de69c..915c2f4 100644
  #include <linux/platform_device.h>
  
 diff --git a/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c b/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
-index be88a71..85a5561 100644
 --- a/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
 +++ b/connectivity/conninfra/conn_drv/connv3/platform/mt6989/mt6989_pinctrl.c
 @@ -7,8 +7,10 @@
@@ -1036,7 +1130,6 @@ index be88a71..85a5561 100644
  #include <linux/platform_device.h>
  
 diff --git a/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c b/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
-index f2db24d..2ac1e23 100755
 --- a/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
 +++ b/connectivity/conninfra/conn_drv/connv3/src/connv3_drv.c
 @@ -6,6 +6,7 @@
@@ -1056,7 +1149,7 @@ index f2db24d..2ac1e23 100755
  
  static struct platform_driver g_mtk_connv3_dev_drv = {
  	.probe = mtk_connv3_probe,
-@@ -291,7 +292,7 @@ int mtk_connv3_probe(struct platform_device *pdev)
+@@ -291,7 +292,7 @@
  	return 0;
  }
  
@@ -1065,7 +1158,7 @@ index f2db24d..2ac1e23 100755
  {
  	atomic_set(&g_connv3_hw_init_done, 0);
  
-@@ -300,7 +301,6 @@ int mtk_connv3_remove(struct platform_device *pdev)
+@@ -300,7 +301,6 @@
  	if (g_connv3_drv_dev)
  		g_connv3_drv_dev = NULL;
  
@@ -1074,10 +1167,9 @@ index f2db24d..2ac1e23 100755
  
  /* put log/variable to file node */
 diff --git a/connectivity/wlan/adaptor/wmt_cdev_wifi.c b/connectivity/wlan/adaptor/wmt_cdev_wifi.c
-index dd29365..6fb84ac 100644
 --- a/connectivity/wlan/adaptor/wmt_cdev_wifi.c
 +++ b/connectivity/wlan/adaptor/wmt_cdev_wifi.c
-@@ -829,7 +829,7 @@ static int WIFI_init(void)
+@@ -829,7 +829,7 @@
  		goto error;
  
  #if CREATE_NODE_DYNAMIC	/* mknod replace */
@@ -1087,10 +1179,9 @@ index dd29365..6fb84ac 100644
  		goto error;
  	wmtwifi_dev = device_create(wmtwifi_class, NULL, wifi_devno, NULL,
 diff --git a/connectivity/wlan/core/gen4m/Kbuild.main b/connectivity/wlan/core/gen4m/Kbuild.main
-index d819cdc..1169471 100644
 --- a/connectivity/wlan/core/gen4m/Kbuild.main
 +++ b/connectivity/wlan/core/gen4m/Kbuild.main
-@@ -138,7 +138,7 @@ ccflags-y += -DCFG_SUPPORT_PASSPOINT=1
+@@ -138,7 +138,7 @@
  ccflags-y += -DCFG_HS20_DEBUG=1
  endif
  
@@ -1100,7 +1191,6 @@ index d819cdc..1169471 100644
  #ccflags-y:=$(filter-out -U$(WLAN_CHIP_ID),$(ccflags-y))
  #ccflags-y += -DLINUX -D$(WLAN_CHIP_ID)
 diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
-index e7949db..7e17bc5 100644
 --- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
 +++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha256.h
 @@ -18,7 +18,7 @@
@@ -1113,7 +1203,6 @@ index e7949db..7e17bc5 100644
  int sha256_prf(const u8 *key, size_t key_len, const char *label,
  	       const u8 *data, size_t data_len, u8 *buf, size_t buf_len);
 diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
-index afce2b3..f6907b7 100644
 --- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
 +++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384.h
 @@ -18,7 +18,7 @@
@@ -1126,7 +1215,6 @@ index afce2b3..f6907b7 100644
  int sha384_prf(const u8 *key, size_t key_len, const char *label,
  	       const u8 *data, size_t data_len, u8 *buf, size_t buf_len);
 diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
-index 2cfa063..38fee3b 100644
 --- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
 +++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha384_i.h
 @@ -20,7 +20,7 @@
@@ -1139,10 +1227,9 @@ index 2cfa063..38fee3b 100644
  		   unsigned long inlen);
  int sha384_done(struct sha384_state *md, unsigned char *out);
 diff --git a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
-index 26765c3..ac4a75a 100644
 --- a/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
 +++ b/connectivity/wlan/core/gen4m/include/wpa_supp/src/crypto/sha512_i.h
-@@ -22,7 +22,7 @@ struct nan_rdf_sha512_state {
+@@ -22,7 +22,7 @@
  	u8 buf[SHA512_BLOCK_SIZE];
  };
  
@@ -1152,10 +1239,9 @@ index 26765c3..ac4a75a 100644
  		   unsigned long inlen);
  int sha512_done(struct nan_rdf_sha512_state *md, unsigned char *out);
 diff --git a/connectivity/wlan/core/gen4m/mgmt/fils.c b/connectivity/wlan/core/gen4m/mgmt/fils.c
-index e6bece7..7e40fa1 100644
 --- a/connectivity/wlan/core/gen4m/mgmt/fils.c
 +++ b/connectivity/wlan/core/gen4m/mgmt/fils.c
-@@ -217,7 +217,7 @@ uint32_t filsBuildErpReauthStart(struct ADAPTER *ad, struct FILS_INFO *fils,
+@@ -217,7 +217,7 @@
  	*cp = EAP_ERP_CS_HMAC_SHA256_128;
  	cp++;
  
@@ -1164,7 +1250,7 @@ index e6bece7..7e40fa1 100644
  		DBGLOG(FILS, ERROR, "sha256 failed\n");
  		return 0;
  	}
-@@ -914,10 +914,10 @@ uint32_t filsProcessErpFinish(struct ADAPTER *ad, struct FILS_INFO *fils,
+@@ -914,10 +914,10 @@
  		return WLAN_STATUS_FAILURE;
  	}
  
@@ -1178,10 +1264,9 @@ index e6bece7..7e40fa1 100644
  	}
  
 diff --git a/connectivity/wlan/core/gen4m/nan/nan_sec.c b/connectivity/wlan/core/gen4m/nan/nan_sec.c
-index 1cc0e40..f50eaa6 100644
 --- a/connectivity/wlan/core/gen4m/nan/nan_sec.c
 +++ b/connectivity/wlan/core/gen4m/nan/nan_sec.c
-@@ -637,8 +637,8 @@ nan_sec_wpa_eapol_key_mic(const u8 *key, size_t key_len, u32 cipher,
+@@ -637,8 +637,8 @@
  	dumpMemory8((uint8_t *)buf, len);
  
  	if (cipher == NAN_CIPHER_SUITE_ID_NCS_SK_GCM_256) {
@@ -1192,7 +1277,7 @@ index 1cc0e40..f50eaa6 100644
  			       __func__);
  			return WLAN_STATUS_FAILURE;
  		}
-@@ -648,8 +648,8 @@ nan_sec_wpa_eapol_key_mic(const u8 *key, size_t key_len, u32 cipher,
+@@ -648,8 +648,8 @@
  		dumpMemory8(mic, NCS_SK_256_MIC_LEN);
  	} else {
  		/* NAN_CIPHER_SUITE_ID_NCS_SK_CCM_128 */
@@ -1204,10 +1289,9 @@ index 1cc0e40..f50eaa6 100644
  			return WLAN_STATUS_FAILURE;
  		}
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c b/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
-index 4a1e3b4..c190dde 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_cfg80211.c
-@@ -6353,10 +6353,18 @@ int mtk_uninit_ap_role(struct GLUE_INFO *prGlueInfo,
+@@ -6353,10 +6353,18 @@
  
  #if (CFG_SUPPORT_DFS_MASTER == 1)
  #if KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
@@ -1226,7 +1310,7 @@ index 4a1e3b4..c190dde 100644
  {
  #if CFG_ENABLE_WIFI_DIRECT && CFG_ENABLE_WIFI_DIRECT_CFG_80211
  	struct GLUE_INFO *prGlueInfo = NULL;
-@@ -7312,7 +7320,14 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+@@ -7312,7 +7320,14 @@
  	return mtk_cfg80211_tdls_oper(wiphy, ndev, peer, oper);
  }
  
@@ -1242,23 +1326,23 @@ index 4a1e3b4..c190dde 100644
  int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
  		      struct net_device *dev,
  		      const u8 *peer, u8 action_code, u8 dialog_token,
-@@ -8394,9 +8409,15 @@ int mtk_cfg_start_ap(struct wiphy *wiphy,
+@@ -8394,9 +8409,15 @@
  	return mtk_p2p_cfg80211_start_ap(wiphy, dev, settings);
  }
  
 +#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
-+int mtk_cfg_change_beacon(struct wiphy *wiphy,
-+			  struct net_device *dev,
-+			  struct cfg80211_ap_update *info)
-+#else
  int mtk_cfg_change_beacon(struct wiphy *wiphy,
  			  struct net_device *dev,
++			  struct cfg80211_ap_update *info)
++#else
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
  			  struct cfg80211_beacon_data *info)
 +#endif
  {
  	struct GLUE_INFO *prGlueInfo = NULL;
  
-@@ -8413,10 +8434,15 @@ int mtk_cfg_change_beacon(struct wiphy *wiphy,
+@@ -8413,10 +8434,15 @@
  		return -EFAULT;
  	}
  #endif
@@ -1275,7 +1359,7 @@ index 4a1e3b4..c190dde 100644
  int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev,
  	unsigned int link_id)
  #else
-@@ -8441,8 +8467,12 @@ int mtk_cfg_stop_ap(struct wiphy *wiphy, struct net_device *dev)
+@@ -8441,8 +8467,12 @@
  	return mtk_p2p_cfg80211_stop_ap(wiphy, dev);
  }
  
@@ -1289,7 +1373,7 @@ index 4a1e3b4..c190dde 100644
  {
  	struct GLUE_INFO *prGlueInfo = NULL;
  
-@@ -8458,7 +8488,8 @@ int mtk_cfg_set_wiphy_params(struct wiphy *wiphy,
+@@ -8458,7 +8488,8 @@
  	return mtk_p2p_cfg80211_set_wiphy_params(wiphy, changed);
  }
  
@@ -1299,23 +1383,23 @@ index 4a1e3b4..c190dde 100644
  int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
  			     struct net_device *dev,
  			     unsigned int link_id,
-@@ -8490,9 +8521,15 @@ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+@@ -8490,9 +8521,15 @@
  			mask);
  }
  
 +#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
-+int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
 +			struct wireless_dev *wdev, int radio_idx,
 +			enum nl80211_tx_power_setting type, int mbm)
 +#else
- int mtk_cfg_set_txpower(struct wiphy *wiphy,
++int mtk_cfg_set_txpower(struct wiphy *wiphy,
  			struct wireless_dev *wdev,
  			enum nl80211_tx_power_setting type, int mbm)
 +#endif
  {
  	struct GLUE_INFO *prGlueInfo = NULL;
  
-@@ -8512,9 +8549,14 @@ int mtk_cfg_set_txpower(struct wiphy *wiphy,
+@@ -8512,9 +8549,14 @@
  	return mtk_p2p_cfg80211_set_txpower(wiphy, wdev, type, mbm);
  }
  
@@ -1333,10 +1417,9 @@ index 4a1e3b4..c190dde 100644
  	struct GLUE_INFO *prGlueInfo = NULL;
  
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c b/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
-index dc8a8f9..006a6c2 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_coredump.c
-@@ -200,8 +200,7 @@ static int coredump_add_cdev(struct coredump_ctx *ctx)
+@@ -200,8 +200,7 @@
  		goto unregister_chrdev_region;
  	}
  
@@ -1347,10 +1430,9 @@ index dc8a8f9..006a6c2 100644
  		DBGLOG(INIT, ERROR,
  			"class_create failed, ret: %d\n",
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c b/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
-index 94201cd..35c910c 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_fw_dev.c
-@@ -239,8 +239,7 @@ int FwLogDevInit(void)
+@@ -239,8 +239,7 @@
  	if (result < 0)
  		goto free_dev;
  
@@ -1361,10 +1443,9 @@ index 94201cd..35c910c 100644
  	if (KAL_IS_ERR(gIndexDev->driver_class)) {
  		result = -ENOMEM;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c b/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
-index ef9299c..b8a03a5 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_fw_log.c
-@@ -263,8 +263,7 @@ int fw_log_wifi_inf_init(void)
+@@ -263,8 +263,7 @@
  		goto unregister_chrdev_region;
  	}
  
@@ -1375,10 +1456,9 @@ index ef9299c..b8a03a5 100644
  		DBGLOG(INIT, ERROR,
  			"class_create failed, ret: %d\n",
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_ics.c b/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
-index 218a25d..69c9cf7 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_ics.c
-@@ -359,8 +359,7 @@ int IcsInit(void)
+@@ -359,8 +359,7 @@
  	if (result < 0)
  		goto free_dev;
  
@@ -1389,7 +1469,6 @@ index 218a25d..69c9cf7 100644
  	if (KAL_IS_ERR(gIcsDev->driver_class)) {
  		result = -ENOMEM;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
-index 9e32e13..a41fad9 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_kal.c
 @@ -43,6 +43,9 @@
@@ -1402,18 +1481,19 @@ index 9e32e13..a41fad9 100644
  #include <net/sch_generic.h>
  #include <linux/skbuff.h>
  #include <linux/module.h>
-@@ -70,6 +73,10 @@
+@@ -70,7 +73,11 @@
  #if (CFG_WLAN_ATF_SUPPORT == 1)
  #include <linux/arm-smccc.h>
  #include <linux/soc/mediatek/mtk_sip_svc.h>
 +
 +#ifndef MTK_SIP_KERNEL_WLAN_CONTROL
 +#define MTK_SIP_KERNEL_WLAN_CONTROL MTK_SIP_SMC_CMD(0x535)
-+#endif
  #endif
++#endif
  
  #if (CFG_SUPPORT_TX_PWR_ENV == 1)
-@@ -1878,7 +1885,9 @@ uint32_t kal_is_skb_gro(struct ADAPTER *prAdapter, uint8_t ucBssIdx)
+ #include "rlm.h"
+@@ -1878,7 +1885,9 @@
  static inline void napi_gro_flush_list(struct napi_struct *napi)
  {
  	napi_gro_flush(napi, false);
@@ -1424,7 +1504,7 @@ index 9e32e13..a41fad9 100644
  	if (napi->rx_count) {
  		netif_receive_skb_list(&napi->rx_list);
  		INIT_LIST_HEAD(&napi->rx_list);
-@@ -1921,7 +1930,10 @@ void kal_gro_flush(struct ADAPTER *prAdapter)
+@@ -1921,7 +1930,10 @@
  		prWifiVar->ucGROFlushTimeout)) {
  		napi_gro_flush(&prGlueInfo->napi, false);
  		DBGLOG_LIMITED(INIT, TRACE, "napi_gro_flush.\n");
@@ -1436,7 +1516,7 @@ index 9e32e13..a41fad9 100644
  		prGlueInfo->u4PendingFlushNum =
  			prGlueInfo->napi.rx_count;
  #else
-@@ -6697,7 +6709,7 @@ u_int8_t kalSetTimer(struct GLUE_INFO *prGlueInfo,
+@@ -6697,7 +6709,7 @@
  		mod_timer(&prGlueInfo->tickfn,
  			  jiffies + u4Interval * HZ / MSEC_PER_SEC);
  	} else {
@@ -1445,7 +1525,7 @@ index 9e32e13..a41fad9 100644
  
  		prGlueInfo->tickfn.expires = jiffies + u4Interval * HZ /
  					     MSEC_PER_SEC;
-@@ -6723,7 +6735,7 @@ u_int8_t kalCancelTimer(struct GLUE_INFO *prGlueInfo)
+@@ -6723,7 +6735,7 @@
  
  	clear_bit(GLUE_FLAG_TIMEOUT_BIT, &prGlueInfo->ulFlag);
  
@@ -1454,7 +1534,7 @@ index 9e32e13..a41fad9 100644
  		return TRUE;
  	else
  		return FALSE;
-@@ -6849,7 +6861,7 @@ void kalTimeoutHandler(unsigned long arg)
+@@ -6849,7 +6861,7 @@
  {
  #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
  	struct GLUE_INFO *prGlueInfo =
@@ -1463,7 +1543,7 @@ index 9e32e13..a41fad9 100644
  #else
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)arg;
  #endif
-@@ -8483,7 +8495,7 @@ u_int8_t kalSendUevent(const char *src)
+@@ -8483,7 +8495,7 @@
  	DBGLOG(INIT, INFO, "Send UEvent = %s", src);
  
  	/*send uevent*/
@@ -1472,7 +1552,43 @@ index 9e32e13..a41fad9 100644
  	if (event_string[0] == '\0') { /*string is null*/
  		return FALSE;
  	}
-@@ -11727,7 +11739,7 @@ void kalIndicateChannelSwitch(struct GLUE_INFO *prGlueInfo,
+@@ -11495,7 +11507,7 @@
+ 	return 0;
+ }
+ 
+-#if CFG_MTK_ANDROID_WMT && \
++#if defined(CONFIG_MTK_DISP_NOTIFIER) && CFG_MTK_ANDROID_WMT && \
+ 	KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ enum ENUM_WLAN_FB_EVENT kalGetMtkDispEvent(const uint8_t *fn,
+ 	unsigned long event, void *data)
+@@ -11556,7 +11568,7 @@
+ 	if (!prGlueInfo)
+ 		goto end;
+ 
+-#if CFG_MTK_ANDROID_WMT && \
++#if defined(CONFIG_MTK_DISP_NOTIFIER) && CFG_MTK_ANDROID_WMT && \
+ 	KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ 	eEvent = kalGetMtkDispEvent(__func__, event, data);
+ #else /* CFG_MTK_ANDROID_WMT */
+@@ -11600,7 +11612,7 @@
+ 
+ 	wlan_fb_notifier_priv_data = prGlueInfo;
+ 
+-#if CFG_MTK_ANDROID_WMT && \
++#if defined(CONFIG_MTK_DISP_NOTIFIER) && CFG_MTK_ANDROID_WMT && \
+ 	KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ 	i4Ret = mtk_disp_notifier_register("wlan_fb_notifier",
+ 			&wlan_fb_notifier);
+@@ -11617,7 +11629,7 @@
+ 
+ void kalFbNotifierUnReg(void)
+ {
+-#if CFG_MTK_ANDROID_WMT && \
++#if defined(CONFIG_MTK_DISP_NOTIFIER) && CFG_MTK_ANDROID_WMT && \
+ 	KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ 	mtk_disp_notifier_unregister(&wlan_fb_notifier);
+ #else
+@@ -11727,7 +11739,7 @@
  		linkIdx, 0);
  #endif
  #else
@@ -1481,7 +1597,7 @@ index 9e32e13..a41fad9 100644
  #endif
  	/* Check SAP channel */
  	p2pFuncSwitchSapChannel(prGlueInfo->prAdapter);
-@@ -13355,7 +13367,7 @@ void kalSetThreadSchPolicyPriority(struct GLUE_INFO *prGlueInfo)
+@@ -13355,7 +13367,7 @@
  }
  
  #if KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
@@ -1490,7 +1606,7 @@ index 9e32e13..a41fad9 100644
  #endif
  
  #if CFG_SUPPORT_RX_GRO
-@@ -13405,7 +13417,7 @@ uint8_t kalRxGroInit(struct net_device *prDev)
+@@ -13405,7 +13417,7 @@
  void kalNapiThreadedInit(struct GLUE_INFO *prGlueInfo)
  {
  #if KERNEL_VERSION(5, 15, 0) <= CFG80211_VERSION_CODE
@@ -1499,7 +1615,7 @@ index 9e32e13..a41fad9 100644
  		prGlueInfo->napi_thread = NULL;
  		DBGLOG(INIT, ERROR, "Napi Threaded Init Fail\n");
  	} else {
-@@ -13429,12 +13441,14 @@ uint8_t kalNapiInit(struct GLUE_INFO *prGlueInfo)
+@@ -13429,12 +13441,14 @@
  	spin_lock_init(&prGlueInfo->napi_spinlock);
  	skb_queue_head_init(&prGlueInfo->rRxNapiSkbQ);
  	/* use dummy device to register napi */
@@ -1517,7 +1633,7 @@ index 9e32e13..a41fad9 100644
  			kalNapiPoll, NAPI_POLL_WEIGHT);
  #endif
  #if CFG_SUPPORT_RX_NAPI_THREADED
-@@ -13447,6 +13461,8 @@ uint8_t kalNapiInit(struct GLUE_INFO *prGlueInfo)
+@@ -13447,6 +13461,8 @@
  uint8_t kalNapiUninit(struct GLUE_INFO *prGlueInfo)
  {
  	netif_napi_del(&prGlueInfo->napi);
@@ -1526,7 +1642,7 @@ index 9e32e13..a41fad9 100644
  #if CFG_SUPPORT_RX_NAPI_THREADED
  	kalNapiThreadedUninit(prGlueInfo);
  #endif /* CFG_SUPPORT_RX_NAPI_THREADED */
-@@ -14111,7 +14127,7 @@ void kalTpeTimeoutHandler(unsigned long ulData)
+@@ -14111,7 +14127,7 @@
  #endif
  {
  #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
@@ -1535,7 +1651,7 @@ index 9e32e13..a41fad9 100644
  #else
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)ulData;
  #endif
-@@ -14181,7 +14197,7 @@ void kalTpeUninit(struct GLUE_INFO *prGlueInfo)
+@@ -14181,7 +14197,7 @@
  	if (!prAdapter->rWifiVar.ucTpEnhanceEnable)
  		return;
  
@@ -1544,7 +1660,7 @@ index 9e32e13..a41fad9 100644
  }
  
  int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
-@@ -14274,7 +14290,7 @@ int kalTpeProcess(struct GLUE_INFO *prGlueInfo,
+@@ -14274,7 +14290,7 @@
  			prGlueInfo->u4TpeTimeout) {
  			/* Timeout already, flush out directly. */
  			if (timer_pending(&prGlueInfo->rTpeTimer))
@@ -1553,7 +1669,7 @@ index 9e32e13..a41fad9 100644
  			kalTpeFlush(prGlueInfo);
  			kalSetEvent(prGlueInfo);
  		} else {
-@@ -14371,7 +14387,7 @@ void kalTxDirectTimerCheckSkbQ(unsigned long data)
+@@ -14371,7 +14387,7 @@
  {
  #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
  	struct GLUE_INFO *prGlueInfo =
@@ -1562,7 +1678,7 @@ index 9e32e13..a41fad9 100644
  #else
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)data;
  #endif
-@@ -14390,7 +14406,7 @@ void kalTxDirectTimerCheckHifQ(unsigned long data)
+@@ -14390,7 +14406,7 @@
  
  #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
  	struct GLUE_INFO *prGlueInfo =
@@ -1571,7 +1687,7 @@ index 9e32e13..a41fad9 100644
  #else
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)data;
  #endif
-@@ -15939,8 +15955,8 @@ void kalTxDirectUninit(struct GLUE_INFO *prGlueInfo)
+@@ -15939,8 +15955,8 @@
  
  	if (HAL_IS_TX_DIRECT(prAdapter)) {
  		if (prAdapter->fgTxDirectInited) {
@@ -1583,22 +1699,22 @@ index 9e32e13..a41fad9 100644
  		}
  	}
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c b/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
-index 2581c37..064bc2e 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_p2p_kal.c
-@@ -2712,7 +2712,10 @@ void kalP2pIndicateChnlSwitchStarted(struct ADAPTER *prAdapter,
+@@ -2712,8 +2712,11 @@
  		chandef.center_freq1,
  		chandef.center_freq2);
  
 -#if (KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE)
 +#if (KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE)
-+	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
+ 	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
 +				  ucLinkIdx, ucCsaCount, fgQuiet);
 +#elif (KERNEL_VERSION(6, 3, 0) <= CFG80211_VERSION_CODE)
- 	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
++	cfg80211_ch_switch_started_notify(prNetdevice, &chandef,
  				  ucLinkIdx, ucCsaCount, fgQuiet, 0);
  #elif (KERNEL_VERSION(6, 1, 0) <= CFG80211_VERSION_CODE) && \
-@@ -2886,7 +2889,7 @@ void kalP2pIndicateChnlSwitch(struct ADAPTER *prAdapter,
+ 	(CFG_ADVANCED_80211_MLO == 1)
+@@ -2886,7 +2889,7 @@
  		linkIdx, 0);
  #endif
  #else
@@ -1608,10 +1724,9 @@ index 2581c37..064bc2e 100644
  	netif_carrier_on(prNetdevice);
  	netif_tx_wake_all_queues(prNetdevice);
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c b/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
-index 8165a3f..66790dc 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_sa_log.c
-@@ -382,8 +382,7 @@ int SalogInit(void)
+@@ -382,8 +382,7 @@
  	if (result < 0)
  		goto free_dev;
  
@@ -1622,10 +1737,9 @@ index 8165a3f..66790dc 100644
  	if (KAL_IS_ERR(gSaDev->driver_class)) {
  		result = -ENOMEM;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c b/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
-index 4d94750..e1c2c5c 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/gl_sys_lock.c
-@@ -71,7 +71,7 @@ static void wfsys_lock_release_trace(void)
+@@ -71,7 +71,7 @@
  	uint64_t end_time_nsec;
  	uint64_t timeout;
  
@@ -1635,7 +1749,6 @@ index 4d94750..e1c2c5c 100644
  	end_time_sec = local_clock();
  	end_time_nsec = do_div(end_time_sec, NSEC_PER_SEC) / MSEC_PER_SEC;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c b/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
-index 8a4a7b2..04ff5d5 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/hif/axi/axi.c
 @@ -39,6 +39,7 @@
@@ -1646,7 +1759,7 @@ index 8a4a7b2..04ff5d5 100644
  #include <linux/of_reserved_mem.h>
  
  #include "mt66xx_reg.h"
-@@ -455,7 +456,7 @@ exit:
+@@ -455,7 +456,7 @@
  	return ret;
  }
  
@@ -1655,7 +1768,7 @@ index 8a4a7b2..04ff5d5 100644
  {
  	struct mt66xx_hif_driver_data *prDriverData =
  		platform_get_drvdata(pdev);
-@@ -465,7 +466,6 @@ static int mtk_axi_remove(struct platform_device *pdev)
+@@ -465,7 +466,6 @@
  	halFreeHifMem(pdev);
  	emi_mem_uninit(prChipInfo, pdev);
  	platform_set_drvdata(pdev, NULL);
@@ -1663,16 +1776,15 @@ index 8a4a7b2..04ff5d5 100644
  }
  
  static int mtk_axi_suspend(struct platform_device *pdev,
-@@ -821,4 +821,3 @@ void glBusFuncOff(void)
+@@ -821,4 +821,3 @@
  	hifAxiRemove();
  	g_fgDriverProbed = FALSE;
  }
 -
 diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
-index 4f43491..4783815 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/hif/common/hal_pdma.c
-@@ -1715,7 +1715,7 @@ void halHifSwInfoUnInit(struct GLUE_INFO *prGlueInfo)
+@@ -1715,7 +1715,7 @@
  	prBusInfo = prChipInfo->bus_info;
  	prSwWfdmaInfo = &prBusInfo->rSwWfdmaInfo;
  
@@ -1681,7 +1793,7 @@ index 4f43491..4783815 100644
  #if (CFG_SUPPORT_TX_DATA_DELAY == 1)
  	hrtimer_cancel(&prHifInfo->rTxDelayTimer);
  #endif
-@@ -4390,7 +4390,7 @@ void halHwRecoveryTimeout(unsigned long arg)
+@@ -4390,7 +4390,7 @@
  #endif
  {
  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
@@ -1690,7 +1802,7 @@ index 4f43491..4783815 100644
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)prHif->rSerTimerData;
  #else
  	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)arg;
-@@ -4638,7 +4638,7 @@ void halHwRecoveryFromError(struct ADAPTER *prAdapter)
+@@ -4638,7 +4638,7 @@
  
  	case ERR_RECOV_WAIT_MCU_NORMAL:
  		if (u4Status & ERROR_DETECT_MCU_NORMAL_STATE) {
@@ -1700,7 +1812,6 @@ index 4f43491..4783815 100644
  			/* update Beacon frame if operating in AP mode. */
  			DBGLOG(HAL, INFO, "SER(T) Host re-initialize BCN\n");
 diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c b/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
-index ae09007..c485f80 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/hif/common/hif_mem.c
 @@ -25,6 +25,7 @@
@@ -1712,7 +1823,6 @@ index ae09007..c485f80 100644
  #include <linux/of_irq.h>
  #include <linux/of_address.h>
 diff --git a/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c b/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
-index a5aae0b..db19f3d 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/hif/pcie/pcie.c
 @@ -39,6 +39,7 @@
@@ -1723,7 +1833,7 @@ index a5aae0b..db19f3d 100644
  #include <linux/of_reserved_mem.h>
  #include <linux/of_irq.h>
  #include <linux/of_address.h>
-@@ -1026,7 +1027,7 @@ exit:
+@@ -1026,7 +1027,7 @@
  	return ret;
  }
  
@@ -1732,7 +1842,7 @@ index a5aae0b..db19f3d 100644
  {
  #if (CFG_MTK_ANDROID_WMT == 1)
  	struct mt66xx_hif_driver_data *prDriverData =
-@@ -1045,7 +1046,6 @@ static int mtk_axi_remove(struct platform_device *pdev)
+@@ -1045,7 +1046,6 @@
  	kalReleaseHifSkbList();
  #endif
  	platform_set_drvdata(pdev, NULL);
@@ -1741,10 +1851,9 @@ index a5aae0b..db19f3d 100644
  
  /*----------------------------------------------------------------------------*/
 diff --git a/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h b/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
-index 17a58b1..f3181ef 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
 +++ b/connectivity/wlan/core/gen4m/os/linux/include/gl_cfg80211.h
-@@ -467,7 +467,8 @@ int mtk_cfg_change_iface(struct wiphy *wiphy,
+@@ -467,7 +467,8 @@
  			 enum nl80211_iftype type, u32 *flags,
  			 struct vif_params *params);
  #endif
@@ -1754,7 +1863,7 @@ index 17a58b1..f3181ef 100644
  int mtk_cfg_add_key(struct wiphy *wiphy,
  		    struct net_device *ndev, int link_id, u8 key_index,
  		    bool pairwise, const u8 *mac_addr,
-@@ -503,7 +504,8 @@ int mtk_cfg_set_default_mgmt_key(struct wiphy *wiphy,
+@@ -503,7 +504,8 @@
  		struct net_device *ndev, u8 key_index);
  #endif
  
@@ -1764,7 +1873,7 @@ index 17a58b1..f3181ef 100644
  int mtk_cfg_set_default_beacon_key(struct wiphy *wiphy,
  		struct net_device *ndev, int link_id, u8 key_index);
  #else
-@@ -557,7 +559,15 @@ int mtk_cfg_tdls_oper(struct wiphy *wiphy,
+@@ -557,7 +559,15 @@
  		      struct net_device *ndev,
  		      u8 *peer, enum nl80211_tdls_operation oper);
  #endif
@@ -1781,32 +1890,35 @@ index 17a58b1..f3181ef 100644
  int mtk_cfg_tdls_mgmt(struct wiphy *wiphy,
  		      struct net_device *ndev,
  		      const u8 *peer, u8 action_code, u8 dialog_token,
-@@ -711,7 +721,13 @@ int mtk_cfg_testmode_cmd(struct wiphy *wiphy, void *data,
+@@ -711,10 +721,16 @@
  #endif	/* CONFIG_NL80211_TESTMODE */
  
  #if (CFG_SUPPORT_DFS_MASTER == 1)
 -#if KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
 +#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
-+int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
-+				  struct net_device *dev,
-+				  struct cfg80211_chan_def *chandef,
-+				  unsigned int cac_time_ms,
-+				  int link_id);
-+#elif KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
  int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
  				  struct net_device *dev,
  				  struct cfg80211_chan_def *chandef,
-@@ -747,18 +763,30 @@ int mtk_cfg_disassoc(struct wiphy *wiphy,
++				  unsigned int cac_time_ms,
++				  int link_id);
++#elif KERNEL_VERSION(3, 15, 0) <= CFG80211_VERSION_CODE
++int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
++				  struct net_device *dev,
++				  struct cfg80211_chan_def *chandef,
+ 				  unsigned int cac_time_ms);
+ #else
+ int mtk_cfg_start_radar_detection(struct wiphy *wiphy,
+@@ -747,18 +763,30 @@
  int mtk_cfg_start_ap(struct wiphy *wiphy,
  		     struct net_device *dev,
  		     struct cfg80211_ap_settings *settings);
 +#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
-+int mtk_cfg_change_beacon(struct wiphy *wiphy,
-+			  struct net_device *dev,
-+			  struct cfg80211_ap_update *info);
-+#else
  int mtk_cfg_change_beacon(struct wiphy *wiphy,
  			  struct net_device *dev,
++			  struct cfg80211_ap_update *info);
++#else
++int mtk_cfg_change_beacon(struct wiphy *wiphy,
++			  struct net_device *dev,
  			  struct cfg80211_beacon_data *info);
 -#if (CFG_ADVANCED_80211_MLO == 1)
 +#endif
@@ -1830,19 +1942,19 @@ index 17a58b1..f3181ef 100644
  int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
  			     struct net_device *dev,
  			     unsigned int link_id,
-@@ -770,12 +798,21 @@ int mtk_cfg_set_bitrate_mask(struct wiphy *wiphy,
+@@ -770,12 +798,21 @@
  			     const u8 *peer,
  			     const struct cfg80211_bitrate_mask *mask);
  #endif
 +#if KERNEL_VERSION(6, 18, 0) <= CFG80211_VERSION_CODE
-+int mtk_cfg_set_txpower(struct wiphy *wiphy,
+ int mtk_cfg_set_txpower(struct wiphy *wiphy,
 +			struct wireless_dev *wdev, int radio_idx,
 +			enum nl80211_tx_power_setting type, int mbm);
 +int mtk_cfg_get_txpower(struct wiphy *wiphy,
 +			struct wireless_dev *wdev, int radio_idx,
 +			unsigned int link_id, int *dbm);
 +#else
- int mtk_cfg_set_txpower(struct wiphy *wiphy,
++int mtk_cfg_set_txpower(struct wiphy *wiphy,
  			struct wireless_dev *wdev,
  			enum nl80211_tx_power_setting type, int mbm);
  int mtk_cfg_get_txpower(struct wiphy *wiphy,
@@ -1853,10 +1965,21 @@ index 17a58b1..f3181ef 100644
  
  int mtk_cfg80211_update_ft_ies(struct wiphy *wiphy, struct net_device *dev,
 diff --git a/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h b/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
-index 9e2ee22..a8290d0 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
 +++ b/connectivity/wlan/core/gen4m/os/linux/include/gl_os.h
-@@ -876,7 +876,7 @@ struct GLUE_INFO {
+@@ -225,7 +225,10 @@
+ #endif
+ #include <linux/time.h>
+ #include <linux/fb.h>
+-#if CFG_MTK_ANDROID_WMT && \
++#ifndef FB_EVENT_BLANK
++#define FB_EVENT_BLANK 0x09
++#endif
++#if defined(CONFIG_MTK_DISP_NOTIFIER) && CFG_MTK_ANDROID_WMT && \
+ 	KERNEL_VERSION(5, 4, 0) <= CFG80211_VERSION_CODE
+ #include "mtk_disp_notify.h"
+ #endif
+@@ -876,7 +879,7 @@
  #endif /* CFG_SUPPORT_TASKLET_FREE_MSDU */
  
  #if CFG_SUPPORT_RX_GRO
@@ -1866,10 +1989,9 @@ index 9e2ee22..a8290d0 100644
  	OS_SYSTIME tmGROFlushTimeout;
  	spinlock_t napi_spinlock;
 diff --git a/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c b/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
-index f07e41c..8e99682 100644
 --- a/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
 +++ b/connectivity/wlan/core/gen4m/os/linux/plat/mt6878/plat_priv.c
-@@ -119,16 +119,12 @@ void kalSetTaskUtilMinPct(int pid, unsigned int min)
+@@ -119,16 +119,12 @@
  		attr.sched_util_max = (blc_1024 << 10) / 1280;
  	}
  
@@ -1890,10 +2012,9 @@ index f07e41c..8e99682 100644
  	}
  }
 diff --git a/connectivity/wlan/core/gen4m/reset/reset.c b/connectivity/wlan/core/gen4m/reset/reset.c
-index b5c1f5a..e1d750c 100644
 --- a/connectivity/wlan/core/gen4m/reset/reset.c
 +++ b/connectivity/wlan/core/gen4m/reset/reset.c
-@@ -343,7 +343,7 @@ static void resetkoTimeoutHandler(unsigned long arg)
+@@ -343,7 +343,7 @@
  #endif
  {
  #if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
@@ -1902,7 +2023,7 @@ index b5c1f5a..e1d750c 100644
  #else
  	struct FsmEntity *fsm = (struct FsmEntity *)arg;
  #endif
-@@ -377,7 +377,7 @@ void resetkoCancleTimer(struct FsmEntity *fsm)
+@@ -377,7 +377,7 @@
  	}
  	MR_Info("[%s] %s\n", fsm->name, __func__);
  
@@ -1912,10 +2033,9 @@ index b5c1f5a..e1d750c 100644
  }
  
 diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
-index 72e22a9..d3330fa 100644
 --- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
 +++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha256.c
-@@ -123,7 +123,7 @@ hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+@@ -123,7 +123,7 @@
  }
  
  /**
@@ -1924,7 +2044,7 @@ index 72e22a9..d3330fa 100644
   * @key: Key for HMAC operations
   * @key_len: Length of the key in bytes
   * @data: Pointers to the data area
-@@ -132,7 +132,7 @@ hmac_sha256_vector(const u8 *key, size_t key_len, size_t num_elem,
+@@ -132,7 +132,7 @@
   * Returns: 0 on success, -1 on failure
   */
  int
@@ -1933,7 +2053,7 @@ index 72e22a9..d3330fa 100644
  	    u8 *mac) {
  	return hmac_sha256_vector(key, key_len, 1, &data, &data_len, mac);
  }
-@@ -172,7 +172,7 @@ void caculate_pmkid(u8 *key, u8 *IMAC, u8 *RMAC, u8 *serviceName, u8 *pmkid)
+@@ -172,7 +172,7 @@
  	os_memcpy(pmkIdSrc+post, RMAC, 6);
  	post += 6;
  	os_memcpy(pmkIdSrc+post, aucServiceID, 6);
@@ -1943,10 +2063,9 @@ index 72e22a9..d3330fa 100644
  
  }
 diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
-index 7e5402d..c0d5e0c 100644
 --- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
 +++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384-internal.c
-@@ -30,7 +30,7 @@ sha384_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+@@ -30,7 +30,7 @@
  	struct sha384_state ctx;
  	size_t i;
  
@@ -1955,7 +2074,7 @@ index 7e5402d..c0d5e0c 100644
  	for (i = 0; i < num_elem; i++)
  		if (sha384_process(&ctx, addr[i], len[i]))
  			return -1;
-@@ -52,7 +52,7 @@ sha384_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+@@ -52,7 +52,7 @@
   *   @return CRYPT_OK if successful
   */
  void
@@ -1965,10 +2084,9 @@ index 7e5402d..c0d5e0c 100644
  	md->length = 0;
  	md->state[0] = CONST64(0xcbbb9d5dc1059ed8);
 diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
-index 73b633a..cce750e 100644
 --- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
 +++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha384.c
-@@ -81,7 +81,7 @@ hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
+@@ -81,7 +81,7 @@
  }
  
  /**
@@ -1977,7 +2095,7 @@ index 73b633a..cce750e 100644
   * @key: Key for HMAC operations
   * @key_len: Length of the key in bytes
   * @data: Pointers to the data area
-@@ -90,7 +90,7 @@ hmac_sha384_vector(const u8 *key, size_t key_len, size_t num_elem,
+@@ -90,7 +90,7 @@
   * Returns: 0 on success, -1 on failure
   */
  int
@@ -1987,10 +2105,9 @@ index 73b633a..cce750e 100644
  	return hmac_sha384_vector(key, key_len, 1, &data, &data_len, mac);
  }
 diff --git a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
-index 995cc3a..41e3d0b 100644
 --- a/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
 +++ b/connectivity/wlan/core/gen4m/wpa_supp/src/crypto/sha512-internal.c
-@@ -30,7 +30,7 @@ sha512_vector(size_t num_elem, const u8 *addr[], const size_t *len, u8 *mac) {
+@@ -30,7 +30,7 @@
  	struct nan_rdf_sha512_state ctx;
  	size_t i;
  
@@ -1999,7 +2116,7 @@ index 995cc3a..41e3d0b 100644
  	for (i = 0; i < num_elem; i++)
  		if (sha512_process(&ctx, addr[i], len[i]))
  			return -1;
-@@ -156,7 +156,7 @@ sha512_compress(struct nan_rdf_sha512_state *md, unsigned char *buf) {
+@@ -156,7 +156,7 @@
   *   @return CRYPT_OK if successful
   */
  void

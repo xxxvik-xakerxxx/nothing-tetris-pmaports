@@ -68,16 +68,21 @@ normal Alpine/postmarketOS practice.
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 
-The r85 package stages Tetris 16b Android MT6878 connectivity modules from the
+The r86 package stages Tetris 16b Android MT6878 connectivity modules from the
 Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are ABI-locked kernel
-subpackages. It also stages the official
+subpackages. The official `connadp` bridge is built and loaded before
+`conninfra`; it provides the WMT, CONAP/SCP diagnostic, stack-dump, and
+connectivity power-throttling interfaces consumed by Wi-Fi and Bluetooth.
+It also stages the official
 Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
 `snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369
 PMIC codec plus AW88261 speaker amplifier into the board DT. This is a
 practical overlay bring-up step, not an upstream-ready replacement for native
 Linux connectivity/audio support. Linux 6.18 compatibility changes are normal
-source patches instead of build-time source transformations. The audio bridge
+source patches instead of build-time source transformations. Patch `1000`
+adapts the vendor connectivity bridge to Linux 6.18, while `1001` adapts the
+MT6878 connectivity modules themselves. The audio bridge
 uses `1101` for optional calibration handling and `1102` for Linux 6.18 ASoC
 helper and namespace API changes.
 

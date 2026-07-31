@@ -1,0 +1,26 @@
+diff --git a/drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c b/drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c
+index eb72cfb..3bf40aa 100644
+--- a/drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c
++++ b/drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c
+@@ -309,7 +309,7 @@ static int conn_dbg_dev_init(void)
+ 		goto err1;
+ 	}
+ 
+-	pConnDbgClass = class_create(THIS_MODULE, CONN_DBG_DEVICE_NAME);
++	pConnDbgClass = class_create(CONN_DBG_DEVICE_NAME);
+ 	if (IS_ERR(pConnDbgClass)) {
+ 		pr_info("class create fail, error code(%ld)\n",
+ 						PTR_ERR(pConnDbgClass));
+diff --git a/drivers/misc/mediatek/connectivity/power_throttling/adapter.c b/drivers/misc/mediatek/connectivity/power_throttling/adapter.c
+index 4e44255..c63fdb7 100644
+--- a/drivers/misc/mediatek/connectivity/power_throttling/adapter.c
++++ b/drivers/misc/mediatek/connectivity/power_throttling/adapter.c
+@@ -518,7 +518,7 @@ static int conn_pwr_dev_init(void)
+ 		goto err1;
+ 	}
+ 
+-	pConnPwrClass = class_create(THIS_MODULE, CONN_PWR_DEVICE_NAME);
++	pConnPwrClass = class_create(CONN_PWR_DEVICE_NAME);
+ 	if (IS_ERR(pConnPwrClass)) {
+ 		pr_info("class create fail, error code(%ld)\n",
+ 						PTR_ERR(pConnPwrClass));

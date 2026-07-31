@@ -125,7 +125,7 @@ The next useful hardware targets, in roughly pragmatic order:
    USB data role, wake behavior.
 2. Stabilize RT6010 haptics on r58+ and confirm it no longer freezes/reboots.
 3. Fix MT6363 key handling for power and volume-up.
-4. Validate r85 MT6631 connectivity modules on-device: conninfra, WMT, Wi-Fi,
+4. Validate r86 MT6631 connectivity modules on-device: connadp, conninfra, WMT, Wi-Fi,
    then Bluetooth.
 5. Bring up flashlight as LED-class or V4L2 flash.
 6. Add GNSS/FM clients after Wi-Fi/BT connectivity is stable.
