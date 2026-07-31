@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=86
+pkgrel=88
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -159,6 +159,7 @@ _build_connectivity_modules() {
 	_connectivity_make "$_conn"/bt/mt66xx/6878 \
 		BT_PLATFORM=6878 \
 		LOG_TAG=bt_drv_6878 \
+		USE_DEVICE_NODE=0 \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
@@ -271,7 +272,6 @@ package() {
 		"$_devmods_dir"/drivers/misc/mediatek/connectivity/connadp.ko \
 		"$_connmods_dir"/connectivity/conninfra/conninfra.ko \
 		"$_connmods_dir"/connectivity/connfem/connfem.ko \
-		"$_connmods_dir"/connectivity/common/wmt_drv.ko \
 		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
 		"$_connmods_dir"/connectivity/bt/mt66xx/6878/bt_drv_6878.ko; do
@@ -316,7 +316,7 @@ cccfa39e5150e25aa43fa9c9aa8ceb27fd3bad253c9f387bba50c734d5987aca7819f83af8cce59c
 beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
 c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
-5d1b6b4c5ad354a17f0c0c982f4300e671d9ee8f03a08ee0865929214930793e8d312f12d8be45d0e5d6a02955e57c83a09857a2bb776f682cfe880118a76f18  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+1525a8d504b5eba116e3030585d4f54070fcbb8cfc8fdc89369aca13aa7aca4e8ec17ac8c7473c20946356e58945dcba7a20f67c78965e98c4986107a6b8c848  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 cfc0184fe120fa66d2f031322486afa803c303be0ad5c4d71bb15f78137b2f917d4e961965795a1a0adb9c630b2ea69f2ff24e94cfb14199af8a08ef11c0dea3  1102-vendor-audio-linux-6.18-api.patch.vendor
 

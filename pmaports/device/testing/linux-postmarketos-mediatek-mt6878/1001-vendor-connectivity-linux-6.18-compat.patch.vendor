@@ -188,6 +188,18 @@ diff --git a/connectivity/bt/mt66xx/6878/Kbuild b/connectivity/bt/mt66xx/6878/Kb
  
 -include $(srctree)/$(src)/../btif/Kbuild
 +include $(M)/../btif/Kbuild
+diff --git a/connectivity/bt/mt66xx/include/btmtk_chip_if.h b/connectivity/bt/mt66xx/include/btmtk_chip_if.h
+--- a/connectivity/bt/mt66xx/include/btmtk_chip_if.h
++++ b/connectivity/bt/mt66xx/include/btmtk_chip_if.h
+@@ -16,7 +16,7 @@
+ #include "btmtk_btif.h"
+ #define CFG_SUPPORT_BT_DL_WIFI_PATCH    0
+ #define CFG_SUPPORT_DVT                 0
+-#define CFG_SUPPORT_BLUEZ               0
++#define CFG_SUPPORT_BLUEZ               1
+ 
+ #if (CONNAC20_CHIPID == 6885)
+ 	#include "platform_6885.h"
 diff --git a/connectivity/bt/mt66xx/btif/Kbuild b/connectivity/bt/mt66xx/btif/Kbuild
 --- a/connectivity/bt/mt66xx/btif/Kbuild
 +++ b/connectivity/bt/mt66xx/btif/Kbuild
@@ -203,6 +215,16 @@ diff --git a/connectivity/bt/mt66xx/btif/Kbuild b/connectivity/bt/mt66xx/btif/Kb
  $(info [bt_drv] btif/Kbuild KO_PATH=$(KO_PATH) DEVICE_MODULES_PATH=$(DEVICE_MODULES_PATH))
  
  ifndef TOP
+@@ -98,7 +102,8 @@
+ ccflags-y += -D CHIP_IF_BTIF
+ 
+ # Use device node or hci_dev as native interface
+-ccflags-y += -D USE_DEVICE_NODE=1
++USE_DEVICE_NODE ?= 1
++ccflags-y += -D USE_DEVICE_NODE=$(USE_DEVICE_NODE)
+ 
+ # Customized fw update feature
+ ccflags-y += -D CUSTOMER_FW_UPDATE=0
 diff --git a/connectivity/bt/mt66xx/btif/btmtk_beif.c b/connectivity/bt/mt66xx/btif/btmtk_beif.c
 --- a/connectivity/bt/mt66xx/btif/btmtk_beif.c
 +++ b/connectivity/bt/mt66xx/btif/btmtk_beif.c
@@ -263,6 +285,44 @@ diff --git a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c b/connectivity/bt/mt6
  int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v)
  {
  	int *data = (int *)v;
+@@ -586,7 +591,7 @@
+  *     0 if success, otherwise error code
+  *
+  */
+-void bt_report_hw_error()
++void bt_report_hw_error(void)
+ {
+ 	const uint8_t HCI_EVT_HW_ERROR[] = {0x04, 0x10, 0x01, 0x00};
+ 	btmtk_recv(g_sbdev->hdev, HCI_EVT_HW_ERROR, sizeof(HCI_EVT_HW_ERROR));
+@@ -1035,6 +1040,14 @@
+ {
+ 	int err = 0;
+ #if (USE_DEVICE_NODE == 0)
++	/* MT6631 advertises Synchronization Train but rejects opcode 0x0c77. */
++	if (skb->len >= 16 && skb->data[0] == 0x0e &&
++	    skb->data[3] == 0x04 && skb->data[4] == 0x10 &&
++	    skb->data[5] == 0x00 && skb->data[6] == 0x02 &&
++	    (skb->data[8] & 0x04)) {
++		skb->data[8] &= ~0x04;
++		BTMTK_INFO("Mask unsupported Synchronization Train feature");
++	}
+ 	err = hci_recv_frame(hdev, skb);
+ #else
+ 	err = rx_skb_enqueue(skb);
+@@ -1674,12 +1687,8 @@
+ 		return -1;
+ 	}
+ 
+-	/* 2. Init HCI device */
++	/* 2. Allocate HCI device */
+ 	btmtk_allocate_hci_device(g_sbdev, HCI_UART);
+-#if (USE_DEVICE_NODE == 0)
+-	SET_HCIDEV_DEV(g_sbdev->hdev, BTMTK_GET_DEV(cif_dev));
+-	btmtk_register_hci_device(g_sbdev);
+-#endif
+ 
+ 	/* 3. Init power manager */
+ 	bt_psm_init(&cif_dev->psm);
 @@ -1708,7 +1713,8 @@
  
  	/* 8. Register screen on/off & suspend/wakup notify callback */
@@ -273,6 +333,24 @@ diff --git a/connectivity/bt/mt66xx/btif/btmtk_btif_main.c b/connectivity/bt/mt6
  	if (mtk_disp_notifier_register("btmtk_disp_notifier", &btmtk_disp_notifier)) {
                  BTMTK_ERR("Register mtk_disp_notifier failed\n");
  	}
+@@ -1741,6 +1751,17 @@
+ 	/* Set ICB cif state */
+ 	btmtk_set_chip_state((void *)g_sbdev, BTMTK_STATE_WORKING);
+ 
++#if (USE_DEVICE_NODE == 0)
++	/* hci_register_dev queues setup immediately, so register only when the
++	 * transport state and conninfra callbacks are ready.
++	 */
++	SET_HCIDEV_DEV(g_sbdev->hdev, BTMTK_GET_DEV(cif_dev));
++	if (btmtk_register_hci_device(g_sbdev)) {
++		BTMTK_ERR("%s: HCI device registration failed", __func__);
++		return -1;
++	}
++#endif
++
+ 	BTMTK_INFO("%s: Done", __func__);
+ 	return 0;
+ }
 @@ -1756,7 +1762,7 @@
   * Return Value:
   *     0 if success, otherwise error code
@@ -379,6 +457,33 @@ diff --git a/connectivity/bt/mt66xx/btmtk_main.c b/connectivity/bt/mt66xx/btmtk_
  
  #include "btmtk_define.h"
  #include "btmtk_main.h"
+@@ -3713,7 +3714,26 @@
+ 	bdev->chip_reset = 0;
+ 	BTMTK_INFO("%s End", __func__);
+ }
++
++static int btmtk_set_public_address(struct hci_dev *hdev,
++				    const bdaddr_t *bdaddr)
++{
++	struct sk_buff *skb;
++	long ret;
+ 
++	skb = __hci_cmd_sync(hdev, 0xfc1a, sizeof(*bdaddr), bdaddr,
++			     HCI_INIT_TIMEOUT);
++	if (IS_ERR(skb)) {
++		ret = PTR_ERR(skb);
++		bt_dev_err(hdev, "setting MT6631 public address failed (%ld)",
++			   ret);
++		return ret;
++	}
++	kfree_skb(skb);
++
++	return 0;
++}
++
+ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
+ {
+ 	struct hci_dev *hdev;
 @@ -3736,9 +3737,6 @@
  
  	hdev->bus = hci_bus_type;
@@ -388,6 +493,15 @@ diff --git a/connectivity/bt/mt66xx/btmtk_main.c b/connectivity/bt/mt66xx/btmtk_
 -	hdev->dev_type = 0x00;
  
  	bdev->hdev = hdev;
+ 
+@@ -3748,6 +3765,8 @@
+ 	hdev->flush    = bt_flush;
+ 	hdev->send	   = bt_send_frame;
+ 	hdev->setup    = bt_setup;
++	hdev->set_bdaddr = btmtk_set_public_address;
++	hci_set_quirk(hdev, HCI_QUIRK_INVALID_BDADDR);
+ 
+ 	init_waitqueue_head(&bdev->p_wait_event_q);
  
 diff --git a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h b/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
 --- a/connectivity/bt/mt66xx/include/btif/btmtk_btif.h
@@ -975,6 +1089,28 @@ diff --git a/connectivity/conninfra/conn_drv/connv2/platform/consys_hw_plat_data
  
  #include "consys_hw.h"
  
+@@ -129,21 +130,15 @@ const struct of_device_id apconninfra_of_ids[] = {
+ 	},
+ 	{
+ 		.compatible = "mediatek,mt6878-6637-consys",
+-	#if IS_ENABLED(CONFIG_MTK_COMBO_CHIP_CONSYS_6878)
+ 		.data = (void*)&mt6878_6637_plat_data,
+-	#endif
+ 	},
+ 	{
+ 		.compatible = "mediatek,mt6878-6631-consys",
+-	#if IS_ENABLED(CONFIG_MTK_COMBO_CHIP_CONSYS_6878)
+ 		.data = (void*)&mt6878_6631_plat_data,
+-	#endif
+ 	},
+ 	{
+ 		.compatible = "mediatek,mt6878-6631-6686-consys",
+-	#if IS_ENABLED(CONFIG_MTK_COMBO_CHIP_CONSYS_6878)
+ 		.data = (void*)&mt6878_6631_6686_plat_data,
+-	#endif
+ 	},
+ 	{}
+ };
 diff --git a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
 --- a/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h
 +++ b/connectivity/conninfra/conn_drv/connv2/platform/include/connsys_smc.h

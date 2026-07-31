@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,7 +36,7 @@ jobs:
 
   build-pmaports:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     container:
       image: alpine:3.23.3
       options: --privileged --ulimit nofile=1048576:1048576
@@ -135,16 +136,39 @@ jobs:
             /work/out/nothing-tetris-root.sparse.img
           cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-boot.img /work/out/
           cp -v /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/boot/boot_image.itb /work/out/
-          test -e /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/usr/libexec/nothing-tetris-connectivity-setup
-          test -e /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/usr/lib/firmware/connsys_wifi_mt6878_mt6631.bin
           rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
+          test -x "$rootfs/usr/libexec/nothing-tetris-connectivity-setup"
+          test -x "$rootfs/usr/libexec/nothing-tetris-bluetooth-address"
+          test -x "$rootfs/usr/libexec/nothing-tetris-wifi-nvram-extract"
+          test -x "$rootfs/usr/libexec/nothing-tetris-wifi-nvram-load"
+          test -x "$rootfs/usr/bin/nmcli"
+          test -x "$rootfs/usr/bin/bluetoothctl"
+          test -x "$rootfs/usr/sbin/wpa_supplicant"
+          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service"
+          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address.service"
+          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-wifi-nvram.service"
+          test -f "$rootfs/etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf"
+          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
+          test -L "$rootfs/etc/systemd/system/dbus-org.bluez.service"
+          test -L "$rootfs/etc/systemd/system/bluetooth.target.wants/bluetooth.service"
+          for firmware_size in \
+            connsys_bt_mt6878_mt6631.bin:8388608 \
+            connsys_gnss_mt6878_mt6631.bin:8388608 \
+            connsys_wifi_mt6878_mt6631.bin:8388608; do
+            firmware=${firmware_size%:*}
+            expected=${firmware_size#*:}
+            actual=$(stat -c %s "$rootfs/usr/lib/firmware/$firmware")
+            test "$actual" -eq "$expected" || {
+              echo "invalid firmware size: $firmware: $actual != $expected"
+              exit 1
+            }
+          done
           for module in \
             extra/mediatek-pmic/mtk-spmi-pmic-adc.ko \
             extra/mediatek-pmic/nvmem-mt635x-efuse.ko \
             extra/mediatek-connectivity/connadp.ko \
             extra/mediatek-connectivity/conninfra.ko \
             extra/mediatek-connectivity/connfem.ko \
-            extra/mediatek-connectivity/wmt_drv.ko \
             extra/mediatek-connectivity/wmtWifi.ko \
             extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko \
             extra/mediatek-connectivity/bt_drv_6878.ko \
@@ -155,11 +179,20 @@ jobs:
             find "$rootfs/lib/modules" -path "*/$module" -print -quit |
               grep -q . || { echo "missing module: $module"; exit 1; }
           done
+          ! find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .
+          bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
+          grep -aFq 'Mask unsupported Synchronization Train feature' "$bt_module"
+          grep -aFq 'HCI device registration failed' "$bt_module"
+          grep -aFq 'setting MT6631 public address failed' "$bt_module"
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
           test -s /work/out/nothing-tetris-root.sparse.img
           test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb
           file /work/out/nothing-tetris-root.sparse.img
+          (cd /work/out && sha256sum \
+            boot_image.itb \
+            nothing-tetris-boot.img \
+            nothing-tetris-root.sparse.img > SHA256SUMS)
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
       - name: Collect pmbootstrap logs

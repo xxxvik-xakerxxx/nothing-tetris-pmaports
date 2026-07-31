@@ -1,11 +1,13 @@
 [Unit]
 Description=Nothing Tetris connectivity bring-up
-After=local-fs.target systemd-udev-settle.service
-Wants=systemd-udev-settle.service
+Requires=nothing-tetris-wifi-nvram.service
+After=local-fs.target nothing-tetris-wifi-nvram.service
+Before=NetworkManager.service bluetooth.service iwd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/libexec/nothing-tetris-connectivity-setup base
+ExecStart=/usr/libexec/nothing-tetris-connectivity-setup wifi
+TimeoutStartSec=30
 RemainAfterExit=yes
 
 [Install]

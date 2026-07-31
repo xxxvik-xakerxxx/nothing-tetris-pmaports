@@ -1,0 +1,74 @@
+#!/bin/sh
+set -eu
+umask 077
+
+source_device=${1:-/dev/disk/by-partlabel/nvdata}
+wifi_output=${2:-/run/nothing-tetris/WIFI}
+bt_output=${3:-/run/nothing-tetris/BT_ADDR}
+case "$wifi_output" in
+	*/*) output_dir=${wifi_output%/*} ;;
+	*) output_dir=. ;;
+esac
+case "$bt_output" in
+	*/*) bt_output_dir=${bt_output%/*} ;;
+	*) bt_output_dir=. ;;
+esac
+wifi_temporary="$wifi_output.tmp.$$"
+bt_record_temporary="$bt_output.record.tmp.$$"
+bt_temporary="$bt_output.tmp.$$"
+
+cleanup() {
+	rm -f "$wifi_temporary" "$bt_record_temporary" "$bt_temporary"
+}
+trap cleanup EXIT HUP INT TERM
+
+[ -b "$source_device" ] || {
+	echo "nothing-tetris: nvdata partition is unavailable" >&2
+	exit 1
+}
+
+install -d -m 0700 "$output_dir" "$bt_output_dir"
+if ! debugfs -R "dump /APCFG/APRDEB/WIFI $wifi_temporary" \
+		"$source_device" >/dev/null 2>&1; then
+	echo "nothing-tetris: failed to read Wi-Fi NVRAM from nvdata" >&2
+	exit 1
+fi
+
+[ -f "$wifi_temporary" ] || {
+	echo "nothing-tetris: Wi-Fi NVRAM is missing from nvdata" >&2
+	exit 1
+}
+
+size=$(stat -c %s "$wifi_temporary")
+[ "$size" -eq 6146 ] || {
+	echo "nothing-tetris: invalid Wi-Fi NVRAM size: $size" >&2
+	exit 1
+}
+
+if ! debugfs -R "dump /APCFG/APRDEB/BT_Addr $bt_record_temporary" \
+		"$source_device" >/dev/null 2>&1; then
+	echo "nothing-tetris: failed to read Bluetooth address from nvdata" >&2
+	exit 1
+fi
+
+[ -f "$bt_record_temporary" ] || {
+	echo "nothing-tetris: Bluetooth address record is missing from nvdata" >&2
+	exit 1
+}
+
+size=$(stat -c %s "$bt_record_temporary")
+[ "$size" -eq 2416 ] || {
+	echo "nothing-tetris: invalid Bluetooth address record size: $size" >&2
+	exit 1
+}
+
+dd if="$bt_record_temporary" of="$bt_temporary" bs=1 count=6 2>/dev/null
+[ "$(stat -c %s "$bt_temporary")" -eq 6 ] || {
+	echo "nothing-tetris: failed to extract Bluetooth address" >&2
+	exit 1
+}
+
+chmod 0600 "$wifi_temporary" "$bt_temporary"
+mv -f "$wifi_temporary" "$wifi_output"
+mv -f "$bt_temporary" "$bt_output"
+trap - EXIT HUP INT TERM

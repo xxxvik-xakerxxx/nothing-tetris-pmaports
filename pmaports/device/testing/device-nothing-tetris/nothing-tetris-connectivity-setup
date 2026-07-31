@@ -10,59 +10,91 @@ load_module() {
 	if [ -d "/sys/module/$module" ]; then
 		return 0
 	fi
-	if modprobe "$module" 2>/dev/null; then
-		return 0
-	fi
 
 	release=$(uname -r)
 	path=/lib/modules/$release/extra/mediatek-connectivity/$module.ko
 	if [ -e "$path" ]; then
 		insmod "$path" && return 0
 	fi
+	if modprobe "$module" 2>/dev/null; then
+		return 0
+	fi
 
 	return 1
 }
 
+load_modules() {
+	for module in "$@"; do
+		if ! load_module "$module"; then
+			log "failed to load $module"
+			return 1
+		fi
+	done
+}
+
+bring_up_wifi() {
+	load_modules connadp conninfra connfem wmtWifi cfg80211 \
+		wlan_drv_gen4m_6878
+
+	[ -c /dev/wmtWifi ] || {
+		log "/dev/wmtWifi is unavailable"
+		return 1
+	}
+
+	/usr/libexec/nothing-tetris-wifi-nvram-load
+
+	# The B4.1 vendor stack performs joint Wi-Fi/BT pre-calibration here.
+	load_modules bluetooth bt_drv_6878
+
+	# The vendor cdev interprets this single byte as the Wi-Fi power-on command.
+	printf '1' > /dev/wmtWifi
+
+	tries=0
+	while [ ! -d /sys/class/net/wlan0 ]; do
+		tries=$((tries + 1))
+		[ "$tries" -lt 50 ] || {
+			log "wlan0 was not registered"
+			return 1
+		}
+		sleep 0.1
+	done
+	ip link set wlan0 up
+	log "wlan0 is ready for the network manager"
+}
+
 stage=${1:-base}
+
+missing_firmware=0
+for firmware in \
+	connsys_wifi_mt6878_mt6631.bin \
+	connsys_bt_mt6878_mt6631.bin \
+	connsys_gnss_mt6878_mt6631.bin; do
+	if [ ! -s "/usr/lib/firmware/$firmware" ]; then
+		log "missing packaged firmware: $firmware"
+		missing_firmware=1
+	fi
+done
+[ "$missing_firmware" -eq 0 ] || exit 1
+
 case "$stage" in
 	base)
-		modules="connadp conninfra connfem"
+		log "loading base stage"
+		load_modules connadp conninfra connfem
 		;;
 	wifi)
-		modules="connadp conninfra connfem wmtWifi wlan_drv_gen4m_6878"
+		log "loading Wi-Fi stage"
+		bring_up_wifi
 		;;
 	bluetooth)
-		modules="connadp conninfra connfem bt_drv_6878"
+		log "loading Bluetooth stage"
+		load_modules connadp conninfra connfem bluetooth bt_drv_6878
 		;;
 	all)
-		modules="connadp conninfra connfem wmtWifi wlan_drv_gen4m_6878 bt_drv_6878"
+		log "loading all connectivity stages"
+		bring_up_wifi
 		;;
 	*)
 		echo "usage: $0 {base|wifi|bluetooth|all}" >&2
 		exit 2
 		;;
 esac
-
-for firmware in \
-	connsys_wifi_mt6878_mt6631.bin \
-	connsys_bt_mt6878_mt6631.bin \
-	connsys_gnss_mt6878_mt6631.bin; do
-	[ -s "/usr/lib/firmware/$firmware" ] ||
-		log "missing packaged firmware: $firmware"
-done
-
-log "loading $stage stage"
-failures=0
-for module in $modules; do
-	if ! load_module "$module"; then
-		log "failed to load $module"
-		failures=$((failures + 1))
-	fi
-done
-
-if [ "$stage" = wifi ] || [ "$stage" = all ]; then
-	ip link show wlan0 >/dev/null 2>&1 &&
-		log "wlan0 is present" || log "wlan0 is not present yet"
-fi
-
-[ "$failures" -eq 0 ]

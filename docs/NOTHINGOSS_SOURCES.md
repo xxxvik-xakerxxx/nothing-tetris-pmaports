@@ -1,6 +1,6 @@
-# NothingOSS source map for Tetris
+# NothingOSS 4.1 source map for Tetris
 
-This port uses official NothingOSS Tetris module sources as a temporary bridge
+This port uses official Nothing OS 4.1 Tetris module sources as a temporary bridge
 for complex hardware and as a register/topology reference for native drivers.
 Package boundaries, compatibility rules and promotion gates are documented in
 `docs/DRIVER_STRATEGY.md`.
@@ -10,28 +10,38 @@ Package boundaries, compatibility rules and promotion gates are documented in
 | Repository | Use |
 | --- | --- |
 | `NothingOSS/android_kernel_6.1_nothing_mt6878` | Android kernel source and device tree reference for CMF Phone 1. Use it to verify registers, DT nodes, clocks, resets, pinctrl, panel/audio/camera topology and vendor driver expectations. |
-| `NothingOSS/android_kernel_modules_nothing_mt6878` | Vendor module tree for connectivity and large out-of-tree blocks. For Tetris use the pinned `mt6878/Tetris/16b` commit. |
-| `NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878` | Vendor device-module tree for PMIC, sound, media, LEDs, IIO, power, USB, thermal, haptics and other peripheral drivers. For Tetris use the pinned `mt6878/Tetris/16b` commit. |
+| `NothingOSS/android_kernel_modules_nothing_mt6878` | Vendor module tree for connectivity and large out-of-tree blocks. Use the pinned Nothing OS 4.1 commit below. |
+| `NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878` | Vendor device-module tree for PMIC, sound, media, LEDs, IIO, power, USB, thermal, haptics and other peripheral drivers. Use the pinned Nothing OS 4.1 commit below. |
 | `NothingOSS/android_kernel_build_nothing_mt6878` | Build metadata reference. Use it to identify which vendor modules Nothing intended to build together and the config symbols they expect. |
 
 Other NothingOSS repositories target different SoCs or devices. They are useful
 only as style/reference material, not as direct Tetris module sources.
 
-## Current pinned Tetris 16b sources
+## Current pinned Nothing OS 4.1 sources
 
 | APKBUILD variable | Repository | Commit |
 | --- | --- | --- |
 | `_connmods_commit` | `android_kernel_modules_nothing_mt6878` | `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835` |
 | `_devmods_commit` | `android_kernel_device_modules_6.1_nothing_mt6878` | `ee2be53cb75670b548948636a0db1d1ff112bf12` |
 
+Both commits are the official `Tetris-B4.1-260415-1709` source drop. The
+`mt6878/Tetris/16b` branch name is not a version-selection rule: only commits
+identified as Nothing OS 4.1 or newer are accepted. Older Tetris drops may be
+used for historical comparison, but never as build inputs or hardware truth.
+
 Pin commits, not branch names. NothingOSS branch heads can move; pmaports
 builds must be reproducible.
+
+Fenrir's `bin/tetris.bin` is a stock LK container from
+`B4.1-260615-1652`. It is useful for reverse engineering the bootloader-to-
+Linux handoff, secure connsys memory layout and firmware-loading contract. It
+does not contain reusable Linux drivers and is not shipped by this repository.
 
 ## Module-first bring-up queue
 
 | Block | Source | Expected approach | Notes |
 | --- | --- | --- | --- |
-| Wi-Fi / Bluetooth | `android_kernel_modules_nothing_mt6878/connectivity` | Already staged as vendor modules. Keep fixing Linux 6.18 API fallout and firmware/service loading. | Includes `conninfra`, `connfem`, WMT, WLAN and BT pieces. |
+| Wi-Fi / Bluetooth | `android_kernel_modules_nothing_mt6878/connectivity` | Staged as B4.1 vendor modules with native cfg80211/HCI integration and reproducible boot services. | Includes `conninfra`, `connfem`, WMT, WLAN and BT pieces; per-device calibration/address data is read-only extracted from `nvdata`. |
 | GNSS / FM | `android_kernel_modules_nothing_mt6878/connectivity/gps`, `fmradio` | Add after Wi-Fi/BT base is stable because they share connsys infrastructure. | Needs userspace integration later. |
 | Speaker / microphones | `android_kernel_device_modules_6.1_nothing_mt6878/sound/soc` | Stage official MT6878 AFE, MT6369 codec and MT6878-MT6369 machine driver modules. Add board DT and UCM. | Current r78 work wires the first pass. |
 | PMIC ADC / efuse | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/iio`, `drivers/nvmem` | Stage vendor PMIC ADC/efuse modules or port the small parts natively. | Needed to remove temporary optional audio calibration fallback. |
@@ -41,7 +51,7 @@ builds must be reproducible.
 | Camera | `android_kernel_modules_nothing_mt6878/mtkcam` plus `device_modules/drivers/media` and camera misc drivers | Treat as a large staged stack, not one giant patch. Start with sensor inventory, cam_cal, VCM/OIS/flash, then ISP/media graph. | Kernel probe alone will not make a usable camera without DT, media pipeline and userspace stack. |
 | GPU | `android_kernel_modules_nothing_mt6878/gpu` and `device_modules/drivers/gpu` | Large staged stack. Requires power domains, clocks, firmware/userspace and careful ABI work. | Do after core phone features unless CI capacity is available. |
 
-## Official Tetris 16b module inventory
+## Official Tetris 4.1 module inventory
 
 Nothing's `mgk_64_k61.bzl` confirms these hardware groups are intended to be
 built for this MT6878 family:

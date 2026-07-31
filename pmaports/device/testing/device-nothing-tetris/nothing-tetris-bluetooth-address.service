@@ -1,0 +1,19 @@
+[Unit]
+Description=Configure Nothing Tetris factory Bluetooth address
+Requires=nothing-tetris-connectivity.service
+After=nothing-tetris-connectivity.service
+Before=bluetooth.service
+ConditionPathExists=/run/nothing-tetris/BT_ADDR
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-bluetooth-address
+TimeoutStartSec=15
+RemainAfterExit=yes
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_BLUETOOTH
+
+[Install]
+WantedBy=multi-user.target

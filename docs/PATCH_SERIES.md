@@ -68,19 +68,24 @@ normal Alpine/postmarketOS practice.
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 
-The r86 package stages Tetris 16b Android MT6878 connectivity modules from the
-Nothing kernel module releases. Connectivity firmware is isolated in
+The r88 package stages Nothing OS 4.1 MT6878 connectivity modules from the
+official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
 loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
 stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
 Bluetooth.
-The boot service deliberately stops after `connadp`, `conninfra` and `connfem`.
-On-device r86 testing confirmed that WLAN/BT modules, factory NVRAM and joint
-pre-cal reach the radio-specific power-on paths, but WMMCU and BGFSYS cannot
-complete until U-Boot reproduces the stock LK secure connsys memory contract.
-The standalone `wmt_drv` is packaged for investigation but is not loaded: it
-duplicates symbols already provided by `conninfra` in this source combination.
+The boot service loads the bridge, WLAN and native-HCI Bluetooth modules in the
+hardware-tested order. It extracts the 6146-byte per-device Wi-Fi calibration
+from `nvdata`, performs one WMT NVRAM write, completes joint pre-calibration and
+powers Wi-Fi before NetworkManager and BlueZ start. It also extracts only the
+six-byte factory Bluetooth address and provisions it through the standard
+kernel HCI/BlueZ MGMT path before `bluetooth.service`. On-device testing
+confirmed repeated Wi-Fi scans, native BlueZ discovery, address persistence
+across a controller power cycle and simultaneous radio operation without
+WFSYS/BGFSYS reset. The standalone `wmt_drv` is not installed because
+it duplicates symbols already provided by `conninfra` in this source
+combination.
 The vendor `conninfra` cleanup path also oopses if the module is unloaded, so
 connectivity tests must use a clean boot instead of module remove/reload cycles.
 It also stages the official
@@ -115,8 +120,8 @@ not a confirmed external RT1711H controller.
 1. Validate MT6375 attach/orientation/role handling after correcting the TCPCI
    register window. The r63 live regmap confirms vendor ID `0x29cf` and product
    ID `0x6375` in the main bank; the old `0xf200` mapping read only zeros.
-2. Complete the stock LK connsys secure-memory handoff in U-Boot; module probe,
-   firmware, NVRAM and BT/WLAN pre-cal are already confirmed on-device.
+2. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
+   native Bluetooth discovery and factory Bluetooth address provisioning.
 3. Validate LM3644 torch/strobe channels and add the V4L2 flash bridge with
    the camera stack.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
