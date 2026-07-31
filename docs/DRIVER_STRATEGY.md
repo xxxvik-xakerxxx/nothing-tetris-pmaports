@@ -9,10 +9,7 @@ The port has two goals that must remain separate:
 
 | Package | Ownership |
 | --- | --- |
-| `linux-postmarketos-mediatek-mt6878` | Kernel, DT, native drivers and temporary upstreamable patches. |
-| `linux-postmarketos-mediatek-mt6878-pmic` | ABI-locked MT6369 AUXADC and efuse calibration providers. |
-| `linux-postmarketos-mediatek-mt6878-connectivity` | ABI-locked NothingOSS conninfra, WMT, Wi-Fi and Bluetooth modules. |
-| `linux-postmarketos-mediatek-mt6878-audio` | ABI-locked NothingOSS MT6878 AFE, MT6369 codec and machine modules. |
+| `linux-postmarketos-mediatek-mt6878` | Kernel, DT, native patches, and ABI-matched MT6369 calibration, NothingOSS connectivity, and MT6878 audio modules. |
 | `firmware-nothing-tetris` | Proprietary MT6631 Wi-Fi, Bluetooth and GNSS firmware with the names requested by the drivers. |
 | `device-nothing-tetris` | Device metadata, boot layout, UCM/UI configuration, udev rules and temporary module loading policy. |
 
@@ -64,7 +61,7 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | Function | Confirmed hardware/path | Integration |
 | --- | --- | --- |
 | SD card | MT6878 MSDC1, GPIO14 card detect, MT6369 VMCH/VMC | Native `mtk-sd`, patch `0014`. |
-| Audio calibration | MT6369 AUXADC plus PMIC efuse | Vendor providers in the `-pmic` subpackage, patch `0013`. |
+| Audio calibration | MT6369 AUXADC plus PMIC efuse | Vendor providers in the kernel package, patch `0013`. |
 | Rear flash | Dual-channel LM3644 at I2C6 address `0x63`, enable GPIO155 | Small native LED/V4L2 driver; do not import Android flashlight-core. |
 | Fingerprint | Goodix SPI1, IRQ GPIO18, reset GPIO73, MT6369 VFP | Experimental vendor bridge also requires the TEE userspace contract. |
 | Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires SCP firmware, SCP core, HF manager and sensorhub as one group. |

@@ -12,9 +12,6 @@ depends="
 	dtc
 	firmware-nothing-tetris
 	linux-postmarketos-mediatek-mt6878
-	linux-postmarketos-mediatek-mt6878-audio
-	linux-postmarketos-mediatek-mt6878-connectivity
-	linux-postmarketos-mediatek-mt6878-pmic
 	postmarketos-base
 	u-boot-tools
 "

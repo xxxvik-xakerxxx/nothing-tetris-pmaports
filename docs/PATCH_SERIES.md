@@ -70,10 +70,11 @@ normal Alpine/postmarketOS practice.
 
 The r86 package stages Tetris 16b Android MT6878 connectivity modules from the
 Nothing kernel module releases. Connectivity firmware is isolated in
-`firmware-nothing-tetris`, and connectivity/audio modules are ABI-locked kernel
-subpackages. The official `connadp` bridge is built and loaded before
-`conninfra`; it provides the WMT, CONAP/SCP diagnostic, stack-dump, and
-connectivity power-throttling interfaces consumed by Wi-Fi and Bluetooth.
+`firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
+inside the matching kernel package. The official `connadp` bridge is built and
+loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
+stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
+Bluetooth.
 It also stages the official
 Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
 `snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369

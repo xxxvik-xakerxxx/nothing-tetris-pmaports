@@ -10,11 +10,6 @@ _flavor="postmarketos-mediatek-mt6878"
 url="https://github.com/MT6878-mainline/linux"
 license="GPL-2.0-only"
 options="!strip !check !tracedeps pmb:cross-native pmb:kconfigcheck-community"
-subpackages="
-	$pkgname-pmic:_pmic
-	$pkgname-connectivity:_connectivity
-	$pkgname-audio:_audio
-"
 makedepends="
 	bash
 	bc
@@ -296,30 +291,6 @@ package() {
 
 	install -D "$builddir"/include/config/kernel.release \
 		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
-}
-
-_connectivity() {
-	pkgdesc="Nothing Tetris MT6878/MT6631 vendor connectivity modules"
-	depends="$pkgname=$pkgver-r$pkgrel"
-
-	amove "lib/modules/*/extra/mediatek-connectivity"
-}
-
-_pmic() {
-	pkgdesc="Nothing Tetris MT6369 ADC and efuse calibration modules"
-	depends="$pkgname=$pkgver-r$pkgrel"
-
-	amove "lib/modules/*/extra/mediatek-pmic"
-}
-
-_audio() {
-	pkgdesc="Nothing Tetris MT6878 vendor ASoC modules"
-	depends="
-		$pkgname=$pkgver-r$pkgrel
-		$pkgname-pmic=$pkgver-r$pkgrel
-	"
-
-	amove "lib/modules/*/extra/mediatek-audio"
 }
 
 sha512sums="

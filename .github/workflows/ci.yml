@@ -20,6 +20,13 @@ jobs:
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
+      - name: Validate kernel package layout
+        run: |
+          kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
+          device_apkbuild=pmaports/device/testing/device-nothing-tetris/APKBUILD
+          ! grep -q '^subpackages=' "$kernel_apkbuild"
+          ! grep -q 'linux-postmarketos-mediatek-mt6878-\(pmic\|connectivity\|audio\)' \
+            "$device_apkbuild"
 
   build-pmaports:
     runs-on: ubuntu-latest
