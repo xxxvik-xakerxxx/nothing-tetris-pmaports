@@ -50,7 +50,7 @@ normal Alpine/postmarketOS practice.
 
 | Patch | Purpose |
 | --- | --- |
-| `0003-mfd-mt6363-keys-mt6375-telemetry.patch` | MT6363 PMIC core, PMIC key support with state resync on IRQ, and MT6375 telemetry foundation. |
+| `0003-mfd-mt6363-keys-mt6375-telemetry.patch` | MT6363 PMIC core, hardware-tested power/volume-up press and release IRQ handling, and MT6375 telemetry foundation. |
 | `0007-power-supply-mt6375-monitor.patch` | Read-only battery/USB power monitor and platform registration. |
 
 ### Peripheral identification and staged bring-up
@@ -75,6 +75,14 @@ inside the matching kernel package. The official `connadp` bridge is built and
 loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
 stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
 Bluetooth.
+The boot service deliberately stops after `connadp`, `conninfra` and `connfem`.
+On-device r86 testing confirmed that WLAN/BT modules, factory NVRAM and joint
+pre-cal reach the radio-specific power-on paths, but WMMCU and BGFSYS cannot
+complete until U-Boot reproduces the stock LK secure connsys memory contract.
+The standalone `wmt_drv` is packaged for investigation but is not loaded: it
+duplicates symbols already provided by `conninfra` in this source combination.
+The vendor `conninfra` cleanup path also oopses if the module is unloaded, so
+connectivity tests must use a clean boot instead of module remove/reload cycles.
 It also stages the official
 Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
 `snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369
@@ -107,8 +115,8 @@ not a confirmed external RT1711H controller.
 1. Validate MT6375 attach/orientation/role handling after correcting the TCPCI
    register window. The r63 live regmap confirms vendor ID `0x29cf` and product
    ID `0x6375` in the main bank; the old `0xf200` mapping read only zeros.
-2. Validate r76 MT6631 vendor module loading on device: conninfra, WMT, Wi-Fi
-   and Bluetooth.
+2. Complete the stock LK connsys secure-memory handoff in U-Boot; module probe,
+   firmware, NVRAM and BT/WLAN pre-cal are already confirmed on-device.
 3. Validate LM3644 torch/strobe channels and add the V4L2 flash bridge with
    the camera stack.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.

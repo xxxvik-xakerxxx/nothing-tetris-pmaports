@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18-r85` candidate |
+| Kernel version | `6.18-r86` package (`#87` build) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -54,24 +54,25 @@ Driver packaging and vendor-to-native migration are documented in
 | Display | Simple framebuffer | Works | Stable inherited framebuffer through `simpledrm`. |
 | Display | Native DSI/panel | Broken | Native display bring-up is intentionally not in the active baseline. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
-| Input | Hardware keys | Pending validation | r85 uses the official MT6363 debounce and interrupt-select masks for power and volume-up. |
+| Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
-| USB-C | Type-C attach/orientation | Pending validation | r85 maps the hardware-confirmed TCPCI register bank directly; r63 used the wrong empty window. |
-| USB-C | Analog audio switch | Pending validation | r85 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
+| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC probes with device ID `0x0241` and exposes `port0` plus an attached partner; orientation, role swap and wake still need testing. |
+| USB-C | Analog audio switch | Pending validation | r86 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
 | Audio | Speaker amp identification | Partial | AW88261 probes on I2C. |
-| Audio | Playback/recording | Pending validation | r85 packages the official MT6878 AFE, MT6369 codec and machine modules; routing/UCM still needs hardware validation. |
+| Audio | Playback/recording | Broken | The official modules are packaged, but the MT6369 machine driver defers with `-EPROBE_DEFER`; no ALSA sound card exists yet. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
-| Camera | Flash | Pending validation | r85 adds a native dual-channel LM3644 LED flash-class driver and the confirmed GPIO wiring. |
-| Connectivity | Connsys foundation | Pending | MT6878/MT6631 manual regulator/MMIO bring-up driver is present; live r63 registers the device and can trigger power-on. |
-| Connectivity | Wi-Fi | Pending validation | r85 packages ABI-locked MT6631 modules and dedicated firmware. |
-| Connectivity | Bluetooth | Pending validation | r85 packages the MT6878 BEIF Bluetooth module after conninfra/WMT. |
+| Camera | Flash | Broken | r86 contains the LM3644 driver and board wiring, but no LED class device probes on the current image. |
+| Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
+| Connectivity | Wi-Fi | Broken | Module/AXI/reserved-memory/NVRAM setup works, but WMMCU power-on fails because the secure EMI remap is absent; no `wlan0`. |
+| Connectivity | Bluetooth | Broken | Module and pre-cal callback register, but BGFSYS power-on fails under the same boot-time connsys contract; no HCI device. |
 | Connectivity | GPS/GNSS | Broken | Generic GNSS core registers; MT6631 GNSS client is not packaged yet. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
 | Sensors | Rotation/accelerometer | Broken | Sensorhub/IIO path not started. |
 | Sensors | Ambient light/proximity | Broken | Sensorhub/IIO path not started. |
+| Storage | microSD | Partial | Native MSDC1 probes as `mmc0` with card-detect GPIO; insertion and I/O are not yet hardware-tested. |
 | Storage | Root filesystem | Works | Verified live: `/dev/sdc82` ext4, 104.6 GiB, about 97 GiB free. |
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |
 | Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters; Settings may still show a generic/blank processor string. |
@@ -80,6 +81,7 @@ Driver packaging and vendor-to-native migration are documented in
 
 On the tested r53 userspace/kernel image:
 
+- Power, volume-up and volume-down generate balanced press/release events without stuck keys.
 - `/` is mounted from `/dev/sdc82` as ext4 and is not full.
 - `/boot` is mounted from `/dev/sdc81` as ext2.
 - `hostnamectl` reports `Hardware Vendor: Nothing` and `Hardware Model: CMF Phone 1`.
@@ -99,6 +101,24 @@ Additional live checks on r63:
 - The phone exposes `connsys_wifi_a`, `connsys_bt_a` and `connsys_gnss_a`
   partitions, but `firmware-nothing-tetris` ships the required blobs so the
   rootfs does not depend on reading Android partitions at runtime.
+
+Additional live checks on the r86 package (`6.18.0 #87`):
+
+- The device service loads only `connadp`, `conninfra` and `connfem`; this
+  base-only boot remains stable and does not power either radio.
+- The exact 6146-byte factory Wi-Fi NVRAM is accepted through `/dev/wmtWifi`.
+  WLAN module probe, AXI mapping, the 20 MiB DMA pool and firmware loading all
+  complete before WMMCU reports `0x18060b10=0` and `0x184c1604=0`.
+- Loading both WLAN and BT modules triggers the official joint pre-cal flow.
+  BT reaches BGFSYS but power-on fails; WLAN then reaches WMMCU and fails at
+  the same missing secure connsys remap. Neither `wlan0` nor an HCI device is
+  created.
+- A failed radio pre-cal leaves userspace running, but unloading the vendor
+  `conninfra` module oopses in its platform-driver cleanup. Do not use
+  `modprobe -r conninfra`; reboot after connectivity experiments.
+- MT6375 exposes battery/USB power supplies and a Type-C partner, RT6010
+  exposes `FF_RUMBLE`, AW88261 identifies as chip `0x2113`, and MSDC1 exposes
+  `mmc0`. ALSA still has no sound card and LM3644 exposes no LED device.
 
 Useful storage checks on a booted phone:
 
@@ -123,15 +143,16 @@ The next useful hardware targets, in roughly pragmatic order:
 
 1. Validate MT6375 Type-C on-device: attach/detach IRQs, orientation, sink role,
    USB data role, wake behavior.
-2. Stabilize RT6010 haptics on r58+ and confirm it no longer freezes/reboots.
-3. Fix MT6363 key handling for power and volume-up.
-4. Validate r86 MT6631 connectivity modules on-device: connadp, conninfra, WMT, Wi-Fi,
-   then Bluetooth.
-5. Bring up flashlight as LED-class or V4L2 flash.
+2. Reproduce the complete stock LK connsys secure-memory contract in U-Boot,
+   then repeat the already-working MT6631 module/NVRAM/pre-cal sequence.
+3. Stabilize RT6010 haptics and confirm repeated rumble no longer freezes or
+   reboots the phone.
+4. Resolve the MT6369 ASoC deferred probe, then add speaker/microphone routing
+   and UCM.
+5. Validate MSDC1 card insertion/removal and LM3644 torch/strobe operation.
 6. Add GNSS/FM clients after Wi-Fi/BT connectivity is stable.
-7. Bring up MT6878 AFE, MT6369 audio routing, AW88261 speaker path and UCM.
-8. Add sensorhub/IIO support for rotation, proximity and ambient light.
-9. Treat modem/SIM and cameras as later large projects.
+7. Add sensorhub/IIO support for rotation, proximity and ambient light.
+8. Treat modem/SIM and cameras as later large projects.
 
 ## Layout
 

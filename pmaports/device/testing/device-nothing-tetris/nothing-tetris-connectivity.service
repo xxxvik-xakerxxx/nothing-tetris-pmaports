@@ -5,7 +5,7 @@ Wants=systemd-udev-settle.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/libexec/nothing-tetris-connectivity-setup
+ExecStart=/usr/libexec/nothing-tetris-connectivity-setup base
 RemainAfterExit=yes
 
 [Install]

@@ -7,7 +7,7 @@ log() {
 
 load_module() {
 	module=$1
-	if grep -qw "^$module" /proc/modules; then
+	if [ -d "/sys/module/$module" ]; then
 		return 0
 	fi
 	if modprobe "$module" 2>/dev/null; then
@@ -17,9 +17,31 @@ load_module() {
 	release=$(uname -r)
 	path=/lib/modules/$release/extra/mediatek-connectivity/$module.ko
 	if [ -e "$path" ]; then
-		insmod "$path"
+		insmod "$path" && return 0
 	fi
+
+	return 1
 }
+
+stage=${1:-base}
+case "$stage" in
+	base)
+		modules="connadp conninfra connfem"
+		;;
+	wifi)
+		modules="connadp conninfra connfem wmtWifi wlan_drv_gen4m_6878"
+		;;
+	bluetooth)
+		modules="connadp conninfra connfem bt_drv_6878"
+		;;
+	all)
+		modules="connadp conninfra connfem wmtWifi wlan_drv_gen4m_6878 bt_drv_6878"
+		;;
+	*)
+		echo "usage: $0 {base|wifi|bluetooth|all}" >&2
+		exit 2
+		;;
+esac
 
 for firmware in \
 	connsys_wifi_mt6878_mt6631.bin \
@@ -29,15 +51,18 @@ for firmware in \
 		log "missing packaged firmware: $firmware"
 done
 
-for module in \
-	connadp \
-	conninfra \
-	connfem \
-	wmt_drv \
-	wmtWifi \
-	wlan_drv_gen4m_6878 \
-	bt_drv_6878; do
-	load_module "$module" || log "failed to load $module"
+log "loading $stage stage"
+failures=0
+for module in $modules; do
+	if ! load_module "$module"; then
+		log "failed to load $module"
+		failures=$((failures + 1))
+	fi
 done
 
-ip link show wlan0 >/dev/null 2>&1 && log "wlan0 is present" || log "wlan0 is not present yet"
+if [ "$stage" = wifi ] || [ "$stage" = all ]; then
+	ip link show wlan0 >/dev/null 2>&1 &&
+		log "wlan0 is present" || log "wlan0 is not present yet"
+fi
+
+[ "$failures" -eq 0 ]
