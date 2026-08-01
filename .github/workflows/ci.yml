@@ -75,7 +75,8 @@ jobs:
       - name: Prepare pmbootstrap workdir
         run: |
           mkdir -p /pmwork/work/cache_distfiles
-          mkdir -p /pmwork/work/cache_ccache
+          mkdir -p /pmwork/work/cache_ccache_x86_64
+          mkdir -p /pmwork/work/cache_sccache
           mkdir -p /pmwork/work/packages
           printf "8\n" > /pmwork/work/version
       - name: Restore pmbootstrap cache
@@ -84,7 +85,8 @@ jobs:
         with:
           path: |
             /pmwork/work/cache_distfiles
-            /pmwork/work/cache_ccache
+            /pmwork/work/cache_ccache_x86_64
+            /pmwork/work/cache_sccache
           key: pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-${{ github.run_id }}
           restore-keys: |
             pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-
@@ -232,7 +234,8 @@ jobs:
         with:
           path: |
             /pmwork/work/cache_distfiles
-            /pmwork/work/cache_ccache
+            /pmwork/work/cache_ccache_x86_64
+            /pmwork/work/cache_sccache
           key: ${{ steps.pmbootstrap-cache.outputs.cache-primary-key }}
       - name: Upload install images
         uses: actions/upload-artifact@v7
