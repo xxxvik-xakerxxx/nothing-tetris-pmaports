@@ -10,6 +10,46 @@ official MT6878 BTIF profile.
 This remains a downstream compatibility bridge for module-first bring-up while
 native mainline drivers are developed.
 
+diff --git a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_soc.c b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_soc.c
+--- a/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_soc.c
++++ b/connectivity/conninfra/conn_drv/connv2/platform/mt6878/mt6878_soc.c
+@@ -40,8 +40,10 @@ int consys_get_co_clock_type_mt6878(void)
+ 			clock_type = CONNSYS_CLOCK_SCHEMATIC_26M_EXTCXO;
+ 	} else {
+ 		if (!map) {
+-			pr_notice("%s, failed to get regmap.\n", __func__);
+-			return -1;
++			/* Tetris has a fixed 26 MHz co-clock and no MT6685 MFD. */
++			pr_notice("%s, no MT6685 regmap; using 26M co-clock.\n",
++				__func__);
++			return clock_type;
+ 		}
+ 		regmap_read(map, DCXO_DIGCLK_ELR, &value);
+ 		if (value & 0x1)
+@@ -195,9 +197,19 @@ int consys_conninfra_on_power_ctrl_mt6878(unsigned int enable)
+ {
+-	int ret = 0;
++	struct platform_device *pdev = get_consys_device();
++	int ret;
+ 
+ #if MTK_CONNINFRA_CLOCK_BUFFER_API_AVAILABLE
+-	ret = consys_platform_spm_conn_ctrl_mt6878(enable);
+-	mdelay(5);
++	/*
++	 * Runtime PM only controls hardware when CONSYS is attached to a power
++	 * domain. The Tetris mainline DT has no native CONSYS genpd yet, so use
++	 * the generated SPM sequence until that binding is available.
++	 */
++	if (pdev && pdev->dev.pm_domain) {
++		ret = consys_platform_spm_conn_ctrl_mt6878(enable);
++		mdelay(5);
++	} else {
++		ret = consys_conninfra_on_power_ctrl_mt6878_gen(enable);
++	}
+ #else
+ 	ret = consys_conninfra_on_power_ctrl_mt6878_gen(enable);
+ #endif /* MTK_CONNINFRA_CLOCK_BUFFER_API_AVAILABLE */
+
 diff --git a/connectivity/bt/linux_v2/Kbuild b/connectivity/bt/linux_v2/Kbuild
 --- a/connectivity/bt/linux_v2/Kbuild
 +++ b/connectivity/bt/linux_v2/Kbuild

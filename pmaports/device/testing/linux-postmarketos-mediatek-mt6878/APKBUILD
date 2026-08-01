@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=88
+pkgrel=90
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -14,12 +14,12 @@ makedepends="
 	bash
 	bc
 	bison
-	clang
+	clang21
 	devicepkg-dev
 	flex
 	kmod
-	lld
-	llvm
+	lld21
+	llvm21
 	openssl-dev
 	perl
 	python3
@@ -52,6 +52,7 @@ source="
 	0015-leds-flash-lm3644-tetris.patch
 	0016-usb-typec-hl5280-audio-switch.patch
 	0017-mfd-mt6363-auxadc-registers.patch
+	0018-phy-mediatek-tphy-role-switch-init.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
@@ -238,6 +239,8 @@ build() {
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
 		mediatek/mt6878-nothing-tetris.dtb
+	grep -q 'clang version 21' include/generated/compile.h || \
+		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
@@ -299,8 +302,8 @@ ac703d53b671d8dc4a798670e2b0f1b6f1d4b7c64be16e5ed331c4d8e01371279efa613cb45f87e8
 829db7a368cf7a9b02e0f0e0a8406aa60f391018138809359373c3779ebadf26fc9fb3ab8aed94b2af4c2c0e21a6c661b9bfc5dfe74fe69ad95768cda7ee11dc  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
 306589e6ad6341ceba85087eca2351fa6821ed9e5164bca4b183385c36604cf343a132b7fc4800b389c9574ae848a61dce078cbc4da66d5d530f889c2767d4c8  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
-33c57376ae157c012c3e64f0eea466bf7fc0042d3d3c6dfb5c7bc587f0568fe8d2b3fcc9fa91478209d54d5c892a72e9f27847bd86dcce2f85aaab9b30959a87  0002-mfd-mt6369-spmi-pmic.patch
-5ea70389a500cbca6adf0949458c1b04705873ec7e6b17c7271f8c4a34f9cce83b89479fafdcdc901e960e11d95c8f895e121180c273991f758feb3d15b5330c  0003-mfd-mt6363-keys-mt6375-telemetry.patch
+7212d468340fc05ae3cea31caaa547119bd73bc61a5497c50d1048b2b091ba64551e2f28e65c66146b2f70604e99c96d719347d3db2a35d59b035e7fdeda9c56  0002-mfd-mt6369-spmi-pmic.patch
+e589d0aed09a2d0cd9705f16eaec49c97f45e161429e244fe857b382503aafb8522fb8d4a6972820d67c97dcd4d3b096e21a05b38b283a9a2cd355f040c56bb2  0003-mfd-mt6363-keys-mt6375-telemetry.patch
 60aad4c99ce65fe136f8489b11904a5a872ed802a847515cfced662ab9c19eb5ed736252b68807b9e19d11552af39a1bee574ae727bbfc8579102e18a1f3d6fe  0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch
 4dc6bd68565355553bbd126c7588ad1baafa0b0f21c3d4382c1aa2902726de256e304a1a5e792c0e27eb1f290b2703f47083d5b34adacc73b2acad526bca9c5d  0005-drm-sysfb-tetris-framebuffer.patch
 261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0006-pinctrl-mediatek-mt6878-eint.patch
@@ -315,8 +318,9 @@ cccfa39e5150e25aa43fa9c9aa8ceb27fd3bad253c9f387bba50c734d5987aca7819f83af8cce59c
 98f17f4977dc23dc8455fcecb8c382b8a56f9fe2523fc92f1dc9f8ea2c5c0234817573502823c02fdcf171509fd5eb3561650570095e0f9074f805f5413c6cd9  0015-leds-flash-lm3644-tetris.patch
 beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
 c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
+c2bccee8deda4a205bc3b0e8aacea6456fa29c9c1be69297ef3ec7cc62e7e6b03bf8703b8f3b03e5ad07f2d6b3b9ec7c4db16769548cbbaf86a5c9ba6683ed04  0018-phy-mediatek-tphy-role-switch-init.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
-1525a8d504b5eba116e3030585d4f54070fcbb8cfc8fdc89369aca13aa7aca4e8ec17ac8c7473c20946356e58945dcba7a20f67c78965e98c4986107a6b8c848  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+452717159d00d852ba94986925afb43cd3edc5bb09694d636a77be0f4b9879946c4e3f58a09c801917ebeedbba3020bbcba11e8fb072483de32ca52e411299a2  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 cfc0184fe120fa66d2f031322486afa803c303be0ad5c4d71bb15f78137b2f917d4e961965795a1a0adb9c630b2ea69f2ff24e94cfb14199af8a08ef11c0dea3  1102-vendor-audio-linux-6.18-api.patch.vendor
 

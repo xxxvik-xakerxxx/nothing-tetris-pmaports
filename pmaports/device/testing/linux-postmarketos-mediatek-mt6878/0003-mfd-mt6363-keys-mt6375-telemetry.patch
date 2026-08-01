@@ -401,7 +401,7 @@
  obj-$(CONFIG_XILINX_AMS) += xilinx-ams.o
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6363.dtsi
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,29 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +#include <dt-bindings/input/input.h>
 +#include <dt-bindings/spmi/spmi.h>
@@ -412,6 +412,10 @@
 +	interrupts = <4>;
 +	interrupt-controller;
 +	#interrupt-cells = <2>;
++
++	mt6363-consys {
++		compatible = "mediatek,mt6363-consys";
++	};
 +
 +	mt6363_keys: keys {
 +		compatible = "mediatek,mt6363-keys";
@@ -443,7 +447,7 @@
 +#endif
 --- /dev/null
 +++ b/drivers/mfd/mt6363-spmi.c
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,265 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Minimal MT6363 SPMI PMIC core for the Nothing Tetris bring-up.
@@ -495,6 +499,10 @@
 +		.of_compatible = "mediatek,mt6363-keys",
 +		.resources = mt6363_key_resources,
 +		.num_resources = ARRAY_SIZE(mt6363_key_resources),
++	},
++	{
++		.name = "mt6363-consys",
++		.of_compatible = "mediatek,mt6363-consys",
 +	},
 +};
 +

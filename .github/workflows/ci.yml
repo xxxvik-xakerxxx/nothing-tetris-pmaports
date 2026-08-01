@@ -208,10 +208,19 @@ jobs:
           done
           ! find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
+          conninfra_module=$(find "$rootfs/lib/modules" -name conninfra.ko -print -quit)
+          test "$(stat -c %s "$conninfra_module")" -gt 6000000 || {
+            echo "conninfra module is missing MT6878 platform objects"
+            exit 1
+          }
+          grep -aFq 'mediatek,mt6878-6631-consys' "$conninfra_module"
+          grep -aFq 'no MT6685 regmap; using 26M co-clock' "$conninfra_module"
           grep -aFq 'Mask unsupported Synchronization Train feature' "$bt_module"
           grep -aFq 'HCI device registration failed' "$bt_module"
           grep -aFq 'setting MT6631 public address failed' "$bt_module"
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+          test "$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")" = 'co_clock_flag=1'
+          grep -aFq 'Alpine clang version 21' /work/out/boot_image.itb
           test -s /work/out/nothing-tetris-root.sparse.img
           test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb

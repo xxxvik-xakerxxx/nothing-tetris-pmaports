@@ -1,6 +1,6 @@
 --- a/arch/arm64/boot/dts/mediatek/mt6369.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6369.dtsi
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,222 @@
 +// SPDX-License-Identifier: GPL-2.0 OR MIT
 +/*
 + * Copyright (c) 2023 MediaTek Inc.
@@ -11,6 +11,10 @@
 +	second_pmic@5 {
 +		compatible = "mediatek,mt6369";
 +		reg = <0x5 SPMI_USID>;
++
++		mt6369_consys: mt6369-consys {
++			compatible = "mediatek,mt6369-consys";
++		};
 +
 +		mt6369codec: mt6369codec {
 +			compatible = "mediatek,mt6369-sound";
@@ -304,7 +308,7 @@
  obj-$(CONFIG_MFD_MT6397)	+= mt6397.o
 --- a/drivers/mfd/mt6369-spmi.c
 +++ b/drivers/mfd/mt6369-spmi.c
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,59 @@
 +// SPDX-License-Identifier: GPL-2.0
 +//
 +// Copyright (c) 2026
@@ -317,6 +321,10 @@
 +
 +static const struct mfd_cell mt6369_devs[] = {
 +	{ .name = "mt6369-regulator" },
++	{
++		.name = "mt6369-consys",
++		.of_compatible = "mediatek,mt6369-consys",
++	},
 +	{
 +		.name = "mt6369-sound",
 +		.of_compatible = "mediatek,mt6369-sound",
