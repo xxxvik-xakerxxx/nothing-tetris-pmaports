@@ -234,6 +234,7 @@ _build_audio_modules() {
 
 build() {
 	unset LDFLAGS
+	export PATH="/usr/lib/llvm21/bin:$PATH"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
 	make -j"$_jobs" ARCH="$_carch" LLVM=1 \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
@@ -247,6 +248,7 @@ build() {
 }
 
 package() {
+	export PATH="/usr/lib/llvm21/bin:$PATH"
 	mkdir -p "$pkgdir"/boot
 
 	install -Dm644 "$builddir/arch/$_carch/boot/Image.gz" \
