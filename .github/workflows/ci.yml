@@ -137,20 +137,45 @@ jobs:
           cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-boot.img /work/out/
           cp -v /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/boot/boot_image.itb /work/out/
           rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
-          test -x "$rootfs/usr/libexec/nothing-tetris-connectivity-setup"
-          test -x "$rootfs/usr/libexec/nothing-tetris-bluetooth-address"
-          test -x "$rootfs/usr/libexec/nothing-tetris-wifi-nvram-extract"
-          test -x "$rootfs/usr/libexec/nothing-tetris-wifi-nvram-load"
-          test -x "$rootfs/usr/bin/nmcli"
-          test -x "$rootfs/usr/bin/bluetoothctl"
-          test -x "$rootfs/usr/sbin/wpa_supplicant"
-          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service"
-          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address.service"
-          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/nothing-tetris-wifi-nvram.service"
-          test -f "$rootfs/etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf"
-          test -L "$rootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
-          test -L "$rootfs/etc/systemd/system/dbus-org.bluez.service"
-          test -L "$rootfs/etc/systemd/system/bluetooth.target.wants/bluetooth.service"
+          check_exec() {
+            test -x "$rootfs$1" || {
+              echo "missing executable in rootfs: $1"
+              exit 1
+            }
+          }
+          check_file() {
+            test -f "$rootfs$1" || {
+              echo "missing file in rootfs: $1"
+              exit 1
+            }
+          }
+          check_link() {
+            test -L "$rootfs$1" || {
+              echo "missing systemd link in rootfs: $1"
+              exit 1
+            }
+          }
+          for executable in \
+            /usr/libexec/nothing-tetris-connectivity-setup \
+            /usr/libexec/nothing-tetris-bluetooth-address \
+            /usr/libexec/nothing-tetris-wifi-nvram-extract \
+            /usr/libexec/nothing-tetris-wifi-nvram-load \
+            /usr/bin/nmcli \
+            /usr/bin/bluetoothctl \
+            /usr/sbin/wpa_supplicant; do
+            check_exec "$executable"
+          done
+          check_file /usr/lib/systemd/system-preset/89-nothing-tetris.preset
+          check_file /etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf
+          for link in \
+            /etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service \
+            /etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address.service \
+            /etc/systemd/system/multi-user.target.wants/nothing-tetris-wifi-nvram.service \
+            /etc/systemd/system/multi-user.target.wants/NetworkManager.service \
+            /etc/systemd/system/dbus-org.bluez.service \
+            /etc/systemd/system/bluetooth.target.wants/bluetooth.service; do
+            check_link "$link"
+          done
           for firmware_size in \
             connsys_bt_mt6878_mt6631.bin:8388608 \
             connsys_gnss_mt6878_mt6631.bin:8388608 \

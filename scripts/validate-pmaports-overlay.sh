@@ -84,6 +84,7 @@ validate_connectivity_boot() {
 	bt_service_dropin="$device_pkg/nothing-tetris-bluetooth.service.conf"
 	bt_helper="$device_pkg/nothing-tetris-bluetooth-address.c"
 	bt_patch="$kernel_pkg/1001-vendor-connectivity-linux-6.18-compat.patch.vendor"
+	preset="$device_pkg/89-nothing-tetris.preset"
 
 	if grep -Fq 'wmt_drv' "$setup" "$kernel_apkbuild"; then
 		echo "wmt_drv must not be loaded or packaged; it conflicts with conninfra" >&2
@@ -102,6 +103,13 @@ validate_connectivity_boot() {
 	grep -Fq 'MGMT_OP_SET_PUBLIC_ADDRESS' "$bt_helper"
 	grep -Fq 'HCI_QUIRK_INVALID_BDADDR' "$bt_patch"
 	grep -Fq 'hdev->set_bdaddr = btmtk_set_public_address' "$bt_patch"
+	grep -Fxq 'enable nothing-tetris-wifi-nvram.service' "$preset"
+	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
+	grep -Fxq 'enable nothing-tetris-bluetooth-address.service' "$preset"
+	if grep -Fq 'multi-user.target.wants/nothing-tetris-' "$device_pkg/APKBUILD"; then
+		echo "device package must use systemd presets instead of packaged enablement links" >&2
+		return 1
+	fi
 }
 
 validate_sums "$kernel_pkg"
