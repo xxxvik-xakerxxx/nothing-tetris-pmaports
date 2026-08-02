@@ -139,6 +139,7 @@ validate_connectivity_boot() {
 
 validate_power_and_audio_config() {
 	config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	cpu_patch="$kernel_pkg/0019-arm64-dts-mt6878-shallow-cpuidle.patch"
 
 	for option in \
 		CONFIG_CPU_IDLE=y \
@@ -150,6 +151,8 @@ validate_power_and_audio_config() {
 		grep -Fxq "$option" "$config"
 	done
 	grep -Fxq '# CONFIG_ARM_PSCI_CPUIDLE_DOMAIN is not set' "$config"
+	test "$(grep -c '^+.*compatible = "arm,cortex-a55";' "$cpu_patch")" -eq 4
+	test "$(grep -c '^+.*compatible = "arm,cortex-a78";' "$cpu_patch")" -eq 4
 }
 
 validate_connectivity_firmware() {

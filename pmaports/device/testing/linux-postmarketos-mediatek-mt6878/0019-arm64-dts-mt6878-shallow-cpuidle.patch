@@ -9,8 +9,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_l>;
  			capacity-dmips-mhz  = <267>;
- 		};
- 
+		};
+
 @@ -72,8 +71,7 @@
  			reg = <0x100>;
  			performance-domains = <&performance 0>;
@@ -19,8 +19,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_l>;
  			capacity-dmips-mhz  = <267>;
- 		};
- 
+		};
+
 @@ -83,8 +81,7 @@
  			reg = <0x200>;
  			performance-domains = <&performance 0>;
@@ -29,8 +29,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_l>;
  			capacity-dmips-mhz  = <267>;
- 		};
- 
+		};
+
 @@ -94,8 +91,7 @@
  			reg = <0x300>;
  			performance-domains = <&performance 0>;
@@ -39,8 +39,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_l>;
  			capacity-dmips-mhz  = <267>;
- 		};
- 
+		};
+
 @@ -105,8 +101,7 @@
  			reg = <0x400>;
  			performance-domains = <&performance 1>;
@@ -49,8 +49,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_b>;
  			capacity-dmips-mhz  = <1024>;
- 		};
- 
+		};
+
 @@ -116,8 +111,7 @@
  			reg = <0x500>;
  			performance-domains = <&performance 1>;
@@ -59,8 +59,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_b>;
  			capacity-dmips-mhz  = <1024>;
- 		};
- 
+		};
+
 @@ -127,8 +121,7 @@
  			reg = <0x600>;
  			performance-domains = <&performance 1>;
@@ -69,8 +69,8 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_b>;
  			capacity-dmips-mhz  = <1024>;
- 		};
- 
+		};
+
 @@ -138,8 +131,7 @@
  			reg = <0x700>;
  			performance-domains = <&performance 1>;
@@ -78,6 +78,81 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 -			cpu-idle-states = <&cpuoff_b &clusteroff_b &mcusysoff_b
 -						&system_vcore &s2idle>;
 +			cpu-idle-states = <&cpuoff_b>;
- 			capacity-dmips-mhz  = <1024>;
- 		};
+			capacity-dmips-mhz  = <1024>;
+		};
 
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -57,7 +57,7 @@
+ 
+ 		cpu0: cpu@0 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a78";
++			compatible = "arm,cortex-a55";
+ 			reg = <0x0>;
+ 			performance-domains = <&performance 0>;
+ 			enable-method = "psci";
+@@ -67,7 +67,7 @@
+ 
+ 		cpu1: cpu@1 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a78";
++			compatible = "arm,cortex-a55";
+ 			reg = <0x100>;
+ 			performance-domains = <&performance 0>;
+ 			enable-method = "psci";
+@@ -77,7 +77,7 @@
+ 
+ 		cpu2: cpu@2 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a78";
++			compatible = "arm,cortex-a55";
+ 			reg = <0x200>;
+ 			performance-domains = <&performance 0>;
+ 			enable-method = "psci";
+@@ -87,7 +87,7 @@
+ 
+ 		cpu3: cpu@3 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a78";
++			compatible = "arm,cortex-a55";
+ 			reg = <0x300>;
+ 			performance-domains = <&performance 0>;
+ 			enable-method = "psci";
+@@ -97,7 +97,7 @@
+ 
+ 		cpu4: cpu@100 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a55";
++			compatible = "arm,cortex-a78";
+ 			reg = <0x400>;
+ 			performance-domains = <&performance 1>;
+ 			enable-method = "psci";
+@@ -107,7 +107,7 @@
+ 
+ 		cpu5: cpu@101 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a55";
++			compatible = "arm,cortex-a78";
+ 			reg = <0x500>;
+ 			performance-domains = <&performance 1>;
+ 			enable-method = "psci";
+@@ -117,7 +117,7 @@
+ 
+ 		cpu6: cpu@102 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a55";
++			compatible = "arm,cortex-a78";
+ 			reg = <0x600>;
+ 			performance-domains = <&performance 1>;
+ 			enable-method = "psci";
+@@ -127,7 +127,7 @@
+ 
+ 		cpu7: cpu@103 {
+ 			device_type = "cpu";
+-			compatible = "arm,cortex-a55";
++			compatible = "arm,cortex-a78";
+ 			reg = <0x700>;
+ 			performance-domains = <&performance 1>;
+ 			enable-method = "psci";
