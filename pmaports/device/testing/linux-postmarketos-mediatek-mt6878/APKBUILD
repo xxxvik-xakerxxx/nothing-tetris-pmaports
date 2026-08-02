@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=95
+pkgrel=96
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -54,8 +54,10 @@ source="
 	0017-mfd-mt6363-auxadc-registers.patch
 	0018-phy-mediatek-tphy-role-switch-init.patch
 	0019-arm64-dts-mt6878-shallow-cpuidle.patch
+	0020-arm64-dts-mt6878-gnss.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+	1002-vendor-gnss-linux-6.18-compat.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
 "
@@ -74,6 +76,8 @@ prepare() {
 
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1002-vendor-gnss-linux-6.18-compat.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -160,6 +164,10 @@ _build_connectivity_modules() {
 		BT_PLATFORM=6878 \
 		LOG_TAG=bt_drv_6878 \
 		USE_DEVICE_NODE=0 \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+
+	_connectivity_make "$_conn"/gps/data_link/plat/v050 \
+		CONFIG_MTK_GPS_SUPPORT=y \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
@@ -278,7 +286,8 @@ package() {
 		"$_connmods_dir"/connectivity/connfem/connfem.ko \
 		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
-		"$_connmods_dir"/connectivity/bt/mt66xx/6878/bt_drv_6878.ko; do
+		"$_connmods_dir"/connectivity/bt/mt66xx/6878/bt_drv_6878.ko \
+		"$_connmods_dir"/connectivity/gps/data_link/plat/v050/gps_drv_dl_v050.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-audio"
@@ -321,8 +330,10 @@ beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8c
 c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
 c2bccee8deda4a205bc3b0e8aacea6456fa29c9c1be69297ef3ec7cc62e7e6b03bf8703b8f3b03e5ad07f2d6b3b9ec7c4db16769548cbbaf86a5c9ba6683ed04  0018-phy-mediatek-tphy-role-switch-init.patch
 10f9e8f506bd2ae4f97e0d4326b660b7f428dff92fdac0827e8e9ceec51e68529190b0892ad0d7df911d7a99b9bcf021eeab002d757546081ae706538ffc0c24  0019-arm64-dts-mt6878-shallow-cpuidle.patch
+95f1dd6bf1d7488915e8e6d4904c5a22775cb9c1be23e8bc7393391f178c638616cb687cbc887092591d1a88597eb8e8754c621e887853bf9d7d911dae0d3379  0020-arm64-dts-mt6878-gnss.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
+175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 cfc0184fe120fa66d2f031322486afa803c303be0ad5c4d71bb15f78137b2f917d4e961965795a1a0adb9c630b2ea69f2ff24e94cfb14199af8a08ef11c0dea3  1102-vendor-audio-linux-6.18-api.patch.vendor
 

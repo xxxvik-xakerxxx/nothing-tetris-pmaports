@@ -69,6 +69,8 @@ normal Alpine/postmarketOS practice.
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 | `0018-phy-mediatek-tphy-role-switch-init.patch` | Keeps the MTK T-PHY device path available while the USB role-switch graph is incomplete. |
 | `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Corrects CPU0-3 to Cortex-A55 and CPU4-7 to Cortex-A78 from live MIDR evidence, and limits the first PSCI cpuidle rollout to per-CPU power-off. Cluster, MCU and system states remain gated behind live USB/SSH validation. |
+| `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation; module loading remains manual. |
+| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
 
 The r88 package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
@@ -76,7 +78,7 @@ official Nothing kernel module releases. Connectivity firmware is isolated in
 inside the matching kernel package. The official `connadp` bridge is built and
 loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
 stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
-Bluetooth.
+Bluetooth and the staged GNSS v050 transport.
 The boot service loads the bridge, WLAN and native-HCI Bluetooth modules in the
 hardware-tested order. It extracts the 6146-byte per-device Wi-Fi calibration
 from `nvdata`, performs one WMT NVRAM write, completes joint pre-calibration and

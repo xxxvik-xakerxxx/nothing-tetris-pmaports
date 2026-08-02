@@ -180,6 +180,7 @@ validate_connectivity_firmware() {
 
 validate_connectivity_build() {
 	workflow="$repo_root/.github/workflows/ci.yml"
+	gnss_patch="$kernel_pkg/1002-vendor-gnss-linux-6.18-compat.patch.vendor"
 
 	grep -Eq '^  PMBOOTSTRAP_COMMIT: [0-9a-f]{40}$' "$workflow"
 	grep -Eq '^  PMAPORTS_COMMIT: [0-9a-f]{40}$' "$workflow"
@@ -193,6 +194,19 @@ validate_connectivity_build() {
 		exit 1
 	fi
 	grep -Fq "'-DCONFIG_MTK_COMBO_CHIP_CONSYS_6878=1 '" "$kernel_apkbuild"
+	grep -Fq 'gps/data_link/plat/v050' "$kernel_apkbuild"
+	grep -Fq 'CONFIG_MTK_GPS_SUPPORT=y' "$kernel_apkbuild"
+	grep -Fq 'gps_drv_dl_v050.ko' "$kernel_apkbuild"
+	grep -Fq 'GPS_PLATFORM := v050' "$gnss_patch"
+	if grep -Eq 'gps/data_link/plat/v06(0|1)|gps_drv_dl_v06(0|1)' \
+			"$kernel_apkbuild" "$gnss_patch"; then
+		echo "Tetris must use the MT6878 GNSS v050 profile" >&2
+		return 1
+	fi
+	if grep -Fq 'gps_drv_dl_v050' "$device_pkg/nothing-tetris-connectivity-setup"; then
+		echo "GNSS must remain manual until position data and suspend are validated" >&2
+		return 1
+	fi
 	grep -Fq 'gzip -cd "$rootfs/boot/vmlinuz"' "$workflow"
 	grep -Fq 'nothing-tetris-radio-live.tar.zst' "$workflow"
 	grep -Fq 'name: nothing-tetris-radio-live' "$workflow"

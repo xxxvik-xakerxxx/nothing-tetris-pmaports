@@ -70,11 +70,11 @@ Driver packaging and vendor-to-native migration are documented in
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | B4.1 WLAN firmware, factory NVRAM, scans and Wi-Fi/Bluetooth coexistence work live. Clean-install automatic startup is staged for CI validation. |
 | Connectivity | Bluetooth | Partial | Native BlueZ HCI, factory address provisioning, discovery and Wi-Fi coexistence work live. Clean-install automatic startup still requires CI image validation. |
-| Connectivity | GPS/GNSS | Broken | MT6631 firmware is packaged, but no MT6878 GNSS client module or standard Linux GNSS device is installed. |
+| Connectivity | GPS/GNSS | Partial | The B4.1 MT6878 v050 module boots, probes seven IRQs and completes a live power cycle without disturbing Wi-Fi, Bluetooth or USB. Position data, suspend and a standard Linux GNSS userspace bridge remain unvalidated, so it is not autoloaded. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
-| Sensors | Rotation/accelerometer | Broken | Sensorhub/IIO path not started. |
-| Sensors | Ambient light/proximity | Broken | Sensorhub/IIO path not started. |
+| Sensors | Rotation/accelerometer | Broken | Requires the MT6878 SCP remoteproc and vendor sensorhub transport before IIO clients can be exposed safely. |
+| Sensors | Ambient light/proximity | Broken | Shares the unported SCP sensorhub path; no blind client probing. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | Root filesystem | Works | Verified live: `/dev/sdc82` ext4, 104.6 GiB, about 97 GiB free. |
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |

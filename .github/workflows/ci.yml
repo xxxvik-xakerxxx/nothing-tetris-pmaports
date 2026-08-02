@@ -57,7 +57,7 @@ jobs:
           apk add --no-cache \
             android-tools \
             build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
-            file findutils git linux-headers mtools multipath-tools openssl \
+            dtc file findutils git linux-headers mtools multipath-tools openssl \
             openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
             util-linux xz zstd
       - name: Fetch upstream pmaports and pmbootstrap
@@ -238,6 +238,7 @@ jobs:
             extra/mediatek-connectivity/wmtWifi.ko \
             extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko \
             extra/mediatek-connectivity/bt_drv_6878.ko \
+            extra/mediatek-connectivity/gps_drv_dl_v050.ko \
             extra/mediatek-audio/snd-soc-mtk-common.ko \
             extra/mediatek-audio/snd-soc-mt6369.ko \
             extra/mediatek-audio/snd-soc-mt6878-afe.ko \
@@ -248,6 +249,7 @@ jobs:
           ! find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
           conninfra_module=$(find "$rootfs/lib/modules" -name conninfra.ko -print -quit)
+          gps_module=$(find "$rootfs/lib/modules" -name gps_drv_dl_v050.ko -print -quit)
           wifi_module=$(find "$rootfs/lib/modules" -name wlan_drv_gen4m_6878.ko -print -quit)
           test "$(stat -c %s "$conninfra_module")" -gt 6000000 || {
             echo "conninfra module is missing MT6878 platform objects"
@@ -270,6 +272,10 @@ jobs:
             'HCI device registration failed' "$bt_module"
           check_contains "native HCI address programming path" \
             'setting MT6631 public address failed' "$bt_module"
+          test "$(modinfo -F name "$gps_module")" = gps_drv_dl_v050
+          test "$(modinfo -F depends "$gps_module")" = conninfra
+          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+            /gnss@18c00000 status)" = okay
           for radio_module in "$wifi_module" "$bt_module"; do
             if modinfo -F depends "$radio_module" | tr ',' '\n' | \
                 grep -Fxq wmt_drv; then

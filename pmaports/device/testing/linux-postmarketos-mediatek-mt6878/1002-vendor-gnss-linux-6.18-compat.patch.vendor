@@ -1,0 +1,107 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] vendor: gnss: adapt MT6878 data-link v050 to Linux 6.18
+
+Keep the Nothing OS 4.1 MT6878 GNSS data-link implementation buildable as an
+external module. Fix source path resolution in Kbuild and update the class,
+platform remove, and timer APIs removed after the vendor Linux 6.1 baseline.
+
+The v050 implementation is the vendor profile that explicitly supports
+MT6878. Newer v060/v061 profiles target different SoCs and must not be used for
+Tetris.
+
+diff --git a/connectivity/gps/data_link/plat/v050/Kbuild b/connectivity/gps/data_link/plat/v050/Kbuild
+--- a/connectivity/gps/data_link/plat/v050/Kbuild
++++ b/connectivity/gps/data_link/plat/v050/Kbuild
+@@ -74,22 +74,23 @@ obj-m += $(MODULE_NAME).o
+ 
+ ifeq ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6897),y)
+     ccflags-y += -D GPS_DL_EMI_BASE_TO_VLP=1
+-else if ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6878),y)
++else ifeq ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6878),y)
+     ccflags-y += -D GPS_DL_EMI_BASE_TO_VLP=1
+ else
+ 
+ endif
+ 
+ GPS_DRV_CONTROL_LNA := n
+ GPS_DL_HAS_MOCK := n
+-GPS_SRC_FOLDER := $(srctree)/$(src)/../..
++GPS_SRC_FOLDER := $(abspath $(src)/../..)
++GPS_PLAT_FOLDER := $(abspath $(src))
+ ccflags-y += -DMTK_GENERIC_HAL
+ 
+-ccflags-y += -I$(srctree)/$(src)
+-ccflags-y += -I$(srctree)/$(src)/inc
+-ccflags-y += -I$(srctree)/$(src)/hw/inc
++ccflags-y += -I$(GPS_PLAT_FOLDER)
++ccflags-y += -I$(GPS_PLAT_FOLDER)/inc
++ccflags-y += -I$(GPS_PLAT_FOLDER)/hw/inc
+ 
+-CONNINFRA_SRC_FOLDER := $(srctree)/$(src)/../../../../conninfra
++CONNINFRA_SRC_FOLDER := $(abspath $(src)/../../../../conninfra)
+ ccflags-y += -I$(CONNINFRA_SRC_FOLDER)/include
+ ccflags-y += -I$(CONNINFRA_SRC_FOLDER)/conn_drv/connv2/debug_utility/metlog
+ ccflags-y += -DGPS_DL_HAS_CONNINFRA_DRV=1
+diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
+--- a/connectivity/gps/data_link/linux/gps_each_device.c
++++ b/connectivity/gps/data_link/linux/gps_each_device.c
+@@ -567,7 +567,7 @@ int gps_dl_cdev_setup(struct gps_each_device *dev, int index)
+ 		return result;
+ 	}
+ 
+-	dev->cls = class_create(THIS_MODULE, dev->cfg.dev_name);
++	dev->cls = class_create(dev->cfg.dev_name);
+ 	if (IS_ERR(dev->cls)) {
+ 		GDL_LOGE("class_create fail on %s", dev->cfg.dev_name);
+ 		return -1;
+diff --git a/connectivity/gps/data_link/linux/gps_dl_emi.c b/connectivity/gps/data_link/linux/gps_dl_emi.c
+--- a/connectivity/gps/data_link/linux/gps_dl_emi.c
++++ b/connectivity/gps/data_link/linux/gps_dl_emi.c
+@@ -218,7 +218,7 @@ void gps_dl_emi_create_device(void)
+ 		goto err_out;
+ 	}
+ 
+-	gps_icap_dev_ptr->cls = class_create(THIS_MODULE, "gpsemi");
++	gps_icap_dev_ptr->cls = class_create("gpsemi");
+ 	if (IS_ERR(gps_icap_dev_ptr->cls)) {
+ 		GDL_LOGE("unable to create class, err = %d\n", (int)PTR_ERR(gps_icap_dev_ptr->cls));
+ 		goto err_out;
+diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+--- a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
++++ b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+@@ -580,14 +580,13 @@ static int gps_dl_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
+-static int gps_dl_remove(struct platform_device *pdev)
++static void gps_dl_remove(struct platform_device *pdev)
+ {
+ 	struct gps_each_device *p_each_dev = gps_dl_device_get(GPS_DATA_LINK_ID0);
+ 
+ 	GDL_LOGW_INI("do gps_dl_remove");
+ 	platform_set_drvdata(pdev, NULL);
+ 	p_each_dev->private_data = NULL;
+-	return 0;
+ }
+ 
+ static int gps_dl_drv_suspend(struct device *dev)
+diff --git a/connectivity/gps/data_link/linux/gps_dl_osal.c b/connectivity/gps/data_link/linux/gps_dl_osal.c
+--- a/connectivity/gps/data_link/linux/gps_dl_osal.c
++++ b/connectivity/gps/data_link/linux/gps_dl_osal.c
+@@ -345,7 +345,7 @@ int gps_dl_osal_timer_stop(struct gps_dl_osal_timer *pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer(timer);
++	timer_delete(timer);
+ 	return 0;
+ }
+ 
+@@ -353,7 +353,7 @@ int gps_dl_osal_timer_stop_sync(struct gps_dl_osal_timer *pTimer)
+ {
+ 	struct timer_list *timer = &pTimer->timer;
+ 
+-	del_timer_sync(timer);
++	timer_delete_sync(timer);
+ 	return 0;
+ }

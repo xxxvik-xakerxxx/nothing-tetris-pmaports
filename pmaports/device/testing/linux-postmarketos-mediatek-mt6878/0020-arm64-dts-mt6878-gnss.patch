@@ -1,0 +1,22 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] arm64: dts: mt6878: enable Tetris GNSS transport
+
+Enable the MT6878 GNSS platform device after validating the Nothing OS 4.1
+v050 data-link driver live on Tetris. Boot, probe, IRQ registration and a
+short power on/off cycle preserve USB networking, Wi-Fi and Bluetooth.
+
+Keep module loading manual until a standard Linux GNSS userspace bridge can
+confirm position data and suspend/resume behavior.
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -383,7 +383,7 @@ gps: gnss@18c00000 {
+ 		emi-alignment = <0x100000>;
+ 		emi-max-addr = <0xc0000000>;
+ 		b13b14-status-addr = <0x1c000008>;
+-		status = "disabled";
++		status = "okay";
+ 	};
+ };
+ 
