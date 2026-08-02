@@ -6,7 +6,7 @@ Before=NetworkManager.service bluetooth.service iwd.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/libexec/nothing-tetris-connectivity-setup wifi
+ExecStart=/usr/libexec/nothing-tetris-connectivity-setup all
 TimeoutStartSec=30
 RemainAfterExit=yes
 

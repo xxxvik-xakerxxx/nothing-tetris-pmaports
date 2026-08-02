@@ -43,9 +43,6 @@ bring_up_wifi() {
 
 	/usr/libexec/nothing-tetris-wifi-nvram-load
 
-	# The B4.1 vendor stack performs joint Wi-Fi/BT pre-calibration here.
-	load_modules bluetooth bt_drv_6878
-
 	# The vendor cdev interprets this single byte as the Wi-Fi power-on command.
 	printf '1' > /dev/wmtWifi
 
@@ -60,6 +57,20 @@ bring_up_wifi() {
 	done
 	ip link set wlan0 up
 	log "wlan0 is ready for the network manager"
+}
+
+bring_up_bluetooth() {
+	load_modules bluetooth bt_drv_6878
+	[ -d /sys/class/bluetooth/hci0 ] || {
+		log "hci0 was not registered"
+		return 1
+	}
+	log "hci0 is ready for BlueZ"
+}
+
+bring_up_all() {
+	bring_up_wifi
+	bring_up_bluetooth
 }
 
 stage=${1:-base}
@@ -87,11 +98,12 @@ case "$stage" in
 		;;
 	bluetooth)
 		log "loading Bluetooth stage"
-		load_modules connadp conninfra connfem bluetooth bt_drv_6878
+		load_modules connadp conninfra connfem
+		bring_up_bluetooth
 		;;
 	all)
 		log "loading all connectivity stages"
-		bring_up_wifi
+		bring_up_all
 		;;
 	*)
 		echo "usage: $0 {base|wifi|bluetooth|all}" >&2
