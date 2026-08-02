@@ -67,6 +67,8 @@ normal Alpine/postmarketOS practice.
 | `0015-leds-flash-lm3644-tetris.patch` | Native dual-channel LM3644 Linux LED flash-class driver and Tetris I2C/GPIO wiring. |
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
+| `0018-phy-mediatek-tphy-role-switch-init.patch` | Keeps the MTK T-PHY device path available while the USB role-switch graph is incomplete. |
+| `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Limits the first PSCI cpuidle rollout to per-CPU power-off; cluster, MCU and system states remain gated behind live USB/SSH validation. |
 
 The r88 package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in

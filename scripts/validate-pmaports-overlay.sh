@@ -86,6 +86,7 @@ validate_connectivity_boot() {
 	bt_extract="$device_pkg/nothing-tetris-bluetooth-address-extract"
 	bt_helper="$device_pkg/nothing-tetris-bluetooth-address.c"
 	bt_patch="$kernel_pkg/1001-vendor-connectivity-linux-6.18-compat.patch.vendor"
+	wifi_powersave="$device_pkg/20-nothing-tetris-wifi-powersave.conf"
 	preset="$device_pkg/89-nothing-tetris.preset"
 
 	if grep -Fq 'wmt_drv' "$setup" "$kernel_apkbuild"; then
@@ -120,6 +121,12 @@ validate_connectivity_boot() {
 	grep -Fq 'MGMT_OP_SET_PUBLIC_ADDRESS' "$bt_helper"
 	grep -Fq 'HCI_QUIRK_INVALID_BDADDR' "$bt_patch"
 	grep -Fq 'hdev->set_bdaddr = btmtk_set_public_address' "$bt_patch"
+	grep -Fxq '[connection]' "$wifi_powersave"
+	grep -Fxq 'wifi.powersave=3' "$wifi_powersave"
+	grep -Fq '/usr/lib/NetworkManager/conf.d/20-nothing-tetris-wifi-powersave.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'DBGLOG(SW4, TRACE, TEMP_LOG_TEMPLATE' "$bt_patch"
+	grep -Fq 'DBGLOG(HAL, TRACE, "%s\n", buf)' "$bt_patch"
 	grep -Fxq 'enable nothing-tetris-wifi-nvram.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address-extract.service' "$preset"
@@ -128,6 +135,21 @@ validate_connectivity_boot() {
 		echo "device package must use systemd presets instead of packaged enablement links" >&2
 		return 1
 	fi
+}
+
+validate_power_and_audio_config() {
+	config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+
+	for option in \
+		CONFIG_CPU_IDLE=y \
+		CONFIG_CPU_IDLE_GOV_MENU=y \
+		CONFIG_DT_IDLE_STATES=y \
+		CONFIG_ARM_PSCI_CPUIDLE=y \
+		CONFIG_SND_DYNAMIC_MINORS=y \
+		CONFIG_SND_MAX_CARDS=32; do
+		grep -Fxq "$option" "$config"
+	done
+	grep -Fxq '# CONFIG_ARM_PSCI_CPUIDLE_DOMAIN is not set' "$config"
 }
 
 validate_connectivity_firmware() {
@@ -185,6 +207,7 @@ validate_source_files "$device_pkg"
 validate_source_files "$firmware_pkg"
 validate_vendor_baseline
 validate_connectivity_boot
+validate_power_and_audio_config
 validate_connectivity_firmware
 validate_connectivity_build
 

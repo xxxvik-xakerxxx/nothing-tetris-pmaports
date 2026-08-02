@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=6
-pkgrel=8
+pkgrel=9
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -20,6 +20,7 @@ depends="
 "
 makedepends="devicepkg-dev"
 source="
+	20-nothing-tetris-wifi-powersave.conf
 	80-nothing-tetris-udisks.rules
 	89-nothing-tetris.preset
 	boot_image.its
@@ -123,6 +124,8 @@ package() {
 		"$pkgdir"/usr/share/u-boot/nothing-tetris/boot_image.its
 	install -Dm644 "$srcdir"/80-nothing-tetris-udisks.rules \
 		"$pkgdir"/usr/lib/udev/rules.d/80-nothing-tetris-udisks.rules
+	install -Dm644 "$srcdir"/20-nothing-tetris-wifi-powersave.conf \
+		"$pkgdir"/usr/lib/NetworkManager/conf.d/20-nothing-tetris-wifi-powersave.conf
 	install -Dm755 "$srcdir"/nothing-tetris-connectivity-setup \
 		"$pkgdir"/usr/libexec/nothing-tetris-connectivity-setup
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address-extract \
@@ -148,6 +151,7 @@ package() {
 }
 
 sha512sums="
+279383f1a442a296c5c4b6f3261b4742e01be3bd5293a15179b63fbb325e316b6606996c2b990ab7704710bb170cf74276fb4d86a5e17fe7922f3f8402fe4fd9  20-nothing-tetris-wifi-powersave.conf
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
 72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
