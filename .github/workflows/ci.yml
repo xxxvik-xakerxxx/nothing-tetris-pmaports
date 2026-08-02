@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+env:
+  PMBOOTSTRAP_COMMIT: ea17c1499b7f82d5829849314e89b23684919141
+  PMAPORTS_COMMIT: 7ea600ada6d4716b500bda0d6a17ba396be05b5c
+  TETRIS_UBOOT_COMMIT: 8623187b366b65e6434eafdee9fdc8ad9654c6c1
+  TETRIS_UBOOT_SHA256: 1cb47331bfba08e2b1d0979d9d053dcb5fdc17136bda6884402d938e65e8e392
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -57,8 +63,21 @@ jobs:
       - name: Fetch upstream pmaports and pmbootstrap
         run: |
           cd /work
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git upstream/pmbootstrap
-          git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git upstream/pmaports
+          mkdir -p upstream/pmbootstrap upstream/pmaports
+          git -C upstream/pmbootstrap init
+          git -C upstream/pmbootstrap remote add origin \
+            https://gitlab.postmarketos.org/postmarketOS/pmbootstrap.git
+          git -C upstream/pmbootstrap fetch --depth=1 origin "$PMBOOTSTRAP_COMMIT"
+          git -C upstream/pmbootstrap checkout --detach FETCH_HEAD
+          test "$(git -C upstream/pmbootstrap rev-parse HEAD)" = "$PMBOOTSTRAP_COMMIT"
+          git -C upstream/pmaports init
+          git -C upstream/pmaports remote add origin \
+            https://gitlab.postmarketos.org/postmarketOS/pmaports.git
+          git -C upstream/pmaports fetch --depth=1 origin "$PMAPORTS_COMMIT"
+          git -C upstream/pmaports checkout --detach FETCH_HEAD
+          test "$(git -C upstream/pmaports rev-parse HEAD)" = "$PMAPORTS_COMMIT"
+          git -C upstream/pmaports update-ref \
+            refs/remotes/origin/main "$PMAPORTS_COMMIT"
           rm -rf \
             upstream/pmaports/device/testing/device-nothing-tetris \
             upstream/pmaports/device/testing/firmware-nothing-tetris \
@@ -177,6 +196,7 @@ jobs:
           }
           for executable in \
             /usr/libexec/nothing-tetris-connectivity-setup \
+            /usr/libexec/nothing-tetris-bluetooth-address-extract \
             /usr/libexec/nothing-tetris-bluetooth-address \
             /usr/libexec/nothing-tetris-wifi-nvram-extract \
             /usr/libexec/nothing-tetris-wifi-nvram-load \
@@ -189,6 +209,7 @@ jobs:
           check_file /etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf
           for link in \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service \
+            /etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address-extract.service \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address.service \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-wifi-nvram.service \
             /etc/systemd/system/multi-user.target.wants/NetworkManager.service \
@@ -249,6 +270,13 @@ jobs:
             'HCI device registration failed' "$bt_module"
           check_contains "native HCI address programming path" \
             'setting MT6631 public address failed' "$bt_module"
+          for radio_module in "$wifi_module" "$bt_module"; do
+            if modinfo -F depends "$radio_module" | tr ',' '\n' | \
+                grep -Fxq wmt_drv; then
+              echo "legacy wmt_drv dependency in $radio_module"
+              exit 1
+            fi
+          done
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
           expected_conninfra_cfg=$(printf 'co_clock_flag=1\npre_cal_mode=0')
           actual_conninfra_cfg=$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")
@@ -272,8 +300,12 @@ jobs:
           cat > /work/out/nothing-tetris-radio-live.MANIFEST <<EOF
           github_sha=$GITHUB_SHA
           kernel_release=$release
+          pmbootstrap_commit=$PMBOOTSTRAP_COMMIT
+          pmaports_commit=$PMAPORTS_COMMIT
           connectivity_source=e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
           device_modules_source=ee2be53cb75670b548948636a0db1d1ff112bf12
+          required_uboot_commit=$TETRIS_UBOOT_COMMIT
+          required_uboot_sha256=$TETRIS_UBOOT_SHA256
           EOF
           tar -C "$rootfs" -cf /tmp/nothing-tetris-radio-live.tar \
             "lib/modules/$release/extra/mediatek-connectivity" \
@@ -281,9 +313,17 @@ jobs:
             usr/lib/firmware/connsys_bt_mt6878_mt6631.bin \
             usr/lib/firmware/connsys_gnss_mt6878_mt6631.bin \
             usr/lib/firmware/connsys_wifi_mt6878_mt6631.bin \
+            usr/libexec/nothing-tetris-bluetooth-address-extract \
+            usr/libexec/nothing-tetris-bluetooth-address \
             usr/libexec/nothing-tetris-connectivity-setup \
+            usr/libexec/nothing-tetris-wifi-nvram-extract \
             usr/libexec/nothing-tetris-wifi-nvram-load \
-            usr/lib/systemd/system/nothing-tetris-connectivity.service
+            usr/lib/systemd/system/nothing-tetris-bluetooth-address-extract.service \
+            usr/lib/systemd/system/nothing-tetris-bluetooth-address.service \
+            usr/lib/systemd/system/nothing-tetris-connectivity.service \
+            usr/lib/systemd/system/nothing-tetris-wifi-nvram.service \
+            usr/lib/systemd/system-preset/89-nothing-tetris.preset \
+            etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf
           zstd -T0 -10 /tmp/nothing-tetris-radio-live.tar \
             -o /work/out/nothing-tetris-radio-live.tar.zst
           test -s /work/out/nothing-tetris-radio-live.tar.zst
@@ -294,6 +334,14 @@ jobs:
             boot_image.itb \
             nothing-tetris-boot.img \
             nothing-tetris-root.sparse.img > SHA256SUMS)
+          cat > /work/out/BUILD-MANIFEST <<EOF
+          github_sha=$GITHUB_SHA
+          pmbootstrap_commit=$PMBOOTSTRAP_COMMIT
+          pmaports_commit=$PMAPORTS_COMMIT
+          kernel_release=$release
+          required_uboot_commit=$TETRIS_UBOOT_COMMIT
+          required_uboot_sha256=$TETRIS_UBOOT_SHA256
+          EOF
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
       - name: Collect pmbootstrap logs

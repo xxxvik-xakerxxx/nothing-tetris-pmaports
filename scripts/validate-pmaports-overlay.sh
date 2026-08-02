@@ -81,7 +81,9 @@ validate_connectivity_boot() {
 	service="$device_pkg/nothing-tetris-connectivity.service"
 	nvram_service="$device_pkg/nothing-tetris-wifi-nvram.service"
 	bt_address_service="$device_pkg/nothing-tetris-bluetooth-address.service"
+	bt_extract_service="$device_pkg/nothing-tetris-bluetooth-address-extract.service"
 	bt_service_dropin="$device_pkg/nothing-tetris-bluetooth.service.conf"
+	bt_extract="$device_pkg/nothing-tetris-bluetooth-address-extract"
 	bt_helper="$device_pkg/nothing-tetris-bluetooth-address.c"
 	bt_patch="$kernel_pkg/1001-vendor-connectivity-linux-6.18-compat.patch.vendor"
 	preset="$device_pkg/89-nothing-tetris.preset"
@@ -90,8 +92,14 @@ validate_connectivity_boot() {
 		echo "wmt_drv must not be loaded or packaged; it conflicts with conninfra" >&2
 		return 1
 	fi
+	if grep -Fq '_conn"/common' "$kernel_apkbuild"; then
+		echo "radio modules must resolve connlog symbols from conninfra, not legacy common" >&2
+		return 1
+	fi
 
 	grep -Fq 'nothing-tetris-wifi-nvram-load' "$setup"
+	grep -Fq 'modprobe "$module"' "$setup"
+	grep -Fq 'partial radio state detected; reboot before retrying' "$setup"
 	grep -Fq 'bring_up_radios' "$setup"
 	grep -Fq 'load_modules bluetooth bt_drv_6878' "$setup"
 	grep -Fq '[ ! -d /sys/class/bluetooth/hci0 ]' "$setup"
@@ -100,7 +108,13 @@ validate_connectivity_boot() {
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-connectivity-setup all' "$service"
 	grep -Fq 'Requires=nothing-tetris-wifi-nvram.service' "$service"
 	grep -Fq 'Requires=dev-disk-by\x2dpartlabel-nvdata.device' "$nvram_service"
-	grep -Fq '/APCFG/APRDEB/BT_Addr' "$device_pkg/nothing-tetris-wifi-nvram-extract"
+	if grep -Fq '/APCFG/APRDEB/BT_Addr' "$device_pkg/nothing-tetris-wifi-nvram-extract"; then
+		echo "Bluetooth factory data must not block Wi-Fi NVRAM extraction" >&2
+		return 1
+	fi
+	grep -Fq '/APCFG/APRDEB/BT_Addr' "$bt_extract"
+	grep -Fq 'Requires=dev-disk-by\x2dpartlabel-nvdata.device' "$bt_extract_service"
+	grep -Fq 'Requires=nothing-tetris-bluetooth-address-extract.service nothing-tetris-connectivity.service' "$bt_address_service"
 	grep -Fq 'Before=bluetooth.service' "$bt_address_service"
 	grep -Fq 'Requires=nothing-tetris-bluetooth-address.service' "$bt_service_dropin"
 	grep -Fq 'MGMT_OP_SET_PUBLIC_ADDRESS' "$bt_helper"
@@ -108,6 +122,7 @@ validate_connectivity_boot() {
 	grep -Fq 'hdev->set_bdaddr = btmtk_set_public_address' "$bt_patch"
 	grep -Fxq 'enable nothing-tetris-wifi-nvram.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
+	grep -Fxq 'enable nothing-tetris-bluetooth-address-extract.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address.service' "$preset"
 	if grep -Fq 'multi-user.target.wants/nothing-tetris-' "$device_pkg/APKBUILD"; then
 		echo "device package must use systemd presets instead of packaged enablement links" >&2
@@ -141,6 +156,13 @@ validate_connectivity_firmware() {
 validate_connectivity_build() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
+	grep -Eq '^  PMBOOTSTRAP_COMMIT: [0-9a-f]{40}$' "$workflow"
+	grep -Eq '^  PMAPORTS_COMMIT: [0-9a-f]{40}$' "$workflow"
+	grep -Eq '^  TETRIS_UBOOT_COMMIT: [0-9a-f]{40}$' "$workflow"
+	grep -Eq '^  TETRIS_UBOOT_SHA256: [0-9a-f]{64}$' "$workflow"
+	grep -Fq 'fetch --depth=1 origin "$PMBOOTSTRAP_COMMIT"' "$workflow"
+	grep -Fq 'fetch --depth=1 origin "$PMAPORTS_COMMIT"' "$workflow"
+	grep -Fq 'refs/remotes/origin/main "$PMAPORTS_COMMIT"' "$workflow"
 	if grep -Fq 'CONFIG_SUPPORT_PRE_ON_PHY_ACTION=n' "$kernel_apkbuild"; then
 		echo "WLAN must retain the MT6878 joint pre-calibration callbacks" >&2
 		exit 1
