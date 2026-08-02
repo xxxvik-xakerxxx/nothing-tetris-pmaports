@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=91
+pkgrel=92
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -155,7 +155,6 @@ _build_connectivity_modules() {
 		CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH=y \
 		CONFIG_MTK_WIFI_POWER_THROTTLING=n \
 		CONFIG_MODIFY_TX_POWER_BY_BAT_VOLT=n \
-		CONFIG_SUPPORT_PRE_ON_PHY_ACTION=n \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_conn/wlan/core/gen4m/Module.symvers"
 

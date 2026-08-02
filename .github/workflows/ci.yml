@@ -239,9 +239,9 @@ jobs:
             'mt6878_6631_plat_data' /tmp/conninfra.relocations
           check_contains "MT6631 26 MHz co-clock fallback" \
             'no MT6685 regmap; using 26M co-clock' "$conninfra_module"
-          check_not_contains "joint pre-calibration power callback" \
+          check_contains "joint pre-calibration power callback" \
             'wlan_precal_pwron_v1' "$wifi_module"
-          check_not_contains "joint pre-calibration calibration callback" \
+          check_contains "joint pre-calibration calibration callback" \
             'wlan_precal_docal' "$wifi_module"
           check_contains "MT6631 HCI feature mask" \
             'Mask unsupported Synchronization Train feature' "$bt_module"
@@ -250,7 +250,7 @@ jobs:
           check_contains "native HCI address programming path" \
             'setting MT6631 public address failed' "$bt_module"
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
-          expected_conninfra_cfg=$(printf 'co_clock_flag=1\npre_cal_mode=1')
+          expected_conninfra_cfg=$(printf 'co_clock_flag=1\npre_cal_mode=0')
           actual_conninfra_cfg=$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")
           test "$actual_conninfra_cfg" = "$expected_conninfra_cfg" || {
             echo "invalid conninfra.cfg"
@@ -317,4 +317,13 @@ jobs:
         with:
           name: nothing-tetris-images
           path: /work/out/*
+          if-no-files-found: error
+      - name: Upload radio live bundle
+        uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: nothing-tetris-radio-live
+          path: |
+            /work/out/nothing-tetris-radio-live.tar.zst
+            /work/out/nothing-tetris-radio-live.MANIFEST
           if-no-files-found: error

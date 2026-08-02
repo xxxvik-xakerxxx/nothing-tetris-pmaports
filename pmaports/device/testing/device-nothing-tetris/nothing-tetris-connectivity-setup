@@ -32,7 +32,7 @@ load_modules() {
 	done
 }
 
-bring_up_wifi() {
+bring_up_radios() {
 	load_modules connadp conninfra connfem wmtWifi cfg80211 \
 		wlan_drv_gen4m_6878
 
@@ -43,34 +43,35 @@ bring_up_wifi() {
 
 	/usr/libexec/nothing-tetris-wifi-nvram-load
 
+	# MT6878 performs one joint Wi-Fi/BT pre-calibration. Both callbacks must
+	# be registered before either radio is powered for normal operation.
+	load_modules bluetooth bt_drv_6878
+
+	tries=0
+	while [ ! -d /sys/class/net/wlan0 ] || \
+			[ ! -d /sys/class/bluetooth/hci0 ]; do
+		tries=$((tries + 1))
+		[ "$tries" -lt 150 ] || {
+			log "joint radio pre-calibration did not register wlan0 and hci0"
+			return 1
+		}
+		sleep 0.1
+	done
+
 	# The vendor cdev interprets this single byte as the Wi-Fi power-on command.
 	printf '1' > /dev/wmtWifi
 
 	tries=0
-	while [ ! -d /sys/class/net/wlan0 ]; do
+	while ! ip link show wlan0 >/dev/null 2>&1; do
 		tries=$((tries + 1))
 		[ "$tries" -lt 50 ] || {
-			log "wlan0 was not registered"
+			log "wlan0 disappeared after Wi-Fi power-on"
 			return 1
 		}
 		sleep 0.1
 	done
 	ip link set wlan0 up
-	log "wlan0 is ready for the network manager"
-}
-
-bring_up_bluetooth() {
-	load_modules bluetooth bt_drv_6878
-	[ -d /sys/class/bluetooth/hci0 ] || {
-		log "hci0 was not registered"
-		return 1
-	}
-	log "hci0 is ready for BlueZ"
-}
-
-bring_up_all() {
-	bring_up_wifi
-	bring_up_bluetooth
+	log "wlan0 and hci0 are ready for NetworkManager and BlueZ"
 }
 
 stage=${1:-base}
@@ -93,17 +94,16 @@ case "$stage" in
 		load_modules connadp conninfra connfem
 		;;
 	wifi)
-		log "loading Wi-Fi stage"
-		bring_up_wifi
+		log "loading joint Wi-Fi/Bluetooth stage"
+		bring_up_radios
 		;;
 	bluetooth)
-		log "loading Bluetooth stage"
-		load_modules connadp conninfra connfem
-		bring_up_bluetooth
+		log "loading joint Wi-Fi/Bluetooth stage"
+		bring_up_radios
 		;;
 	all)
-		log "loading all connectivity stages"
-		bring_up_all
+		log "loading joint Wi-Fi/Bluetooth stage"
+		bring_up_radios
 		;;
 	*)
 		echo "usage: $0 {base|wifi|bluetooth|all}" >&2
