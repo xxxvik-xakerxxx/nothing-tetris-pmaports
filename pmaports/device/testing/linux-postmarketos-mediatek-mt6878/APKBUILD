@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=92
+pkgrel=93
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -135,9 +135,6 @@ _build_connectivity_modules() {
 
 	_connectivity_make "$_conn"/connfem KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_conn/connfem/Module.symvers"
-
-	_connectivity_make "$_conn"/common KBUILD_EXTRA_SYMBOLS="$_symbols"
-	_symbols="$_symbols $_conn/common/Module.symvers"
 
 	_connectivity_make "$_conn"/wlan/adaptor \
 		CONNAC_VER=2_0 \
