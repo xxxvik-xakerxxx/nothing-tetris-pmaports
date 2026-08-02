@@ -1,0 +1,20 @@
+[Unit]
+Description=Extract Nothing Tetris factory Bluetooth address
+Requires=dev-disk-by\x2dpartlabel-nvdata.device
+After=dev-disk-by\x2dpartlabel-nvdata.device local-fs.target
+Before=nothing-tetris-bluetooth-address.service bluetooth.service
+
+[Service]
+Type=oneshot
+RuntimeDirectory=nothing-tetris
+RuntimeDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/libexec/nothing-tetris-bluetooth-address-extract
+RemainAfterExit=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

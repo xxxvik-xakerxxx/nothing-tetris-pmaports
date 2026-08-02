@@ -1,7 +1,7 @@
 [Unit]
 Description=Configure Nothing Tetris factory Bluetooth address
-Requires=nothing-tetris-connectivity.service
-After=nothing-tetris-connectivity.service
+Requires=nothing-tetris-bluetooth-address-extract.service nothing-tetris-connectivity.service
+After=nothing-tetris-bluetooth-address-extract.service nothing-tetris-connectivity.service
 Before=bluetooth.service
 ConditionPathExists=/run/nothing-tetris/BT_ADDR
 

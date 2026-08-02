@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=6
-pkgrel=7
+pkgrel=8
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -25,6 +25,8 @@ source="
 	boot_image.its
 	deviceinfo
 	greetd-tetris-display.conf
+	nothing-tetris-bluetooth-address-extract
+	nothing-tetris-bluetooth-address-extract.service
 	nothing-tetris-bluetooth-address.c
 	nothing-tetris-bluetooth-address.service
 	nothing-tetris-bluetooth.service.conf
@@ -50,6 +52,7 @@ build() {
 }
 
 check() {
+	sh -n "$srcdir"/nothing-tetris-bluetooth-address-extract
 	sh -n "$srcdir"/nothing-tetris-connectivity-setup
 	sh -n "$srcdir"/nothing-tetris-wifi-nvram-extract
 
@@ -122,6 +125,8 @@ package() {
 		"$pkgdir"/usr/lib/udev/rules.d/80-nothing-tetris-udisks.rules
 	install -Dm755 "$srcdir"/nothing-tetris-connectivity-setup \
 		"$pkgdir"/usr/libexec/nothing-tetris-connectivity-setup
+	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address-extract \
+		"$pkgdir"/usr/libexec/nothing-tetris-bluetooth-address-extract
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address \
 		"$pkgdir"/usr/libexec/nothing-tetris-bluetooth-address
 	install -Dm755 "$srcdir"/nothing-tetris-wifi-nvram-extract \
@@ -130,6 +135,8 @@ package() {
 		"$pkgdir"/usr/libexec/nothing-tetris-wifi-nvram-load
 	install -Dm644 "$srcdir"/nothing-tetris-connectivity.service \
 		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-connectivity.service
+	install -Dm644 "$srcdir"/nothing-tetris-bluetooth-address-extract.service \
+		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-bluetooth-address-extract.service
 	install -Dm644 "$srcdir"/nothing-tetris-bluetooth-address.service \
 		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-bluetooth-address.service
 	install -Dm644 "$srcdir"/nothing-tetris-wifi-nvram.service \
@@ -142,16 +149,18 @@ package() {
 
 sha512sums="
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
-d6af5b50329a229bc9af17cdde0cbca8c669bbb21f408aea8320edaaff8431985d6994fcb4f796db08ad7ca3445b80a710b78f1f7c746ac1c76dbf6fa3f92ba3  89-nothing-tetris.preset
+72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
 a9a1daae5ca2cd328b65540213f4bbb581f8119df71b8e2b51d69301343a793c770a2e7750a68456d1829f8e6cd3364d683087bc773dd549c6d407b56dc19ceb  deviceinfo
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
+18fe51bf25f196993e01d19476798029cddd9dadef4ffd250d3b6f41da3e97056dd17208d647ac6dfc2e152735eab14dfb69ccda078cbf49b115dde5c39ed491  nothing-tetris-bluetooth-address-extract
+c9f4a3ba904e46726effd8b4c47b00a6da50bf38ea1c85101ea0ee9f5178286999b10822c8ae2254bab112081b8ebd1ada7874f022b41b3a369302633e621a7e  nothing-tetris-bluetooth-address-extract.service
 c63fdb9c4213a2a35a4a867e41a6c6d7e97db5b08eb4840c625a2d47d9c598f5046ecf4a687772f4ab82a01214ba843e22e3cb48e0710aed4a61dcef1458b18f  nothing-tetris-bluetooth-address.c
-10c0bd6ba44fc5de90c6fab5c8f1557e5df5ed06b078d8260f43ff5ab0b5169f22e03e928893a27dbd8e2e333a4d865f43d3b8fef3f3ea8405e9df981c2f15af  nothing-tetris-bluetooth-address.service
+ce093b67bf0f1c67542e6c7417c052b17bc203406ecaacae0997633700dcb2422ebacb73cf1e38148adb0e347f7b3151ce7819b6ab2a75a07abfdb2dddf56ce5  nothing-tetris-bluetooth-address.service
 84817bfd5b9a9b7370c5ab299ddbe652c043ef36352a8bc2f088eecdc55372436a4e82717c1cb135d9845158c34b1dfa21b167516114fda87fdff3c61ae02208  nothing-tetris-bluetooth.service.conf
 a8b68de13cac4374d852fbddfc64645d39566d971791c5e305da549944937bac863c4d9b1f9a4c59fe5ca606ec12659df173e553c82e516d92a529d07f6398eb  nothing-tetris-connectivity.service
-8c8292bc2cf1a7ddaa84fac746176c4be8928b9ddf4cdd2c3eb3dc5de2ab3bfea84cceb50a1eee5e4d959f7348c1308465bb731fcf69a79355b4ccc95ca14b37  nothing-tetris-connectivity-setup
-ed86c3842e72bb5c37320f88618249db28098e408fb1a96385c5995c5f1d73bce79797e97f337211334e3931fdea97ce4a34b758b7e7d36bdabff04f03c5d3a8  nothing-tetris-wifi-nvram-extract
+d33eebdbde0cd1196e064524829c34c449994f89233e68b68332e05ef4aae2d3fb9007e50ccce7bad01c536f6376802fefe48e64897e86a9f69418c1c0c59fcd  nothing-tetris-connectivity-setup
+a9574c65474ba420461cac734afc87396e7d97d031c0676dd218a17ac7542e5ff0aa9cd216d643c0e8d56255cbdabaca43bb72893f6fca5882cca0f7d5fd503a  nothing-tetris-wifi-nvram-extract
 28b6b865f7964ea73f072fe0f6f3188fe6e4d8c307c9ff5029d91d071144994733de37bcc85391d381e037180de2318425a531d46088a7dc89c9ed886d6c937d  nothing-tetris-wifi-nvram-load.c
 12186da839be456a98f281d1babe64f277123ceb1eaf4fd5c285d89d0dc7014333242862d2570012f3b5bb47dc212b694df704a9bd54dbb459004e61c1b88cfc  nothing-tetris-wifi-nvram.service
 291488cf24bb4ecc515d5c44907f5899bf818bb148b4729da2257b5deadf113c65e3d2f228c730f1ce79250de94dd217b7da5d69abe71be5e707f966f4a80c2a  phoc.ini

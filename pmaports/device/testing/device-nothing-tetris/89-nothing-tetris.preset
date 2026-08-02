@@ -1,3 +1,4 @@
 enable nothing-tetris-wifi-nvram.service
 enable nothing-tetris-connectivity.service
+enable nothing-tetris-bluetooth-address-extract.service
 enable nothing-tetris-bluetooth-address.service

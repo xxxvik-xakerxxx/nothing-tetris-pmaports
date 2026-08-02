@@ -11,12 +11,7 @@ load_module() {
 		return 0
 	fi
 
-	release=$(uname -r)
-	path=/lib/modules/$release/extra/mediatek-connectivity/$module.ko
-	if [ -e "$path" ]; then
-		insmod "$path" && return 0
-	fi
-	if modprobe "$module" 2>/dev/null; then
+	if modprobe "$module"; then
 		return 0
 	fi
 
@@ -33,6 +28,18 @@ load_modules() {
 }
 
 bring_up_radios() {
+	if [ -d /sys/class/net/wlan0 ] && \
+			[ -d /sys/class/bluetooth/hci0 ]; then
+		ip link set wlan0 up
+		log "wlan0 and hci0 are already ready"
+		return 0
+	fi
+	if [ -d /sys/module/wlan_drv_gen4m_6878 ] || \
+			[ -d /sys/module/bt_drv_6878 ]; then
+		log "partial radio state detected; reboot before retrying"
+		return 1
+	fi
+
 	load_modules connadp conninfra connfem wmtWifi cfg80211 \
 		wlan_drv_gen4m_6878
 
