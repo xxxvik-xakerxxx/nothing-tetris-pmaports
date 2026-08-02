@@ -92,9 +92,12 @@ validate_connectivity_boot() {
 	fi
 
 	grep -Fq 'nothing-tetris-wifi-nvram-load' "$setup"
+	grep -Fq 'bring_up_all' "$setup"
 	grep -Fq 'load_modules bluetooth bt_drv_6878' "$setup"
+	grep -Fq '[ -d /sys/class/bluetooth/hci0 ]' "$setup"
 	grep -Fq "printf '1' > /dev/wmtWifi" "$setup"
 	grep -Fq 'Before=NetworkManager.service bluetooth.service iwd.service' "$service"
+	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-connectivity-setup all' "$service"
 	grep -Fq 'Requires=nothing-tetris-wifi-nvram.service' "$service"
 	grep -Fq 'Requires=dev-disk-by\x2dpartlabel-nvdata.device' "$nvram_service"
 	grep -Fq '/APCFG/APRDEB/BT_Addr' "$device_pkg/nothing-tetris-wifi-nvram-extract"
@@ -112,6 +115,42 @@ validate_connectivity_boot() {
 	fi
 }
 
+validate_connectivity_firmware() {
+	config="$firmware_pkg/conninfra.cfg"
+	expected_config=$(printf 'co_clock_flag=1\npre_cal_mode=1')
+	actual_config=$(cat "$config")
+	if [ "$actual_config" != "$expected_config" ]; then
+		echo "conninfra.cfg must disable joint Wi-Fi/BT pre-calibration" >&2
+		return 1
+	fi
+
+	for item in \
+		connsys_bt_mt6878_mt6631.bin:740956 \
+		connsys_gnss_mt6878_mt6631.bin:523368 \
+		connsys_wifi_mt6878_mt6631.bin:1526820; do
+		file=${item%:*}
+		expected=${item#*:}
+		actual=$(wc -c < "$firmware_pkg/$file")
+		if [ "$actual" -ne "$expected" ]; then
+			echo "invalid extracted firmware size: $file: $actual != $expected" >&2
+			return 1
+		fi
+	done
+}
+
+validate_connectivity_build() {
+	workflow="$repo_root/.github/workflows/ci.yml"
+
+	grep -Fq 'CONFIG_SUPPORT_PRE_ON_PHY_ACTION=n' "$kernel_apkbuild"
+	grep -Fq "'-DCONFIG_MTK_COMBO_CHIP_CONSYS_6878=1 '" "$kernel_apkbuild"
+	grep -Fq 'gzip -cd "$rootfs/boot/vmlinuz"' "$workflow"
+	grep -Fq 'nothing-tetris-radio-live.tar.zst' "$workflow"
+	if grep -F 'clang version 21' "$workflow" | grep -Fq 'boot_image.itb'; then
+		echo "compiler identity cannot be searched in the compressed FIT image" >&2
+		return 1
+	fi
+}
+
 validate_sums "$kernel_pkg"
 validate_sums "$device_pkg"
 validate_sums "$firmware_pkg"
@@ -120,5 +159,7 @@ validate_source_files "$device_pkg"
 validate_source_files "$firmware_pkg"
 validate_vendor_baseline
 validate_connectivity_boot
+validate_connectivity_firmware
+validate_connectivity_build
 
 echo "pmaports overlay validation passed"

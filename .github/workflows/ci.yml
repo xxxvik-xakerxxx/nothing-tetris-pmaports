@@ -157,6 +157,24 @@ jobs:
               exit 1
             }
           }
+          check_contains() {
+            description=$1
+            needle=$2
+            file=$3
+            grep -aFq -- "$needle" "$file" || {
+              echo "missing $description in $file: $needle"
+              exit 1
+            }
+          }
+          check_not_contains() {
+            description=$1
+            needle=$2
+            file=$3
+            if grep -aFq -- "$needle" "$file"; then
+              echo "unexpected $description in $file: $needle"
+              exit 1
+            fi
+          }
           for executable in \
             /usr/libexec/nothing-tetris-connectivity-setup \
             /usr/libexec/nothing-tetris-bluetooth-address \
@@ -179,9 +197,9 @@ jobs:
             check_link "$link"
           done
           for firmware_size in \
-            connsys_bt_mt6878_mt6631.bin:8388608 \
-            connsys_gnss_mt6878_mt6631.bin:8388608 \
-            connsys_wifi_mt6878_mt6631.bin:8388608; do
+            connsys_bt_mt6878_mt6631.bin:740956 \
+            connsys_gnss_mt6878_mt6631.bin:523368 \
+            connsys_wifi_mt6878_mt6631.bin:1526820; do
             firmware=${firmware_size%:*}
             expected=${firmware_size#*:}
             actual=$(stat -c %s "$rootfs/usr/lib/firmware/$firmware")
@@ -209,21 +227,68 @@ jobs:
           ! find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
           conninfra_module=$(find "$rootfs/lib/modules" -name conninfra.ko -print -quit)
+          wifi_module=$(find "$rootfs/lib/modules" -name wlan_drv_gen4m_6878.ko -print -quit)
           test "$(stat -c %s "$conninfra_module")" -gt 6000000 || {
             echo "conninfra module is missing MT6878 platform objects"
             exit 1
           }
-          grep -aFq 'mediatek,mt6878-6631-consys' "$conninfra_module"
-          grep -aFq 'no MT6685 regmap; using 26M co-clock' "$conninfra_module"
-          grep -aFq 'Mask unsupported Synchronization Train feature' "$bt_module"
-          grep -aFq 'HCI device registration failed' "$bt_module"
-          grep -aFq 'setting MT6631 public address failed' "$bt_module"
+          check_contains "MT6878/MT6631 compatible" \
+            'mediatek,mt6878-6631-consys' "$conninfra_module"
+          readelf --wide -r "$conninfra_module" > /tmp/conninfra.relocations
+          check_contains "MT6878/MT6631 platform-data relocation" \
+            'mt6878_6631_plat_data' /tmp/conninfra.relocations
+          check_contains "MT6631 26 MHz co-clock fallback" \
+            'no MT6685 regmap; using 26M co-clock' "$conninfra_module"
+          check_not_contains "joint pre-calibration power callback" \
+            'wlan_precal_pwron_v1' "$wifi_module"
+          check_not_contains "joint pre-calibration calibration callback" \
+            'wlan_precal_docal' "$wifi_module"
+          check_contains "MT6631 HCI feature mask" \
+            'Mask unsupported Synchronization Train feature' "$bt_module"
+          check_contains "native HCI registration path" \
+            'HCI device registration failed' "$bt_module"
+          check_contains "native HCI address programming path" \
+            'setting MT6631 public address failed' "$bt_module"
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
-          test "$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")" = 'co_clock_flag=1'
-          grep -aFq 'Alpine clang version 21' /work/out/boot_image.itb
+          expected_conninfra_cfg=$(printf 'co_clock_flag=1\npre_cal_mode=1')
+          actual_conninfra_cfg=$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")
+          test "$actual_conninfra_cfg" = "$expected_conninfra_cfg" || {
+            echo "invalid conninfra.cfg"
+            printf 'expected:\n%s\nactual:\n%s\n' \
+              "$expected_conninfra_cfg" "$actual_conninfra_cfg"
+            exit 1
+          }
+          gzip -cd "$rootfs/boot/vmlinuz" > /tmp/nothing-tetris-Image
+          check_contains "LLVM 21 compiler identity" \
+            'clang version 21' /tmp/nothing-tetris-Image
+          rm -f /tmp/nothing-tetris-Image /tmp/conninfra.relocations
           test -s /work/out/nothing-tetris-root.sparse.img
           test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb
+          release_dir=$(find "$rootfs/lib/modules" -mindepth 1 -maxdepth 1 \
+            -type d -print -quit)
+          release=${release_dir##*/}
+          test -n "$release"
+          cat > /work/out/nothing-tetris-radio-live.MANIFEST <<EOF
+          github_sha=$GITHUB_SHA
+          kernel_release=$release
+          connectivity_source=e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+          device_modules_source=ee2be53cb75670b548948636a0db1d1ff112bf12
+          EOF
+          tar -C "$rootfs" -cf /tmp/nothing-tetris-radio-live.tar \
+            "lib/modules/$release/extra/mediatek-connectivity" \
+            usr/lib/firmware/conninfra.cfg \
+            usr/lib/firmware/connsys_bt_mt6878_mt6631.bin \
+            usr/lib/firmware/connsys_gnss_mt6878_mt6631.bin \
+            usr/lib/firmware/connsys_wifi_mt6878_mt6631.bin \
+            usr/libexec/nothing-tetris-connectivity-setup \
+            usr/libexec/nothing-tetris-wifi-nvram-load \
+            usr/lib/systemd/system/nothing-tetris-connectivity.service
+          zstd -T0 -10 /tmp/nothing-tetris-radio-live.tar \
+            -o /work/out/nothing-tetris-radio-live.tar.zst
+          test -s /work/out/nothing-tetris-radio-live.tar.zst
+          sha256sum /work/out/nothing-tetris-radio-live.tar.zst >> \
+            /work/out/nothing-tetris-radio-live.MANIFEST
           file /work/out/nothing-tetris-root.sparse.img
           (cd /work/out && sha256sum \
             boot_image.itb \
