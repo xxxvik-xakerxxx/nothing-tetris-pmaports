@@ -139,7 +139,9 @@ validate_connectivity_boot() {
 
 validate_power_and_audio_config() {
 	config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	apkbuild="$kernel_pkg/APKBUILD"
 	cpu_patch="$kernel_pkg/0019-arm64-dts-mt6878-shallow-cpuidle.patch"
+	pmdomain_patch="$kernel_pkg/0018-pmdomain-mediatek-mt6878-audio.patch"
 	audio_patch="$kernel_pkg/0010-audio-mt6878-aw88261.patch"
 	audio_vendor_patch="$kernel_pkg/1102-vendor-audio-linux-6.18-api.patch.vendor"
 	audio_modules="$device_pkg/nothing-tetris-audio.conf"
@@ -153,6 +155,16 @@ validate_power_and_audio_config() {
 		CONFIG_SND_MAX_CARDS=32; do
 		grep -Fxq "$option" "$config"
 	done
+
+	grep -Fq 'export PATH="/usr/lib/llvm21/bin:$PATH"' "$apkbuild"
+	grep -Fq 'make ARCH="$_carch" LLVM=1 olddefconfig' "$apkbuild"
+	grep -Eq '^\+[[:space:]]*infracfg_ao: syscon@10001000 \{' "$pmdomain_patch"
+	grep -Eq '^\+[[:space:]]*infracfg = <&infracfg_ao>;' "$pmdomain_patch"
+	grep -Fq '+#define MTK_SCPD_STATUS_IN_CTL' "$pmdomain_patch"
+	grep -Fq '+#define PWR_ACK_BIT' "$pmdomain_patch"
+	grep -Fq '+#define PWR_ACK_2ND_BIT' "$pmdomain_patch"
+	grep -Eq '^\+[[:space:]]*if \(MTK_SCPD_CAPS\(pd, MTK_SCPD_STATUS_IN_CTL\)\) \{' \
+		"$pmdomain_patch"
 	grep -Fxq '# CONFIG_ARM_PSCI_CPUIDLE_DOMAIN is not set' "$config"
 	test "$(grep -c '^+.*compatible = "arm,cortex-a55";' "$cpu_patch")" -eq 4
 	test "$(grep -c '^+.*compatible = "arm,cortex-a78";' "$cpu_patch")" -eq 4

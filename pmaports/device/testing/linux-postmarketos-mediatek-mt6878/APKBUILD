@@ -71,6 +71,8 @@ _android_top="$srcdir/android-top"
 prepare() {
 	default_prepare
 	cp "$srcdir/config-$_flavor.$arch" .config
+	export PATH="/usr/lib/llvm21/bin:$PATH"
+	make ARCH="$_carch" LLVM=1 olddefconfig
 
 	mkdir -p "$_android_top"/vendor/mediatek/kernel_modules
 	ln -snf "$_connmods_dir"/connectivity \
@@ -357,7 +359,7 @@ fbdb65423ec8fab0540d9eb6898e8fc558f1398c2871543452be86850db4efee396af461b9bef9a7
 98f17f4977dc23dc8455fcecb8c382b8a56f9fe2523fc92f1dc9f8ea2c5c0234817573502823c02fdcf171509fd5eb3561650570095e0f9074f805f5413c6cd9  0015-leds-flash-lm3644-tetris.patch
 beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
 c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
-8ed1ec9027f43f977cb1921a3326ac94aa7472213197037feef031fa10f093e6426a6bad665007d4994cec89026282721023eed1662f6dcdf1ecc5b87440ebd0  0018-pmdomain-mediatek-mt6878-audio.patch
+f47dcf3deee55601313833c112d8080f5ea15bd9ca557bb1e348e1ce2144f363f9616a67e11a06e4dbeb097ba60fd80f1a919b0a05f7f09b8ae8b482ba38ed64  0018-pmdomain-mediatek-mt6878-audio.patch
 10f9e8f506bd2ae4f97e0d4326b660b7f428dff92fdac0827e8e9ceec51e68529190b0892ad0d7df911d7a99b9bcf021eeab002d757546081ae706538ffc0c24  0019-arm64-dts-mt6878-shallow-cpuidle.patch
 95f1dd6bf1d7488915e8e6d4904c5a22775cb9c1be23e8bc7393391f178c638616cb687cbc887092591d1a88597eb8e8754c621e887853bf9d7d911dae0d3379  0020-arm64-dts-mt6878-gnss.patch
 8559310e63dbc5ed8edf08f2cfe6f614efb54f7f215c087bec00d4208c72f100a7d49b213f92f9e007e958464ce22b0adce6090dd53d0bc5caa38758b23817e1  0021-usb-mtu3-native-role-switch.patch

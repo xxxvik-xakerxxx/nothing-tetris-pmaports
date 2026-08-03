@@ -8,14 +8,27 @@ without relying on bootloader state.
 
 --- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
-@@ -10,5 +10,6 @@
+@@ -9,6 +9,7 @@
+ #include <dt-bindings/interrupt-controller/arm-gic.h>
  #include <dt-bindings/interrupt-controller/irq.h>
  #include <dt-bindings/phy/phy.h>
 +#include <dt-bindings/power/mediatek,mt6878-power.h>
  #include <dt-bindings/reset/ti-syscon.h>
  #include "mt6878-pinfunc.h"
  
-@@ -397,13 +398,18 @@
+@@ -306,6 +307,11 @@
+ 			hw-voter-regmap = <&hwv>;
+ 		};
+ 
++		infracfg_ao: syscon@10001000 {
++			compatible = "mediatek,mt6878-infracfg-ao", "syscon";
++			reg = <0x10001000 0x1000>;
++		};
++
+ 		pio: pinctrl {
+ 			compatible = "mediatek,mt6878-pinctrl";
+ 			reg = <0x10005000 0x1000>,
+@@ -395,13 +401,19 @@
  		};
  
  		audiosys: syscon@11050000 {
@@ -33,13 +46,16 @@ without relying on bootloader state.
 +				reg = <0 0x9000>;
  				interrupts = <GIC_SPI 392 IRQ_TYPE_LEVEL_HIGH 0>;
 +				power-domains = <&spm MT6878_POWER_DOMAIN_AUDIO>;
++				infracfg = <&infracfg_ao>;
  				clocks = <&audiosys CLK_AFE_AUDIO_HOPPING>,
  					 <&audiosys CLK_AFE_AUDIO_F26M>,
  					 <&audiosys CLK_AFE_DL0_DAC>,
-@@ -739,6 +746,26 @@
- 			};
- 		};
- 
+@@ -859,6 +871,26 @@
+ 				     "syscon";
+ 			reg = <0x13fa0c00 0x1000>;
+ 			#clock-cells = <1>;
++		};
++
 +		scpsys: syscon@1c001000 {
 +			compatible = "mediatek,mt6878-scpsys", "syscon", "simple-mfd";
 +			reg = <0x1c001000 0x1000>;
@@ -58,11 +74,9 @@ without relying on bootloader state.
 +					#power-domain-cells = <0>;
 +				};
 +			};
-+		};
-+
+ 		};
+ 
  		watchdog: watchdog@1c00a000 {
- 			compatible = "mediatek,mt6878-wdt",
- 				     "mediatek,mt6589-wdt",
 --- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
 +++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
 @@ -18,6 +18,7 @@
@@ -73,7 +87,31 @@ without relying on bootloader state.
  #include "mt6893-pm-domains.h"
  #include "mt8167-pm-domains.h"
  #include "mt8173-pm-domains.h"
-@@ -936,6 +937,10 @@
+@@ -37,8 +38,10 @@
+ #define PWR_ON_2ND_BIT			BIT(3)
+ #define PWR_CLK_DIS_BIT			BIT(4)
+ #define PWR_SRAM_CLKISO_BIT		BIT(5)
+ #define PWR_SRAM_ISOINT_B_BIT		BIT(6)
++#define PWR_ACK_BIT			BIT(30)
++#define PWR_ACK_2ND_BIT			BIT(31)
+ 
+ #define PWR_RTFF_SAVE			BIT(24)
+ #define PWR_RTFF_NRESTORE		BIT(25)
+ #define PWR_RTFF_CLK_DIS		BIT(26)
+@@ -71,6 +74,12 @@ static bool scpsys_domain_is_on(struct scpsys_domain *pd)
+ 	struct scpsys *scpsys = pd->scpsys;
+ 	u32 status, status2;
+ 
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_STATUS_IN_CTL)) {
++		regmap_read(scpsys->base, pd->data->ctl_offs, &status);
++		return (status & (PWR_ACK_BIT | PWR_ACK_2ND_BIT)) ==
++		       (PWR_ACK_BIT | PWR_ACK_2ND_BIT);
++	}
++
+ 	regmap_read(scpsys->base, pd->data->pwr_sta_offs, &status);
+ 	status &= pd->data->sta_mask;
+ 
+@@ -936,6 +945,10 @@
  		.compatible = "mediatek,mt6795-power-controller",
  		.data = &mt6795_scpsys_data,
  	},
@@ -84,6 +122,16 @@ without relying on bootloader state.
  	{
  		.compatible = "mediatek,mt6893-power-controller",
  		.data = &mt6893_scpsys_data,
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.h
+@@ -15,6 +15,7 @@
+ #define MTK_SCPD_SRAM_PDN_INVERTED	BIT(9)
+ #define MTK_SCPD_MODEM_PWRSEQ		BIT(10)
+ #define MTK_SCPD_SKIP_RESET_B		BIT(11)
++#define MTK_SCPD_STATUS_IN_CTL		BIT(12)
+ #define MTK_SCPD_CAPS(_scpd, _x)	((_scpd)->data->caps & (_x))
+ 
+ #define SPM_VDE_PWR_CON			0x0210
 --- /dev/null
 +++ b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
 @@ -0,0 +1,45 @@
