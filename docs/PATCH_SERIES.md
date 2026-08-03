@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=85`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=99`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -37,7 +37,7 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `0001-input-touchscreen-ft3519t-tetris.patch` | Board DT plus vendor-derived FT3519 touchscreen driver. Large and not upstream-quality yet, but required for working touch. |
 | `0002-mfd-mt6369-spmi-pmic.patch` | MT6369 SPMI PMIC/regulator foundation required by touch and peripheral rails. |
-| `0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch` | Hardware inventory nodes kept disabled until drivers are ready, including MT6631 connsys/Wi-Fi/BT/GNSS. |
+| `0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch` | Board peripheral inventory plus the hardware-tested MT6631 conninfra reserved-memory/PMIC contract. Wi-Fi and Bluetooth are enabled; unvalidated clients remain disabled. |
 | `0006-pinctrl-mediatek-mt6878-eint.patch` | EINT table fix needed by board interrupts. |
 
 ### Stable framebuffer display path
@@ -72,7 +72,7 @@ normal Alpine/postmarketOS practice.
 | `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation; module loading remains manual. |
 | `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
 
-The r88 package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=99` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -85,9 +85,10 @@ from `nvdata`, performs one WMT NVRAM write, completes joint pre-calibration and
 powers Wi-Fi before NetworkManager and BlueZ start. It also extracts only the
 six-byte factory Bluetooth address and provisions it through the standard
 kernel HCI/BlueZ MGMT path before `bluetooth.service`. On-device testing
-confirmed repeated Wi-Fi scans, native BlueZ discovery, address persistence
-across a controller power cycle and simultaneous radio operation without
-WFSYS/BGFSYS reset. The standalone `wmt_drv` is not installed because
+confirmed automatic joint pre-calibration across three clean boots, Wi-Fi scans
+of 77, 75 and 79 BSS, native BlueZ discovery, address persistence across a
+controller power cycle and simultaneous radio operation without WFSYS/BGFSYS
+reset. The standalone `wmt_drv` is not installed because
 it duplicates symbols already provided by `conninfra` in this source
 combination.
 The vendor `conninfra` cleanup path also oopses if the module is unloaded, so

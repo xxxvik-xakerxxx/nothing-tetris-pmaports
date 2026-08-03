@@ -1,6 +1,6 @@
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -97,6 +97,184 @@
+@@ -97,6 +97,193 @@
  	regulator-max-microvolt = <3000000>;
  };
  
@@ -119,6 +119,14 @@
 +		emi-max-addr = <0x90000000>;
 +		hwid-node = <92>;
 +		adie-sku = <0 1>;
++		memory-region = <&consys_emi>;
++		mediatek,main-pmic = <&main_pmic>;
++		mediatek,secondary-pmic = <&second_pmic>;
++		mt6363_vcn13-supply = <&mt6363_vcn13>;
++		mt6363_vrfio18-supply = <&mt6363_vrfio18>;
++		mt6369_vcn33_1-supply = <&mt6369_vcn33_1>;
++		mt6369_vcn33_2-supply = <&mt6369_vcn33_2>;
++		mt6369_vant18-supply = <&mt6369_vant18>;
 +		vcn13-supply = <&mt6363_vcn13>;
 +		vrfio18-supply = <&mt6363_vrfio18>;
 +		vcn33-1-supply = <&mt6369_vcn33_1>;
@@ -137,11 +145,12 @@
 +		      <0 0x10001000 0 0x1000>;
 +		interrupts = <GIC_SPI 693 IRQ_TYPE_LEVEL_HIGH 0>,
 +			     <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH 0>;
-+		status = "disabled";
++		status = "okay";
 +	};
 +
 +	wifi: wifi@18400000 {
 +		compatible = "mediatek,wifi";
++		memory-region = <&wifi_reserved>;
 +		remap-idx = <1>;
 +		reg = <0 0x18400000 0 0>,
 +		      <0 0x18000000 0 0x700000>;
@@ -151,7 +160,7 @@
 +		emi-size = <0x1400000>;
 +		emi-alignment = <0x1000000>;
 +		emi-max-addr = <0xc0000000>;
-+		status = "disabled";
++		status = "okay";
 +	};
 +
 +	gps: gnss@18c00000 {
@@ -185,3 +194,19 @@
  &pio {
  	key_gpio_default: key-default {
  		pins-cmd1-dat {
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -809,11 +809,11 @@
+-		mblock-42-shared-dma-pool_wifi-reserve-memory_dma {
++		wifi_reserved: mblock-42-shared-dma-pool_wifi-reserve-memory_dma {
+ 			phandle = <0x312>;
+ 			reg = <0x00 0x86b00000 0x00 0x1400000>;
+ 			no-map;
+ 			compatible = "shared-dma-pool";
+ 		};
+ 
+-		mblock-41-consys_emi_reserved {
++		consys_emi: mblock-41-consys_emi_reserved {
+ 			reg = <0x00 0x85e00000 0x00 0xd00000>;
+ 			no-map;
+ 			compatible = "mediatek,consys_emi_reserved";

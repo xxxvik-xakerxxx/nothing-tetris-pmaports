@@ -86,6 +86,7 @@ validate_connectivity_boot() {
 	bt_extract="$device_pkg/nothing-tetris-bluetooth-address-extract"
 	bt_helper="$device_pkg/nothing-tetris-bluetooth-address.c"
 	bt_patch="$kernel_pkg/1001-vendor-connectivity-linux-6.18-compat.patch.vendor"
+	dts_patch="$kernel_pkg/0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch"
 	wifi_powersave="$device_pkg/20-nothing-tetris-wifi-powersave.conf"
 	preset="$device_pkg/89-nothing-tetris.preset"
 
@@ -127,6 +128,25 @@ validate_connectivity_boot() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'DBGLOG(SW4, TRACE, TEMP_LOG_TEMPLATE' "$bt_patch"
 	grep -Fq 'DBGLOG(HAL, TRACE, "%s\n", buf)' "$bt_patch"
+	grep -Fq '+		consys_emi: mblock-41-consys_emi_reserved {' "$dts_patch"
+	grep -Fq '+		wifi_reserved: mblock-42-shared-dma-pool_wifi-reserve-memory_dma {' "$dts_patch"
+	grep -Fq '+		memory-region = <&consys_emi>;' "$dts_patch"
+	grep -Fq '+		memory-region = <&wifi_reserved>;' "$dts_patch"
+	grep -Fq '+		mediatek,main-pmic = <&main_pmic>;' "$dts_patch"
+	grep -Fq '+		mediatek,secondary-pmic = <&second_pmic>;' "$dts_patch"
+	for supply in \
+		mt6363_vcn13 \
+		mt6363_vrfio18 \
+		mt6369_vcn33_1 \
+		mt6369_vcn33_2 \
+		mt6369_vant18; do
+		grep -Fq "+		$supply-supply = <&$supply>;" "$dts_patch"
+	done
+	grep -Fq '+		vcn13-supply = <&mt6363_vcn13>;' "$dts_patch"
+	grep -Fq '+		vrfio18-supply = <&mt6363_vrfio18>;' "$dts_patch"
+	grep -Fq '+		vcn33-1-supply = <&mt6369_vcn33_1>;' "$dts_patch"
+	grep -Fq '+		vcn33-2-supply = <&mt6369_vcn33_2>;' "$dts_patch"
+	test "$(grep -c '^+.*status = "okay";' "$dts_patch")" -ge 3
 	grep -Fxq 'enable nothing-tetris-wifi-nvram.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address-extract.service' "$preset"

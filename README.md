@@ -105,14 +105,15 @@ Additional live checks on r63:
   partitions, but `firmware-nothing-tetris` ships the required blobs so the
   rootfs does not depend on reading Android partitions at runtime.
 
-Connectivity validation for the r88 package sources:
+Connectivity validation for the `pkgrel=99` package sources:
 
 - U-Boot preloads the exact MT6631 payloads from the packaged Nothing OS 4.1
   firmware containers before Linux applies the conninfra memory protection.
 - Wi-Fi factory calibration is read-only extracted from the `nvdata` GPT
   partition at boot and delivered to `/dev/wmtWifi` as one validated write.
-- Four consecutive NetworkManager scans completed with `Status:NORMAL`; the
-  final coexistence scan found 28 BSS while the Bluetooth controller remained
+- Three clean boots of the CI kernel/rootfs with the rebuilt package DTB
+  completed automatic joint Wi-Fi/Bluetooth pre-calibration. NetworkManager
+  scans found 77, 75 and 79 BSS while the Bluetooth controller remained
   powered, with no WFSYS assert, instruction abort, SCIF timeout or reset.
 - The Bluetooth module uses the native kernel HCI interface. BlueZ powered the
   controller and discovered 23 nearby devices without an Android HAL. The
@@ -127,7 +128,7 @@ Connectivity validation for the r88 package sources:
 - MT6375 exposes battery/USB power supplies and a Type-C partner, RT6010
   exposes `FF_RUMBLE`, AW88261 identifies as chip `0x2113`, and MSDC1 exposes
   `mmc0`. ALSA still has no sound card and LM3644 exposes no LED device.
-- The current r88 kernel has no cpuidle framework or thermal zones. The MT6375
+- The earlier r88 kernel had no cpuidle framework or thermal zones. The MT6375
   PMIC ADC reported about 40-41 C during connected Wi-Fi/Bluetooth use, while
   the WLAN driver emitted several INFO telemetry records every second. The next
   package enables only shallow per-CPU PSCI idle, enables NetworkManager Wi-Fi

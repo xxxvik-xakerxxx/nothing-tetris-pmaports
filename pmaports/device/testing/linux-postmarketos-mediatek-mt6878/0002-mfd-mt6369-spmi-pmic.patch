@@ -8,7 +8,7 @@
 +
 +#include <dt-bindings/spmi/spmi.h>
 +
-+	second_pmic@5 {
++	second_pmic: second_pmic@5 {
 +		compatible = "mediatek,mt6369";
 +		reg = <0x5 SPMI_USID>;
 +
