@@ -258,7 +258,7 @@ validate_haptics() {
 		'RT6010_RAM_WAVE_INDEX 0x01'; do
 		name=${setting% *}
 		value=${setting#* }
-		grep -Eq "^\\+#define $name[[:space:]]+$value$" "$haptic_patch"
+		grep -Eq "^\\+#define ${name}[[:space:]]+${value}$" "$haptic_patch"
 	done
 
 	grep -Eq '^\+[[:space:]]+schedule_work\(&rt->play_work\);$' "$haptic_patch"

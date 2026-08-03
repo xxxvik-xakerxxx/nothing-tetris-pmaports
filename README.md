@@ -64,10 +64,11 @@ Driver packaging and vendor-to-native migration are documented in
 | Haptics | RT6010 rumble | Works (live) | The native driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; full-strength and repeated bounded effects work without kernel, USB or radio faults. |
 | Haptics | Clean-install integration | Pending validation | The device package autoloads `rt6010` and identifies it to feedbackd. A clean CI-artifact flash, suspend/resume and cold-boot repetition remain. |
 | Audio | Speaker amp identification | Partial | AW88261 probes, identifies chip `0x2113` and loads `aw88261_acf.bin`; physical output is not validated. |
-| Audio | Playback/recording | Partial | MT6878 AFE, MT6369 and the machine card register automatically in the live `pkgrel=100` candidate. PCM endpoints exist, but speakers, microphones, routing/UCM and lifecycle tests remain. |
+| Audio | Playback/recording | Partial | MT6878 AFE, MT6369, AW88261 and the machine card register automatically. ALSA exposes playback and capture endpoints, but both speakers, every microphone, routing/UCM and lifecycle tests remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
 | Camera | Front/rear cameras | Broken | No V4L2/media nodes are present. Sensors, SENINF/ISP, clocks, power domains, IOMMU and userspace still need a staged port. |
-| Camera | Flash | Broken | r86 contains the LM3644 driver and board wiring, but no LED class device probes on the current image. |
+| Camera | Torch | Works (live) | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off without USB or radio faults. |
+| Camera | Flash strobe | Pending validation | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 camera-flash bridge remain unvalidated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | B4.1 WLAN firmware, factory NVRAM, scans and Wi-Fi/Bluetooth coexistence work live. Clean-install automatic startup is staged for CI validation. |
 | Connectivity | Bluetooth | Partial | Native BlueZ HCI, factory address provisioning, discovery and Wi-Fi coexistence work live. Clean-install automatic startup still requires CI image validation. |
@@ -143,7 +144,7 @@ Connectivity validation for the `pkgrel=99` package sources:
   is unsafe on this kernel. Connectivity recovery uses a normal reboot.
 - MT6375 exposes battery/USB power supplies and a Type-C partner, RT6010
   exposes `FF_RUMBLE`, AW88261 identifies as chip `0x2113`, and MSDC1 exposes
-  `mmc0`. ALSA still has no sound card and LM3644 exposes no LED device.
+  `mmc0`.
 - The earlier r88 kernel had no cpuidle framework or thermal zones. The MT6375
   PMIC ADC reported about 40-41 C during connected Wi-Fi/Bluetooth use, while
   the WLAN driver emitted several INFO telemetry records every second. The next
@@ -171,6 +172,12 @@ Additional live audit on the `6.18.0 #99` kernel:
   `Model Name`; arm64 exposes the heterogeneous clusters as MIDR implementer
   and part fields. Kernel CPU topology is correct, so the display bug belongs
   in GNOME/libgtop rather than a Tetris-specific kernel string.
+- LM3644 registers `white:flash-rear-main` and `white:flash-rear-wide`. Both
+  channels illuminated independently during bounded torch tests and returned
+  to `brightness=0`; UDC stayed configured and no LED fault was logged.
+- ALSA card `mt6878-mt6369` registers with 13 normal playback PCM devices,
+  18 normal capture PCM devices and the expected hostless paths. Enumeration
+  proves the AFE/card graph, not physical speaker or microphone routing.
 
 Useful storage checks on a booted phone:
 
@@ -203,7 +210,8 @@ The next useful hardware targets, in roughly pragmatic order:
    cold boots, cancellation and suspend/resume.
 5. Validate the `pkgrel=100` audio-clock image, then test each speaker and
    microphone route and add UCM profiles.
-6. Validate MSDC1 card insertion/removal and LM3644 torch/strobe operation.
+6. Validate MSDC1 card insertion/removal plus LM3644 timed strobe and V4L2
+   flash integration; bounded torch on both channels already works live.
 7. Complete the GNSS reserved-memory/userspace contract, then validate a real
    fix, restart and suspend/resume while Wi-Fi and Bluetooth remain active.
 8. Port the MT6878 LVTS calibration/controller data and expose conservative SoC
