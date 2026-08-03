@@ -1253,10 +1253,7 @@ diff --git a/sound/soc/mediatek/mt6878/mt6878-mt6369.c b/sound/soc/mediatek/mt68
 diff --git a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
 --- a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
 +++ b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
-@@ -175,15 +175,13 @@ int mt6878_afe_gpio_request(struct mtk_base_afe *afe, bool enable,
- 	case MT6878_DAI_I2S_IN0:
- 		break;
- 	case MT6878_DAI_I2S_OUT0:
+@@ -178,13 +178,11 @@ int mt6878_afe_gpio_request(struct mtk_base_afe *afe, bool enable,
  		break;
  	case MT6878_DAI_I2S_IN4:
  	case MT6878_DAI_I2S_OUT4:
@@ -1272,3 +1269,4 @@ diff --git a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c b/sound/soc/mediatek/mt
 -		}
  		break;
  	case MT6878_DAI_VOW:
+ 		if (enable) {
