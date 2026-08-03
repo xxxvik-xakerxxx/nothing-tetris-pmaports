@@ -69,11 +69,16 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires SCP firmware, SCP core, HF manager and sensorhub as one group. |
 | Cameras | IMX882, GC16B3C and SC202CS through MT6878 seninf/ISP | Experimental camera group after clocks, power domains and IOMMU. |
 | Modem/SIM | CCCI/DPMAIF, SIM detect GPIO46/GPIO47 | Experimental modem group plus userspace daemon and firmware. |
+| SoC thermal | MT6878 LVTS, 24 sensors in MCU/AP/GPU domains, four efuse cells | Port the official B4.1 calibration/controller data to Linux thermal; start with read-only zones and conservative critical trips. |
+| USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
 | Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
 
-The July 30 hardware audit of the r63 device confirmed a 108 GiB root
-partition with 97.2 GiB free and all eight CPUs. Storage and CPU reporting are
-not current kernel blockers.
+The live hardware audits confirmed a 108 GiB root partition with about 97 GiB
+free and all eight CPUs. `lscpu` correctly decodes four Cortex-A55 and four
+Cortex-A78 cores. The blank processor row in GNOME 50.3 is a userspace parser
+limitation, not missing kernel topology. The running kernel has no thermal
+class, so thermal support remains a blocker before sustained GPU/modem/camera
+loads.
 
 ## Promotion gate
 

@@ -57,29 +57,29 @@ Driver packaging and vendor-to-native migration are documented in
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
 | Power | CPU idle | Pending validation | The next kernel enables only per-CPU PSCI power-off; cluster/system idle states remain disabled until USB/SSH survival is proven. |
-| Power | Thermal management | Broken | No thermal zones or MT6878 LVTS driver exist in the current kernel. |
+| Power | Thermal management | Broken | The running kernel has no thermal class or zones. Nothing OS 4.1 provides MT6878 LVTS data for 24 sensors across MCU/AP/GPU domains, but it is not integrated yet. |
 | USB | Device mode / NCM | Works | The pmOS USB gadget enumerates and carries stable SSH traffic without RX/TX errors. |
-| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC exposes `port0`, partner, sink/device roles and orientation. Kernel USB role switching, host mode and wake remain unvalidated. |
+| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC reports reverse orientation, sink power, device data role and charging. MTU3 dual-role support is disabled, `/sys/class/usb_role` is empty, and host mode/wake remain unvalidated. |
 | USB-C | Analog audio switch | Pending validation | r86 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Works (live) | The native driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; full-strength and repeated bounded effects work without kernel, USB or radio faults. |
 | Haptics | Clean-install integration | Pending validation | The device package autoloads `rt6010` and identifies it to feedbackd. A clean CI-artifact flash, suspend/resume and cold-boot repetition remain. |
 | Audio | Speaker amp identification | Partial | AW88261 probes, identifies chip `0x2113` and loads `aw88261_acf.bin`; physical output is not validated. |
 | Audio | Playback/recording | Partial | MT6878 AFE, MT6369 and the machine card register automatically in the live `pkgrel=100` candidate. PCM endpoints exist, but speakers, microphones, routing/UCM and lifecycle tests remain. |
-| GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
-| Camera | Front/rear cameras | Broken | Not started. |
+| GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
+| Camera | Front/rear cameras | Broken | No V4L2/media nodes are present. Sensors, SENINF/ISP, clocks, power domains, IOMMU and userspace still need a staged port. |
 | Camera | Flash | Broken | r86 contains the LM3644 driver and board wiring, but no LED class device probes on the current image. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | B4.1 WLAN firmware, factory NVRAM, scans and Wi-Fi/Bluetooth coexistence work live. Clean-install automatic startup is staged for CI validation. |
 | Connectivity | Bluetooth | Partial | Native BlueZ HCI, factory address provisioning, discovery and Wi-Fi coexistence work live. Clean-install automatic startup still requires CI image validation. |
-| Connectivity | GPS/GNSS | Partial | The B4.1 MT6878 v050 module boots, probes seven IRQs and completes a live power cycle without disturbing Wi-Fi, Bluetooth or USB. Position data, suspend and a standard Linux GNSS userspace bridge remain unvalidated, so it is not autoloaded. |
+| Connectivity | GPS/GNSS | Partial | The B4.1 MT6878 v050 module probes seven IRQs and completes a real DSP open/close power cycle without disturbing Wi-Fi, Bluetooth or USB. Reserved-memory handoff, position data, suspend and a standard Linux GNSS userspace bridge remain unvalidated, so it is not autoloaded. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
-| Modem | Calls/SMS/mobile data | Broken | Modem/SIM stack not started. |
+| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. The generic Phosh SIM UI is not evidence of modem support. |
 | Sensors | Rotation/accelerometer | Broken | Requires the MT6878 SCP remoteproc and vendor sensorhub transport before IIO clients can be exposed safely. |
 | Sensors | Ambient light/proximity | Broken | Shares the unported SCP sensorhub path; no blind client probing. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | Root filesystem | Works | Verified live: `/dev/sdc82` ext4, 104.6 GiB, about 97 GiB free. |
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |
-| Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters; Settings may still show a generic/blank processor string. |
+| Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters. GNOME 50.3 ignores ARM `CPU implementer`/`CPU part` fields and therefore leaves the Settings processor row blank; this needs a portable GNOME/libgtop fix. |
 
 ## Current Live Findings
 
@@ -152,6 +152,26 @@ Connectivity validation for the `pkgrel=99` package sources:
 - Type-C sysfs reports normal orientation, sink power role and device data role.
   `/sys/class/usb_role` is absent, so role swap and host mode are not claimed.
 
+Additional live audit on the `6.18.0 #99` kernel:
+
+- Opening `/dev/gpsdl0` transitioned the GNSS DSP from `OFF` to `ON`, reached
+  `OPENED`, and returned cleanly through `CLOSING` to `OFF`. Wi-Fi and
+  Bluetooth remained powered and USB SSH survived without an assert, abort,
+  reset, oops or watchdog event.
+- The GNSS probe still reports no usable LK `emi-addr` or `memory-region` and
+  falls back to small DMA buffers. Do not autoload it until the memory owner
+  and Linux userspace ABI are made explicit.
+- MT6375 TCPC reports reverse cable orientation, sink power, device data role,
+  5.1 V USB input and a configured MTU3 gadget. The Type-C state is valid, but
+  the MTU3 data-role switch is not registered because dual-role mode is off.
+- `/sys/class/thermal` is absent, ModemManager reports no modem, `/dev/dri` has
+  no render node, and there are no camera media/video nodes. The two IIO
+  devices are PMIC ADCs, not motion, light or proximity sensors.
+- GNOME Settings 50.3 searches only `model name`, `cpu`, `Processor` and
+  `Model Name`; arm64 exposes the heterogeneous clusters as MIDR implementer
+  and part fields. Kernel CPU topology is correct, so the display bug belongs
+  in GNOME/libgtop rather than a Tetris-specific kernel string.
+
 Useful storage checks on a booted phone:
 
 ```sh
@@ -184,9 +204,14 @@ The next useful hardware targets, in roughly pragmatic order:
 5. Validate the `pkgrel=100` audio-clock image, then test each speaker and
    microphone route and add UCM profiles.
 6. Validate MSDC1 card insertion/removal and LM3644 torch/strobe operation.
-7. Add the MT6878/MT6631 GNSS client after Wi-Fi/BT connectivity is stable.
-8. Port SCP handoff, then sensorhub/IIO for rotation, proximity and ambient light.
-9. Treat modem/SIM, cameras and native GPU support as separate large projects.
+7. Complete the GNSS reserved-memory/userspace contract, then validate a real
+   fix, restart and suspend/resume while Wi-Fi and Bluetooth remain active.
+8. Port the MT6878 LVTS calibration/controller data and expose conservative SoC
+   thermal zones before GPU, modem or camera stress testing.
+9. Fix heterogeneous ARM CPU naming in GNOME/libgtop without hard-coding this
+   handset's marketing SoC name.
+10. Port SCP handoff, then sensorhub/IIO for rotation, proximity and ambient light.
+11. Treat modem/SIM, cameras and native GPU support as separate large projects.
 
 ## Layout
 
