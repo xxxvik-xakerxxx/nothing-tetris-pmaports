@@ -57,7 +57,7 @@ jobs:
           apk add --no-cache \
             android-tools \
             build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
-            dtc file findutils git linux-headers mtools multipath-tools openssl \
+            dtc file findutils git kmod linux-headers mtools multipath-tools openssl \
             openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
             util-linux xz zstd
       - name: Fetch upstream pmaports and pmbootstrap
@@ -230,6 +230,13 @@ jobs:
               exit 1
             }
           done
+          release_dir=$(find "$rootfs/lib/modules" -mindepth 1 -maxdepth 1 \
+            -type d -print -quit)
+          release=${release_dir##*/}
+          test -n "$release"
+          rootfs_modinfo() {
+            modinfo -b "$rootfs" -k "$release" "$@"
+          }
           for module in \
             extra/mediatek-pmic/mtk-spmi-pmic-adc.ko \
             extra/mediatek-pmic/nvmem-mt635x-efuse.ko \
@@ -273,12 +280,12 @@ jobs:
             'HCI device registration failed' "$bt_module"
           check_contains "native HCI address programming path" \
             'setting MT6631 public address failed' "$bt_module"
-          test "$(modinfo -F name "$gps_module")" = gps_drv_dl_v050
-          test "$(modinfo -F depends "$gps_module")" = conninfra
+          test "$(rootfs_modinfo -F name gps_drv_dl_v050)" = gps_drv_dl_v050
+          test "$(rootfs_modinfo -F depends gps_drv_dl_v050)" = conninfra
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /gnss@18c00000 status)" = okay
-          for radio_module in "$wifi_module" "$bt_module"; do
-            if modinfo -F depends "$radio_module" | tr ',' '\n' | \
+          for radio_module in wlan_drv_gen4m_6878 bt_drv_6878; do
+            if rootfs_modinfo -F depends "$radio_module" | tr ',' '\n' | \
                 grep -Fxq wmt_drv; then
               echo "legacy wmt_drv dependency in $radio_module"
               exit 1
@@ -300,10 +307,6 @@ jobs:
           test -s /work/out/nothing-tetris-root.sparse.img
           test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb
-          release_dir=$(find "$rootfs/lib/modules" -mindepth 1 -maxdepth 1 \
-            -type d -print -quit)
-          release=${release_dir##*/}
-          test -n "$release"
           cat > /work/out/nothing-tetris-radio-live.MANIFEST <<EOF
           github_sha=$GITHUB_SHA
           kernel_release=$release

@@ -197,6 +197,20 @@ validate_power_and_audio_config() {
 	fi
 }
 
+validate_ci_rootfs_module_checks() {
+	workflow="$repo_root/.github/workflows/ci.yml"
+
+	grep -Eq '^[[:space:]]+dtc file findutils git kmod linux-headers' "$workflow"
+	grep -Fq 'modinfo -b "$rootfs" -k "$release" "$@"' "$workflow"
+	grep -Fq 'test "$(rootfs_modinfo -F name gps_drv_dl_v050)"' "$workflow"
+	grep -Fq 'if rootfs_modinfo -F depends "$radio_module"' "$workflow"
+	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
+		grep -Fq 'if modinfo -F' "$workflow"; then
+		echo "CI must resolve target modules through the target rootfs/release" >&2
+		return 1
+	fi
+}
+
 validate_connectivity_firmware() {
 	config="$firmware_pkg/conninfra.cfg"
 	expected_config=$(printf 'co_clock_flag=1\npre_cal_mode=0')
@@ -266,6 +280,7 @@ validate_source_files "$firmware_pkg"
 validate_vendor_baseline
 validate_connectivity_boot
 validate_power_and_audio_config
+validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build
 
