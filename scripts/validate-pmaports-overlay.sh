@@ -189,14 +189,37 @@ validate_power_and_audio_config() {
 	test "$(grep -c '^+.*compatible = "arm,cortex-a55";' "$cpu_patch")" -eq 4
 	test "$(grep -c '^+.*compatible = "arm,cortex-a78";' "$cpu_patch")" -eq 4
 
-	expected_audio_modules=$(printf 'snd_soc_mt6878_afe\nmt6878_mt6369')
+	expected_audio_modules=$(printf 'mtk_spmi_pmic_adc\nnvmem_mt635x_efuse\nsnd_soc_mt6878_afe\nmt6878_mt6369')
 	actual_audio_modules=$(grep -Ev '^[[:space:]]*(#|$)' "$audio_modules")
 	if [ "$actual_audio_modules" != "$expected_audio_modules" ]; then
-		echo "audio module autoload order must be AFE followed by the machine driver" >&2
+		echo "audio module autoload order must load calibration suppliers before AFE and the machine driver" >&2
 		return 1
 	fi
 
 	grep -Fq '+	.mute_stream = aw88261_mute_stream,' "$audio_patch"
+	grep -Fq '+				topckgen = <&topckgen>;' "$audio_patch"
+	grep -Fq '+				apmixedsys = <&apmixedsys>;' "$audio_patch"
+	grep -Fq '+		audio_sram: sram@11059000 {' "$audio_patch"
+	grep -Fq '+#include "clk-gate.h"' "$audio_patch"
+	grep -Fq '+	.composite_clks = top_aud_divs,' "$audio_patch"
+	grep -Fq '+	.num_composite_clks = ARRAY_SIZE(top_aud_divs),' "$audio_patch"
+	for clock in \
+		CLK_TOP_APLL_SI1_MCK_SEL \
+		CLK_TOP_APLL_FMI2S_MCK_SEL \
+		CLK_TOP_APLL12_DIV_SI1 \
+		CLK_TOP_APLL12_DIV_FMI2S; do
+		grep -Fq "$clock" "$audio_patch"
+	done
+	for property in \
+		'etdm-out-ch = <2>;' \
+		'etdm-in-ch = <2>;' \
+		'etdm-out-sync = <0>;' \
+		'etdm-in-sync = <1>;' \
+		'etdm-ip-mode = <0>;' \
+		'etdm-align-mode = <1>;'; do
+		grep -Fq "+				$property" "$audio_patch"
+	done
+	test "$(grep -c '^+.*return ret;' "$audio_vendor_patch")" -ge 2
 	if grep -Fq 'mute_unmute_on_trigger' "$audio_patch"; then
 		echo "AW88261 must not run its sleeping mute callback from the atomic trigger path" >&2
 		return 1

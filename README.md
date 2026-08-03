@@ -62,8 +62,8 @@ Driver packaging and vendor-to-native migration are documented in
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPC exposes `port0`, partner, sink/device roles and orientation. Kernel USB role switching, host mode and wake remain unvalidated. |
 | USB-C | Analog audio switch | Pending validation | r86 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
-| Audio | Speaker amp identification | Partial | AW88261 probes on I2C. |
-| Audio | Playback/recording | Broken | The official modules are packaged, but the MT6369 machine driver defers with `-EPROBE_DEFER`; no ALSA sound card exists yet. |
+| Audio | Speaker amp identification | Partial | AW88261 probes, identifies chip `0x2113` and loads `aw88261_acf.bin`; physical output is not validated. |
+| Audio | Playback/recording | Partial | MT6878 AFE, MT6369 and the machine card register automatically in the live `pkgrel=100` candidate. PCM endpoints exist, but speakers, microphones, routing/UCM and lifecycle tests remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
 | Camera | Front/rear cameras | Broken | Not started. |
 | Camera | Flash | Broken | r86 contains the LM3644 driver and board wiring, but no LED class device probes on the current image. |
@@ -94,7 +94,7 @@ On the tested r53 userspace/kernel image:
   device package now installs `80-nothing-tetris-udisks.rules` to hide
   non-postmarketOS partitions from desktop storage UIs.
 
-Additional live checks on r63:
+Additional historical live checks on r63:
 
 - RT6010 haptics probes on I2C and registers an input force-feedback device.
 - AW88261 speaker amplifier probes on I2C, but the kernel still reports
@@ -104,6 +104,18 @@ Additional live checks on r63:
 - The phone exposes `connsys_wifi_a`, `connsys_bt_a` and `connsys_gnss_a`
   partitions, but `firmware-nothing-tetris` ships the required blobs so the
   rootfs does not depend on reading Android partitions at runtime.
+
+Audio validation for the `pkgrel=100` candidate sources:
+
+- The AFE maps the official `audio_sram@11059000`, parses the Tetris B4.1 ETDM
+  contract and registers all 75 DAIs.
+- `mtk_spmi_pmic_adc` and `nvmem_mt635x_efuse` provide MT6369 calibration data;
+  the codec completes MTKAIF and headphone trim calibration.
+- Preserving `-EPROBE_DEFER` in the machine driver allows the ALSA card to
+  register automatically after AW88261 becomes ready, without a manual bind.
+- The live cold boot retained USB networking, NetworkManager Wi-Fi and BlueZ.
+  Playback and capture remain blocked from `Works` until the new topckgen
+  clocks are present in a CI kernel and every physical route is tested.
 
 Connectivity validation for the `pkgrel=99` package sources:
 
@@ -165,8 +177,8 @@ The next useful hardware targets, in roughly pragmatic order:
    preserve USB gadget recovery before adding host role switching.
 4. Stabilize RT6010 haptics and confirm repeated rumble no longer freezes or
    reboots the phone.
-5. Resolve the MT6369 ASoC registration with dynamic ALSA minors, then add speaker/microphone routing
-   and UCM.
+5. Validate the `pkgrel=100` audio-clock image, then test each speaker and
+   microphone route and add UCM profiles.
 6. Validate MSDC1 card insertion/removal and LM3644 torch/strobe operation.
 7. Add the MT6878/MT6631 GNSS client after Wi-Fi/BT connectivity is stable.
 8. Port SCP handoff, then sensorhub/IIO for rotation, proximity and ambient light.

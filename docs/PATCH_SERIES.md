@@ -59,7 +59,7 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `0008-connectivity-mt6878-mt6631-connsys.patch` | MT6363 connectivity rails plus minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 | `0009-clk-mediatek-mt6878-mfg.patch` | MFG PLL/top mux clock foundation for future GPU work. |
-| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys clock foundation, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
+| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys and topckgen audio clocks, audio SRAM/ETDM contract, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
 | `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 | `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
@@ -130,7 +130,7 @@ not a confirmed external RT1711H controller.
 3. Validate LM3644 torch/strobe channels and add the V4L2 flash bridge with
    the camera stack.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
-5. Validate Tetris 16b vendor audio modules on device, then add UCM profiles
-   for speaker and microphones.
+5. Validate the `pkgrel=100` audio-clock image, then test every physical
+   speaker/microphone path and add UCM profiles.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
 7. Modem/SIM and cameras as later large projects.

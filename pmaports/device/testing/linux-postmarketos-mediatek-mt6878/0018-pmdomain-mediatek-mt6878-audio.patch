@@ -28,7 +28,7 @@ without relying on bootloader state.
  		pio: pinctrl {
  			compatible = "mediatek,mt6878-pinctrl";
  			reg = <0x10005000 0x1000>,
-@@ -395,13 +401,19 @@
+@@ -395,21 +401,27 @@
  		};
  
  		audiosys: syscon@11050000 {
@@ -45,6 +45,14 @@ without relying on bootloader state.
  				compatible = "mediatek,mt6878-sound", "mediatek,mt6878-afe";
 +				reg = <0 0x9000>;
  				interrupts = <GIC_SPI 392 IRQ_TYPE_LEVEL_HIGH 0>;
+ 				topckgen = <&topckgen>;
+ 				apmixedsys = <&apmixedsys>;
+ 				etdm-out-ch = <2>;
+ 				etdm-in-ch = <2>;
+ 				etdm-out-sync = <0>;
+ 				etdm-in-sync = <1>;
+ 				etdm-ip-mode = <0>;
+ 				etdm-align-mode = <1>;
 +				power-domains = <&spm MT6878_POWER_DOMAIN_AUDIO>;
 +				infracfg = <&infracfg_ao>;
  				clocks = <&audiosys CLK_AFE_AUDIO_HOPPING>,

@@ -12,7 +12,7 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/medi
 index 898cd78..2c7ba4a 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
-@@ -394,6 +394,86 @@
+@@ -394,6 +394,102 @@
  			#clock-cells = <1>;
  		};
  
@@ -24,6 +24,14 @@ index 898cd78..2c7ba4a 100644
 +			afe: audio-controller {
 +				compatible = "mediatek,mt6878-sound", "mediatek,mt6878-afe";
 +				interrupts = <GIC_SPI 392 IRQ_TYPE_LEVEL_HIGH 0>;
++				topckgen = <&topckgen>;
++				apmixedsys = <&apmixedsys>;
++				etdm-out-ch = <2>;
++				etdm-in-ch = <2>;
++				etdm-out-sync = <0>;
++				etdm-in-sync = <1>;
++				etdm-ip-mode = <0>;
++				etdm-align-mode = <1>;
 +				clocks = <&audiosys CLK_AFE_AUDIO_HOPPING>,
 +					 <&audiosys CLK_AFE_AUDIO_F26M>,
 +					 <&audiosys CLK_AFE_DL0_DAC>,
@@ -96,9 +104,72 @@ index 898cd78..2c7ba4a 100644
 +			};
 +		};
 +
++		audio_sram: sram@11059000 {
++			compatible = "mediatek,audio_sram";
++			reg = <0x11059000 0xf900>;
++			prefer-mode = <0>;
++			mode-size = <0xf900 0x14c00>;
++			block-size = <0x1000>;
++		};
++
  		ssusb: usb0@11201000 {
  			compatible = "mediatek,mtu3";
  			reg = <0x11201000 0x2e00>,
+diff --git a/drivers/clk/mediatek/clk-mt6878-topckgen.c b/drivers/clk/mediatek/clk-mt6878-topckgen.c
+index e18b226..e6f87a3 100644
+--- a/drivers/clk/mediatek/clk-mt6878-topckgen.c
++++ b/drivers/clk/mediatek/clk-mt6878-topckgen.c
+@@ -13,6 +13,7 @@
+ #include <linux/of_device.h>
+ #include <linux/platform_device.h>
+ 
++#include "clk-gate.h"
+ #include "clk-mtk.h"
+ #include "clk-mux.h"
+ 
+@@ -1748,13 +1749,40 @@ static const struct mtk_composite top_aud_divs[] = {
+ 		8/* lsb */),
+ };
+ 
++static const struct mtk_gate_regs top_cg_regs = {
++	.set_ofs = 0x320,
++	.clr_ofs = 0x320,
++	.sta_ofs = 0x320,
++};
++
++#define GATE_TOP(_id, _name, _parent, _shift) { \
++		.id = _id, \
++		.name = _name, \
++		.parent_name = _parent, \
++		.regs = &top_cg_regs, \
++		.shift = _shift, \
++		.ops = &mtk_clk_gate_ops_no_setclr, \
++	}
++
++static const struct mtk_gate top_clks[] = {
++	GATE_TOP(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1", "aud_1_ck", 1),
++	GATE_TOP(CLK_TOP_APLL12_DIV_SI2, "apll12_div_si2", "aud_1_ck", 2),
++	GATE_TOP(CLK_TOP_APLL12_DIV_SI4, "apll12_div_si4", "aud_1_ck", 4),
++	GATE_TOP(CLK_TOP_APLL12_DIV_SO1, "apll12_div_so1", "aud_1_ck", 7),
++	GATE_TOP(CLK_TOP_APLL12_DIV_SO2, "apll12_div_so2", "aud_1_ck", 8),
++	GATE_TOP(CLK_TOP_APLL12_DIV_SO4, "apll12_div_so4", "aud_1_ck", 10),
++	GATE_TOP(CLK_TOP_APLL12_DIV_FMI2S, "apll12_div_fmi2s", "aud_1_ck", 12),
++};
++
+ static const struct mtk_clk_desc topck_desc = {
++	.clks = top_clks,
++	.num_clks = ARRAY_SIZE(top_clks),
+ 	.factor_clks = top_divs,
+ 	.num_factor_clks = ARRAY_SIZE(top_divs),
+ 	.mux_clks = top_muxes,
+ 	.num_mux_clks = ARRAY_SIZE(top_muxes),
+-	//.composite_clks = top_aud_divs,
+-	//.num_composite_clks = ARRAY_SIZE(top_aud_divs)
++	.composite_clks = top_aud_divs,
++	.num_composite_clks = ARRAY_SIZE(top_aud_divs),
+ };
+ 
+ static const struct of_device_id of_match_clk_mt6878_ck[] = {
 diff --git a/drivers/clk/mediatek/Makefile b/drivers/clk/mediatek/Makefile
 index c022506..caecb67 100644
 --- a/drivers/clk/mediatek/Makefile
