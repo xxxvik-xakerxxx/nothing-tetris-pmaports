@@ -196,6 +196,7 @@ jobs:
           }
           for executable in \
             /usr/libexec/nothing-tetris-connectivity-setup \
+            /usr/libexec/nothing-tetris-audio-policy \
             /usr/libexec/nothing-tetris-bluetooth-address-extract \
             /usr/libexec/nothing-tetris-bluetooth-address \
             /usr/libexec/nothing-tetris-wifi-nvram-extract \
@@ -206,7 +207,12 @@ jobs:
             check_exec "$executable"
           done
           check_file /usr/lib/systemd/system-preset/89-nothing-tetris.preset
+          check_file /usr/lib/systemd/user-preset/89-nothing-tetris-user.preset
+          check_file /usr/lib/systemd/user/nothing-tetris-audio-policy.service
           check_file /usr/lib/modules-load.d/nothing-tetris-audio.conf
+          check_file /etc/pulse/default.pa.d/90-nothing-tetris-audio.pa
+          check_file /usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf
+          check_file /usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/mt6878-mt6369.conf
           check_file /etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf
           for link in \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service \
@@ -247,6 +253,8 @@ jobs:
             extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko \
             extra/mediatek-connectivity/bt_drv_6878.ko \
             extra/mediatek-connectivity/gps_drv_dl_v050.ko \
+            extra/mediatek-audio/mt6685-core.ko \
+            extra/mediatek-audio/mt6685-audclk.ko \
             extra/mediatek-audio/snd-soc-mtk-common.ko \
             extra/mediatek-audio/snd-soc-mt6369.ko \
             extra/mediatek-audio/snd-soc-mt6878-afe.ko \
@@ -282,6 +290,20 @@ jobs:
             'setting MT6631 public address failed' "$bt_module"
           test "$(rootfs_modinfo -F name gps_drv_dl_v050)" = gps_drv_dl_v050
           test "$(rootfs_modinfo -F depends gps_drv_dl_v050)" = conninfra
+          test "$(rootfs_modinfo -F name mt6685_core)" = mt6685_core
+          test "$(rootfs_modinfo -F name mt6685_audclk)" = mt6685_audclk
+          check_contains "direct two-channel DL6 transport" \
+            'PlaybackPCM "hw:${CardId},6"' \
+            "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
+          check_contains "mono speaker remap" \
+            'sink_name=tetris_mono_speaker' \
+            "$rootfs/etc/pulse/default.pa.d/90-nothing-tetris-audio.pa"
+          check_contains "speaker lifecycle policy" \
+            'pactl subscribe' \
+            "$rootfs/usr/libexec/nothing-tetris-audio-policy"
+          check_contains "audio policy user preset" \
+            'enable nothing-tetris-audio-policy.service' \
+            "$rootfs/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset"
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /gnss@18c00000 status)" = okay
           for radio_module in wlan_drv_gen4m_6878 bt_drv_6878; do

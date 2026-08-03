@@ -164,7 +164,14 @@ validate_power_and_audio_config() {
 	pmdomain_patch="$kernel_pkg/0018-pmdomain-mediatek-mt6878-audio.patch"
 	audio_patch="$kernel_pkg/0010-audio-mt6878-aw88261.patch"
 	audio_vendor_patch="$kernel_pkg/1102-vendor-audio-linux-6.18-api.patch.vendor"
+	audio_clock_patch="$kernel_pkg/1103-vendor-audio-mt6685-clock.patch.vendor"
 	audio_modules="$device_pkg/nothing-tetris-audio.conf"
+	audio_pulse="$device_pkg/nothing-tetris-audio.pa"
+	audio_policy="$device_pkg/nothing-tetris-audio-policy"
+	audio_policy_unit="$device_pkg/nothing-tetris-audio-policy.service"
+	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
+	audio_ucm="$device_pkg/HiFi.conf"
+	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 
 	for option in \
 		CONFIG_CPU_IDLE=y \
@@ -189,12 +196,67 @@ validate_power_and_audio_config() {
 	test "$(grep -c '^+.*compatible = "arm,cortex-a55";' "$cpu_patch")" -eq 4
 	test "$(grep -c '^+.*compatible = "arm,cortex-a78";' "$cpu_patch")" -eq 4
 
-	expected_audio_modules=$(printf 'mtk_spmi_pmic_adc\nnvmem_mt635x_efuse\nsnd_soc_mt6878_afe\nmt6878_mt6369')
+	expected_audio_modules=$(printf 'mtk_spmi_pmic_adc\nnvmem_mt635x_efuse\nmt6685_core\nmt6685_audclk\nsnd_soc_mt6878_afe\nmt6878_mt6369')
 	actual_audio_modules=$(grep -Ev '^[[:space:]]*(#|$)' "$audio_modules")
 	if [ "$actual_audio_modules" != "$expected_audio_modules" ]; then
-		echo "audio module autoload order must load calibration suppliers before AFE and the machine driver" >&2
+		echo "audio module autoload order must load calibration and MT6685 clock suppliers before AFE and the machine driver" >&2
 		return 1
 	fi
+
+	grep -Fq 'compatible = "mediatek,mt6685";' "$audio_patch"
+	grep -Fq 'reg = <0x9 SPMI_USID>;' "$audio_patch"
+	grep -Fq 'mt6685_set_dcxo_mode(0);' "$audio_clock_patch"
+	grep -Fq 'mt6685_set_dcxo(false);' "$audio_clock_patch"
+	grep -Fq 'MT6878_AFE_GPIO_CLK_MOSI_ON' "$audio_clock_patch"
+	grep -Fq 'mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_CLK_MOSI_ON)' \
+		"$audio_clock_patch"
+	grep -Fq -- '-DCONFIG_MT6685_AUDCLK_MODULE=1' "$apkbuild"
+	grep -Fq 'mt6685-core.ko mt6685-audclk.ko' "$apkbuild"
+	grep -Fq '"$_devmods_dir"/drivers/mfd/mt6685-core.ko' "$apkbuild"
+	grep -Fq '"$_devmods_dir"/drivers/mfd/mt6685-audclk.ko' "$apkbuild"
+	grep -Eq '^[[:space:]]+alsa-ucm-conf$' "$device_pkg/APKBUILD"
+	grep -Fq 'usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'etc/pulse/default.pa.d/90-nothing-tetris-audio.pa' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'SectionUseCase."HiFi"' "$audio_ucm_card"
+	for device in Speaker Earpiece Mic; do
+		grep -Fq "SectionDevice.\"$device\"" "$audio_ucm"
+	done
+	grep -Fxq 'Syntax 6' "$audio_ucm"
+	test "$(grep -c 'PlaybackPCM "hw:${CardId},6"' "$audio_ucm")" -eq 2
+	test "$(grep -c 'PlaybackChannels 2' "$audio_ucm")" -eq 2
+	test "$(grep -c 'PlaybackChannelPos0 FL' "$audio_ucm")" -eq 2
+	test "$(grep -c 'PlaybackChannelPos1 FR' "$audio_ucm")" -eq 2
+	grep -Fq "name='PCM Playback Volume' 0" "$audio_ucm"
+	if grep -Eq 'LibraryConfig|type (dshare|route)' "$audio_ucm"; then
+		echo "audio UCM must use the live-validated direct DL6 transport" >&2
+		return 1
+	fi
+	grep -Fq 'unload-module module-stream-restore' "$audio_pulse"
+	grep -Fq 'load-module module-stream-restore restore_device=false' "$audio_pulse"
+	grep -Fq 'load-module module-remap-sink sink_name=tetris_mono_speaker' \
+		"$audio_pulse"
+	grep -Fq 'master=alsa_output.platform-sound.HiFi__Speaker__sink' \
+		"$audio_pulse"
+	grep -Fq 'channels=1 channel_map=mono master_channel_map=front-left' \
+		"$audio_pulse"
+	grep -Fq 'device.class=filter' "$audio_pulse"
+	grep -Fq 'device.class=sound' "$audio_pulse"
+	grep -Fq 'set-default-sink tetris_mono_speaker' "$audio_pulse"
+	sh -n "$audio_policy"
+	grep -Fq 'pactl subscribe' "$audio_policy"
+	grep -Fq "Event 'new' on sink #" "$audio_policy"
+	grep -Fq 'pactl set-default-sink "$mono_sink"' "$audio_policy"
+	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
+		"$audio_policy_unit"
+	grep -Fxq 'WantedBy=default.target' "$audio_policy_unit"
+	grep -Fxq 'enable nothing-tetris-audio-policy.service' \
+		"$audio_user_preset"
+	grep -Fq 'I2SOUT4_CH1 DL6_CH1' "$audio_ucm"
+	grep -Fq "name='RCV Mux' 'Voice Playback'" "$audio_ucm"
+	grep -Fq "name='PGA_L_Mux' AIN0" "$audio_ucm"
+	grep -Fq "name='PGA_R_Mux' AIN2" "$audio_ucm"
 
 	grep -Fq '+	.mute_stream = aw88261_mute_stream,' "$audio_patch"
 	grep -Fq '+				topckgen = <&topckgen>;' "$audio_patch"

@@ -63,8 +63,8 @@ Driver packaging and vendor-to-native migration are documented in
 | USB-C | Analog audio switch | Pending validation | r86 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
 | Haptics | RT6010 rumble | Works (live) | The native driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; full-strength and repeated bounded effects work without kernel, USB or radio faults. |
 | Haptics | Clean-install integration | Pending validation | The device package autoloads `rt6010` and identifies it to feedbackd. A clean CI-artifact flash, suspend/resume and cold-boot repetition remain. |
-| Audio | Speaker amp identification | Partial | AW88261 probes, identifies chip `0x2113` and loads `aw88261_acf.bin`; physical output is not validated. |
-| Audio | Playback/recording | Partial | MT6878 AFE, MT6369, AW88261 and the machine card register automatically. ALSA exposes playback and capture endpoints, but both speakers, every microphone, routing/UCM and lifecycle tests remain. |
+| Audio | Physical playback/capture | Works (live) | The AW88261 main speaker, MT6369 earpiece and built-in AIN0/AIN2 microphones are physically validated. MT6685 BBCK5 is the common clock supplier. |
+| Audio | System integration | Works (live) | PulseAudio exposes `Main Speaker`, `Earpiece` and `Internal Microphones` through UCM. Both output profiles and system event sounds work; automatic cold boot from a clean CI image and lifecycle tests remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
 | Camera | Front/rear cameras | Broken | No V4L2/media nodes are present. Sensors, SENINF/ISP, clocks, power domains, IOMMU and userspace still need a staged port. |
 | Camera | Torch | Works (live) | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off without USB or radio faults. |
@@ -110,7 +110,7 @@ Additional historical live checks on r63:
   partitions, but `firmware-nothing-tetris` ships the required blobs so the
   rootfs does not depend on reading Android partitions at runtime.
 
-Audio validation for the `pkgrel=100` candidate sources:
+Audio validation for the current candidate sources:
 
 - The AFE maps the official `audio_sram@11059000`, parses the Tetris B4.1 ETDM
   contract and registers all 75 DAIs.
@@ -118,9 +118,21 @@ Audio validation for the `pkgrel=100` candidate sources:
   the codec completes MTKAIF and headphone trim calibration.
 - Preserving `-EPROBE_DEFER` in the machine driver allows the ALSA card to
   register automatically after AW88261 becomes ready, without a manual bind.
-- The live cold boot retained USB networking, NetworkManager Wi-Fi and BlueZ.
-  Playback and capture remain blocked from `Works` until the new topckgen
-  clocks are present in a CI kernel and every physical route is tested.
+- The lower AW88261 speaker and upper MT6369 earpiece produced physical audio.
+  The earpiece and both built-in microphone paths require MT6685 BBCK5 in
+  register mode; AIN0 is the main microphone and AIN2 is the secondary
+  microphone on the tested unit.
+- PulseAudio accepts the packaged UCM profile, creates the main-speaker and
+  earpiece transports plus the internal-microphone source, and switches the
+  mixer routes without direct mixer commands. DL6 remains a two-channel
+  hardware transport, as required by the AW88261, while a PulseAudio remap
+  exposes the single physical main speaker as mono and performs application
+  downmixing before the transport. The raw stereo transport is hidden from
+  desktop settings. A full PulseAudio restart recreated this topology and
+  selected the mono speaker automatically; `libcanberra` playback was then
+  physically confirmed on the lower speaker. The upper earpiece and both
+  microphones remain physically validated. A clean CI-artifact flash is still
+  required before clean-install audio can be marked `Works`.
 
 Connectivity validation for the `pkgrel=99` package sources:
 
@@ -208,8 +220,8 @@ The next useful hardware targets, in roughly pragmatic order:
    preserve USB gadget recovery before adding host role switching.
 4. Validate packaged RT6010 haptics from a clean CI installation, including
    cold boots, cancellation and suspend/resume.
-5. Validate the `pkgrel=100` audio-clock image, then test each speaker and
-   microphone route and add UCM profiles.
+5. Validate packaged UCM audio from a clean CI artifact, then repeat both
+   speaker, both microphone, suspend/resume and cold-boot lifecycle tests.
 6. Validate MSDC1 card insertion/removal plus LM3644 timed strobe and V4L2
    flash integration; bounded torch on both channels already works live.
 7. Complete the GNSS reserved-memory/userspace contract, then validate a real

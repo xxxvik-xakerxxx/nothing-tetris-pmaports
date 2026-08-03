@@ -1,0 +1,46 @@
+#!/bin/sh
+
+speaker_sink=alsa_output.platform-sound.HiFi__Speaker__sink
+mono_sink=tetris_mono_speaker
+
+configure_speaker() {
+	sinks=$(pactl list short sinks 2>/dev/null) || return
+	printf '%s\n' "$sinks" | grep -Fq "$speaker_sink" || return
+
+	if ! printf '%s\n' "$sinks" | grep -Fq "$mono_sink"; then
+		pactl load-module module-remap-sink \
+			sink_name="$mono_sink" \
+			master="$speaker_sink" \
+			channels=1 channel_map=mono \
+			master_channel_map=front-left remix=yes >/dev/null || return
+		sinks=$(pactl list short sinks 2>/dev/null) || return
+	fi
+
+	speaker_index=$(printf '%s\n' "$sinks" | \
+		awk -v name="$speaker_sink" '$2 == name { print $1; exit }')
+	mono_index=$(printf '%s\n' "$sinks" | \
+		awk -v name="$mono_sink" '$2 == name { print $1; exit }')
+	[ -n "$speaker_index" ] && [ -n "$mono_index" ] || return
+
+	printf '%s\n' \
+		"update-sink-proplist $speaker_index device.class=filter device.description=Internal_AW88261_transport" \
+		"update-sink-proplist $mono_index device.class=sound device.description=CMF_Main_Speaker device.icon_name=audio-speakers" | \
+		pacmd >/dev/null 2>&1 || return
+	pactl set-default-sink "$mono_sink" >/dev/null 2>&1 || true
+}
+
+while :; do
+	until pactl info >/dev/null 2>&1; do
+		sleep 1
+	done
+
+	configure_speaker
+	pactl subscribe 2>/dev/null | while IFS= read -r event; do
+		case "$event" in
+			*"Event 'new' on sink #"*|*"Event 'change' on card #"*)
+				configure_speaker
+				;;
+		esac
+	done
+	sleep 1
+done

@@ -1,0 +1,67 @@
+diff --git a/drivers/mfd/mt6685-audclk.c b/drivers/mfd/mt6685-audclk.c
+--- a/drivers/mfd/mt6685-audclk.c
++++ b/drivers/mfd/mt6685-audclk.c
+@@ -93,5 +93,13 @@ static int mt6685_audclk_probe(struct platform_device *pdev)
+ 	mutex_init(&clk->lock);
+ 	clk->dev = &pdev->dev;
++
++	/*
++	 * LK leaves BBCK5 controlled by EN_BB on Tetris. Linux owns the
++	 * audio clock after probe, so put it in register mode before the
++	 * MT6369 codec starts balancing playback and capture clock users.
++	 */
++	mt6685_set_dcxo_mode(0);
++	mt6685_set_dcxo(false);
+ 	dev_info(&pdev->dev, "%s done\n", __func__);
+ 	return 0;
+ }
+diff --git a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.h b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.h
+--- a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.h
++++ b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.h
+@@ -12,6 +12,8 @@
+ #define _MT6878_AFE_GPIO_H_
+ 
+ enum mt6878_afe_gpio {
++	MT6878_AFE_GPIO_CLK_MOSI_OFF,
++	MT6878_AFE_GPIO_CLK_MOSI_ON,
+ 	MT6878_AFE_GPIO_DAT_MISO0_OFF,
+ 	MT6878_AFE_GPIO_DAT_MISO0_ON,
+ 	MT6878_AFE_GPIO_DAT_MISO1_OFF,
+diff --git a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
+--- a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
++++ b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
+@@ -22,6 +22,8 @@ struct audio_gpio_attr {
+ };
+ 
+ static struct audio_gpio_attr aud_gpios[MT6878_AFE_GPIO_GPIO_NUM] = {
++	[MT6878_AFE_GPIO_CLK_MOSI_OFF] = {"aud-clk-mosi-off", false, NULL},
++	[MT6878_AFE_GPIO_CLK_MOSI_ON] = {"aud-clk-mosi-on", false, NULL},
+ 	[MT6878_AFE_GPIO_DAT_MISO0_OFF] = {"aud-dat-miso0-off", false, NULL},
+ 	[MT6878_AFE_GPIO_DAT_MISO0_ON] = {"aud-dat-miso0-on", false, NULL},
+ 	[MT6878_AFE_GPIO_DAT_MISO1_OFF] = {"aud-dat-miso1-off", false, NULL},
+@@ -49,6 +51,9 @@ static struct audio_gpio_attr aud_gpios[MT6878_AFE_GPIO_GPIO_NUM] = {
+ 
+ static DEFINE_MUTEX(gpio_request_mutex);
+ 
++static int mt6878_afe_gpio_select(struct mtk_base_afe *afe,
++				  enum mt6878_afe_gpio type);
++
+ int mt6878_afe_gpio_init(struct mtk_base_afe *afe)
+ {
+ 	int ret;
+@@ -78,7 +83,15 @@ int mt6878_afe_gpio_init(struct mtk_base_afe *afe)
+ 		} else
+ 			aud_gpios[i].gpio_prepare = true;
+ 	}
+ 
++	/*
++	 * MTKAIF shares one always-muxed clock pin between playback and
++	 * capture. LK does not leave GPIO164 in AUD_CLK_MOSI mode on Tetris.
++	 */
++	ret = mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_CLK_MOSI_ON);
++	if (ret)
++		return ret;
++
+ 	/* gpio status init */
+ 	mt6878_afe_gpio_request(afe, false, MT6878_DAI_ADDA, 0);
+ 	mt6878_afe_gpio_request(afe, false, MT6878_DAI_ADDA, 1);

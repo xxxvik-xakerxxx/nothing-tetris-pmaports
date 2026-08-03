@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=101`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=102`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -71,9 +71,20 @@ normal Alpine/postmarketOS practice.
 | `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Corrects CPU0-3 to Cortex-A55 and CPU4-7 to Cortex-A78 from live MIDR evidence, and limits the first PSCI cpuidle rollout to per-CPU power-off. Cluster, MCU and system states remain gated behind live USB/SSH validation. |
 | `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation; module loading remains manual. |
 | `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3 while keeping peripheral mode as the safe default; it remains staged because kernel dual-role mode and OTG VBUS ownership are not complete. |
-| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
 
-The `pkgrel=101` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+### NothingOSS module adaptations
+
+| Patch | Purpose |
+| --- | --- |
+| `1000-vendor-connectivity-adapter-linux-6.18.patch.vendor` | Adapts the official MediaTek connectivity adapter from Nothing OS 4.1 to the Linux 6.18 kernel ABI used by this package. |
+| `1001-vendor-connectivity-linux-6.18-compat.patch.vendor` | Adapts the official MT6878/MT6631 conninfra, Wi-Fi and Bluetooth modules to Linux 6.18 and exposes Bluetooth through native Linux HCI. |
+| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
+| `1101-vendor-audio-optional-calibration.patch.vendor` | Keeps optional PMIC calibration failures explicit while allowing the MT6369 codec to probe when a provider is unavailable. |
+| `1102-vendor-audio-linux-6.18-api.patch.vendor` | Adapts the official MT6878/MT6369 ASoC stack to Linux 6.18 APIs and the Tetris composite I2S4 pinctrl state. |
+| `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
+| `1200-vendor-sensor-framework-linux-6.18.patch.vendor` | Adapts the official MediaTek sensor framework core to Linux 6.18; only the framework module is staged and no sensor is advertised as working yet. |
+
+The `pkgrel=102` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -95,16 +106,24 @@ combination.
 The vendor `conninfra` cleanup path also oopses if the module is unloaded, so
 connectivity tests must use a clean boot instead of module remove/reload cycles.
 It also stages the official
-Nothing Tetris 16b MT6878 audio module stack (`snd-soc-mtk-common`,
-`snd-soc-mt6369`, `snd-soc-mt6878-afe`, `mt6878-mt6369`) and wires the MT6369
-PMIC codec plus AW88261 speaker amplifier into the board DT. This is a
+Nothing Tetris 16b MT6878 audio module stack (`mt6685-core`, `mt6685-audclk`,
+`snd-soc-mtk-common`, `snd-soc-mt6369`, `snd-soc-mt6878-afe`,
+`mt6878-mt6369`) and wires the MT6369 PMIC codec plus AW88261 speaker amplifier
+into the board DT. The device package installs UCM routes for the main speaker,
+earpiece and AIN0/AIN2 built-in microphones. UCM opens DL6 directly as the
+two-channel transport required by the AW88261. A PulseAudio drop-in hides that
+transport and exposes the single physical main speaker as a one-channel mono
+sink, so application stereo is downmixed before it reaches ALSA. This replaces
+the discarded ALSA `route` and `dshare` experiments, which produced silent or
+corrupted system event streams despite clean direct hardware playback. This is a
 practical overlay bring-up step, not an upstream-ready replacement for native
 Linux connectivity/audio support. Linux 6.18 compatibility changes are normal
 source patches instead of build-time source transformations. Patch `1000`
 adapts the vendor connectivity bridge to Linux 6.18, while `1001` adapts the
 MT6878 connectivity modules themselves. The audio bridge
 uses `1101` for optional calibration handling and `1102` for Linux 6.18 ASoC
-helper and namespace API changes.
+helper and namespace API changes. Patch `1103` supplies MT6685 BBCK5 and the
+MTKAIF clock pin required by the codec.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,
@@ -131,7 +150,7 @@ not a confirmed external RT1711H controller.
 3. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
    stack; both torch channels already pass bounded live tests.
 4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
-5. Validate the `pkgrel=100` audio-clock image, then test every physical
-   speaker/microphone path and add UCM profiles.
+5. Validate the packaged audio stack from a clean CI image, then repeat both
+   speaker/microphone paths and suspend/resume lifecycle tests.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
 7. Modem/SIM and cameras as later large projects.

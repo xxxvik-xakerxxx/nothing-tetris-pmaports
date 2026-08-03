@@ -1,0 +1,13 @@
+.nofail
+
+# DL6 must remain a two-channel transport for the AW88261. Expose the
+# single physical loudspeaker as mono so PulseAudio downmixes application
+# streams before they reach the transport.
+unload-module module-stream-restore
+load-module module-stream-restore restore_device=false
+load-module module-remap-sink sink_name=tetris_mono_speaker master=alsa_output.platform-sound.HiFi__Speaker__sink channels=1 channel_map=mono master_channel_map=front-left remix=yes
+update-sink-proplist alsa_output.platform-sound.HiFi__Speaker__sink device.class=filter device.description=Internal_AW88261_transport
+update-sink-proplist tetris_mono_speaker device.class=sound device.description=CMF_Main_Speaker device.icon_name=audio-speakers
+set-default-sink tetris_mono_speaker
+
+.fail
