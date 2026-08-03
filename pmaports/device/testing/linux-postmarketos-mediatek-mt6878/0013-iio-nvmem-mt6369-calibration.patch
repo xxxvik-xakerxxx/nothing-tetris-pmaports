@@ -1,3 +1,20 @@
+--- a/drivers/mfd/mt6369-spmi.c
++++ b/drivers/mfd/mt6369-spmi.c
+@@ -11,6 +11,14 @@
+ 
+ static const struct mfd_cell mt6369_devs[] = {
+ 	{ .name = "mt6369-regulator" },
++	{
++		.name = "mt6369-auxadc",
++		.of_compatible = "mediatek,mt6368-auxadc",
++	},
++	{
++		.name = "mt6369-efuse",
++		.of_compatible = "mediatek,mt6373-efuse",
++	},
+ 	{
+ 		.name = "mt6369-consys",
+ 		.of_compatible = "mediatek,mt6369-consys",
 --- a/arch/arm64/boot/dts/mediatek/mt6369.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6369.dtsi
 @@ -3,6 +3,7 @@

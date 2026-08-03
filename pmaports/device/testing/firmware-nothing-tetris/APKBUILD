@@ -1,13 +1,14 @@
 maintainer="xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>"
 pkgname=firmware-nothing-tetris
 pkgver=1
-pkgrel=2
-pkgdesc="Connectivity firmware for Nothing CMF Phone 1"
+pkgrel=3
+pkgdesc="Firmware for Nothing CMF Phone 1"
 url="https://github.com/NothingOSS"
 arch="aarch64"
 license="proprietary"
 options="!check !strip !archcheck !tracedeps pmb:cross-native"
 source="
+	aw88261_acf.bin
 	conninfra.cfg
 	connsys_bt_mt6878_mt6631.bin
 	connsys_gnss_mt6878_mt6631.bin
@@ -16,6 +17,8 @@ source="
 
 package() {
 	_fwdir="$pkgdir/usr/lib/firmware"
+	install -Dm644 "$srcdir"/aw88261_acf.bin \
+		"$_fwdir"/aw88261_acf.bin
 	install -Dm644 "$srcdir"/conninfra.cfg "$_fwdir"/conninfra.cfg
 	install -Dm644 "$srcdir"/connsys_wifi_mt6878_mt6631.bin \
 		"$_fwdir"/connsys_wifi_mt6878_mt6631.bin
@@ -39,6 +42,7 @@ package() {
 }
 
 sha512sums="
+b38e9608c0f5a5db62ed988be36709eb0476a040388f36a3edd8e75e5d39ccfdf5c7f6ac006d78e7ccc436b7110a03d6500d4a8846db9e156bf4a3cc798d4e64  aw88261_acf.bin
 ab82fe31c5fe48f9ef201cb0312a199e304437deb1210d9a4a93de7de1a02858b97e0d6b18600ba6faf051615b55b8561b5582b5881fefe0f0bc901dc65a4451  conninfra.cfg
 a591b0a7422295d3964bd775754579482ad19e23dd8bb4eb413cde03b80033872be45d20ee4099f0224d3065d5532460f34771865e52d637589db186ae3fdaea  connsys_bt_mt6878_mt6631.bin
 94312789dbbb30bff98814fa441e05394e84beee1277cd3bc63d8b5cf35bae93fe844aae8f18d9acb93dc0d36a04df05db180328065a3db095424ec2d20b56cf  connsys_gnss_mt6878_mt6631.bin

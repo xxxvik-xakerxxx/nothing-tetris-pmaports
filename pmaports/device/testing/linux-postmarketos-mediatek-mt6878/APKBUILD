@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=96
+pkgrel=98
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -52,14 +52,16 @@ source="
 	0015-leds-flash-lm3644-tetris.patch
 	0016-usb-typec-hl5280-audio-switch.patch
 	0017-mfd-mt6363-auxadc-registers.patch
-	0018-phy-mediatek-tphy-role-switch-init.patch
+	0018-pmdomain-mediatek-mt6878-audio.patch
 	0019-arm64-dts-mt6878-shallow-cpuidle.patch
 	0020-arm64-dts-mt6878-gnss.patch
+	0021-usb-mtu3-native-role-switch.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
+	1200-vendor-sensor-framework-linux-6.18.patch.vendor
 "
 builddir="$srcdir/$_repository-$_commit"
 _connmods_dir="$srcdir/android_kernel_modules_nothing_mt6878-$_connmods_commit"
@@ -84,6 +86,8 @@ prepare() {
 		< "$srcdir"/1101-vendor-audio-optional-calibration.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1102-vendor-audio-linux-6.18-api.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/1200-vendor-sensor-framework-linux-6.18.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -239,6 +243,26 @@ _build_audio_modules() {
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
+_sensor_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_SENSOR_SUPPORT=m \
+		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags)" \
+		"$@" modules
+}
+
+_build_sensor_modules() {
+	_sensor_make "$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core
+}
+
 build() {
 	unset LDFLAGS
 	export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -252,6 +276,7 @@ build() {
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
+	_build_sensor_modules
 }
 
 package() {
@@ -300,6 +325,10 @@ package() {
 		"$_devmods_dir"/sound/soc/mediatek/mt6878/mt6878-mt6369.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
+	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-sensors"
+	install -Dm644 \
+		"$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core/hf_manager.ko \
+		"$_extra/hf_manager.ko"
 	depmod -b "$pkgdir" "$_release"
 
 	install -D "$builddir"/include/config/kernel.release \
@@ -320,21 +349,23 @@ e589d0aed09a2d0cd9705f16eaec49c97f45e161429e244fe857b382503aafb8522fb8d4a6972820
 2d00776c2f409dbc76dc412e41f343279e0f7c8e16340071fd71771b9fb5b883cb65262be64d923fc8600d55db5ad45220f8b12870a0c377c9f2236ec9d2f575  0007-power-supply-mt6375-monitor.patch
 1f34c790726bd24e0385e4c10541e61391b9232e0b4d3d873098e2df0e2c26fce8a8fa8233cb260b3c1d6605db9ddd24810ba353efb5b2d3391a985704278be8  0008-connectivity-mt6878-mt6631-connsys.patch
 4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0009-clk-mediatek-mt6878-mfg.patch
-abeff486502121fcdc4b436f928eb9119533658f833948c757ce1d9497214b48710574003b4263169ddb4cd388f0b452d18f83abdd9b802f57a682188b2832c1  0010-audio-mt6878-aw88261.patch
+f10aba9d6b28e5362d28e2aa8570fa5a816d5650b96774f141975ad7e088535a9a7d05f41905a2fcec99d0c3088df7b835176a1186c819c2416eaee6e67d2eb3  0010-audio-mt6878-aw88261.patch
 fbdb65423ec8fab0540d9eb6898e8fc558f1398c2871543452be86850db4efee396af461b9bef9a755c0b6a7f341a31ed782cec96d3eb3f2f4688f1bcf2e04d2  0011-input-rt6010-haptics-tetris.patch
 04624aeaded67051582111130dc753b6222fdb8b345c265ec6d844b219fd11dd8788cb96cb651d300d2b19f1c4ee6c85913494d24841e960d6f015558cfbc520  0012-usb-typec-mt6375-tcpc-tetris.patch
-cccfa39e5150e25aa43fa9c9aa8ceb27fd3bad253c9f387bba50c734d5987aca7819f83af8cce59cd2eb5c562923ccc139606c5f72c524db1c0ccd202961c300  0013-iio-nvmem-mt6369-calibration.patch
+884c127314bf87251804ce396f20bcaddc4b3d4bddf4589b9ae572974cb94a436ab6a02296fffa59283674e94ebc230ca437aac18b169c252907c8d51af2afe2  0013-iio-nvmem-mt6369-calibration.patch
 16e93ed8c05a90e231cfc4f8869da91abb0416bb72a5bffca0f1efbca3b1e020b9ba3f24bb620f996fe9d679d9bc9b73a8f25990d704ad26f30212480172c013  0014-mmc-mt6878-tetris-sdcard.patch
 98f17f4977dc23dc8455fcecb8c382b8a56f9fe2523fc92f1dc9f8ea2c5c0234817573502823c02fdcf171509fd5eb3561650570095e0f9074f805f5413c6cd9  0015-leds-flash-lm3644-tetris.patch
 beb94291b1397a41f39193a96f437c3525388052d4d296683f4c1df260b9e913aca4d8bceb518a8cfd8517d4b3786270aef94cb4cc35ffac935edc4dcefca18f  0016-usb-typec-hl5280-audio-switch.patch
 c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768dae9d555a7c0253e2b291554864a0deaef1264004458080b02  0017-mfd-mt6363-auxadc-registers.patch
-c2bccee8deda4a205bc3b0e8aacea6456fa29c9c1be69297ef3ec7cc62e7e6b03bf8703b8f3b03e5ad07f2d6b3b9ec7c4db16769548cbbaf86a5c9ba6683ed04  0018-phy-mediatek-tphy-role-switch-init.patch
+8ed1ec9027f43f977cb1921a3326ac94aa7472213197037feef031fa10f093e6426a6bad665007d4994cec89026282721023eed1662f6dcdf1ecc5b87440ebd0  0018-pmdomain-mediatek-mt6878-audio.patch
 10f9e8f506bd2ae4f97e0d4326b660b7f428dff92fdac0827e8e9ceec51e68529190b0892ad0d7df911d7a99b9bcf021eeab002d757546081ae706538ffc0c24  0019-arm64-dts-mt6878-shallow-cpuidle.patch
 95f1dd6bf1d7488915e8e6d4904c5a22775cb9c1be23e8bc7393391f178c638616cb687cbc887092591d1a88597eb8e8754c621e887853bf9d7d911dae0d3379  0020-arm64-dts-mt6878-gnss.patch
+8559310e63dbc5ed8edf08f2cfe6f614efb54f7f215c087bec00d4208c72f100a7d49b213f92f9e007e958464ce22b0adce6090dd53d0bc5caa38758b23817e1  0021-usb-mtu3-native-role-switch.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
-cfc0184fe120fa66d2f031322486afa803c303be0ad5c4d71bb15f78137b2f917d4e961965795a1a0adb9c630b2ea69f2ff24e94cfb14199af8a08ef11c0dea3  1102-vendor-audio-linux-6.18-api.patch.vendor
+c9de4873ce9c3761cbc7fd1a3730ffce62374ada3b9cdec0dca0ed1fc8c031d45a37cc1e8fe3a09b37af507e0d5c0b839990c87cc5e137db417633879cacd608  1102-vendor-audio-linux-6.18-api.patch.vendor
+78497d14b8dac9f70a27318c80eb2143b5ffdf2bc1a678edd0e449db3de80a2c7e68371aa9f83a5ddbd4fbb4e6737cbe766f7022a53c99cf366b755ab6284fda  1200-vendor-sensor-framework-linux-6.18.patch.vendor
 
 "

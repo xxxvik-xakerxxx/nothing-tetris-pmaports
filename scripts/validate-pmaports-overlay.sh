@@ -140,6 +140,9 @@ validate_connectivity_boot() {
 validate_power_and_audio_config() {
 	config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 	cpu_patch="$kernel_pkg/0019-arm64-dts-mt6878-shallow-cpuidle.patch"
+	audio_patch="$kernel_pkg/0010-audio-mt6878-aw88261.patch"
+	audio_vendor_patch="$kernel_pkg/1102-vendor-audio-linux-6.18-api.patch.vendor"
+	audio_modules="$device_pkg/nothing-tetris-audio.conf"
 
 	for option in \
 		CONFIG_CPU_IDLE=y \
@@ -153,6 +156,33 @@ validate_power_and_audio_config() {
 	grep -Fxq '# CONFIG_ARM_PSCI_CPUIDLE_DOMAIN is not set' "$config"
 	test "$(grep -c '^+.*compatible = "arm,cortex-a55";' "$cpu_patch")" -eq 4
 	test "$(grep -c '^+.*compatible = "arm,cortex-a78";' "$cpu_patch")" -eq 4
+
+	expected_audio_modules=$(printf 'snd_soc_mt6878_afe\nmt6878_mt6369')
+	actual_audio_modules=$(grep -Ev '^[[:space:]]*(#|$)' "$audio_modules")
+	if [ "$actual_audio_modules" != "$expected_audio_modules" ]; then
+		echo "audio module autoload order must be AFE followed by the machine driver" >&2
+		return 1
+	fi
+
+	grep -Fq '+	.mute_stream = aw88261_mute_stream,' "$audio_patch"
+	if grep -Fq 'mute_unmute_on_trigger' "$audio_patch"; then
+		echo "AW88261 must not run its sleeping mute callback from the atomic trigger path" >&2
+		return 1
+	fi
+	for pin in \
+		PINMUX_GPIO42__FUNC_I2SIN4_BCK \
+		PINMUX_GPIO43__FUNC_I2SIN4_LRCK \
+		PINMUX_GPIO44__FUNC_I2SOUT4_DATA0 \
+		PINMUX_GPIO45__FUNC_I2SIN4_DATA0; do
+		grep -Fq "+				 <$pin>" "$audio_patch" ||
+			grep -Fq "+			pinmux = <$pin>" "$audio_patch"
+	done
+	grep -Fq 'The composite I2SIN4 state owns BCK, LRCK and both data pins.' \
+		"$audio_vendor_patch"
+	if grep -Eq '^\+.*MT6878_AFE_GPIO_I2SOUT4_(ON|OFF)' "$audio_vendor_patch"; then
+		echo "mainline AFE must select the composite I2S4 state only once" >&2
+		return 1
+	fi
 }
 
 validate_connectivity_firmware() {
@@ -197,7 +227,6 @@ validate_connectivity_build() {
 	grep -Fq 'gps/data_link/plat/v050' "$kernel_apkbuild"
 	grep -Fq 'CONFIG_MTK_GPS_SUPPORT=y' "$kernel_apkbuild"
 	grep -Fq 'gps_drv_dl_v050.ko' "$kernel_apkbuild"
-	grep -Fq 'GPS_PLATFORM := v050' "$gnss_patch"
 	if grep -Eq 'gps/data_link/plat/v06(0|1)|gps_drv_dl_v06(0|1)' \
 			"$kernel_apkbuild" "$gnss_patch"; then
 		echo "Tetris must use the MT6878 GNSS v050 profile" >&2

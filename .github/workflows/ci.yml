@@ -206,6 +206,7 @@ jobs:
             check_exec "$executable"
           done
           check_file /usr/lib/systemd/system-preset/89-nothing-tetris.preset
+          check_file /usr/lib/modules-load.d/nothing-tetris-audio.conf
           check_file /etc/systemd/system/bluetooth.service.d/10-nothing-tetris-address.conf
           for link in \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service \

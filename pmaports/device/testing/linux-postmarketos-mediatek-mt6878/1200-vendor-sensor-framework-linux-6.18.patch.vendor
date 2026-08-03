@@ -1,0 +1,98 @@
+--- a/drivers/misc/mediatek/sensor/2.0/core/hf_manager.c
++++ b/drivers/misc/mediatek/sensor/2.0/core/hf_manager.c
+@@ -42,6 +42,7 @@
+ static int hf_manager_major;
+ static struct class *hf_manager_class;
+ static uint8_t hf_manager_debug_sensor_type;
++static struct proc_dir_entry *hf_manager_proc;
+ 
+ static DECLARE_BITMAP(sensor_list_bitmap, SENSOR_TYPE_SENSOR_MAX);
+ static struct hf_core hfcore;
+@@ -294,7 +295,6 @@
+ 	int i = 0, err = 0;
+ 	uint32_t gain = 0;
+ 	struct hf_manager *manager = NULL;
+-	struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
+ 
+ 	if (!device || !device->dev_name ||
+ 			!device->support_list || !device->support_size)
+@@ -315,9 +315,8 @@
+ 	clear_bit(HF_MANAGER_IO_READY, &manager->flags);
+ 
+ 	if (device->device_poll == HF_DEVICE_IO_POLLING) {
+-		hrtimer_init(&manager->io_poll_timer,
++		hrtimer_setup(&manager->io_poll_timer, hf_manager_io_poll,
+ 			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+-		manager->io_poll_timer.function = hf_manager_io_poll;
+ 	} else if (device->device_poll == HF_DEVICE_IO_INTERRUPT) {
+ 		manager->interrupt = hf_manager_io_interrupt;
+ 	}
+@@ -338,8 +337,7 @@
+ 				manager->kworker = NULL;
+ 				goto out_err;
+ 			}
+-			sched_setscheduler_nocheck(manager->kworker->task,
+-				SCHED_FIFO, &param);
++			sched_set_fifo(manager->kworker->task);
+ 		}
+ 	}
+ 
+@@ -1177,7 +1175,7 @@
+ 		goto err_out;
+ 
+ 	/* record process id and thread id for debug */
+-	strlcpy(client->proc_comm, current->comm, sizeof(client->proc_comm));
++	strscpy(client->proc_comm, current->comm, sizeof(client->proc_comm));
+ 	client->leader_pid = current->group_leader->pid;
+ 	client->pid = current->pid;
+ 	client->core = &hfcore;
+@@ -1716,7 +1714,6 @@
+ {
+ 	int ret;
+ 	struct device *dev;
+-	struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
+ 
+ 	init_hf_core(&hfcore);
+ 
+@@ -1727,7 +1724,7 @@
+ 		goto err_exit;
+ 	}
+ 
+-	hf_manager_class = class_create(THIS_MODULE, "hf_manager");
++	hf_manager_class = class_create("hf_manager");
+ 	if (IS_ERR(hf_manager_class)) {
+ 		pr_err("Failed to create class\n");
+ 		ret = PTR_ERR(hf_manager_class);
+@@ -1742,8 +1739,9 @@
+ 		goto err_class;
+ 	}
+ 
+-	if (!proc_create_data("hf_manager", 0600, NULL,
+-			&hf_manager_proc_fops, &hfcore))
++	hf_manager_proc = proc_create_data("hf_manager", 0600, NULL,
++			&hf_manager_proc_fops, &hfcore);
++	if (!hf_manager_proc)
+ 		pr_err("Failed to create proc\n");
+ 
+ 	hfcore.kworker = kthread_create_worker(0, "hf_manager");
+@@ -1753,10 +1751,11 @@
+ 		hfcore.kworker = NULL;
+ 		goto err_device;
+ 	}
+-	sched_setscheduler_nocheck(hfcore.kworker->task, SCHED_FIFO, &param);
++	sched_set_fifo(hfcore.kworker->task);
+ 	return 0;
+ 
+ err_device:
++	proc_remove(hf_manager_proc);
+ 	device_destroy(hf_manager_class, MKDEV(hf_manager_major, 0));
+ err_class:
+ 	class_destroy(hf_manager_class);
+@@ -1769,6 +1768,7 @@
+ static void __exit hf_manager_exit(void)
+ {
+ 	kthread_destroy_worker(hfcore.kworker);
++	proc_remove(hf_manager_proc);
+ 	device_destroy(hf_manager_class, MKDEV(hf_manager_major, 0));
+ 	class_destroy(hf_manager_class);
+ 	unregister_chrdev(hf_manager_major, "hf_manager");

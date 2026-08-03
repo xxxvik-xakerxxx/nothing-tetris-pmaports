@@ -1,0 +1,76 @@
+From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
+Subject: [PATCH] arm64: dts: mt6878: connect Type-C to the MTU3 role switch
+
+MTU3 owns the USB data role, but the original graph connected the USB2 PHY
+to the child xHCI controller. Neither endpoint registered a USB role-switch,
+so TCPM could report Type-C state while data-role changes never reached MTU3.
+
+Register MTU3 as the role-switch provider, connect the active MT6375 Type-C
+connector to it and keep peripheral mode as the safe default so the pmOS NCM
+gadget remains available while TCPM initializes.
+
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -525,7 +525,17 @@
+ 			ranges;
+ 			mediatek,syscon-wakeup = <&pericfg_ao 0x214 105>;
+ 			wakeup-source;
++			dr_mode = "otg";
++			maximum-speed = "high-speed";
++			usb-role-switch;
++			role-switch-default-mode = "peripheral";
+ 
++			port {
++				ssusb_role_sw: endpoint {
++					remote-endpoint = <&typec_hs>;
++				};
++			};
++
+ 			usb_host: xhci0@11200000 {
+ 				compatible = "mediatek,mtk-xhci";
+ 				reg = <0x11200000 0x1000>;
+@@ -533,12 +543,6 @@
+ 				interrupts = <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH 0>;
+ 				clocks = <&clk26m>;
+ 				clock-names = "sys_ck";
+-
+-				port {
+-					usb_role: endpoint {
+-						remote-endpoint = <&mtu3_drd_switch>;
+-					};
+-				};
+ 			};
+ 		};
+ 
+@@ -858,14 +862,7 @@
+ 				clocks = <&clk26m>;
+ 				clock-names = "ref";
+ 				#phy-cells = <1>;
+-				mediatek,software-role-switch;
+ 				status = "disabled";
+-
+-				port {
+-					mtu3_drd_switch: endpoint {
+-						remote-endpoint = <&usb_role>;
+-					};
+-				};
+ 			};
+ 		};
+ 
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -175,6 +175,14 @@
+ 			ports {
+ 				#address-cells = <1>;
+ 				#size-cells = <0>;
++
++				port@0 {
++					reg = <0>;
++
++					typec_hs: endpoint {
++						remote-endpoint = <&ssusb_role_sw>;
++					};
++				};
+ 
+ 				port@2 {
+ 					reg = <2>;

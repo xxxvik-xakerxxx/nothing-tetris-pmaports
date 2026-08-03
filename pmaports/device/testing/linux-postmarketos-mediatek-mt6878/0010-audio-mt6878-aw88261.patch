@@ -1,3 +1,13 @@
+From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
+Subject: [PATCH] arm64: mediatek: add MT6878 Tetris audio support
+
+Describe the MT6878 audio clocks, AFE, codec and board pinctrl used by
+Tetris. Bind the populated AW88261 smart amplifier and start it from the
+PCM mute lifecycle, after ASoC has powered the DAPM route. This follows
+the Nothing OS 4.1 driver ordering and avoids probing the amplifier PLL
+before the I2S clocks are available.
+
+---
 diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
 index 898cd78..2c7ba4a 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
@@ -248,17 +258,82 @@ index 0000000..9018d19
 +MODULE_DESCRIPTION("MediaTek MT6878 audio clock driver");
 +MODULE_LICENSE("GPL");
 
-From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
-Subject: [PATCH] ASoC: aw88261: identify the Tetris speaker amplifier
-
-The populated Tetris BOM uses an AW88261 at i2c6 address 0x34; its
-read-only chip ID was verified as 0x2113. Add an OF match and describe
-only that populated amplifier. No sound card is connected yet, so probe
-does not load firmware or power the amplifier.
-
 --- a/sound/soc/codecs/aw88261.c
 +++ b/sound/soc/codecs/aw88261.c
-@@ -1269,9 +1269,16 @@
+@@ -710,10 +710,37 @@ static void aw88261_start(struct aw88261 *aw88261, bool sync_start)
+ 			AW88261_START_WORK_DELAY_MS);
+ }
+ 
++static int aw88261_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
++{
++	struct aw88261 *aw88261 = snd_soc_component_get_drvdata(dai->component);
++
++	if (stream != SNDRV_PCM_STREAM_PLAYBACK)
++		return 0;
++
++	if (mute) {
++		cancel_delayed_work_sync(&aw88261->start_work);
++
++		mutex_lock(&aw88261->lock);
++		aw88261_dev_stop(aw88261->aw_pa);
++		mutex_unlock(&aw88261->lock);
++	} else {
++		mutex_lock(&aw88261->lock);
++		aw88261_start(aw88261, AW88261_ASYNC_START);
++		mutex_unlock(&aw88261->lock);
++	}
++
++	return 0;
++}
++
++static const struct snd_soc_dai_ops aw88261_dai_ops = {
++	.mute_stream = aw88261_mute_stream,
++};
++
+ static struct snd_soc_dai_driver aw88261_dai[] = {
+ 	{
+ 		.name = "aw88261-aif",
+ 		.id = 1,
++		.ops = &aw88261_dai_ops,
+ 		.playback = {
+ 			.stream_name = "Speaker_Playback",
+ 			.channels_min = 1,
+@@ -969,33 +996,9 @@ static const struct snd_kcontrol_new aw88261_controls[] = {
+ 		aw88261_profile_get, aw88261_profile_set),
+ };
+ 
+-static int aw88261_playback_event(struct snd_soc_dapm_widget *w,
+-				struct snd_kcontrol *k, int event)
+-{
+-	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+-	struct aw88261 *aw88261 = snd_soc_component_get_drvdata(component);
+-
+-	mutex_lock(&aw88261->lock);
+-	switch (event) {
+-	case SND_SOC_DAPM_PRE_PMU:
+-		aw88261_start(aw88261, AW88261_ASYNC_START);
+-		break;
+-	case SND_SOC_DAPM_POST_PMD:
+-		aw88261_dev_stop(aw88261->aw_pa);
+-		break;
+-	default:
+-		break;
+-	}
+-	mutex_unlock(&aw88261->lock);
+-
+-	return 0;
+-}
+-
+ static const struct snd_soc_dapm_widget aw88261_dapm_widgets[] = {
+ 	 /* playback */
+-	SND_SOC_DAPM_AIF_IN_E("AIF_RX", "Speaker_Playback", 0, 0, 0, 0,
+-					aw88261_playback_event,
+-					SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
++	SND_SOC_DAPM_AIF_IN("AIF_RX", "Speaker_Playback", 0, SND_SOC_NOPM, 0, 0),
+ 	SND_SOC_DAPM_OUTPUT("DAC Output"),
+ 
+ 	/* capture */
+@@ -1269,9 +1272,16 @@
  };
  MODULE_DEVICE_TABLE(i2c, aw88261_i2c_id);
  
@@ -277,7 +352,7 @@ does not load firmware or power the amplifier.
  	.id_table = aw88261_i2c_id,
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -160,22 +160,31 @@
+@@ -160,22 +160,32 @@
  	#address-cells = <1>;
  	#size-cells = <0>;
  	clock-frequency = <400000>;
@@ -311,6 +386,7 @@ does not load firmware or power the amplifier.
 +	sound {
 +		compatible = "mediatek,mt6878-mt6369-sound";
 +		mediatek,platform = <&afe>;
++		mediatek,codec = <&mt6369codec>;
 +		mediatek,ipm = <1>;
 +		mediatek,spk-i2s = <25 24>;
 +
@@ -321,3 +397,271 @@ does not load firmware or power the amplifier.
 +};
 +
  &{/} {
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -271,6 +271,55 @@
+ };
+ 
+ &afe {
++	pinctrl-names = "aud-clk-mosi-off",
++			"aud-clk-mosi-on",
++			"aud-dat-mosi-off",
++			"aud-dat-mosi-on",
++			"aud-dat-miso0-off",
++			"aud-dat-miso0-on",
++			"aud-dat-miso1-off",
++			"aud-dat-miso1-on",
++			"aud-gpio-i2sin4-off",
++			"aud-gpio-i2sin4-on",
++			"aud-gpio-i2sout4-off",
++			"aud-gpio-i2sout4-on",
++			"aud-gpio-ap-dmic-off",
++			"aud-gpio-ap-dmic-on",
++			"aud-gpio-ap-dmic1-off",
++			"aud-gpio-ap-dmic1-on",
++			"vow-dat-miso-off",
++			"vow-dat-miso-on",
++			"vow-clk-miso-off",
++			"vow-clk-miso-on",
++			"vow-scp-dmic-dat-off",
++			"vow-scp-dmic-dat-on",
++			"vow-scp-dmic-clk-off",
++			"vow-scp-dmic-clk-on";
++	pinctrl-0 = <&aud_clk_mosi_off>;
++	pinctrl-1 = <&aud_clk_mosi_on>;
++	pinctrl-2 = <&aud_dat_mosi_off>;
++	pinctrl-3 = <&aud_dat_mosi_on>;
++	pinctrl-4 = <&aud_dat_miso0_off>;
++	pinctrl-5 = <&aud_dat_miso0_on>;
++	pinctrl-6 = <&aud_dat_miso1_off>;
++	pinctrl-7 = <&aud_dat_miso1_on>;
++	pinctrl-8 = <&aud_gpio_i2sin4_off>;
++	pinctrl-9 = <&aud_gpio_i2sin4_on>;
++	pinctrl-10 = <&aud_gpio_i2sout4_off>;
++	pinctrl-11 = <&aud_gpio_i2sout4_on>;
++	pinctrl-12 = <&aud_gpio_ap_dmic_off>;
++	pinctrl-13 = <&aud_gpio_ap_dmic_on>;
++	pinctrl-14 = <&aud_gpio_ap_dmic1_off>;
++	pinctrl-15 = <&aud_gpio_ap_dmic1_on>;
++	pinctrl-16 = <&vow_dat_miso_off>;
++	pinctrl-17 = <&vow_dat_miso_on>;
++	pinctrl-18 = <&vow_clk_miso_off>;
++	pinctrl-19 = <&vow_clk_miso_on>;
++	pinctrl-20 = <&vow_scp_dmic_dat_off>;
++	pinctrl-21 = <&vow_scp_dmic_dat_on>;
++	pinctrl-22 = <&vow_scp_dmic_clk_off>;
++	pinctrl-23 = <&vow_scp_dmic_clk_on>;
++
+ 	status = "okay";
+ };
+ 
+@@ -417,6 +466,208 @@
+ };
+ 
+ &pio {
++	aud_clk_mosi_off: aud-clk-mosi-off {
++		pins {
++			pinmux = <PINMUX_GPIO164__FUNC_GPIO164>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_clk_mosi_on: aud-clk-mosi-on {
++		pins {
++			pinmux = <PINMUX_GPIO164__FUNC_AUD_CLK_MOSI>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_dat_mosi_off: aud-dat-mosi-off {
++		pins {
++			pinmux = <PINMUX_GPIO166__FUNC_GPIO166>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_dat_mosi_on: aud-dat-mosi-on {
++		pins {
++			pinmux = <PINMUX_GPIO166__FUNC_AUD_DAT_MOSI0>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_dat_miso0_off: aud-dat-miso0-off {
++		pins {
++			pinmux = <PINMUX_GPIO170__FUNC_GPIO170>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_dat_miso0_on: aud-dat-miso0-on {
++		pins {
++			pinmux = <PINMUX_GPIO170__FUNC_AUD_DAT_MISO0>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_dat_miso1_off: aud-dat-miso1-off {
++		pins {
++			pinmux = <PINMUX_GPIO171__FUNC_GPIO171>;
++			input-enable;
++			bias-disable;
++		};
++	};
++
++	aud_dat_miso1_on: aud-dat-miso1-on {
++		pins {
++			pinmux = <PINMUX_GPIO171__FUNC_AUD_DAT_MISO1>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_gpio_i2sin4_off: aud-gpio-i2sin4-off {
++		pins {
++			pinmux = <PINMUX_GPIO42__FUNC_GPIO42>,
++				 <PINMUX_GPIO43__FUNC_GPIO43>,
++				 <PINMUX_GPIO44__FUNC_GPIO44>,
++				 <PINMUX_GPIO45__FUNC_GPIO45>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_gpio_i2sin4_on: aud-gpio-i2sin4-on {
++		pins {
++			pinmux = <PINMUX_GPIO42__FUNC_I2SIN4_BCK>,
++				 <PINMUX_GPIO43__FUNC_I2SIN4_LRCK>,
++				 <PINMUX_GPIO44__FUNC_I2SOUT4_DATA0>,
++				 <PINMUX_GPIO45__FUNC_I2SIN4_DATA0>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_gpio_i2sout4_off: aud-gpio-i2sout4-off {
++		pins {
++			pinmux = <PINMUX_GPIO44__FUNC_GPIO44>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_gpio_i2sout4_on: aud-gpio-i2sout4-on {
++		pins {
++			pinmux = <PINMUX_GPIO44__FUNC_I2SOUT4_DATA0>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_gpio_ap_dmic_off: aud-gpio-ap-dmic-off {
++		pins {
++			pinmux = <PINMUX_GPIO2__FUNC_GPIO2>,
++				 <PINMUX_GPIO3__FUNC_GPIO3>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_gpio_ap_dmic_on: aud-gpio-ap-dmic-on {
++		pins {
++			pinmux = <PINMUX_GPIO2__FUNC_DMIC_CLK>,
++				 <PINMUX_GPIO3__FUNC_DMIC_DAT>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	aud_gpio_ap_dmic1_off: aud-gpio-ap-dmic1-off {
++		pins {
++			pinmux = <PINMUX_GPIO27__FUNC_GPIO27>,
++				 <PINMUX_GPIO28__FUNC_GPIO28>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	aud_gpio_ap_dmic1_on: aud-gpio-ap-dmic1-on {
++		pins {
++			pinmux = <PINMUX_GPIO27__FUNC_DMIC1_CLK>,
++				 <PINMUX_GPIO28__FUNC_DMIC1_DAT>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	vow_dat_miso_off: vow-dat-miso-off {
++		pins {
++			pinmux = <PINMUX_GPIO170__FUNC_GPIO170>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	vow_dat_miso_on: vow-dat-miso-on {
++		pins {
++			pinmux = <PINMUX_GPIO170__FUNC_VOW_DAT_MISO>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	vow_clk_miso_off: vow-clk-miso-off {
++		pins {
++			pinmux = <PINMUX_GPIO171__FUNC_GPIO171>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	vow_clk_miso_on: vow-clk-miso-on {
++		pins {
++			pinmux = <PINMUX_GPIO171__FUNC_VOW_CLK_MISO>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	vow_scp_dmic_dat_off: vow-scp-dmic-dat-off {
++		pins {
++			pinmux = <PINMUX_GPIO3__FUNC_GPIO3>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	vow_scp_dmic_dat_on: vow-scp-dmic-dat-on {
++		pins {
++			pinmux = <PINMUX_GPIO3__FUNC_SCP_DMIC_DAT>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
++	vow_scp_dmic_clk_off: vow-scp-dmic-clk-off {
++		pins {
++			pinmux = <PINMUX_GPIO2__FUNC_GPIO2>;
++			input-enable;
++			bias-pull-down;
++		};
++	};
++
++	vow_scp_dmic_clk_on: vow-scp-dmic-clk-on {
++		pins {
++			pinmux = <PINMUX_GPIO2__FUNC_SCP_DMIC_CLK>;
++			input-schmitt-enable;
++			bias-disable;
++		};
++	};
++
+ 	key_gpio_default: key-default {
+ 		pins-cmd1-dat {
+ 			pinmux = <PINMUX_GPIO54__FUNC_GPIO54>;

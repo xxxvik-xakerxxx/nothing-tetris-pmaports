@@ -1185,3 +1185,90 @@ index b50a756..190c0ae 100644
  MODULE_LICENSE("GPL");
  MODULE_ALIAS("mt6878 mt6369 soc card");
 -
+diff --git a/sound/soc/mediatek/common/mtk-sp-spk-amp.c b/sound/soc/mediatek/common/mtk-sp-spk-amp.c
+--- a/sound/soc/mediatek/common/mtk-sp-spk-amp.c
++++ b/sound/soc/mediatek/common/mtk-sp-spk-amp.c
+@@ -201,7 +201,12 @@ int mtk_spk_update_info(struct snd_soc_card *card,
+ 	unsigned int i2s_set[2];
+ 	unsigned int is_ipm2p0;
+ 
+-	if (mtk_spk_type == MTK_SPK_NOT_SMARTPA)
++	/*
++	 * Standard ASoC codecs do not call the legacy SmartPA type setter.
++	 * An explicit DT I2S route is sufficient to select the speaker links.
++	 */
++	if (mtk_spk_type == MTK_SPK_NOT_SMARTPA &&
++	    !of_property_present(pdev->dev.of_node, "mediatek,spk-i2s"))
+ 		goto BYPASS_UPDATE;
+ 
+ 	/* get hw IPM version */
+diff --git a/sound/soc/mediatek/mt6878/mt6878-mt6369.c b/sound/soc/mediatek/mt6878/mt6878-mt6369.c
+--- a/sound/soc/mediatek/mt6878/mt6878-mt6369.c
++++ b/sound/soc/mediatek/mt6878/mt6878-mt6369.c
+@@ -1820,7 +1820,7 @@
+ static int mt6878_mt6369_dev_probe(struct platform_device *pdev)
+ {
+ 	struct snd_soc_card *card = &mt6878_mt6369_soc_card;
+-	struct device_node *platform_node, *spk_node;
++	struct device_node *codec_node, *platform_node, *spk_node;
+ 	int ret, i;
+ 	struct snd_soc_dai_link *dai_link;
+ #if IS_ENABLED(CONFIG_MTK_BATTERY_PERCENT_THROTTLING)
+@@ -1842,6 +1842,14 @@
+ 					 "mediatek,platform", 0);
+ 	if (!platform_node) {
+ 		dev_info(&pdev->dev, "Property 'platform' missing or invalid\n");
++		return -EINVAL;
++	}
++
++	codec_node = of_parse_phandle(pdev->dev.of_node,
++				      "mediatek,codec", 0);
++	if (!codec_node) {
++		dev_info(&pdev->dev,
++			 "Property 'codec' missing or invalid\n");
+ 		return -EINVAL;
+ 	}
+ 
+@@ -1858,6 +1866,12 @@
+ 		if (!dai_link->platforms->name)
+ 			dai_link->platforms->of_node = platform_node;
+ 
++		if (!strcmp(dai_link->name, "Primary Codec") ||
++		    !strcmp(dai_link->name, "Primary Codec CH34")) {
++			dai_link->codecs->name = NULL;
++			dai_link->codecs->of_node = codec_node;
++		}
++
+ 		if (!strcmp(dai_link->name, "Speaker Codec")) {
+ 			ret = snd_soc_of_get_dai_link_codecs(
+ 						&pdev->dev, spk_node, dai_link);
+@@ -1917,6 +1917,7 @@ static const struct of_device_id mt6878_mt6369_dt_match[] = {
+ 	{.compatible = "mediatek,mt6878-mt6369-sound",},
+ 	{}
+ };
++MODULE_DEVICE_TABLE(of, mt6878_mt6369_dt_match);
+ #endif
+ 
+ static const struct dev_pm_ops mt6878_mt6369_pm_ops = {
+diff --git a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
+--- a/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
++++ b/sound/soc/mediatek/mt6878/mt6878-afe-gpio.c
+@@ -175,15 +175,13 @@ int mt6878_afe_gpio_request(struct mtk_base_afe *afe, bool enable,
+ 	case MT6878_DAI_I2S_IN0:
+ 		break;
+ 	case MT6878_DAI_I2S_OUT0:
+ 		break;
+ 	case MT6878_DAI_I2S_IN4:
+ 	case MT6878_DAI_I2S_OUT4:
+-		if (enable) {
++		/* The composite I2SIN4 state owns BCK, LRCK and both data pins. */
++		if (enable)
+ 			mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_I2SIN4_ON);
+-			mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_I2SOUT4_ON);
+-		} else {
++		else
+ 			mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_I2SIN4_OFF);
+-			mt6878_afe_gpio_select(afe, MT6878_AFE_GPIO_I2SOUT4_OFF);
+-		}
+ 		break;
+ 	case MT6878_DAI_VOW:
