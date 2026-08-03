@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: postmarketOS Porting <porting@localhost>
+From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
 Date: Sun, 26 Jul 2026 00:00:00 +0300
 Subject: [PATCH] input: add RT6010 haptics driver
 
@@ -10,14 +10,22 @@ The Android vendor driver exposes a RichTap/miscdevice interface and
 loads haptic_config.bin at runtime. For postmarketOS we only need the
 standard FF_RUMBLE path, so keep the driver compact and embed the
 validated vendor init pieces: efuse trim, RAM/list/wave layout, boost,
-gain and the short LRA waveform.
+gain and the Tetris B4.1 RAM waveform. Playback uses the vendor timed
+vibrator playlist and its full-scale waveform 1. Enable the populated
+controller in the Tetris device tree.
 
-Signed-off-by: postmarketOS Porting <porting@localhost>
+ff-memless invokes playback from atomic context. Queue all I2C/regmap
+access on a workqueue, handle protection status in a threaded IRQ, and
+stop and reinitialize the controller across system suspend/resume. Map
+standard FF_RUMBLE magnitude onto the B4.1 calibrated gain range.
+
+Signed-off-by: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
 ---
- drivers/input/misc/Kconfig  |  16 ++
- drivers/input/misc/Makefile |   1 +
- drivers/input/misc/rt6010.c | 634 +++++++++++++++++++++++++++++++++++
- 3 files changed, 651 insertions(+)
+ arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts |   4 +-
+ drivers/input/misc/Kconfig                             |  16 ++
+ drivers/input/misc/Makefile                            |   1 +
+ drivers/input/misc/rt6010.c                            | 787 +++++++++++++++++
+ 4 files changed, 806 insertions(+), 2 deletions(-)
  create mode 100644 drivers/input/misc/rt6010.c
 
 diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
@@ -61,10 +69,10 @@ index 5f8b8b2fdd2e..f86602e4c70a 100644
  obj-$(CONFIG_INPUT_GPIO_ROTARY_ENCODER)	+= rotary_encoder.o
 diff --git a/drivers/input/misc/rt6010.c b/drivers/input/misc/rt6010.c
 new file mode 100644
-index 000000000000..e0a625a1ef2d
+index 000000000000..ec0c1ad5a9e1
 --- /dev/null
 +++ b/drivers/input/misc/rt6010.c
-@@ -0,0 +1,634 @@
+@@ -0,0 +1,787 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * RT6010 LRA haptic controller.
@@ -77,9 +85,12 @@ index 000000000000..e0a625a1ef2d
 +#include <linux/gpio/consumer.h>
 +#include <linux/i2c.h>
 +#include <linux/input.h>
++#include <linux/interrupt.h>
 +#include <linux/module.h>
 +#include <linux/mutex.h>
++#include <linux/pm.h>
 +#include <linux/regmap.h>
++#include <linux/spinlock.h>
 +#include <linux/workqueue.h>
 +
 +#define RT6010_REG_DEV_ID		0x00
@@ -135,9 +146,13 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_ENABLE_DELAY_US		2000
 +#define RT6010_EFS_RETRIES		3
 +#define RT6010_EFS_BYTES		4
-+#define RT6010_PLAY_MODE_STREAM		0x02
++#define RT6010_PLAY_MODE_RAM		0x01
 +#define RT6010_GO_START			0x01
 +#define RT6010_GO_STOP			0x00
++#define RT6010_INT_PLAY_DONE		BIT(3)
++#define RT6010_INT_FIFO_AE		BIT(2)
++#define RT6010_INT_FIFO_AF		BIT(1)
++#define RT6010_INT_PROTECTION		BIT(0)
 +
 +#define RT6010_EFS_BIAS_1P2V_TRIM_OFFSET	0
 +#define RT6010_EFS_BIAS_I_TRIM_OFFSET		4
@@ -152,19 +167,36 @@ index 000000000000..e0a625a1ef2d
 +#define RT6010_EFS_OSC_TRIM_MASK		0x0003fc00
 +#define RT6010_EFS_VERSION_MASK			0xc0000000
 +
-+#define RT6010_LIST_BASE_ADDR		0x0000
-+#define RT6010_WAVE_BASE_ADDR		0x0100
-+#define RT6010_FIFO_AE			0x0080
-+#define RT6010_FIFO_AF			0x00c0
++#define RT6010_LIST_BASE_ADDR		0x0400
++#define RT6010_WAVE_BASE_ADDR		0x0420
++#define RT6010_FIFO_AE			0x0200
++#define RT6010_FIFO_AF			0x0300
 +#define RT6010_PRE_F0			817
-+#define RT6010_MIN_GAIN			0x04
-+#define RT6010_DEFAULT_GAIN		0x08
-+#define RT6010_MAX_GAIN			0x18
-+#define RT6010_DEFAULT_BOOST		0x04
-+#define RT6010_DEFAULT_DURATION_MS	20
-+#define RT6010_MAX_DURATION_MS		40
-+
++#define RT6010_MIN_GAIN			0x08
++#define RT6010_DEFAULT_GAIN		0x7f
++#define RT6010_MAX_GAIN			0x7f
++#define RT6010_DEFAULT_BOOST		0x08
++#define RT6010_RAM_REPEAT_COUNT		0x7f
++#define RT6010_RAM_WAVE_INDEX		0x01
 +static const u8 rt6010_waveform[] = {
++	0x04, 0x30, 0x00, 0x80, 0x04, 0xb0, 0x00, 0x80,
++	0x05, 0x30, 0x00, 0x23, 0x05, 0x53, 0x00, 0x14,
++	0x00, 0x0a, 0x13, 0x1b, 0x21, 0x26, 0x28, 0x28,
++	0x25, 0x20, 0x19, 0x11, 0x07, 0xfe, 0xf4, 0xeb,
++	0xe3, 0xdd, 0xda, 0xd8, 0xd9, 0xdc, 0xe1, 0xe9,
++	0xf1, 0xfb, 0x05, 0x0e, 0x17, 0x1e, 0x24, 0x27,
++	0x28, 0x27, 0x23, 0x1d, 0x15, 0x0d, 0x03, 0xf9,
++	0xf0, 0xe7, 0xe0, 0xdb, 0xd9, 0xd8, 0xda, 0xde,
++	0xe5, 0xed, 0xf6, 0xff, 0x09, 0x12, 0x1a, 0x21,
++	0x25, 0x28, 0x28, 0x25, 0x20, 0x1a, 0x11, 0x08,
++	0xfe, 0xf5, 0xec, 0xe4, 0xde, 0xda, 0xd8, 0xd9,
++	0xdc, 0xe1, 0xe8, 0xf1, 0xfa, 0x04, 0x0e, 0x16,
++	0x1e, 0x23, 0x27, 0x28, 0x27, 0x23, 0x1d, 0x16,
++	0x0d, 0x04, 0xfa, 0xf0, 0xe8, 0xe1, 0xdc, 0xd9,
++	0xd8, 0xda, 0xde, 0xe4, 0xec, 0xf5, 0xff, 0x09,
++	0x12, 0x1a, 0x21, 0x25, 0x28, 0x28, 0x25, 0x21,
++	0x1a, 0x12, 0x09, 0xff, 0xf5, 0xec, 0xe4, 0xde,
++	0xda, 0xd8, 0xd9, 0xdc, 0xe1, 0xe8, 0xf0, 0xfa,
 +	0x00, 0x1f, 0x3c, 0x56, 0x6b, 0x79, 0x7f, 0x7f,
 +	0x76, 0x66, 0x51, 0x36, 0x18, 0xf9, 0xda, 0xbd,
 +	0xa5, 0x91, 0x85, 0x80, 0x83, 0x8d, 0x9e, 0xb5,
@@ -181,6 +213,13 @@ index 000000000000..e0a625a1ef2d
 +	0x39, 0x53, 0x68, 0x77, 0x7f, 0x7f, 0x77, 0x69,
 +	0x54, 0x3a, 0x1c, 0xfd, 0xde, 0xc1, 0xa7, 0x94,
 +	0x86, 0x80, 0x82, 0x8b, 0x9c, 0xb2, 0xcd, 0xeb,
++	0x00, 0x16, 0x2c, 0x40, 0x52, 0x62, 0x6f, 0x78,
++	0x7d, 0x7e, 0x7c, 0x75, 0x6b, 0x5d, 0x4c, 0x39,
++	0x24, 0x0e, 0xf9, 0xe2, 0xcd, 0xb9, 0xa8, 0x99,
++	0x8e, 0x86, 0x82, 0x82, 0x86, 0x8e, 0x9a, 0xa9,
++	0xba, 0xce, 0xe3, 0x00, 0x27, 0x4a, 0x66, 0x78,
++	0x7f, 0x78, 0x66, 0x4a, 0x27, 0x00, 0xd9, 0xb6,
++	0x9a, 0x88, 0x81, 0x88, 0x9a, 0xb6, 0xd9
 +};
 +
 +struct rt6010 {
@@ -189,11 +228,16 @@ index 000000000000..e0a625a1ef2d
 +	struct gpio_desc *enable_gpio;
 +	struct input_dev *input;
 +	struct mutex lock;
-+	struct delayed_work stop_work;
++	/* Protects requested_strong and requested_weak in atomic context. */
++	spinlock_t request_lock;
++	struct work_struct play_work;
++	u16 requested_strong;
++	u16 requested_weak;
 +	u32 efs_data;
 +	u8 efs_ver;
 +	u8 revision;
 +	bool initialized;
++	bool suspended;
 +};
 +
 +static const struct regmap_config rt6010_regmap_config = {
@@ -379,28 +423,6 @@ index 000000000000..e0a625a1ef2d
 +	return regmap_raw_write(rt->regmap, RT6010_REG_RAM_DATA, data, len);
 +}
 +
-+static int rt6010_clear_stream_fifo(struct rt6010 *rt)
-+{
-+	unsigned int val;
-+	int error;
-+	int tries;
-+
-+	error = rt6010_write8(rt, RT6010_REG_RAM_CFG, 0x01);
-+	if (error)
-+		return error;
-+
-+	for (tries = 0; tries < 10; tries++) {
-+		error = regmap_read(rt->regmap, RT6010_REG_RAM_CFG, &val);
-+		if (error)
-+			return error;
-+		if (!(val & BIT(0)))
-+			return 0;
-+		usleep_range(1000, 2000);
-+	}
-+
-+	return -ETIMEDOUT;
-+}
-+
 +static int rt6010_clear_protection_locked(struct rt6010 *rt)
 +{
 +	unsigned int val;
@@ -495,7 +517,9 @@ index 000000000000..e0a625a1ef2d
 +	if (error)
 +		return error;
 +
-+	rt6010_clear_protection_locked(rt);
++	error = rt6010_clear_protection_locked(rt);
++	if (error)
++		return error;
 +
 +	rt->initialized = true;
 +	return 0;
@@ -512,18 +536,12 @@ index 000000000000..e0a625a1ef2d
 +	return 0;
 +}
 +
-+static void rt6010_stop_work(struct work_struct *work)
-+{
-+	struct rt6010 *rt = container_of(to_delayed_work(work), struct rt6010,
-+					stop_work);
-+
-+	mutex_lock(&rt->lock);
-+	rt6010_stop_locked(rt);
-+	mutex_unlock(&rt->lock);
-+}
-+
 +static int rt6010_start_locked(struct rt6010 *rt, u16 strong, u16 weak)
 +{
++	const u8 playlist[] = {
++		0x01, 0x00, RT6010_RAM_REPEAT_COUNT, RT6010_RAM_WAVE_INDEX,
++		0x00, 0x00,
++	};
 +	u8 gain;
 +	u32 level = max(strong, weak);
 +	int error;
@@ -540,22 +558,18 @@ index 000000000000..e0a625a1ef2d
 +	error = rt6010_clear_protection_locked(rt);
 +	if (error)
 +		return error;
-+	error = rt6010_clear_stream_fifo(rt);
-+	if (error)
-+		return error;
 +	error = rt6010_write8(rt, RT6010_REG_GAIN_CFG, gain);
 +	if (error)
 +		return error;
++	error = rt6010_write_ram(rt, RT6010_LIST_BASE_ADDR, playlist,
++				 sizeof(playlist));
++	if (error)
++		return error;
 +	error = rt6010_write8(rt, RT6010_REG_PLAY_MODE,
-+			      RT6010_PLAY_MODE_STREAM);
++			      RT6010_PLAY_MODE_RAM);
 +	if (error)
 +		return error;
 +	error = rt6010_write8(rt, RT6010_REG_PLAY_CTRL, RT6010_GO_START);
-+	if (error)
-+		goto out_stop;
-+
-+	error = regmap_raw_write(rt->regmap, RT6010_REG_STREAM_DATA,
-+				 rt6010_waveform, sizeof(rt6010_waveform));
 +	if (error)
 +		goto out_stop;
 +
@@ -568,41 +582,124 @@ index 000000000000..e0a625a1ef2d
 +	return error;
 +}
 +
++static void rt6010_play_work(struct work_struct *work)
++{
++	struct rt6010 *rt = container_of(work, struct rt6010, play_work);
++	unsigned long flags;
++	u16 strong;
++	u16 weak;
++	int error;
++	int stop_error;
++
++	spin_lock_irqsave(&rt->request_lock, flags);
++	strong = rt->requested_strong;
++	weak = rt->requested_weak;
++	spin_unlock_irqrestore(&rt->request_lock, flags);
++
++	if (READ_ONCE(rt->suspended))
++		return;
++
++	mutex_lock(&rt->lock);
++	if (READ_ONCE(rt->suspended)) {
++		mutex_unlock(&rt->lock);
++		return;
++	}
++
++	if (!strong && !weak)
++		error = rt6010_stop_locked(rt);
++	else
++		error = rt6010_start_locked(rt, strong, weak);
++
++	if (error) {
++		stop_error = rt6010_stop_locked(rt);
++		dev_err_ratelimited(rt->dev,
++				    "failed to %s haptics: %d (stop: %d)\n",
++				    strong || weak ? "start" : "stop",
++				    error, stop_error);
++	}
++	mutex_unlock(&rt->lock);
++}
++
 +static int rt6010_play_effect(struct input_dev *input, void *data,
 +			      struct ff_effect *effect)
 +{
 +	struct rt6010 *rt = data;
-+	u16 strong = effect->u.rumble.strong_magnitude;
-+	u16 weak = effect->u.rumble.weak_magnitude;
-+	unsigned int duration = effect->replay.length;
-+	int error = 0;
++	unsigned long flags;
 +
-+	cancel_delayed_work_sync(&rt->stop_work);
++	if (READ_ONCE(rt->suspended))
++		return -EHOSTDOWN;
++
++	/* ff-memless invokes this callback with input->event_lock held. */
++	spin_lock_irqsave(&rt->request_lock, flags);
++	rt->requested_strong = effect->u.rumble.strong_magnitude;
++	rt->requested_weak = effect->u.rumble.weak_magnitude;
++	spin_unlock_irqrestore(&rt->request_lock, flags);
++	schedule_work(&rt->play_work);
++
++	return 0;
++}
++
++static void rt6010_input_close(struct input_dev *input)
++{
++	struct rt6010 *rt = input_get_drvdata(input);
++	unsigned long flags;
++	int error;
++
++	spin_lock_irqsave(&rt->request_lock, flags);
++	rt->requested_strong = 0;
++	rt->requested_weak = 0;
++	spin_unlock_irqrestore(&rt->request_lock, flags);
++	cancel_work_sync(&rt->play_work);
 +
 +	mutex_lock(&rt->lock);
-+	if (!strong && !weak) {
-+		error = rt6010_stop_locked(rt);
-+		goto out_unlock;
-+	}
-+
-+	error = rt6010_start_locked(rt, strong, weak);
-+	if (!error) {
-+		if (!duration)
-+			duration = RT6010_DEFAULT_DURATION_MS;
-+		duration = clamp(duration, 5U, RT6010_MAX_DURATION_MS);
-+		schedule_delayed_work(&rt->stop_work, msecs_to_jiffies(duration));
-+	}
-+
-+out_unlock:
++	error = rt6010_stop_locked(rt);
 +	mutex_unlock(&rt->lock);
-+	return error;
++	if (error)
++		dev_err_ratelimited(rt->dev, "failed to stop haptics: %d\n",
++				    error);
++}
++
++static irqreturn_t rt6010_irq_thread(int irq, void *data)
++{
++	struct rt6010 *rt = data;
++	unsigned int status;
++	int clear_error = 0;
++	int error;
++	int stop_error = 0;
++
++	mutex_lock(&rt->lock);
++	error = regmap_read(rt->regmap, RT6010_REG_INT_STATUS, &status);
++	if (!error && (status & RT6010_INT_PROTECTION)) {
++		stop_error = rt6010_stop_locked(rt);
++		clear_error = rt6010_clear_protection_locked(rt);
++	}
++	mutex_unlock(&rt->lock);
++
++	if (error) {
++		dev_err_ratelimited(rt->dev, "failed to read IRQ status: %d\n",
++				    error);
++		return IRQ_HANDLED;
++	}
++
++	if (status & RT6010_INT_PROTECTION) {
++		dev_warn_ratelimited(rt->dev,
++				     "protection IRQ (stop: %d, clear: %d)\n",
++				     stop_error, clear_error);
++	} else if (status & ~(RT6010_INT_PLAY_DONE | RT6010_INT_FIFO_AE |
++			      RT6010_INT_FIFO_AF)) {
++		dev_warn_ratelimited(rt->dev, "unknown IRQ status %#02x\n",
++				     status);
++	}
++
++	return IRQ_HANDLED;
 +}
 +
 +static void rt6010_disable(void *data)
 +{
 +	struct rt6010 *rt = data;
 +
-+	cancel_delayed_work_sync(&rt->stop_work);
++	WRITE_ONCE(rt->suspended, true);
++	cancel_work_sync(&rt->play_work);
 +	mutex_lock(&rt->lock);
 +	rt6010_stop_locked(rt);
 +	mutex_unlock(&rt->lock);
@@ -625,7 +722,8 @@ index 000000000000..e0a625a1ef2d
 +
 +	rt->dev = dev;
 +	mutex_init(&rt->lock);
-+	INIT_DELAYED_WORK(&rt->stop_work, rt6010_stop_work);
++	spin_lock_init(&rt->request_lock);
++	INIT_WORK(&rt->play_work, rt6010_play_work);
 +	i2c_set_clientdata(client, rt);
 +
 +	rt->enable_gpio = devm_gpiod_get(dev, "enable", GPIOD_OUT_LOW);
@@ -649,12 +747,23 @@ index 000000000000..e0a625a1ef2d
 +	if (error)
 +		return dev_err_probe(dev, error, "failed to initialize RT6010\n");
 +
++	if (client->irq <= 0)
++		return dev_err_probe(dev, -EINVAL, "missing haptic IRQ\n");
++
++	error = devm_request_threaded_irq(dev, client->irq, NULL,
++					  rt6010_irq_thread, IRQF_ONESHOT,
++					  dev_name(dev), rt);
++	if (error)
++		return dev_err_probe(dev, error, "failed to request haptic IRQ\n");
++
 +	rt->input = devm_input_allocate_device(dev);
 +	if (!rt->input)
 +		return -ENOMEM;
 +
 +	rt->input->name = "RT6010 haptics";
 +	rt->input->id.bustype = BUS_I2C;
++	rt->input->close = rt6010_input_close;
++	input_set_drvdata(rt->input, rt);
 +	input_set_capability(rt->input, EV_FF, FF_RUMBLE);
 +
 +	error = input_ff_create_memless(rt->input, rt, rt6010_play_effect);
@@ -673,6 +782,57 @@ index 000000000000..e0a625a1ef2d
 +	return 0;
 +}
 +
++static int rt6010_suspend(struct device *dev)
++{
++	struct rt6010 *rt = dev_get_drvdata(dev);
++	unsigned long flags;
++	int error;
++
++	WRITE_ONCE(rt->suspended, true);
++	disable_irq(to_i2c_client(dev)->irq);
++
++	spin_lock_irqsave(&rt->request_lock, flags);
++	rt->requested_strong = 0;
++	rt->requested_weak = 0;
++	spin_unlock_irqrestore(&rt->request_lock, flags);
++	cancel_work_sync(&rt->play_work);
++
++	mutex_lock(&rt->lock);
++	error = rt6010_stop_locked(rt);
++	rt->initialized = false;
++	gpiod_set_value_cansleep(rt->enable_gpio, 0);
++	mutex_unlock(&rt->lock);
++
++	if (error)
++		dev_warn(dev, "failed to stop haptics for suspend: %d\n", error);
++
++	return 0;
++}
++
++static int rt6010_resume(struct device *dev)
++{
++	struct rt6010 *rt = dev_get_drvdata(dev);
++	int error;
++
++	mutex_lock(&rt->lock);
++	gpiod_set_value_cansleep(rt->enable_gpio, 1);
++	usleep_range(RT6010_ENABLE_DELAY_US, RT6010_ENABLE_DELAY_US + 1000);
++	error = rt6010_init_chip(rt);
++	if (error)
++		gpiod_set_value_cansleep(rt->enable_gpio, 0);
++	mutex_unlock(&rt->lock);
++
++	if (error)
++		return dev_err_probe(dev, error,
++				     "failed to reinitialize RT6010 after resume\n");
++
++	WRITE_ONCE(rt->suspended, false);
++	enable_irq(to_i2c_client(dev)->irq);
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(rt6010_pm_ops, rt6010_suspend, rt6010_resume);
++
 +static const struct of_device_id rt6010_of_match[] = {
 +	{ .compatible = "richtek,rt6010" },
 +	{ .compatible = "ics,haptic-rt6010" },
@@ -690,6 +850,7 @@ index 000000000000..e0a625a1ef2d
 +	.driver = {
 +		.name = "rt6010-haptics",
 +		.of_match_table = rt6010_of_match,
++		.pm = pm_sleep_ptr(&rt6010_pm_ops),
 +	},
 +	.probe = rt6010_probe,
 +	.id_table = rt6010_i2c_id,
@@ -697,19 +858,13 @@ index 000000000000..e0a625a1ef2d
 +module_i2c_driver(rt6010_driver);
 +
 +MODULE_DESCRIPTION("RT6010 haptics driver");
-+MODULE_AUTHOR("postmarketOS Porting <porting@localhost>");
++MODULE_AUTHOR("xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>");
 +MODULE_LICENSE("GPL");
 
-From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
-Subject: [PATCH] arm64: dts: mt6878: enable RT6010 haptics
-
-The populated Tetris haptic controller was identified read-only as an
-RT6010 with device ID 0x6b. Enable the node for the native FF_RUMBLE
-driver.
-
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -107,12 +107,12 @@
+@@ -107,11 +107,11 @@
  	clock-frequency = <400000>;
  
  	haptic@5f {

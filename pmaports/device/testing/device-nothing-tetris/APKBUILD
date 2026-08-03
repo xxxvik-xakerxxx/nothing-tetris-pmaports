@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=6
-pkgrel=11
+pkgrel=12
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -21,6 +21,7 @@ depends="
 makedepends="devicepkg-dev"
 source="
 	20-nothing-tetris-wifi-powersave.conf
+	72-nothing-tetris-feedbackd.rules
 	80-nothing-tetris-udisks.rules
 	89-nothing-tetris.preset
 	boot_image.its
@@ -34,6 +35,7 @@ source="
 	nothing-tetris-connectivity.service
 	nothing-tetris-connectivity-setup
 	nothing-tetris-audio.conf
+	nothing-tetris-haptics.conf
 	nothing-tetris-wifi-nvram-extract
 	nothing-tetris-wifi-nvram-load.c
 	nothing-tetris-wifi-nvram.service
@@ -125,12 +127,16 @@ package() {
 		"$pkgdir"/usr/share/u-boot/nothing-tetris/boot_image.its
 	install -Dm644 "$srcdir"/80-nothing-tetris-udisks.rules \
 		"$pkgdir"/usr/lib/udev/rules.d/80-nothing-tetris-udisks.rules
+	install -Dm644 "$srcdir"/72-nothing-tetris-feedbackd.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/72-nothing-tetris-feedbackd.rules
 	install -Dm644 "$srcdir"/20-nothing-tetris-wifi-powersave.conf \
 		"$pkgdir"/usr/lib/NetworkManager/conf.d/20-nothing-tetris-wifi-powersave.conf
 	install -Dm755 "$srcdir"/nothing-tetris-connectivity-setup \
 		"$pkgdir"/usr/libexec/nothing-tetris-connectivity-setup
 	install -Dm644 "$srcdir"/nothing-tetris-audio.conf \
 		"$pkgdir"/usr/lib/modules-load.d/nothing-tetris-audio.conf
+	install -Dm644 "$srcdir"/nothing-tetris-haptics.conf \
+		"$pkgdir"/usr/lib/modules-load.d/nothing-tetris-haptics.conf
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address-extract \
 		"$pkgdir"/usr/libexec/nothing-tetris-bluetooth-address-extract
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address \
@@ -155,6 +161,7 @@ package() {
 
 sha512sums="
 279383f1a442a296c5c4b6f3261b4742e01be3bd5293a15179b63fbb325e316b6606996c2b990ab7704710bb170cf74276fb4d86a5e17fe7922f3f8402fe4fd9  20-nothing-tetris-wifi-powersave.conf
+da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
 72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
@@ -168,6 +175,7 @@ ce093b67bf0f1c67542e6c7417c052b17bc203406ecaacae0997633700dcb2422ebacb73cf1e3814
 a8b68de13cac4374d852fbddfc64645d39566d971791c5e305da549944937bac863c4d9b1f9a4c59fe5ca606ec12659df173e553c82e516d92a529d07f6398eb  nothing-tetris-connectivity.service
 d33eebdbde0cd1196e064524829c34c449994f89233e68b68332e05ef4aae2d3fb9007e50ccce7bad01c536f6376802fefe48e64897e86a9f69418c1c0c59fcd  nothing-tetris-connectivity-setup
 fcee02fec59de96ad5674c294e2983f83df46e9a5e439a039eacc69ee8ed0356d8e501a57d40ade46c463a6f7affcd255ddfaa9e1a6fa239733d84454d719a00  nothing-tetris-audio.conf
+e5842a03339a0c0e30864f442b368b8d6a00780ece38f67568571c68fe5dbe0714180b7c4a911b7e76022f3d9b2d8daf6d6fd28faf50261a32a51617c9a3800e  nothing-tetris-haptics.conf
 a9574c65474ba420461cac734afc87396e7d97d031c0676dd218a17ac7542e5ff0aa9cd216d643c0e8d56255cbdabaca43bb72893f6fca5882cca0f7d5fd503a  nothing-tetris-wifi-nvram-extract
 28b6b865f7964ea73f072fe0f6f3188fe6e4d8c307c9ff5029d91d071144994733de37bcc85391d381e037180de2318425a531d46088a7dc89c9ed886d6c937d  nothing-tetris-wifi-nvram-load.c
 12186da839be456a98f281d1babe64f277123ceb1eaf4fd5c285d89d0dc7014333242862d2570012f3b5bb47dc212b694df704a9bd54dbb459004e61c1b88cfc  nothing-tetris-wifi-nvram.service

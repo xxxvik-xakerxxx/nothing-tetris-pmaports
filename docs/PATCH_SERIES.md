@@ -60,7 +60,7 @@ normal Alpine/postmarketOS practice.
 | `0008-connectivity-mt6878-mt6631-connsys.patch` | MT6363 connectivity rails plus minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 | `0009-clk-mediatek-mt6878-mfg.patch` | MFG PLL/top mux clock foundation for future GPU work. |
 | `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys and topckgen audio clocks, audio SRAM/ETDM contract, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
-| `0011-input-rt6010-haptics-tetris.patch` | Conservative RT6010 `FF_RUMBLE` driver using vendor init/trim and stream playback, plus Tetris DT enablement. |
+| `0011-input-rt6010-haptics-tetris.patch` | RT6010 `FF_RUMBLE` driver using the Tetris B4.1 gain, boost, RAM layout and full-scale waveform 1 playlist, with atomic-safe workqueue execution, threaded protection IRQ handling, system-sleep recovery and Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 | `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
 | `0014-mmc-mt6878-tetris-sdcard.patch` | Native MT6878 MSDC1 host support and the Tetris microSD slot wiring. |

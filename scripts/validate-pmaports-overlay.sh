@@ -240,6 +240,48 @@ validate_power_and_audio_config() {
 	fi
 }
 
+validate_haptics() {
+	haptic_patch="$kernel_pkg/0011-input-rt6010-haptics-tetris.patch"
+	feedbackd_rule="$device_pkg/72-nothing-tetris-feedbackd.rules"
+	modules_load="$device_pkg/nothing-tetris-haptics.conf"
+
+	for setting in \
+		'RT6010_LIST_BASE_ADDR 0x0400' \
+		'RT6010_WAVE_BASE_ADDR 0x0420' \
+		'RT6010_FIFO_AE 0x0200' \
+		'RT6010_FIFO_AF 0x0300' \
+		'RT6010_DEFAULT_GAIN 0x7f' \
+		'RT6010_MAX_GAIN 0x7f' \
+		'RT6010_DEFAULT_BOOST 0x08' \
+		'RT6010_PLAY_MODE_RAM 0x01' \
+		'RT6010_RAM_REPEAT_COUNT 0x7f' \
+		'RT6010_RAM_WAVE_INDEX 0x01'; do
+		name=${setting% *}
+		value=${setting#* }
+		grep -Eq "^\\+#define $name[[:space:]]+$value$" "$haptic_patch"
+	done
+
+	grep -Eq '^\+[[:space:]]+schedule_work\(&rt->play_work\);$' "$haptic_patch"
+	grep -Eq '^\+[[:space:]]+error = devm_request_threaded_irq\(dev, client->irq, NULL,$' \
+		"$haptic_patch"
+	grep -Fq '+static DEFINE_SIMPLE_DEV_PM_OPS(rt6010_pm_ops,' "$haptic_patch"
+	grep -Eq '^\+[[:space:]]+error = rt6010_write_ram\(rt, RT6010_LIST_BASE_ADDR, playlist,$' \
+		"$haptic_patch"
+	grep -Eq '^\+[[:space:]]+RT6010_PLAY_MODE_RAM\);$' "$haptic_patch"
+	if grep -Eq '^\+[[:space:]]+cancel_delayed_work_sync\(&rt->stop_work\);$' \
+		"$haptic_patch"; then
+		echo "RT6010 FF callback must not perform synchronous work cancellation in atomic context" >&2
+		return 1
+	fi
+	grep -Fq 'ATTRS{name}=="RT6010 haptics"' "$feedbackd_rule"
+	grep -Fq 'ENV{FEEDBACKD_TYPE}="vibra"' "$feedbackd_rule"
+	[ "$(cat "$modules_load")" = "rt6010" ]
+	grep -Fq '/usr/lib/udev/rules.d/72-nothing-tetris-feedbackd.rules' \
+		"$device_pkg/APKBUILD"
+	grep -Fq '/usr/lib/modules-load.d/nothing-tetris-haptics.conf' \
+		"$device_pkg/APKBUILD"
+}
+
 validate_ci_rootfs_module_checks() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
@@ -323,6 +365,7 @@ validate_source_files "$firmware_pkg"
 validate_vendor_baseline
 validate_connectivity_boot
 validate_power_and_audio_config
+validate_haptics
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build

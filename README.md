@@ -61,7 +61,8 @@ Driver packaging and vendor-to-native migration are documented in
 | USB | Device mode / NCM | Works | The pmOS USB gadget enumerates and carries stable SSH traffic without RX/TX errors. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPC exposes `port0`, partner, sink/device roles and orientation. Kernel USB role switching, host mode and wake remain unvalidated. |
 | USB-C | Analog audio switch | Pending validation | r86 wires the HL5280 to the MT6375 Type-C connector and uses its required audio-accessory sequence. |
-| Haptics | RT6010 rumble | Partial | RT6010 probes and exposes `FF_RUMBLE`; longer runtime stability still needs validation. |
+| Haptics | RT6010 rumble | Works (live) | The native driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; full-strength and repeated bounded effects work without kernel, USB or radio faults. |
+| Haptics | Clean-install integration | Pending validation | The device package autoloads `rt6010` and identifies it to feedbackd. A clean CI-artifact flash, suspend/resume and cold-boot repetition remain. |
 | Audio | Speaker amp identification | Partial | AW88261 probes, identifies chip `0x2113` and loads `aw88261_acf.bin`; physical output is not validated. |
 | Audio | Playback/recording | Partial | MT6878 AFE, MT6369 and the machine card register automatically in the live `pkgrel=100` candidate. PCM endpoints exist, but speakers, microphones, routing/UCM and lifecycle tests remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork exists; GPU stack is not enabled. |
@@ -96,7 +97,10 @@ On the tested r53 userspace/kernel image:
 
 Additional historical live checks on r63:
 
-- RT6010 haptics probes on I2C and registers an input force-feedback device.
+- RT6010 haptics probes on I2C, registers an input force-feedback device and
+  executes the official B4.1 RAM waveform at the expected physical strength.
+- Ten repeated bounded effects and feedbackd-triggered effects completed
+  without atomic-context warnings, watchdog resets, USB loss or radio faults.
 - AW88261 speaker amplifier probes on I2C, but the kernel still reports
   `No soundcards found`.
 - MT6375 TCPC currently probes the wrong/empty register path and reports vendor
@@ -175,8 +179,8 @@ The next useful hardware targets, in roughly pragmatic order:
    native Bluetooth discovery and the factory Bluetooth address.
 3. Validate MT6375 Type-C attach/detach, orientation, sink/device roles and wake;
    preserve USB gadget recovery before adding host role switching.
-4. Stabilize RT6010 haptics and confirm repeated rumble no longer freezes or
-   reboots the phone.
+4. Validate packaged RT6010 haptics from a clean CI installation, including
+   cold boots, cancellation and suspend/resume.
 5. Validate the `pkgrel=100` audio-clock image, then test each speaker and
    microphone route and add UCM profiles.
 6. Validate MSDC1 card insertion/removal and LM3644 torch/strobe operation.
