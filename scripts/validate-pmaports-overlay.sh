@@ -125,7 +125,7 @@ validate_connectivity_boot() {
 	grep -Fq 'HCI_QUIRK_INVALID_BDADDR' "$bt_patch"
 	grep -Fq 'hdev->set_bdaddr = btmtk_set_public_address' "$bt_patch"
 	grep -Fxq '[connection]' "$wifi_powersave"
-	grep -Fxq 'wifi.powersave=3' "$wifi_powersave"
+	grep -Fxq 'wifi.powersave=2' "$wifi_powersave"
 	grep -Fq '/usr/lib/NetworkManager/conf.d/20-nothing-tetris-wifi-powersave.conf' \
 		"$device_pkg/APKBUILD"
 	grep -Fq 'DBGLOG(SW4, TRACE, TEMP_LOG_TEMPLATE' "$bt_patch"

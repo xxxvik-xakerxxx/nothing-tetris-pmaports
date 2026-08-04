@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=0
+pkgrel=1
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -188,7 +188,7 @@ package() {
 }
 
 sha512sums="
-279383f1a442a296c5c4b6f3261b4742e01be3bd5293a15179b63fbb325e316b6606996c2b990ab7704710bb170cf74276fb4d86a5e17fe7922f3f8402fe4fd9  20-nothing-tetris-wifi-powersave.conf
+55535bfc5e918df3831df3d254a7bafa070db70bfc1bb733c046d0e0eec454eab6548be7bf016525fdab1fa4e030da74559b2914db0dcedd7b75fc5fd4bc8398  20-nothing-tetris-wifi-powersave.conf
 da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
 72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
