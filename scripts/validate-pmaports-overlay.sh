@@ -89,6 +89,8 @@ validate_connectivity_boot() {
 	dts_patch="$kernel_pkg/0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch"
 	wifi_powersave="$device_pkg/20-nothing-tetris-wifi-powersave.conf"
 	preset="$device_pkg/89-nothing-tetris.preset"
+	modules_initfs="$device_pkg/modules-initfs"
+	wifi_cfg="$device_pkg/wifi.cfg"
 
 	if grep -Fq 'wmt_drv' "$setup" "$kernel_apkbuild"; then
 		echo "wmt_drv must not be loaded or packaged; it conflicts with conninfra" >&2
@@ -151,6 +153,11 @@ validate_connectivity_boot() {
 	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address-extract.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address.service' "$preset"
+	grep -Fxq 'deviceinfo_usb_network_function="ecm.usb0"' \
+		"$device_pkg/deviceinfo"
+	test "$(cat "$modules_initfs")" = usb_f_ecm
+	test "$(grep -Ev '^[[:space:]]*(#|$)' "$wifi_cfg")" = \
+		'DbgLevel0 0xffffffff 0x0f'
 	if grep -Fq 'multi-user.target.wants/nothing-tetris-' "$device_pkg/APKBUILD"; then
 		echo "device package must use systemd presets instead of packaged enablement links" >&2
 		return 1
@@ -174,6 +181,11 @@ validate_power_and_audio_config() {
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 
 	for option in \
+		CONFIG_BT_RFCOMM=m \
+		CONFIG_BT_RFCOMM_TTY=y \
+		CONFIG_BT_BNEP=m \
+		CONFIG_BT_BNEP_MC_FILTER=y \
+		CONFIG_BT_BNEP_PROTO_FILTER=y \
 		CONFIG_CPU_IDLE=y \
 		CONFIG_CPU_IDLE_GOV_MENU=y \
 		CONFIG_DT_IDLE_STATES=y \
@@ -263,6 +275,15 @@ validate_power_and_audio_config() {
 	grep -Fq '+				apmixedsys = <&apmixedsys>;' "$audio_patch"
 	grep -Fq '+		audio_sram: sram@11059000 {' "$audio_patch"
 	grep -Fq '+#include "clk-gate.h"' "$audio_patch"
+	grep -Fq '+#define CLK_AUDDIV_2' "$audio_patch"
+	grep -Fq '+	DIV_GATE(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1",' \
+		"$audio_patch"
+	grep -Fq '+		"apll_SI1_m_sel", CLK_AUDDIV_0, 1,' "$audio_patch"
+	grep -Fq '+		CLK_AUDDIV_2, 8, 8),' "$audio_patch"
+	if grep -Fq 'GATE_TOP(CLK_TOP_APLL12_DIV_SI1' "$audio_patch"; then
+		echo "I2SIN1 MCK must be a programmable CCF divider, not a gate" >&2
+		return 1
+	fi
 	grep -Fq '+	.composite_clks = top_aud_divs,' "$audio_patch"
 	grep -Fq '+	.num_composite_clks = ARRAY_SIZE(top_aud_divs),' "$audio_patch"
 	for clock in \

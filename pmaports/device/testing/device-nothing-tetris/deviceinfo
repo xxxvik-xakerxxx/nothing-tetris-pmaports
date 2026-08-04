@@ -26,3 +26,7 @@ deviceinfo_generate_uboot_fit_images="true"
 # Required for devices using UFS as storage (instead of e.g. eMMC)
 deviceinfo_rootfs_image_sector_size="4096"
 deviceinfo_flash_sparse="true"
+
+# CDC ECM is supported by Linux and macOS on this UDC. NCM enumerates on the
+# MT6878 controller but does not bind to the macOS host network driver.
+deviceinfo_usb_network_function="ecm.usb0"

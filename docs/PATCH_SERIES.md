@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=102`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=103`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -59,7 +59,7 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `0008-connectivity-mt6878-mt6631-connsys.patch` | MT6363 connectivity rails plus minimal MT6878/MT6631 connsys regulator/MMIO bring-up driver with sysfs validation hooks. MT6878 scpsys power-domain support still needs a separate port. |
 | `0009-clk-mediatek-mt6878-mfg.patch` | MFG PLL/top mux clock foundation for future GPU work. |
-| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys and topckgen audio clocks, audio SRAM/ETDM contract, AW88261 speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
+| `0010-audio-mt6878-aw88261.patch` | MT6878 audiosys and topckgen audio clocks, including the programmable B4.1 SI1 MCK divider required by AW88261, audio SRAM/ETDM contract, speaker amplifier identification, and Tetris sound-card DT wiring for the vendor MT6878/MT6369 ASoC stack. |
 | `0011-input-rt6010-haptics-tetris.patch` | RT6010 `FF_RUMBLE` driver using the Tetris B4.1 gain, boost, RAM layout and full-scale waveform 1 playlist, with atomic-safe workqueue execution, threaded protection IRQ handling, system-sleep recovery and Tetris DT enablement. |
 | `0012-usb-typec-mt6375-tcpc-tetris.patch` | Disabled RT1711H inventory node plus MT6375 interrupt domain and minimal Linux TCPM/TCPCI Type-C driver. |
 | `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
@@ -84,7 +84,7 @@ normal Alpine/postmarketOS practice.
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
 | `1200-vendor-sensor-framework-linux-6.18.patch.vendor` | Adapts the official MediaTek sensor framework core to Linux 6.18; only the framework module is staged and no sensor is advertised as working yet. |
 
-The `pkgrel=102` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=103` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and

@@ -127,8 +127,19 @@ index e18b226..e6f87a3 100644
  #include "clk-mtk.h"
  #include "clk-mux.h"
  
-@@ -1748,13 +1749,40 @@ static const struct mtk_composite top_aud_divs[] = {
+@@ -78,6 +79,7 @@
+ #define CLK_CFG_20_SET				0x0124
+ #define CLK_CFG_20_CLR				0x0128
+ #define CLK_AUDDIV_0				0x0320
++#define CLK_AUDDIV_2				0x0328
+ #define VLP_CLK_CFG_0				0x0008
+ #define VLP_CLK_CFG_0_SET			0x000C
+ #define VLP_CLK_CFG_0_CLR			0x0010
+@@ -1748,13 +1750,42 @@ static const struct mtk_composite top_aud_divs[] = {
  		8/* lsb */),
++	DIV_GATE(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1",
++		"apll_SI1_m_sel", CLK_AUDDIV_0, 1,
++		CLK_AUDDIV_2, 8, 8),
  };
  
 +static const struct mtk_gate_regs top_cg_regs = {
@@ -147,7 +158,6 @@ index e18b226..e6f87a3 100644
 +	}
 +
 +static const struct mtk_gate top_clks[] = {
-+	GATE_TOP(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1", "aud_1_ck", 1),
 +	GATE_TOP(CLK_TOP_APLL12_DIV_SI2, "apll12_div_si2", "aud_1_ck", 2),
 +	GATE_TOP(CLK_TOP_APLL12_DIV_SI4, "apll12_div_si4", "aud_1_ck", 4),
 +	GATE_TOP(CLK_TOP_APLL12_DIV_SO1, "apll12_div_so1", "aud_1_ck", 7),

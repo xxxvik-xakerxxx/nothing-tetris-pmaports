@@ -2,8 +2,8 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
-pkgver=6
-pkgrel=13
+pkgver=7
+pkgrel=0
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -31,6 +31,7 @@ source="
 	deviceinfo
 	greetd-tetris-display.conf
 	HiFi.conf
+	modules-initfs
 	nothing-tetris-audio.pa
 	nothing-tetris-audio-policy
 	nothing-tetris-audio-policy.service
@@ -50,6 +51,7 @@ source="
 	phrog-greetd-config.toml
 	mt6878-mt6369.conf
 	tetris-phrog-greetd-session
+	wifi.cfg
 "
 
 build() {
@@ -140,6 +142,8 @@ package() {
 		"$pkgdir"/usr/lib/udev/rules.d/72-nothing-tetris-feedbackd.rules
 	install -Dm644 "$srcdir"/20-nothing-tetris-wifi-powersave.conf \
 		"$pkgdir"/usr/lib/NetworkManager/conf.d/20-nothing-tetris-wifi-powersave.conf
+	install -Dm644 "$srcdir"/wifi.cfg \
+		"$pkgdir"/usr/lib/firmware/wifi.cfg
 	install -Dm755 "$srcdir"/nothing-tetris-connectivity-setup \
 		"$pkgdir"/usr/libexec/nothing-tetris-connectivity-setup
 	install -Dm644 "$srcdir"/nothing-tetris-audio.conf \
@@ -190,9 +194,10 @@ f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486
 72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
 813581aefd3554f9c929a4c46344c3d218032acaf70afc143c4fe3ce34d39c77c71bde81300e05f752f5be5695b84bce564f2d02630819f331399fda0ceec7ed  89-nothing-tetris-user.preset
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
-a9a1daae5ca2cd328b65540213f4bbb581f8119df71b8e2b51d69301343a793c770a2e7750a68456d1829f8e6cd3364d683087bc773dd549c6d407b56dc19ceb  deviceinfo
+d15a305449801e8f44a27b517c912d6010f60ebcce9c7534ecfacd762a0f664e70f6efc8d87d01a5471490f1608d199a611df02953bbd19df640551f83490210  deviceinfo
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
 2f660c612ab20083e7c1ba0a3075fe670695dd7684c73f899f99fdbb75ef8e6a2f40b4aa4db0c81651dde01448ede4a21b39f28f624cef33d0c877891c57b263  HiFi.conf
+d792a16303ea1f812e8e081dd2b7f0cd0e9012071dfba38d56810ae85704c7b4e8255bf14163924d72cda4287e36b31358e5e18f9c000986d531876c1fa73487  modules-initfs
 f44a37d0ea7d7ed8b6bdf8a0c835b7746b2f33b21223242580a8d69dace609390a7912d279f0899eb3be1651d51e9775cc7732a66679875dac22943dd3c69d1d  nothing-tetris-audio.pa
 40644a931cfdd04156516693d487129c069c9c8f85b4585bee41d9b5ef60ddb186beea9151f646da9140abbc4d2f63edf2e2a520b99282d16b4dccf895c88b73  nothing-tetris-audio-policy
 7620e5916a7fb530916446592a1d3e28782a8cefdd96fabd9b91c28a2985f92f78d6bfc502b81f8f505b7e75d0ff3a453f5061fe40041b2710f8bf0917822095  nothing-tetris-audio-policy.service
@@ -212,4 +217,5 @@ a9574c65474ba420461cac734afc87396e7d97d031c0676dd218a17ac7542e5ff0aa9cd216d643c0
 56a1000f12f4b2d61f1bbe08554a1707f6c75eea0603301aef084ebe8271d1ae42a76f1cf9e67bb5e47dee880f3a43ac4041bfafc4eab76f33718107a6b56085  phrog-greetd-config.toml
 ac1be71804ef7617db8936fef36c7b96a8f9a0aa637b9a3f774f473eca0d4fc50398efc3c2e509c407e680082c0ddd581318480e4e59c7e27a043db6e06ccd0a  mt6878-mt6369.conf
 27cbf6e7f0862098bcf0a614a5c97878e9452e682e494a5ff256ae5cd98a0bfa587b8803ef2019fea15e9b9a4f3ee47de78de5b93cb3d3080f8704e2089f6faa  tetris-phrog-greetd-session
+c985e642cbea9f95080ccd05f14ff93799e84b8b41adb3a5417b4eb24ec2e16f38f7733dd5e6d99dc24694296a25e4d7258a5248ee93795e4d46fb762403b281  wifi.cfg
 "

@@ -210,6 +210,8 @@ jobs:
           check_file /usr/lib/systemd/user-preset/89-nothing-tetris-user.preset
           check_file /usr/lib/systemd/user/nothing-tetris-audio-policy.service
           check_file /usr/lib/modules-load.d/nothing-tetris-audio.conf
+          check_file /usr/share/mkinitfs/modules/00-device-nothing-tetris.modules
+          check_file /usr/lib/firmware/wifi.cfg
           check_file /etc/pulse/default.pa.d/90-nothing-tetris-audio.pa
           check_file /usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf
           check_file /usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/mt6878-mt6369.conf
@@ -322,10 +324,26 @@ jobs:
               "$expected_conninfra_cfg" "$actual_conninfra_cfg"
             exit 1
           }
+          actual_wifi_cfg=$(grep -Ev '^[[:space:]]*(#|$)' \
+            "$rootfs/usr/lib/firmware/wifi.cfg")
+          test "$actual_wifi_cfg" = 'DbgLevel0 0xffffffff 0x0f' || {
+            echo "invalid production WLAN debug mask: $actual_wifi_cfg"
+            exit 1
+          }
+          test "$(rootfs_modinfo -F name rfcomm)" = rfcomm
+          test "$(rootfs_modinfo -F name bnep)" = bnep
           gzip -cd "$rootfs/boot/vmlinuz" > /tmp/nothing-tetris-Image
           check_contains "LLVM 21 compiler identity" \
             'clang version 21' /tmp/nothing-tetris-Image
-          rm -f /tmp/nothing-tetris-Image /tmp/conninfra.relocations
+          gzip -cd "$rootfs/boot/initramfs" > /tmp/nothing-tetris-initramfs.cpio
+          check_contains "ECM function in initramfs" \
+            'drivers/usb/gadget/function/usb_f_ecm.ko' \
+            /tmp/nothing-tetris-initramfs.cpio
+          check_contains "ECM deviceinfo selection" \
+            'deviceinfo_usb_network_function="ecm.usb0"' \
+            /tmp/nothing-tetris-initramfs.cpio
+          rm -f /tmp/nothing-tetris-Image /tmp/nothing-tetris-initramfs.cpio \
+            /tmp/conninfra.relocations
           test -s /work/out/nothing-tetris-root.sparse.img
           test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb
@@ -342,6 +360,7 @@ jobs:
           tar -C "$rootfs" -cf /tmp/nothing-tetris-radio-live.tar \
             "lib/modules/$release/extra/mediatek-connectivity" \
             usr/lib/firmware/conninfra.cfg \
+            usr/lib/firmware/wifi.cfg \
             usr/lib/firmware/connsys_bt_mt6878_mt6631.bin \
             usr/lib/firmware/connsys_gnss_mt6878_mt6631.bin \
             usr/lib/firmware/connsys_wifi_mt6878_mt6631.bin \
@@ -393,11 +412,23 @@ jobs:
           key: ${{ steps.pmbootstrap-cache.outputs.cache-primary-key }}
       - name: Upload install images
         uses: actions/upload-artifact@v7
-        if: always()
+        if: success()
         with:
           name: nothing-tetris-images
-          path: /work/out/*
+          path: |
+            /work/out/boot_image.itb
+            /work/out/nothing-tetris-boot.img
+            /work/out/nothing-tetris-root.sparse.img
+            /work/out/BUILD-MANIFEST
+            /work/out/SHA256SUMS
           if-no-files-found: error
+      - name: Upload build logs
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nothing-tetris-build-logs
+          path: /work/out/logs
+          if-no-files-found: warn
       - name: Upload radio live bundle
         uses: actions/upload-artifact@v7
         if: success()
