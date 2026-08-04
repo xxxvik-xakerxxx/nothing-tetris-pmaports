@@ -44,6 +44,8 @@ logs, and device backups are not committed.
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
 Driver packaging and vendor-to-native migration are documented in
 [docs/DRIVER_STRATEGY.md](docs/DRIVER_STRATEGY.md).
+The current mainline promotion policy and remaining hardware order are tracked
+in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 
 ## Feature Status
 
