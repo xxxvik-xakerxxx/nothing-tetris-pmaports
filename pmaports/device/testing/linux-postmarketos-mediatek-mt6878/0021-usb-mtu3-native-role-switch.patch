@@ -1,17 +1,110 @@
-From: xxxvik-xakerxxx <xxxviktor.lyskoxxx@gmail.com>
-Subject: [PATCH] arm64: dts: mt6878: connect Type-C to the MTU3 role switch
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] usb: mtu3: force VBUS only with an active gadget
 
 MTU3 owns the USB data role, but the original graph connected the USB2 PHY
-to the child xHCI controller. Neither endpoint registered a USB role-switch,
-so TCPM could report Type-C state while data-role changes never reached MTU3.
+to the child xHCI controller. Connect the active MT6375 Type-C connector to
+MTU3 and keep peripheral mode as the safe default for the pmOS NCM gadget.
 
-Register MTU3 as the role-switch provider, connect the active MT6375 Type-C
-connector to it and keep peripheral mode as the safe default so the pmOS NCM
-gadget remains available while TCPM initializes.
+MT6878 has no VBUS detection pin wired to the device controller. Add a
+DT-scoped force-VBUS quirk using the register sequence from the matching
+Nothing OS 4.1 implementation. Apply it only around the gadget D+ pull-up,
+after MTU3 power, CSR, speed and interrupt initialization have completed.
+This avoids touching session-valid state during early controller startup.
 
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+
+--- a/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml
++++ b/Documentation/devicetree/bindings/usb/mediatek,mtu3.yaml
+@@ -213,6 +213,12 @@ properties:
+       bit1 for u2port1, ... etc; but can't disable u2port0 if dual role mode
+       is enabled, so will be skipped in this case.
+ 
++  mediatek,force-vbus:
++    $ref: /schemas/types.yaml#/definitions/flag
++    description:
++      Force the internal VBUS valid signal while the device-mode gadget is
++      connected on controllers without a VBUS detection pin.
++
+ # Required child node when support dual-role
+ patternProperties:
+   "^usb@[0-9a-f]+$":
+--- a/drivers/usb/mtu3/mtu3.h
++++ b/drivers/usb/mtu3/mtu3.h
+@@ -227,6 +227,7 @@ struct otg_switch_mtk {
+  * @vusb33: usb3.3V shared by device/host IP
+  * @dr_mode: works in which mode:
+  *		host only, device only or dual-role mode
++ * @force_vbus: force internal VBUS valid while the gadget is connected
+  * @u2_ports: number of usb2.0 host ports
+  * @u3_ports: number of usb3.0 host ports
+  * @u2p_dis_msk: mask of disabling usb2 ports, e.g. bit0==1 to
+@@ -255,6 +256,7 @@ struct ssusb_mtk {
+ 	struct otg_switch_mtk otg_switch;
+ 	enum usb_dr_mode dr_mode;
+ 	bool is_host;
++	bool force_vbus;
+ 	int u2_ports;
+ 	int u3_ports;
+ 	int u2p_dis_msk;
+--- a/drivers/usb/mtu3/mtu3_core.c
++++ b/drivers/usb/mtu3/mtu3_core.c
+@@ -339,13 +339,42 @@ void mtu3_ep_stall_set(struct mtu3_ep *mep, bool set)
+ 	dev_dbg(mtu->dev, "%s: %s\n", mep->name,
+ 		set ? "SEND STALL" : "CLEAR STALL, with EP RESET");
+ }
+ 
++static void mtu3_force_vbus(struct mtu3 *mtu, bool on)
++{
++	struct ssusb_mtk *ssusb = mtu->ssusb;
++	u32 misc;
++	u32 u2ctl;
++
++	if (!ssusb->force_vbus)
++		return;
++
++	u2ctl = mtu3_readl(ssusb->ippc_base, SSUSB_U2_CTRL(0));
++	misc = mtu3_readl(ssusb->mac_base, U3D_MISC_CTRL);
++	if (on) {
++		u2ctl &= ~SSUSB_U2_PORT_OTG_SEL;
++		misc |= VBUS_FRC_EN | VBUS_ON;
++	} else {
++		u2ctl |= SSUSB_U2_PORT_OTG_SEL;
++		misc &= ~(VBUS_FRC_EN | VBUS_ON);
++	}
++
++	mtu3_writel(ssusb->ippc_base, SSUSB_U2_CTRL(0), u2ctl);
++	mtu3_writel(ssusb->mac_base, U3D_MISC_CTRL, misc);
++}
++
+ void mtu3_dev_on_off(struct mtu3 *mtu, int is_on)
+ {
++	if (is_on)
++		mtu3_force_vbus(mtu, true);
++
+ 	if (mtu->u3_capable && mtu->speed >= USB_SPEED_SUPER)
+ 		mtu3_ss_func_set(mtu, is_on);
+ 	else
+ 		mtu3_hs_softconn_set(mtu, is_on);
++
++	if (!is_on)
++		mtu3_force_vbus(mtu, false);
+ 
+ 	dev_info(mtu->dev, "gadget (%s) pullup D%s\n",
+ 		usb_speed_string(mtu->speed), is_on ? "+" : "-");
+--- a/drivers/usb/mtu3/mtu3_plat.c
++++ b/drivers/usb/mtu3/mtu3_plat.c
+@@ -270,6 +270,8 @@ static int get_ssusb_rscs(struct platform_device *pdev, struct ssusb_mtk *ssusb)
+ 	ssusb->dr_mode = usb_get_dr_mode(dev);
+ 	if (ssusb->dr_mode == USB_DR_MODE_UNKNOWN)
+ 		ssusb->dr_mode = USB_DR_MODE_OTG;
++	ssusb->force_vbus =
++		of_property_read_bool(node, "mediatek,force-vbus");
+ 
+ 	of_property_read_u32(node, "mediatek,u3p-dis-msk", &ssusb->u3p_dis_msk);
+ 
 --- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
 +++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
-@@ -525,7 +525,17 @@
+@@ -525,7 +525,18 @@
  			ranges;
  			mediatek,syscon-wakeup = <&pericfg_ao 0x214 105>;
  			wakeup-source;
@@ -19,6 +112,7 @@ gadget remains available while TCPM initializes.
 +			maximum-speed = "high-speed";
 +			usb-role-switch;
 +			role-switch-default-mode = "peripheral";
++			mediatek,force-vbus;
  
 +			port {
 +				ssusb_role_sw: endpoint {

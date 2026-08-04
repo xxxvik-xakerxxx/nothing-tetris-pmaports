@@ -335,7 +335,15 @@ validate_usb_role() {
 	grep -Fxq 'CONFIG_USB_ROLE_SWITCH=y' "$kernel_config"
 	grep -Fq '+			usb-role-switch;' "$usb_patch"
 	grep -Fq '+			role-switch-default-mode = "peripheral";' "$usb_patch"
+	grep -Fq '+			mediatek,force-vbus;' "$usb_patch"
 	grep -Fq '+					remote-endpoint = <&typec_hs>;' "$usb_patch"
+	grep -Fq '+  mediatek,force-vbus:' "$usb_patch"
+	grep -Fq '+		mtu3_force_vbus(mtu, true);' "$usb_patch"
+	grep -Fq '+		mtu3_force_vbus(mtu, false);' "$usb_patch"
+	if grep -Fxq '+	mtu3_force_vbus(mtu, true);' "$usb_patch"; then
+		echo "MTU3 force-VBUS must not run during early controller startup" >&2
+		return 1
+	fi
 	grep -Fxq 'deviceinfo_usb_network_function="ncm.usb0"' \
 		"$device_pkg/deviceinfo"
 	test "$(cat "$device_pkg/modules-initfs")" = usb_f_ncm
