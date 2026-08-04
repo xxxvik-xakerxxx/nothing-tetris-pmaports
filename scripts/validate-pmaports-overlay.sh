@@ -468,6 +468,39 @@ validate_connectivity_build() {
 	fi
 }
 
+validate_sensorhub_staging() {
+	apkbuild="$kernel_apkbuild"
+	modules_initfs="$device_pkg/modules-initfs"
+	preset="$device_pkg/89-nothing-tetris.preset"
+
+	grep -Fq '_sensor_infra_make "$_devmods_dir"/drivers/soc/mediatek \' "$apkbuild"
+	grep -Fq 'CONFIG_MTK_MBOX=m' "$apkbuild"
+	grep -Fq 'CONFIG_RPMSG_MTK=m' "$apkbuild"
+	grep -Fq 'CONFIG_MTK_IPI=m' "$apkbuild"
+	grep -Fq 'CONFIG_MTK_SENSORHUB=m' "$apkbuild"
+	grep -Fq 'CONFIG_MTK_TINYSYS_SAP_SUPPORT=n' "$apkbuild"
+	grep -Fq 'extra/mediatek-sensors-next' "$apkbuild"
+	grep -Fq 'mtk-mbox.ko' "$apkbuild"
+	grep -Fq 'mtk_rpmsg_mbox.ko' "$apkbuild"
+	grep -Fq 'mtk_tinysys_ipi.ko' "$apkbuild"
+	grep -Fq 'sensorhub.ko' "$apkbuild"
+
+	if grep -Eq 'CONFIG_MTK_TINYSYS_SCP_SUPPORT|CONFIG_NANOHUB|CONFIG_MTK_HF_LSM6DSM_SECONDARY' \
+			"$apkbuild"; then
+		echo "first sensorhub staging must not build vendor SCP, nanohub or secondary sensor clients" >&2
+		return 1
+	fi
+	if grep -Eq 'scp[.]ko|nanohub[.]ko|sap[.]ko|lsm6dsm_secondary[.]ko' "$apkbuild"; then
+		echo "first sensorhub staging must package only manual-gated transport modules" >&2
+		return 1
+	fi
+	if grep -Eq 'mtk[-_]mbox|mtk_tinysys_ipi|sensorhub|nanohub|scp' \
+			"$modules_initfs" "$preset" "$device_pkg"/*.conf 2>/dev/null; then
+		echo "sensorhub staging modules must not be autoloaded or preset-enabled" >&2
+		return 1
+	fi
+}
+
 validate_sums "$kernel_pkg"
 validate_sums "$device_pkg"
 validate_sums "$firmware_pkg"
@@ -482,5 +515,6 @@ validate_haptics
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build
+validate_sensorhub_staging
 
 echo "pmaports overlay validation passed"

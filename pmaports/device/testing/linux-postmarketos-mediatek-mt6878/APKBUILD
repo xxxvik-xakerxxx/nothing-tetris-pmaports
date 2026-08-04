@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=105
+pkgrel=106
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -286,8 +286,43 @@ _sensor_make() {
 		"$@" modules
 }
 
+_sensor_infra_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		KCFLAGS="-I$_devmods_dir/include -I$_devmods_dir/drivers/misc/mediatek/include $(_vendor_kcflags)" \
+		"$@" modules
+}
+
 _build_sensor_modules() {
 	_sensor_make "$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core
+
+	# Draft/manual gate only: build the smallest sensorhub dependency chain
+	# for symbol audit. Do not add autoload rules for these modules.
+	_sensor_infra_make "$_devmods_dir"/drivers/soc/mediatek \
+		CONFIG_MTK_MBOX=m
+
+	_sensor_infra_make "$_devmods_dir"/drivers/rpmsg \
+		CONFIG_RPMSG_MTK=m \
+		KBUILD_EXTRA_SYMBOLS="$_devmods_dir/drivers/soc/mediatek/Module.symvers"
+
+	_sensor_infra_make "$_devmods_dir"/drivers/soc/mediatek \
+		CONFIG_MTK_IPI=m \
+		CONFIG_MTK_MBOX=m \
+		CONFIG_RPMSG_MTK=m \
+		KBUILD_EXTRA_SYMBOLS="$_devmods_dir/drivers/soc/mediatek/Module.symvers $_devmods_dir/drivers/rpmsg/Module.symvers"
+
+	_sensor_make "$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/sensorhub \
+		CONFIG_MTK_SENSORHUB=m \
+		CONFIG_MTK_TINYSYS_SAP_SUPPORT=n \
+		KBUILD_EXTRA_SYMBOLS="$_devmods_dir/drivers/misc/mediatek/sensor/2.0/core/Module.symvers $_devmods_dir/drivers/soc/mediatek/Module.symvers $_devmods_dir/drivers/rpmsg/Module.symvers"
 }
 
 build() {
@@ -358,6 +393,15 @@ package() {
 	install -Dm644 \
 		"$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core/hf_manager.ko \
 		"$_extra/hf_manager.ko"
+
+	# Draft/manual gate only. These modules are packaged for offline audit and
+	# explicit insmod testing only; no autoload path may reference them yet.
+	_extra_next="$pkgdir/lib/modules/$_release/extra/mediatek-sensors-next"
+	install -Dm644 "$_devmods_dir"/drivers/soc/mediatek/mtk-mbox.ko "$_extra_next/mtk-mbox.ko"
+	install -Dm644 "$_devmods_dir"/drivers/rpmsg/mtk_rpmsg_mbox.ko "$_extra_next/mtk_rpmsg_mbox.ko"
+	install -Dm644 "$_devmods_dir"/drivers/soc/mediatek/mtk_tinysys_ipi.ko "$_extra_next/mtk_tinysys_ipi.ko"
+	install -Dm644 "$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/sensorhub/sensorhub.ko "$_extra_next/sensorhub.ko"
+
 	depmod -b "$pkgdir" "$_release"
 
 	install -D "$builddir"/include/config/kernel.release \
