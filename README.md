@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=105` in this overlay) |
+| Kernel version | `6.18` (`pkgrel=103` in this overlay) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -60,12 +60,12 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
 | Power | Thermal management | Broken | The running kernel has no thermal class or zones. Nothing OS 4.1 provides MT6878 LVTS data for 24 sensors across MCU/AP/GPU domains, but it is not integrated yet. |
-| USB | Device mode / NCM | Partial | The clean `d68852d` image provides the NCM gadget and native MTU3 role switch. Live application of the official MT6878 force-VBUS sequence made the UDC configure at high speed and carried a verified 32 MiB SSH transfer; `pkgrel=105` moves that quirk into the driver. Automatic cold-boot and suspend/resume validation remain. |
-| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC reports orientation, sink power and device data role, and MTU3 exposes the matching role-switch endpoint. Peripheral mode is the safe default; host mode, source VBUS and wake remain unvalidated. |
+| USB | Device mode / NCM | Partial | NCM previously carried stable SSH and a verified 32 MiB transfer on Linux and macOS. Clean-install audit found MTU3 built gadget-only, so the Type-C role-switch graph never reached the UDC; the next image enables dual-role with peripheral as the safe default. |
+| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC reports reverse orientation, sink power, device data role and charging. MTU3 dual-role support is disabled, `/sys/class/usb_role` is empty, and host mode/wake remain unvalidated. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | The driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; shell, UI and repeated bounded effects work physically. Suspend/resume and three cold boots remain. |
 | Audio | Upper earpiece | Partial | Physical playback and the desktop speaker test work through MT6369. Lifecycle tests remain. |
-| Audio | Lower main speaker | Partial | Direct ALSA playback works through AW88261. The clean `d68852d` kernel models the SI1 MCK divider and boots without the previous clock-index or PLL-lock errors; physical PulseAudio stream lifecycle validation remains. |
+| Audio | Lower main speaker | Partial | Direct ALSA playback works through AW88261. The current kernel exposes its MCK as a fixed gate, so 44.1/48 kHz streams fail `clk_set_rate()` and can truncate; the next kernel stages the native SI1 divider fix. |
 | Audio | Built-in microphones | Partial | AIN0 and AIN2 capture physically through the packaged UCM profile. Per-input recordings, suspend/resume and cold-boot repetition remain. |
 | Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. The main-speaker stream lifecycle is not stable. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
@@ -82,13 +82,13 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 | Sensors | Ambient light/proximity | Broken | Shares the unported SCP sensorhub path; no blind client probing. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | UFS/root I/O | Works | UFS is stable and `/dev/sdc82` mounts read-write as ext4. |
-| Storage | Automatic root grow | Works | A fresh sparse-image flash is expanded by the standard pmOS initramfs path; the clean `d68852d` installation exposes a 104.6 GiB ext4 root filesystem. |
+| Storage | Automatic root grow | Partial | The pmOS initramfs runs `e2fsck` and `resize2fs` before mounting root. The current filesystem is 104.6 GiB; a fresh sparse-image flash still needs the clean-install gate. |
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |
 | Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters. GNOME 50.3 ignores ARM `CPU implementer`/`CPU part` fields and therefore leaves the Settings processor row blank; this needs a portable GNOME/libgtop fix. |
 
 ## Current Live Findings
 
-On the clean CI image from pmaports commit `d68852df2d3ab62a4c320443e4ef88fd446bb7ff`:
+On the clean CI image from pmaports commit `6fcaf8b08a7a192e3e0b0820ede3af1fa1f519fe`:
 
 - Power, volume-up and volume-down generate balanced press/release events without stuck keys.
 - `/` is mounted from `/dev/sdc82` as ext4 and currently exposes 104.6 GiB.
@@ -103,15 +103,12 @@ On the clean CI image from pmaports commit `d68852df2d3ab62a4c320443e4ef88fd446b
   non-postmarketOS partitions from desktop storage UIs.
 - Wi-Fi association and routed traffic, native BlueZ Bluetooth, feedbackd
   haptics, earpiece playback and both microphone inputs survive the clean boot.
-  The clean kernel models the official B4.1 `apll12_div_si1` divider fields in
-  CCF and no longer logs the previous clock-index or AW88261 PLL-lock errors.
-  Physical PulseAudio lifecycle validation for the lower speaker remains.
-- The MTU3 role switch selects device mode, but this kernel leaves the UDC at
-  `not attached` because MT6878 has no hardware VBUS-detect pin. Applying the
-  exact Nothing OS 4.1 force-VBUS register sequence live changed the UDC to
-  `configured` at high speed, survived an off/on cycle and transferred 32 MiB
-  over NCM while Wi-Fi remained active. Kernel `pkgrel=105` packages this as a
-  DT-scoped MTU3 quirk; automatic clean-boot validation remains.
+  The lower speaker stream lifecycle remains the known audio regression. Live
+  clock-tree evidence identified its first error as a non-programmable
+  `apll12_div_si1`; the next kernel models the official B4.1 divider fields in
+  CCF instead of retrying playback in userspace.
+- ECM USB networking is active as `usb0`/`en4` and transferred 32 MiB without
+  RX/TX errors while Wi-Fi and Bluetooth remained active.
 - `/sys/class/thermal`, standard GNSS, modem/WWAN, camera/media and DRM render
   nodes are absent. The two IIO devices are PMIC ADCs, not user sensors.
 - Both LM3644 torch class devices are present. Earlier bounded physical tests

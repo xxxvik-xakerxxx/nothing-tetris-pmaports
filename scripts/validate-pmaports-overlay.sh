@@ -335,18 +335,7 @@ validate_usb_role() {
 	grep -Fxq 'CONFIG_USB_ROLE_SWITCH=y' "$kernel_config"
 	grep -Fq '+			usb-role-switch;' "$usb_patch"
 	grep -Fq '+			role-switch-default-mode = "peripheral";' "$usb_patch"
-	grep -Fq '+			mediatek,force-vbus;' "$usb_patch"
 	grep -Fq '+					remote-endpoint = <&typec_hs>;' "$usb_patch"
-	grep -Fq '+  mediatek,force-vbus:' "$usb_patch"
-	grep -Fq '+	bool force_vbus;' "$usb_patch"
-	grep -Fq '+		of_property_read_bool(node, "mediatek,force-vbus");' \
-		"$usb_patch"
-	grep -Fq '+		u2ctl &= ~SSUSB_U2_PORT_OTG_SEL;' "$usb_patch"
-	grep -Fq '+		misc |= VBUS_FRC_EN | VBUS_ON;' "$usb_patch"
-	grep -Fq '+		u2ctl |= SSUSB_U2_PORT_OTG_SEL;' "$usb_patch"
-	grep -Fq '+		misc &= ~(VBUS_FRC_EN | VBUS_ON);' "$usb_patch"
-	grep -Fq '+	mtu3_force_vbus(mtu, true);' "$usb_patch"
-	grep -Fq '+	mtu3_force_vbus(mtu, false);' "$usb_patch"
 	grep -Fxq 'deviceinfo_usb_network_function="ncm.usb0"' \
 		"$device_pkg/deviceinfo"
 	test "$(cat "$device_pkg/modules-initfs")" = usb_f_ncm

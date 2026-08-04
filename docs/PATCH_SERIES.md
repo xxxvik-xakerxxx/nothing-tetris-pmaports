@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=105`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=103`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -70,7 +70,7 @@ normal Alpine/postmarketOS practice.
 | `0018-pmdomain-mediatek-mt6878-audio.patch` | MT6878 audio power-domain wiring required by the staged ASoC card. |
 | `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Corrects CPU0-3 to Cortex-A55 and CPU4-7 to Cortex-A78 from live MIDR evidence, and limits the first PSCI cpuidle rollout to per-CPU power-off. Cluster, MCU and system states remain gated behind live USB/SSH validation. |
 | `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation; module loading remains manual. |
-| `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3, keeps peripheral mode as the safe default, and implements the DT-scoped internal VBUS-valid quirk required on MT6878 controllers without a VBUS-detect pin. The register transition and NCM data path are live-validated; automatic clean-boot and host-source VBUS remain gated. |
+| `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3 and selects kernel dual-role support while keeping peripheral mode as the safe default. Host mode remains unsupported until OTG VBUS ownership is implemented and validated. |
 
 ### NothingOSS module adaptations
 
@@ -84,7 +84,7 @@ normal Alpine/postmarketOS practice.
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
 | `1200-vendor-sensor-framework-linux-6.18.patch.vendor` | Adapts the official MediaTek sensor framework core to Linux 6.18; only the framework module is staged and no sensor is advertised as working yet. |
 
-The `pkgrel=105` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=103` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
