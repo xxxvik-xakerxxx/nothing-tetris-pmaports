@@ -391,6 +391,48 @@ validate_haptics() {
 		"$device_pkg/APKBUILD"
 }
 
+validate_thermal() {
+	kernel_config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	thermal_patch="$kernel_pkg/0022-thermal-mediatek-mt6878-lvts.patch"
+
+	for option in \
+		CONFIG_THERMAL=y \
+		CONFIG_THERMAL_OF=y \
+		CONFIG_THERMAL_HWMON=y \
+		CONFIG_MTK_THERMAL=y \
+		CONFIG_MTK_LVTS_THERMAL=y \
+		CONFIG_NVMEM_MTK_MT6878_DEVINFO=y; do
+		grep -Fxq "$option" "$kernel_config"
+	done
+
+	grep -Eq '^\+[[:space:]]*\{ \.compatible = "mediatek,mt6878-lvts-mcu"' \
+		"$thermal_patch"
+	grep -Eq '^\+[[:space:]]*\{ \.compatible = "mediatek,mt6878-lvts-ap"' \
+		"$thermal_patch"
+	grep -Eq '^\+[[:space:]]*\{ \.compatible = "mediatek,mt6878-lvts-gpu"' \
+		"$thermal_patch"
+	test "$(grep -c '^+.*thermal-sensors = <&lvts_' "$thermal_patch")" -eq 24
+	test "$(grep -c '^+.*\.polling_only = true,' "$thermal_patch")" -eq 3
+	test "$(grep -c '^+.*\.custom_ctrl_speed = true,' "$thermal_patch")" -eq 3
+	grep -Fq '+obj-$(CONFIG_NVMEM_MTK_MT6878_DEVINFO)	+= mtk-mt6878-devinfo.o' \
+		"$thermal_patch"
+	grep -Fq '+++ b/drivers/nvmem/mtk-mt6878-devinfo.c' "$thermal_patch"
+	grep -Fq '+	devinfo->base = devm_platform_ioremap_resource(pdev, 0);' \
+		"$thermal_patch"
+	grep -Fq '+	{ 182, 0x304 },' "$thermal_patch"
+	grep -Fq '+	{ 196, 0x1e8 }, { 197, 0x1ec }, { 198, 0x1f0 },' \
+		"$thermal_patch"
+	if grep -Fq 'atag,devinfo' "$thermal_patch"; then
+		echo "MT6878 LVTS must read per-device calibration from SoC registers" >&2
+		return 1
+	fi
+	if grep -Eq '^\+.*(trip-point|hw_reboot_trip_point|devm_request_threaded_irq\(.*mt6878)' \
+			"$thermal_patch"; then
+		echo "MT6878 LVTS must remain polling-only until IRQ routing is validated" >&2
+		return 1
+	fi
+}
+
 validate_ci_rootfs_module_checks() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
@@ -476,6 +518,7 @@ validate_connectivity_boot
 validate_power_and_audio_config
 validate_usb_role
 validate_haptics
+validate_thermal
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build

@@ -7,10 +7,10 @@ postmarketOS port into a stable daily-phone build.
 
 | Track | Branch / path | State |
 | --- | --- | --- |
-| Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Fast-forwarded from verified `codex/next-hardware` on 2026-08-04. Current SHA `2eb79b72daefb3ac5435c80e6f9eb39412ab3449`, packages `linux-postmarketos-mediatek-mt6878 6.18-r105`, `device-nothing-tetris 8-r0`, `firmware-nothing-tetris 1-r3`. |
+| Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Live-verified on 2026-08-04. Current SHA `fa00144`, packages `linux-postmarketos-mediatek-mt6878 6.18-r106`, `device-nothing-tetris 8-r1`, `firmware-nothing-tetris 1-r3`. Automatic USB NCM, 32 MiB transfer, warm reboot and Wi-Fi reconnect passed. |
 | Merged hardware baseline branch | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` | Already merged into `main`. Keep only as historical CI reference until branch cleanup. |
-| Thermal candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | Adds safe polled MT6878 LVTS zones. Current SHA `06eb2d3066f59fef4ec7340f29a755db62843585`; CI run `30919258028` is still building. Must pass CI and live boot before promotion to `main`. |
-| U-Boot candidate | `xxxvik-xakerxxx/u-boot:codex/scp-thermal-handoff` | Current handoff branch for preserving LK devinfo calibration data. |
+| Thermal candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | Adds safe polled MT6878 LVTS zones and reads per-device calibration from read-only SoC devinfo registers. Must pass CI and live boot before promotion to `main`. |
+| Bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Keep verified commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef`. Replacing stock LK means no LK-generated `atag,devinfo` exists, so thermal must not depend on a previous-bootloader FDT handoff. |
 
 ## Branch policy
 
@@ -46,12 +46,13 @@ stable baseline:
 
 | Order | Block | Goal | Promotion gate |
 | --- | --- | --- | --- |
-| 1 | Thermal / devinfo | Boot MT6878 LVTS thermal zones in polling-only mode with LK devinfo calibration. | CI build, clean boot, `/sys/class/thermal` zones, plausible idle/load temps, USB/Wi-Fi/BT/audio regression pass. |
-| 2 | Sensorhub | Build-only/manual-gated sensor transport after existing `hf_manager.ko`: `mtk-mbox.ko`, `mtk_rpmsg_mbox.ko`, `mtk_tinysys_ipi.ko`, `sensorhub.ko`. Do not autoload vendor SCP or nanohub. | SCP/mainline RPMSG state is understood, no legacy SCP conflict, at least one sensor path reaches standard Linux/IIO or documented bridge, USB debug remains stable. |
-| 3 | SIM / modem | Stage CCCI/CCMNI/ECCCI modules without autoload. Keep `conn_md` and `mddp` disabled until basic modem boot is clean. | ModemManager sees modem, SIM state is readable, SMS/data smoke test, no radio regression with Wi-Fi/BT/GNSS. |
-| 4 | GPU | Prefer native DRM Panthor over vendor Mali/GED/GPUEB. Solve thermal, MFG0 genpd, MT6319 GPU rail, firmware path and IOMMU mapping first. | `/dev/dri/renderD*`, short GL/offscreen smoke test, thermal zones active, suspend and USB debug regression pass. |
-| 5 | Camera foundation | Build-only sensor inventory, cam_cal, `pd9302a` VCM and LM3644 V4L2 flash bridge before ISP. Do not autoload camsys/imgsys/hcp/aie/OIS. | Sensor IDs visible without hangs, media nodes documented, torch unchanged, no blanket camera stack autoload. |
-| 6 | Native display | Separate DSI/DSC/panel branch while keeping simpledrm as fallback. | KMS framebuffer works, brightness works, suspend/resume works, fallback boot path documented. |
+| 1 | Thermal / devinfo | Boot MT6878 LVTS thermal zones in polling-only mode with per-device calibration read from MT6878 read-only devinfo registers. | CI build, clean boot, `/sys/class/thermal` zones, plausible idle/load temps, USB/Wi-Fi/BT/audio regression pass. |
+| 2 | Power / suspend | Measure and fix the currently high battery drain before enabling more remote processors. Audit suspend residency, wakeup sources, IRQ rate, clocks, regulators and runtime PM for USB, Wi-Fi, audio, thermal and remoteproc. | Repeatable idle/screen-on/Wi-Fi power baselines, no IRQ or wakelock storm, one-hour idle discharge gate, suspend/resume and automatic USB/Wi-Fi recovery pass. |
+| 3 | Sensorhub | Build-only/manual-gated sensor transport after existing `hf_manager.ko`: `mtk-mbox.ko`, `mtk_rpmsg_mbox.ko`, `mtk_tinysys_ipi.ko`, `sensorhub.ko`. Do not autoload vendor SCP or nanohub. | SCP/mainline RPMSG state is understood, no legacy SCP conflict, at least one sensor path reaches standard Linux/IIO or documented bridge, USB debug remains stable. |
+| 4 | SIM / modem | Stage CCCI/CCMNI/ECCCI modules without autoload. Keep `conn_md` and `mddp` disabled until basic modem boot is clean. | ModemManager sees modem, SIM state is readable, SMS/data smoke test, no radio regression with Wi-Fi/BT/GNSS. |
+| 5 | GPU | Prefer native DRM Panthor over vendor Mali/GED/GPUEB. Solve thermal, MFG0 genpd, MT6319 GPU rail, firmware path and IOMMU mapping first. | `/dev/dri/renderD*`, short GL/offscreen smoke test, thermal zones active, suspend and USB debug regression pass. |
+| 6 | Camera foundation | Build-only sensor inventory, cam_cal, `pd9302a` VCM and LM3644 V4L2 flash bridge before ISP. Do not autoload camsys/imgsys/hcp/aie/OIS. | Sensor IDs visible without hangs, media nodes documented, torch unchanged, no blanket camera stack autoload. |
+| 7 | Native display | Separate DSI/DSC/panel branch while keeping simpledrm as fallback. | KMS framebuffer works, brightness works, suspend/resume works, fallback boot path documented. |
 
 ## Draft workspaces
 
@@ -67,9 +68,10 @@ the current staging notes for follow-up patch branches:
 
 ## Current blockers
 
-- Wi-Fi SSH to `192.168.2.76` timed out from the workstation on 2026-08-04, so
-  live audit still needs USB debug or a reachable LAN SSH path.
-- `codex/scp-thermal` CI failed at `0888c289` because the LVTS patch added
-  `mtk-boot-devinfo.c` but referenced `nvmem-mtk-boot-devinfo.o` in Makefile.
-  Commit `06eb2d3066f59fef4ec7340f29a755db62843585` fixes this with the
-  correct GitHub author/committer and awaits CI.
+- The revised direct-register thermal provider still needs a green CI image
+  and clean-device live validation before it can move to `main`.
+- Current battery drain is too high for a stable-phone baseline. Capture idle,
+  screen-on and Wi-Fi power data and fix suspend blockers before sensorhub,
+  modem or GPU remote processors are enabled by default.
+- Thermal IRQs and hardware trips remain disabled until routing and reboot
+  behavior are validated independently of the polling-only temperature path.

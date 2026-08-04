@@ -1,0 +1,1250 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Tue, 4 Aug 2026 22:40:00 +0300
+Subject: [PATCH] thermal: mediatek: add polling-only MT6878 LVTS
+
+Port the MT6878 generation-v6 initialization, calibration formula, sensor map, and controller timing from Nothing OS 4.1. Read the per-device LVTS calibration directly from the MT6878 read-only devinfo registers through a sparse NVMEM provider.
+
+Keep thermal protection IRQs and hardware trips disabled. The vendor kernel carries a reboot workaround for these domains, so this first stage only exports polled temperatures until interrupt routing is validated on hardware.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/Documentation/devicetree/bindings/nvmem/mediatek,mt6878-devinfo.yaml b/Documentation/devicetree/bindings/nvmem/mediatek,mt6878-devinfo.yaml
+new file mode 100644
+index 0000000..bd62382
+--- /dev/null
++++ b/Documentation/devicetree/bindings/nvmem/mediatek,mt6878-devinfo.yaml
+@@ -0,0 +1,48 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/nvmem/mediatek,mt6878-devinfo.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: MediaTek MT6878 device information registers
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description: |
++  MT6878 stores per-device calibration words in read-only SoC registers.
++  The register addresses are indexed using the MediaTek devinfo ABI so
++  hardware drivers can consume fixed calibration cells through NVMEM.
++
++allOf:
++  - $ref: nvmem.yaml#
++
++properties:
++  compatible:
++    const: mediatek,mt6878-devinfo
++
++  reg:
++    maxItems: 1
++
++required:
++  - compatible
++  - reg
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    devinfo@11f10000 {
++      compatible = "mediatek,mt6878-devinfo";
++      reg = <0x11f10000 0x1000>;
++
++      nvmem-layout {
++        compatible = "fixed-layout";
++        #address-cells = <1>;
++        #size-cells = <1>;
++
++        thermal-calibration@1ac {
++          reg = <0x1ac 0x30>;
++        };
++      };
++    };
+diff --git a/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml b/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
+index 0259cd3..59e2cdc 100644
+--- a/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
++++ b/Documentation/devicetree/bindings/thermal/mediatek,lvts-thermal.yaml
+@@ -18,6 +18,9 @@ description: |
+ properties:
+   compatible:
+     enum:
++      - mediatek,mt6878-lvts-ap
++      - mediatek,mt6878-lvts-gpu
++      - mediatek,mt6878-lvts-mcu
+       - mediatek,mt7988-lvts-ap
+       - mediatek,mt8186-lvts
+       - mediatek,mt8188-lvts-ap
+@@ -45,12 +48,16 @@ properties:
+     items:
+       - description: Calibration eFuse data 1 for LVTS
+       - description: Calibration eFuse data 2 for LVTS
++      - description: Calibration eFuse data 3 for LVTS
++      - description: Calibration eFuse data 4 for LVTS
+ 
+   nvmem-cell-names:
+     minItems: 1
+     items:
+       - const: lvts-calib-data-1
+       - const: lvts-calib-data-2
++      - const: lvts-calib-data-3
++      - const: lvts-calib-data-4
+ 
+   "#thermal-sensor-cells":
+     const: 1
+@@ -58,6 +65,31 @@ properties:
+ allOf:
+   - $ref: thermal-sensor.yaml#
+ 
++  - if:
++      properties:
++        compatible:
++          contains:
++            enum:
++              - mediatek,mt6878-lvts-ap
++              - mediatek,mt6878-lvts-gpu
++              - mediatek,mt6878-lvts-mcu
++    then:
++      properties:
++        interrupts: false
++        clocks: false
++        resets: false
++        nvmem-cells:
++          minItems: 4
++          maxItems: 4
++        nvmem-cell-names:
++          minItems: 4
++          maxItems: 4
++    else:
++      required:
++        - interrupts
++        - clocks
++        - resets
++
+   - if:
+       properties:
+         compatible:
+@@ -94,9 +126,6 @@ allOf:
+ required:
+   - compatible
+   - reg
+-  - interrupts
+-  - clocks
+-  - resets
+   - nvmem-cells
+   - nvmem-cell-names
+ 
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+index 9a54f55..f31b715 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -11,6 +11,7 @@
+ #include <dt-bindings/phy/phy.h>
+ #include <dt-bindings/power/mediatek,mt6878-power.h>
+ #include <dt-bindings/reset/ti-syscon.h>
++#include <dt-bindings/thermal/mediatek,lvts-thermal.h>
+ #include "mt6878-pinfunc.h"
+ 
+ / {
+@@ -359,6 +360,36 @@
+ 			reg = <0x10320000 0x2000>;
+ 		};
+ 
++		lvts_ap: thermal-sensor@10315000 {
++			compatible = "mediatek,mt6878-lvts-ap";
++			reg = <0x10315000 0x1000>;
++			nvmem-cells = <&lvts_efuse_data1>, <&lvts_efuse_data2>,
++				      <&lvts_efuse_data3>, <&lvts_efuse_data4>;
++			nvmem-cell-names = "lvts-calib-data-1", "lvts-calib-data-2",
++					   "lvts-calib-data-3", "lvts-calib-data-4";
++			#thermal-sensor-cells = <1>;
++		};
++
++		lvts_mcu: thermal-sensor@10316000 {
++			compatible = "mediatek,mt6878-lvts-mcu";
++			reg = <0x10316000 0x1000>;
++			nvmem-cells = <&lvts_efuse_data1>, <&lvts_efuse_data2>,
++				      <&lvts_efuse_data3>, <&lvts_efuse_data4>;
++			nvmem-cell-names = "lvts-calib-data-1", "lvts-calib-data-2",
++					   "lvts-calib-data-3", "lvts-calib-data-4";
++			#thermal-sensor-cells = <1>;
++		};
++
++		lvts_gpu: thermal-sensor@13ff0000 {
++			compatible = "mediatek,mt6878-lvts-gpu";
++			reg = <0x13ff0000 0x1000>;
++			nvmem-cells = <&lvts_efuse_data1>, <&lvts_efuse_data2>,
++				      <&lvts_efuse_data3>, <&lvts_efuse_data4>;
++			nvmem-cell-names = "lvts-calib-data-1", "lvts-calib-data-2",
++					   "lvts-calib-data-3", "lvts-calib-data-4";
++			#thermal-sensor-cells = <1>;
++		};
++
+ 		uart0: serial@11001000 {
+ 			compatible = "mediatek,mt6577-uart";
+ 			reg = <0x11001000 0x1000>;
+@@ -899,6 +930,33 @@
+ 			};
+ 		};
+ 
++		efuse: devinfo@11f10000 {
++			compatible = "mediatek,mt6878-devinfo";
++			reg = <0x11f10000 0x1000>;
++
++			nvmem-layout {
++				compatible = "fixed-layout";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				lvts_efuse_data1: lvts-calibration@1ac {
++					reg = <0x1ac 0x30>;
++				};
++
++				lvts_efuse_data2: lvts-calibration@140 {
++					reg = <0x140 0x14>;
++				};
++
++				lvts_efuse_data3: lvts-calibration@310 {
++					reg = <0x310 0xc>;
++				};
++
++				lvts_efuse_data4: lvts-calibration@2d8 {
++					reg = <0x2d8 0x4>;
++				};
++			};
++		};
++
+ 		watchdog: watchdog@1c00a000 {
+ 			compatible = "mediatek,mt6878-wdt",
+ 				     "mediatek,mt6589-wdt",
+@@ -921,6 +979,152 @@
+ 		};
+ 	};
+ 
++	thermal-zones {
++		mcu-ts1-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS1_0>;
++		};
++
++		mcu-ts1-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS1_1>;
++		};
++
++		mcu-ts1-2 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS1_2>;
++		};
++
++		mcu-ts1-3 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS1_3>;
++		};
++
++		mcu-ts2-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS2_0>;
++		};
++
++		mcu-ts2-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS2_1>;
++		};
++
++		mcu-ts2-2 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS2_2>;
++		};
++
++		mcu-ts2-3 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS2_3>;
++		};
++
++		mcu-ts3-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS3_0>;
++		};
++
++		mcu-ts3-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS3_1>;
++		};
++
++		mcu-ts3-2 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS3_2>;
++		};
++
++		mcu-ts3-3 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS3_3>;
++		};
++
++		mcu-ts4-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS4_0>;
++		};
++
++		mcu-ts4-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_mcu MT6878_MCU_TS4_1>;
++		};
++
++		ap-ts5-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS5_0>;
++		};
++
++		ap-ts5-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS5_1>;
++		};
++
++		ap-ts5-2 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS5_2>;
++		};
++
++		ap-ts6-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS6_0>;
++		};
++
++		ap-ts6-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS6_1>;
++		};
++
++		ap-ts7-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS7_0>;
++		};
++
++		ap-ts7-1 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS7_1>;
++		};
++
++		ap-ts7-2 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS7_2>;
++		};
++
++		ap-ts7-3 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_ap MT6878_AP_TS7_3>;
++		};
++
++		gpu-ts8-0 {
++			polling-delay-passive = <250>;
++			polling-delay = <1000>;
++			thermal-sensors = <&lvts_gpu MT6878_GPU_TS8_0>;
++		};
++	};
++
+ 	timer {
+ 		compatible = "arm,armv8-timer";
+ 		interrupt-parent = <&gic>;
+diff --git a/drivers/nvmem/Kconfig b/drivers/nvmem/Kconfig
+index e0d88d3..42f50be 100644
+--- a/drivers/nvmem/Kconfig
++++ b/drivers/nvmem/Kconfig
+@@ -227,6 +227,16 @@ config NVMEM_MTK_EFUSE
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called efuse-mtk.
+ 
++config NVMEM_MTK_MT6878_DEVINFO
++	tristate "MediaTek MT6878 device information support"
++	depends on ARCH_MEDIATEK || COMPILE_TEST
++	help
++	  Expose the per-device calibration words stored in the MT6878
++	  read-only device information registers through NVMEM.
++
++	  This driver can also be built as a module. If so, the module will
++	  be called mtk-mt6878-devinfo.
++
+ config NVMEM_MXS_OCOTP
+ 	tristate "Freescale MXS On-Chip OTP Memory Support"
+ 	depends on ARCH_MXS || COMPILE_TEST
+diff --git a/drivers/nvmem/Makefile b/drivers/nvmem/Makefile
+index 70a4464..3ff668b 100644
+--- a/drivers/nvmem/Makefile
++++ b/drivers/nvmem/Makefile
+@@ -48,6 +48,7 @@ obj-$(CONFIG_NVMEM_MICROCHIP_OTPC)	+= nvmem-microchip-otpc.o
+ nvmem-microchip-otpc-y			:= microchip-otpc.o
+ obj-$(CONFIG_NVMEM_MTK_EFUSE)		+= nvmem_mtk-efuse.o
+ nvmem_mtk-efuse-y			:= mtk-efuse.o
++obj-$(CONFIG_NVMEM_MTK_MT6878_DEVINFO)	+= mtk-mt6878-devinfo.o
+ obj-$(CONFIG_NVMEM_MXS_OCOTP)		+= nvmem-mxs-ocotp.o
+ nvmem-mxs-ocotp-y			:= mxs-ocotp.o
+ obj-$(CONFIG_NVMEM_NINTENDO_OTP)	+= nvmem-nintendo-otp.o
+diff --git a/drivers/nvmem/mtk-mt6878-devinfo.c b/drivers/nvmem/mtk-mt6878-devinfo.c
+new file mode 100644
+index 0000000..a4df33e
+--- /dev/null
++++ b/drivers/nvmem/mtk-mt6878-devinfo.c
+@@ -0,0 +1,135 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * MediaTek MT6878 device information NVMEM provider
++ *
++ * MediaTek LK exposes these read-only SoC registers through its devinfo ABI.
++ * Keep the sparse index mapping here so Linux reads per-device calibration
++ * directly instead of depending on a bootloader-generated data blob.
++ */
++
++#include <linux/device.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/nvmem-provider.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++
++#define MT6878_DEVINFO_WORDS	199
++
++struct mt6878_devinfo_map {
++	u16 index;
++	u16 offset;
++};
++
++struct mt6878_devinfo {
++	void __iomem *base;
++};
++
++static const struct mt6878_devinfo_map mt6878_lvts_words[] = {
++	{ 80, 0x1d0 }, { 81, 0x1d4 }, { 82, 0x1d8 }, { 83, 0x1dc },
++	{ 84, 0x1e0 },
++	{ 107, 0x19c }, { 108, 0x1a0 }, { 109, 0x1a4 }, { 110, 0x1a8 },
++	{ 111, 0x1ac }, { 112, 0x1b0 }, { 113, 0x1b4 }, { 114, 0x1b8 },
++	{ 115, 0x1bc }, { 116, 0x1c0 }, { 117, 0x1c4 }, { 118, 0x1c8 },
++	{ 182, 0x304 },
++	{ 196, 0x1e8 }, { 197, 0x1ec }, { 198, 0x1f0 },
++};
++
++static const struct mt6878_devinfo_map *mt6878_devinfo_find(unsigned int index)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6878_lvts_words); i++)
++		if (mt6878_lvts_words[i].index == index)
++			return &mt6878_lvts_words[i];
++
++	return NULL;
++}
++
++static int mt6878_devinfo_read(void *context, unsigned int offset,
++			       void *value, size_t bytes)
++{
++	struct mt6878_devinfo *devinfo = context;
++	u8 *out = value;
++
++	if (offset > MT6878_DEVINFO_WORDS * sizeof(u32) ||
++	    bytes > MT6878_DEVINFO_WORDS * sizeof(u32) - offset)
++		return -EINVAL;
++
++	while (bytes) {
++		const struct mt6878_devinfo_map *map;
++		unsigned int word_offset = offset % sizeof(u32);
++		size_t chunk = min_t(size_t, bytes, sizeof(u32) - word_offset);
++		u32 word;
++
++		map = mt6878_devinfo_find(offset / sizeof(u32));
++		if (!map)
++			return -EINVAL;
++
++		word = readl(devinfo->base + map->offset);
++		memcpy(out, (u8 *)&word + word_offset, chunk);
++		offset += chunk;
++		out += chunk;
++		bytes -= chunk;
++	}
++
++	return 0;
++}
++
++static int mt6878_devinfo_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct mt6878_devinfo *devinfo;
++	struct nvmem_config config = {};
++	struct nvmem_device *nvmem;
++
++	devinfo = devm_kzalloc(dev, sizeof(*devinfo), GFP_KERNEL);
++	if (!devinfo)
++		return -ENOMEM;
++
++	devinfo->base = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(devinfo->base))
++		return PTR_ERR(devinfo->base);
++
++	config.name = "mt6878-devinfo";
++	config.dev = dev;
++	config.owner = THIS_MODULE;
++	config.read_only = true;
++	config.root_only = true;
++	config.stride = 1;
++	config.word_size = 1;
++	config.size = MT6878_DEVINFO_WORDS * sizeof(u32);
++	config.reg_read = mt6878_devinfo_read;
++	config.priv = devinfo;
++
++	nvmem = devm_nvmem_register(dev, &config);
++	if (IS_ERR(nvmem))
++		return dev_err_probe(dev, PTR_ERR(nvmem),
++				     "failed to register NVMEM provider\n");
++
++	dev_info(dev, "registered read-only LVTS calibration cells\n");
++
++	return 0;
++}
++
++static const struct of_device_id mt6878_devinfo_of_match[] = {
++	{ .compatible = "mediatek,mt6878-devinfo" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6878_devinfo_of_match);
++
++static struct platform_driver mt6878_devinfo_driver = {
++	.probe = mt6878_devinfo_probe,
++	.driver = {
++		.name = "mt6878-devinfo",
++		.of_match_table = mt6878_devinfo_of_match,
++	},
++};
++module_platform_driver(mt6878_devinfo_driver);
++
++MODULE_AUTHOR("xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>");
++MODULE_DESCRIPTION("MediaTek MT6878 device information NVMEM provider");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/thermal/mediatek/lvts_thermal.c b/drivers/thermal/mediatek/lvts_thermal.c
+index ab55b20..0e3456c 100644
+--- a/drivers/thermal/mediatek/lvts_thermal.c
++++ b/drivers/thermal/mediatek/lvts_thermal.c
+@@ -17,6 +17,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/reset.h>
+ #include <linux/thermal.h>
++#include <linux/unaligned.h>
+ #include <dt-bindings/thermal/mediatek,lvts-thermal.h>
+ 
+ #include "../thermal_hwmon.h"
+@@ -96,12 +97,11 @@
+ 
+ #define LVTS_MINIMUM_THRESHOLD		20000
+ 
+-static int golden_temp = LVTS_GOLDEN_TEMP_DEFAULT;
+-static int golden_temp_offset;
+-
+ struct lvts_sensor_data {
+ 	int dt_id;
+ 	u8 cal_offsets[3];
++	u8 cal_word;
++	u8 cal_shift;
+ };
+ 
+ struct lvts_ctrl_data {
+@@ -109,6 +109,11 @@ struct lvts_ctrl_data {
+ 	u8 valid_sensor_mask;
+ 	int offset;
+ 	int mode;
++	u16 period_unit;
++	u16 group_interval;
++	u16 filter_interval;
++	u16 sensor_interval;
++	u8 hw_filter;
+ };
+ 
+ #define VALID_SENSOR_MAP(s0, s1, s2, s3) \
+@@ -127,13 +132,21 @@ struct lvts_data {
+ 	const struct lvts_ctrl_data *lvts_ctrl;
+ 	const u32 *conn_cmd;
+ 	const u32 *init_cmd;
++	const u32 *post_calib_cmd;
+ 	int num_lvts_ctrl;
+ 	int num_conn_cmd;
+ 	int num_init_cmd;
++	int num_post_calib_cmd;
+ 	int temp_factor;
+ 	int temp_offset;
+ 	int gt_calib_bit_offset;
++	int default_golden_temp;
+ 	unsigned int def_calibration;
++	bool custom_ctrl_speed;
++	bool mt6878_calibration;
++	bool no_clk;
++	bool no_reset;
++	bool polling_only;
+ };
+ 
+ struct lvts_sensor {
+@@ -144,6 +157,7 @@ struct lvts_sensor {
+ 	int dt_id;
+ 	int low_thresh;
+ 	int high_thresh;
++	int coeff_a;
+ };
+ 
+ struct lvts_ctrl {
+@@ -155,6 +169,9 @@ struct lvts_ctrl {
+ 	void __iomem *base;
+ 	int low_thresh;
+ 	int high_thresh;
++	int golden_temp;
++	int golden_temp_offset;
++	const struct lvts_ctrl_data *data;
+ };
+ 
+ struct lvts_domain {
+@@ -165,6 +182,8 @@ struct lvts_domain {
+ 	void __iomem *base;
+ 	size_t calib_len;
+ 	u8 *calib;
++	int golden_temp;
++	int golden_temp_offset;
+ #ifdef CONFIG_DEBUG_FS
+ 	struct dentry *dom_dentry;
+ #endif
+@@ -269,21 +288,31 @@ static inline int lvts_debugfs_init(struct device *dev,
+ 
+ #endif
+ 
+-static int lvts_raw_to_temp(u32 raw_temp, int temp_factor)
++static int lvts_raw_to_temp(struct lvts_ctrl *lvts_ctrl,
++			    struct lvts_sensor *lvts_sensor, u32 raw_temp)
+ {
++	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
+ 	int temperature;
+ 
+-	temperature = ((s64)(raw_temp & 0xFFFF) * temp_factor) >> 14;
+-	temperature += golden_temp_offset;
++	if (lvts_data->mt6878_calibration) {
++		temperature = div_s64((s64)lvts_sensor->coeff_a << 14,
++				      raw_temp);
++		temperature += lvts_ctrl->golden_temp * 500 -
++			       lvts_sensor->coeff_a;
++	} else {
++		temperature = ((s64)raw_temp * lvts_data->temp_factor) >> 14;
++		temperature += lvts_ctrl->golden_temp_offset;
++	}
+ 
+ 	return temperature;
+ }
+ 
+-static u32 lvts_temp_to_raw(int temperature, int temp_factor)
++static u32 lvts_temp_to_raw(struct lvts_ctrl *lvts_ctrl, int temperature)
+ {
+-	u32 raw_temp = ((s64)(golden_temp_offset - temperature)) << 14;
++	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
++	u32 raw_temp = ((s64)(lvts_ctrl->golden_temp_offset - temperature)) << 14;
+ 
+-	raw_temp = div_s64(raw_temp, -temp_factor);
++	raw_temp = div_s64(raw_temp, -lvts_data->temp_factor);
+ 
+ 	return raw_temp;
+ }
+@@ -293,7 +322,6 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
+ 	struct lvts_sensor *lvts_sensor = thermal_zone_device_priv(tz);
+ 	struct lvts_ctrl *lvts_ctrl = container_of(lvts_sensor, struct lvts_ctrl,
+ 						   sensors[lvts_sensor->id]);
+-	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
+ 	void __iomem *msr = lvts_sensor->msr;
+ 	u32 value;
+ 	int rc;
+@@ -325,8 +353,10 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
+ 	 */
+ 	if (rc)
+ 		return -EAGAIN;
++	if (lvts_ctrl->lvts_data->mt6878_calibration && !(value & 0xffff))
++		return -EAGAIN;
+ 
+-	*temp = lvts_raw_to_temp(value & 0xFFFF, lvts_data->temp_factor);
++	*temp = lvts_raw_to_temp(lvts_ctrl, lvts_sensor, value & 0xFFFF);
+ 
+ 	return 0;
+ }
+@@ -393,11 +423,10 @@ static int lvts_set_trips(struct thermal_zone_device *tz, int low, int high)
+ 	struct lvts_sensor *lvts_sensor = thermal_zone_device_priv(tz);
+ 	struct lvts_ctrl *lvts_ctrl = container_of(lvts_sensor, struct lvts_ctrl,
+ 						   sensors[lvts_sensor->id]);
+-	const struct lvts_data *lvts_data = lvts_ctrl->lvts_data;
+ 	void __iomem *base = lvts_sensor->base;
+-	u32 raw_low = lvts_temp_to_raw(low != -INT_MAX ? low : LVTS_MINIMUM_THRESHOLD,
+-				       lvts_data->temp_factor);
+-	u32 raw_high = lvts_temp_to_raw(high, lvts_data->temp_factor);
++	u32 raw_low = lvts_temp_to_raw(lvts_ctrl,
++				       low != -INT_MAX ? low : LVTS_MINIMUM_THRESHOLD);
++	u32 raw_high = lvts_temp_to_raw(lvts_ctrl, high);
+ 	bool should_update_thresh;
+ 
+ 	lvts_sensor->low_thresh = low;
+@@ -580,6 +609,10 @@ static const struct thermal_zone_device_ops lvts_ops = {
+ 	.set_trips = lvts_set_trips,
+ };
+ 
++static const struct thermal_zone_device_ops lvts_polling_ops = {
++	.get_temp = lvts_get_temp,
++};
++
+ static int lvts_sensor_init(struct device *dev, struct lvts_ctrl *lvts_ctrl,
+ 					const struct lvts_ctrl_data *lvts_ctrl_data)
+ {
+@@ -742,6 +775,40 @@ static int lvts_calibration_init(struct device *dev, struct lvts_ctrl *lvts_ctrl
+ 	return 0;
+ }
+ 
++static int lvts_calibration_init_mt6878(struct device *dev,
++					struct lvts_ctrl *lvts_ctrl,
++					const struct lvts_ctrl_data *lvts_ctrl_data,
++					u8 *efuse_calibration,
++					size_t calib_len)
++{
++	const unsigned int default_count_r = 14437;
++	int i;
++
++	lvts_for_each_valid_sensor(i, lvts_ctrl_data) {
++		const struct lvts_sensor_data *sensor =
++					&lvts_ctrl_data->lvts_sensor[i];
++		u32 count_r;
++
++		if ((sensor->cal_word + 1) * sizeof(u32) > calib_len)
++			return -EINVAL;
++
++		count_r = get_unaligned_le32(efuse_calibration +
++					       sensor->cal_word * sizeof(u32));
++		count_r = (count_r >> sensor->cal_shift) & GENMASK(15, 0);
++		if (!count_r) {
++			dev_warn(dev, "sensor %d has no calibration; using default\n",
++				 lvts_ctrl->sensors[i].dt_id);
++			count_r = default_count_r;
++		}
++
++		lvts_ctrl->calibration[i] = count_r;
++		lvts_ctrl->sensors[i].coeff_a = -60040 +
++			div_u64(280000ULL * count_r, default_count_r);
++	}
++
++	return 0;
++}
++
+ /*
+  * The efuse bytes stream can be split into different chunk of
+  * nvmems. This function reads and concatenate those into a single
+@@ -792,9 +859,12 @@ static int lvts_calibration_read(struct device *dev, struct lvts_domain *lvts_td
+ 	return 0;
+ }
+ 
+-static int lvts_golden_temp_init(struct device *dev, u8 *calib,
++static int lvts_golden_temp_init(struct device *dev,
++				 struct lvts_domain *lvts_td, u8 *calib,
+ 				 const struct lvts_data *lvts_data)
+ {
++	int default_golden_temp = lvts_data->default_golden_temp ?:
++				  LVTS_GOLDEN_TEMP_DEFAULT;
+ 	u32 gt;
+ 
+ 	/*
+@@ -805,11 +875,16 @@ static int lvts_golden_temp_init(struct device *dev, u8 *calib,
+ 
+ 	/* A zero value for gt means that device has invalid efuse data */
+ 	if (gt && gt < LVTS_GOLDEN_TEMP_MAX)
+-		golden_temp = gt;
++		lvts_td->golden_temp = gt;
++	else
++		lvts_td->golden_temp = default_golden_temp;
+ 
+-	golden_temp_offset = golden_temp * 500 + lvts_data->temp_offset;
++	lvts_td->golden_temp_offset = lvts_td->golden_temp * 500 +
++				      lvts_data->temp_offset;
+ 
+-	dev_info(dev, "%sgolden temp=%d\n", gt ? "" : "fake ", golden_temp);
++	dev_info(dev, "%sgolden temp=%d\n",
++		 gt && gt < LVTS_GOLDEN_TEMP_MAX ? "" : "default ",
++		 lvts_td->golden_temp);
+ 
+ 	return 0;
+ }
+@@ -828,7 +903,7 @@ static int lvts_ctrl_init(struct device *dev, struct lvts_domain *lvts_td,
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = lvts_golden_temp_init(dev, lvts_td->calib, lvts_data);
++	ret = lvts_golden_temp_init(dev, lvts_td, lvts_td->calib, lvts_data);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -840,16 +915,25 @@ static int lvts_ctrl_init(struct device *dev, struct lvts_domain *lvts_td,
+ 
+ 		lvts_ctrl[i].base = lvts_td->base + lvts_data->lvts_ctrl[i].offset;
+ 		lvts_ctrl[i].lvts_data = lvts_data;
++		lvts_ctrl[i].data = &lvts_data->lvts_ctrl[i];
++		lvts_ctrl[i].golden_temp = lvts_td->golden_temp;
++		lvts_ctrl[i].golden_temp_offset = lvts_td->golden_temp_offset;
+ 
+ 		ret = lvts_sensor_init(dev, &lvts_ctrl[i],
+ 				       &lvts_data->lvts_ctrl[i]);
+ 		if (ret)
+ 			return ret;
+ 
+-		ret = lvts_calibration_init(dev, &lvts_ctrl[i],
+-					    &lvts_data->lvts_ctrl[i],
+-					    lvts_td->calib,
+-					    lvts_td->calib_len);
++		if (lvts_data->mt6878_calibration)
++			ret = lvts_calibration_init_mt6878(dev, &lvts_ctrl[i],
++							   &lvts_data->lvts_ctrl[i],
++							   lvts_td->calib,
++							   lvts_td->calib_len);
++		else
++			ret = lvts_calibration_init(dev, &lvts_ctrl[i],
++						    &lvts_data->lvts_ctrl[i],
++						    lvts_td->calib,
++						    lvts_td->calib_len);
+ 		if (ret)
+ 			return ret;
+ 
+@@ -963,6 +1047,9 @@ static int lvts_domain_reset(struct device *dev, struct reset_control *reset)
+ {
+ 	int ret;
+ 
++	if (!reset)
++		return 0;
++
+ 	ret = reset_control_assert(reset);
+ 	if (ret)
+ 		return ret;
+@@ -1043,6 +1130,16 @@ static int lvts_ctrl_calibrate(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 
+ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ {
++	const struct lvts_ctrl_data *ctrl_data = lvts_ctrl->data;
++	bool custom_speed = lvts_ctrl->lvts_data->custom_ctrl_speed;
++	u16 filter_interval = custom_speed ? ctrl_data->filter_interval :
++						LVTS_FILTER_INTERVAL;
++	u16 group_interval = custom_speed ? ctrl_data->group_interval :
++					       LVTS_GROUP_INTERVAL;
++	u16 period_unit = custom_speed ? ctrl_data->period_unit : LVTS_PERIOD_UNIT;
++	u16 sensor_interval = custom_speed ? ctrl_data->sensor_interval :
++						LVTS_SENSOR_INTERVAL;
++	u8 hw_filter = custom_speed ? ctrl_data->hw_filter : LVTS_HW_FILTER;
+ 	u32 value;
+ 
+ 	/*
+@@ -1061,8 +1158,8 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 	/*
+ 	 * LVTS_CALSCALE : ADC voltage round
+ 	 */
+-	value = 0x300;
+-	value = LVTS_CALSCALE_CONF;
++	if (lvts_ctrl->lvts_data->mt6878_calibration)
++		writel(LVTS_CALSCALE_CONF, LVTS_CALSCALE(lvts_ctrl->base));
+ 
+ 	/*
+ 	 * LVTS_MSRCTL0 : Sensor filtering strategy
+@@ -1083,8 +1180,8 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 	 * 6-8  : Sensor2 filter
+ 	 * 9-11 : Sensor3 filter
+ 	 */
+-	value = LVTS_HW_FILTER << 9 |  LVTS_HW_FILTER << 6 |
+-			LVTS_HW_FILTER << 3 | LVTS_HW_FILTER;
++	value = hw_filter << 9 | hw_filter << 6 |
++		hw_filter << 3 | hw_filter;
+ 	writel(value, LVTS_MSRCTL0(lvts_ctrl->base));
+ 
+ 	/*
+@@ -1127,7 +1224,7 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 	 *       9 - 0  : Period unit
+ 	 *
+ 	 */
+-	value = LVTS_GROUP_INTERVAL << 20 | LVTS_PERIOD_UNIT;
++	value = group_interval << 20 | period_unit;
+ 	writel(value, LVTS_MONCTL1(lvts_ctrl->base));
+ 
+ 	/*
+@@ -1140,7 +1237,7 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 	 *       9-0  : Interval unit in PERIOD_UNIT between each sensor
+ 	 *
+ 	 */
+-	value = LVTS_FILTER_INTERVAL << 16 | LVTS_SENSOR_INTERVAL;
++	value = filter_interval << 16 | sensor_interval;
+ 	writel(value, LVTS_MONCTL2(lvts_ctrl->base));
+ 
+ 	return lvts_irq_init(lvts_ctrl);
+@@ -1148,6 +1245,8 @@ static int lvts_ctrl_configure(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 
+ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ {
++	const struct thermal_zone_device_ops *ops = lvts_ctrl->lvts_data->polling_only ?
++						      &lvts_polling_ops : &lvts_ops;
+ 	struct lvts_sensor *lvts_sensors = lvts_ctrl->sensors;
+ 	struct thermal_zone_device *tz;
+ 	u32 sensor_map = 0;
+@@ -1166,8 +1265,7 @@ static int lvts_ctrl_start(struct device *dev, struct lvts_ctrl *lvts_ctrl)
+ 
+ 		int dt_id = lvts_sensors[i].dt_id;
+ 
+-		tz = devm_thermal_of_zone_register(dev, dt_id, &lvts_sensors[i],
+-						   &lvts_ops);
++		tz = devm_thermal_of_zone_register(dev, dt_id, &lvts_sensors[i], ops);
+ 		if (IS_ERR(tz)) {
+ 			/*
+ 			 * This thermal zone is not described in the
+@@ -1290,6 +1388,9 @@ static int lvts_domain_init(struct device *dev, struct lvts_domain *lvts_td,
+ 			return ret;
+ 		}
+ 
++		lvts_write_config(lvts_ctrl, lvts_data->post_calib_cmd,
++				  lvts_data->num_post_calib_cmd);
++
+ 		ret = lvts_ctrl_configure(dev, lvts_ctrl);
+ 		if (ret) {
+ 			dev_dbg(dev, "Failed to configure controller");
+@@ -1322,9 +1423,12 @@ static int lvts_probe(struct platform_device *pdev)
+ 	if (!lvts_data)
+ 		return -ENODEV;
+ 
+-	lvts_td->clk = devm_clk_get_enabled(dev, NULL);
+-	if (IS_ERR(lvts_td->clk))
+-		return dev_err_probe(dev, PTR_ERR(lvts_td->clk), "Failed to retrieve clock\n");
++	if (!lvts_data->no_clk) {
++		lvts_td->clk = devm_clk_get_enabled(dev, NULL);
++		if (IS_ERR(lvts_td->clk))
++			return dev_err_probe(dev, PTR_ERR(lvts_td->clk),
++					     "Failed to retrieve clock\n");
++	}
+ 
+ 	res = platform_get_mem_or_io(pdev, 0);
+ 	if (!res)
+@@ -1334,15 +1438,12 @@ static int lvts_probe(struct platform_device *pdev)
+ 	if (IS_ERR(lvts_td->base))
+ 		return dev_err_probe(dev, PTR_ERR(lvts_td->base), "Failed to map io resource\n");
+ 
+-	lvts_td->reset = devm_reset_control_get_by_index(dev, 0);
+-	if (IS_ERR(lvts_td->reset))
+-		return dev_err_probe(dev, PTR_ERR(lvts_td->reset), "Failed to get reset control\n");
+-
+-	irq = platform_get_irq(pdev, 0);
+-	if (irq < 0)
+-		return irq;
+-
+-	golden_temp_offset = lvts_data->temp_offset;
++	if (!lvts_data->no_reset) {
++		lvts_td->reset = devm_reset_control_get_by_index(dev, 0);
++		if (IS_ERR(lvts_td->reset))
++			return dev_err_probe(dev, PTR_ERR(lvts_td->reset),
++					     "Failed to get reset control\n");
++	}
+ 
+ 	ret = lvts_domain_init(dev, lvts_td, lvts_data);
+ 	if (ret)
+@@ -1352,10 +1453,16 @@ static int lvts_probe(struct platform_device *pdev)
+ 	 * At this point the LVTS is initialized and enabled. We can
+ 	 * safely enable the interrupt.
+ 	 */
+-	ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
+-					IRQF_ONESHOT, dev_name(dev), lvts_td);
+-	if (ret)
+-		return dev_err_probe(dev, ret, "Failed to request interrupt\n");
++	if (!lvts_data->polling_only) {
++		irq = platform_get_irq(pdev, 0);
++		if (irq < 0)
++			return irq;
++
++		ret = devm_request_threaded_irq(dev, irq, NULL, lvts_irq_handler,
++						IRQF_ONESHOT, dev_name(dev), lvts_td);
++		if (ret)
++			return dev_err_probe(dev, ret, "Failed to request interrupt\n");
++	}
+ 
+ 	platform_set_drvdata(pdev, lvts_td);
+ 
+@@ -1373,6 +1480,110 @@ static void lvts_remove(struct platform_device *pdev)
+ 		lvts_ctrl_set_enable(&lvts_td->lvts_ctrl[i], false);
+ }
+ 
++#define MT6878_CTRL_SPEED(_group) \
++	.period_unit = 1, \
++	.group_interval = (_group), \
++	.filter_interval = 1, \
++	.sensor_interval = 1, \
++	.hw_filter = 0
++
++static const struct lvts_ctrl_data mt6878_lvts_mcu_data_ctrl[] = {
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_MCU_TS1_0, .cal_word = 1, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS1_1, .cal_word = 1, .cal_shift = 0 },
++			{ .dt_id = MT6878_MCU_TS1_2, .cal_word = 2, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS1_3, .cal_word = 2, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 1, 1, 1),
++		.offset = 0x0,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(246),
++	},
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_MCU_TS2_0, .cal_word = 3, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS2_1, .cal_word = 3, .cal_shift = 0 },
++			{ .dt_id = MT6878_MCU_TS2_2, .cal_word = 4, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS2_3, .cal_word = 4, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 1, 1, 1),
++		.offset = 0x100,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(246),
++	},
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_MCU_TS3_0, .cal_word = 5, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS3_1, .cal_word = 5, .cal_shift = 0 },
++			{ .dt_id = MT6878_MCU_TS3_2, .cal_word = 6, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS3_3, .cal_word = 6, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 1, 1, 1),
++		.offset = 0x200,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(449),
++	},
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_MCU_TS4_0, .cal_word = 7, .cal_shift = 16 },
++			{ .dt_id = MT6878_MCU_TS4_1, .cal_word = 7, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 1, 0, 0),
++		.offset = 0x300,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(449),
++	},
++};
++
++static const struct lvts_ctrl_data mt6878_lvts_ap_data_ctrl[] = {
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_AP_TS5_0, .cal_word = 8, .cal_shift = 16 },
++			{ .dt_id = MT6878_AP_TS5_1, .cal_word = 8, .cal_shift = 0 },
++			{ .dt_id = MT6878_AP_TS5_2, .cal_word = 9, .cal_shift = 16 },
++		},
++		VALID_SENSOR_MAP(1, 1, 1, 0),
++		.offset = 0x0,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(210),
++	},
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_AP_TS6_0, .cal_word = 9, .cal_shift = 0 },
++			{ .dt_id = MT6878_AP_TS6_1, .cal_word = 10, .cal_shift = 16 },
++		},
++		VALID_SENSOR_MAP(1, 1, 0, 0),
++		.offset = 0x100,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(1023),
++	},
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_AP_TS7_0, .cal_word = 11, .cal_shift = 16 },
++			{ .dt_id = MT6878_AP_TS7_1, .cal_word = 11, .cal_shift = 0 },
++			{ .dt_id = MT6878_AP_TS7_2, .cal_word = 12, .cal_shift = 16 },
++			{ .dt_id = MT6878_AP_TS7_3, .cal_word = 12, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 1, 1, 1),
++		.offset = 0x200,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(1023),
++	},
++};
++
++static const struct lvts_ctrl_data mt6878_lvts_gpu_data_ctrl[] = {
++	{
++		.lvts_sensor = {
++			{ .dt_id = MT6878_GPU_TS8_0, .cal_word = 10, .cal_shift = 0 },
++		},
++		VALID_SENSOR_MAP(1, 0, 0, 0),
++		.offset = 0x0,
++		.mode = LVTS_MSR_FILTERED_MODE,
++		MT6878_CTRL_SPEED(138),
++	},
++};
++
+ static const struct lvts_ctrl_data mt7988_lvts_ap_data_ctrl[] = {
+ 	{
+ 		.lvts_sensor = {
+@@ -1417,7 +1628,8 @@ static int lvts_suspend(struct device *dev)
+ 		lvts_ctrl_set_enable(&lvts_td->lvts_ctrl[i], false);
+ 	}
+ 
+-	clk_disable_unprepare(lvts_td->clk);
++	if (lvts_td->clk)
++		clk_disable_unprepare(lvts_td->clk);
+ 
+ 	return 0;
+ }
+@@ -1429,9 +1641,11 @@ static int lvts_resume(struct device *dev)
+ 
+ 	lvts_td = dev_get_drvdata(dev);
+ 
+-	ret = clk_prepare_enable(lvts_td->clk);
+-	if (ret)
+-		return ret;
++	if (lvts_td->clk) {
++		ret = clk_prepare_enable(lvts_td->clk);
++		if (ret)
++			return ret;
++	}
+ 
+ 	for (i = 0; i < lvts_td->num_lvts_ctrl; i++) {
+ 		lvts_ctrl_set_enable(&lvts_td->lvts_ctrl[i], true);
+@@ -1445,6 +1659,15 @@ static int lvts_resume(struct device *dev)
+ static const u32 default_conn_cmds[] = { 0xC103FFFF, 0xC502FF55 };
+ static const u32 mt7988_conn_cmds[] = { 0xC103FFFF, 0xC502FC55 };
+ 
++/* Nothing OS 4.1 LVTS device generation v6 initialization sequence. */
++static const u32 mt6878_init_cmds[] = {
++	0xC1030300, 0xC10307A6, 0xC1030500, 0xC1030447,
++	0xC1030A30, 0xC1030B03, 0xC1030CFF, 0xC1030995,
++	0xC10308F1, 0xC1030E01,
++};
++
++static const u32 mt6878_post_calib_cmds[] = { 0xC10306F8 };
++
+ /*
+  * Write device mask: 0xC1030000
+  */
+@@ -1753,6 +1976,60 @@ static const struct lvts_ctrl_data mt8195_lvts_ap_data_ctrl[] = {
+ 	}
+ };
+ 
++static const struct lvts_data mt6878_lvts_mcu_data = {
++	.lvts_ctrl = mt6878_lvts_mcu_data_ctrl,
++	.conn_cmd = default_conn_cmds,
++	.init_cmd = mt6878_init_cmds,
++	.post_calib_cmd = mt6878_post_calib_cmds,
++	.num_lvts_ctrl = ARRAY_SIZE(mt6878_lvts_mcu_data_ctrl),
++	.num_conn_cmd = ARRAY_SIZE(default_conn_cmds),
++	.num_init_cmd = ARRAY_SIZE(mt6878_init_cmds),
++	.num_post_calib_cmd = ARRAY_SIZE(mt6878_post_calib_cmds),
++	.gt_calib_bit_offset = 0,
++	.default_golden_temp = 60,
++	.custom_ctrl_speed = true,
++	.mt6878_calibration = true,
++	.no_clk = true,
++	.no_reset = true,
++	.polling_only = true,
++};
++
++static const struct lvts_data mt6878_lvts_ap_data = {
++	.lvts_ctrl = mt6878_lvts_ap_data_ctrl,
++	.conn_cmd = default_conn_cmds,
++	.init_cmd = mt6878_init_cmds,
++	.post_calib_cmd = mt6878_post_calib_cmds,
++	.num_lvts_ctrl = ARRAY_SIZE(mt6878_lvts_ap_data_ctrl),
++	.num_conn_cmd = ARRAY_SIZE(default_conn_cmds),
++	.num_init_cmd = ARRAY_SIZE(mt6878_init_cmds),
++	.num_post_calib_cmd = ARRAY_SIZE(mt6878_post_calib_cmds),
++	.gt_calib_bit_offset = 0,
++	.default_golden_temp = 60,
++	.custom_ctrl_speed = true,
++	.mt6878_calibration = true,
++	.no_clk = true,
++	.no_reset = true,
++	.polling_only = true,
++};
++
++static const struct lvts_data mt6878_lvts_gpu_data = {
++	.lvts_ctrl = mt6878_lvts_gpu_data_ctrl,
++	.conn_cmd = default_conn_cmds,
++	.init_cmd = mt6878_init_cmds,
++	.post_calib_cmd = mt6878_post_calib_cmds,
++	.num_lvts_ctrl = ARRAY_SIZE(mt6878_lvts_gpu_data_ctrl),
++	.num_conn_cmd = ARRAY_SIZE(default_conn_cmds),
++	.num_init_cmd = ARRAY_SIZE(mt6878_init_cmds),
++	.num_post_calib_cmd = ARRAY_SIZE(mt6878_post_calib_cmds),
++	.gt_calib_bit_offset = 0,
++	.default_golden_temp = 60,
++	.custom_ctrl_speed = true,
++	.mt6878_calibration = true,
++	.no_clk = true,
++	.no_reset = true,
++	.polling_only = true,
++};
++
+ static const struct lvts_data mt7988_lvts_ap_data = {
+ 	.lvts_ctrl	= mt7988_lvts_ap_data_ctrl,
+ 	.conn_cmd	= mt7988_conn_cmds,
+@@ -1857,6 +2134,9 @@ static const struct lvts_data mt8195_lvts_ap_data = {
+ };
+ 
+ static const struct of_device_id lvts_of_match[] = {
++	{ .compatible = "mediatek,mt6878-lvts-mcu", .data = &mt6878_lvts_mcu_data },
++	{ .compatible = "mediatek,mt6878-lvts-ap", .data = &mt6878_lvts_ap_data },
++	{ .compatible = "mediatek,mt6878-lvts-gpu", .data = &mt6878_lvts_gpu_data },
+ 	{ .compatible = "mediatek,mt7988-lvts-ap", .data = &mt7988_lvts_ap_data },
+ 	{ .compatible = "mediatek,mt8186-lvts", .data = &mt8186_lvts_data },
+ 	{ .compatible = "mediatek,mt8188-lvts-mcu", .data = &mt8188_lvts_mcu_data },
+diff --git a/include/dt-bindings/thermal/mediatek,lvts-thermal.h b/include/dt-bindings/thermal/mediatek,lvts-thermal.h
+index ddc7302..75ad6fc 100644
+--- a/include/dt-bindings/thermal/mediatek,lvts-thermal.h
++++ b/include/dt-bindings/thermal/mediatek,lvts-thermal.h
+@@ -7,6 +7,33 @@
+ #ifndef __MEDIATEK_LVTS_DT_H
+ #define __MEDIATEK_LVTS_DT_H
+ 
++#define MT6878_MCU_TS1_0	0
++#define MT6878_MCU_TS1_1	1
++#define MT6878_MCU_TS1_2	2
++#define MT6878_MCU_TS1_3	3
++#define MT6878_MCU_TS2_0	4
++#define MT6878_MCU_TS2_1	5
++#define MT6878_MCU_TS2_2	6
++#define MT6878_MCU_TS2_3	7
++#define MT6878_MCU_TS3_0	8
++#define MT6878_MCU_TS3_1	9
++#define MT6878_MCU_TS3_2	10
++#define MT6878_MCU_TS3_3	11
++#define MT6878_MCU_TS4_0	12
++#define MT6878_MCU_TS4_1	13
++
++#define MT6878_AP_TS5_0		0
++#define MT6878_AP_TS5_1		1
++#define MT6878_AP_TS5_2		2
++#define MT6878_AP_TS6_0		3
++#define MT6878_AP_TS6_1		4
++#define MT6878_AP_TS7_0		5
++#define MT6878_AP_TS7_1		6
++#define MT6878_AP_TS7_2		7
++#define MT6878_AP_TS7_3		8
++
++#define MT6878_GPU_TS8_0	0
++
+ #define MT7988_CPU_0		0
+ #define MT7988_CPU_1		1
+ #define MT7988_ETH2P5G_0	2
