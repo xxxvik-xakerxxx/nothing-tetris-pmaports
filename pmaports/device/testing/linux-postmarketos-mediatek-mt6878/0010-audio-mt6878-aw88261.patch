@@ -5,7 +5,10 @@ Describe the MT6878 audio clocks, AFE, codec and board pinctrl used by
 Tetris. Bind the populated AW88261 smart amplifier and start it from the
 PCM mute lifecycle, after ASoC has powered the DAPM route. This follows
 the Nothing OS 4.1 driver ordering and avoids probing the amplifier PLL
-before the I2S clocks are available.
+before the I2S clocks are available. Restore the vendor-described
+ARMPLL_26M factor as well: without clock ID 171, the generic MediaTek
+provider underallocates its onecell table and makes the final FMI2S clock
+ID unavailable to the AFE.
 
 ---
 diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
@@ -135,7 +138,15 @@ index e18b226..e6f87a3 100644
  #define VLP_CLK_CFG_0				0x0008
  #define VLP_CLK_CFG_0_SET			0x000C
  #define VLP_CLK_CFG_0_CLR			0x0010
-@@ -1748,13 +1750,42 @@ static const struct mtk_composite top_aud_divs[] = {
+@@ -387,5 +389,7 @@ static const struct mtk_fixed_factor top_divs[] = {
+ 	FACTOR(CLK_TOP_MSDCPLL_D16, "msdcpll_d16",
+ 			"msdcpll", 1, 16),
++	FACTOR(CLK_TOP_ARMPLL_26M, "armpll_26m_ck",
++			"None", 1, 1),
+ 	FACTOR(CLK_TOP_CLKRTC, "clkrtc",
+ 			"clk32k", 1, 1),
+ 	FACTOR(CLK_TOP_TCK_26M_MX8, "tck_26m_mx8_ck",
+@@ -1748,13 +1752,42 @@ static const struct mtk_composite top_aud_divs[] = {
  		8/* lsb */),
 +	DIV_GATE(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1",
 +		"apll_SI1_m_sel", CLK_AUDDIV_0, 1,

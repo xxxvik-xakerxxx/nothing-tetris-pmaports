@@ -34,11 +34,20 @@ jobs:
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
           device_apkbuild=pmaports/device/testing/device-nothing-tetris/APKBUILD
-          ! grep -q '^subpackages=' "$kernel_apkbuild"
-          ! grep -q 'linux-postmarketos-mediatek-mt6878-\(pmic\|connectivity\|audio\)' \
-            "$device_apkbuild"
-          ! sed -n '/uses: actions\/cache\/\(restore\|save\)@/,/key:/p' \
-            .github/workflows/ci.yml | grep -q '/pmwork/work/packages'
+          if grep -q '^subpackages=' "$kernel_apkbuild"; then
+            echo "kernel package must not split hardware modules into subpackages"
+            exit 1
+          fi
+          if grep -q 'linux-postmarketos-mediatek-mt6878-\(pmic\|connectivity\|audio\)' \
+              "$device_apkbuild"; then
+            echo "device package must not depend on split kernel hardware packages"
+            exit 1
+          fi
+          if sed -n '/uses: actions\/cache\/\(restore\|save\)@/,/key:/p' \
+              .github/workflows/ci.yml | grep -q '/pmwork/work/packages'; then
+            echo "package output must not be restored from the Actions cache"
+            exit 1
+          fi
 
   build-pmaports:
     runs-on: ubuntu-latest
@@ -264,10 +273,12 @@ jobs:
             find "$rootfs/lib/modules" -path "*/$module" -print -quit |
               grep -q . || { echo "missing module: $module"; exit 1; }
           done
-          ! find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .
+          if find "$rootfs/lib/modules" -name wmt_drv.ko -print -quit | grep -q .; then
+            echo "legacy wmt_drv module must not be packaged"
+            exit 1
+          fi
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
           conninfra_module=$(find "$rootfs/lib/modules" -name conninfra.ko -print -quit)
-          gps_module=$(find "$rootfs/lib/modules" -name gps_drv_dl_v050.ko -print -quit)
           wifi_module=$(find "$rootfs/lib/modules" -name wlan_drv_gen4m_6878.ko -print -quit)
           test "$(stat -c %s "$conninfra_module")" -gt 6000000 || {
             echo "conninfra module is missing MT6878 platform objects"
@@ -294,6 +305,8 @@ jobs:
           test "$(rootfs_modinfo -F depends gps_drv_dl_v050)" = conninfra
           test "$(rootfs_modinfo -F name mt6685_core)" = mt6685_core
           test "$(rootfs_modinfo -F name mt6685_audclk)" = mt6685_audclk
+          # CardId is expanded by ALSA UCM at runtime.
+          # shellcheck disable=SC2016
           check_contains "direct two-channel DL6 transport" \
             'PlaybackPCM "hw:${CardId},6"' \
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
@@ -336,11 +349,11 @@ jobs:
           check_contains "LLVM 21 compiler identity" \
             'clang version 21' /tmp/nothing-tetris-Image
           gzip -cd "$rootfs/boot/initramfs" > /tmp/nothing-tetris-initramfs.cpio
-          check_contains "ECM function in initramfs" \
-            'drivers/usb/gadget/function/usb_f_ecm.ko' \
+          check_contains "NCM function in initramfs" \
+            'drivers/usb/gadget/function/usb_f_ncm.ko' \
             /tmp/nothing-tetris-initramfs.cpio
-          check_contains "ECM deviceinfo selection" \
-            'deviceinfo_usb_network_function="ecm.usb0"' \
+          check_contains "NCM deviceinfo selection" \
+            'deviceinfo_usb_network_function="ncm.usb0"' \
             /tmp/nothing-tetris-initramfs.cpio
           rm -f /tmp/nothing-tetris-Image /tmp/nothing-tetris-initramfs.cpio \
             /tmp/conninfra.relocations

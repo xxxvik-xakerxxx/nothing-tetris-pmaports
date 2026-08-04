@@ -58,7 +58,7 @@ Driver packaging and vendor-to-native migration are documented in
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
 | Power | Thermal management | Broken | The running kernel has no thermal class or zones. Nothing OS 4.1 provides MT6878 LVTS data for 24 sensors across MCU/AP/GPU domains, but it is not integrated yet. |
-| USB | Device mode / ECM | Partial | ECM carries stable SSH and a verified 32 MiB transfer on Linux and macOS. The next image selects ECM in `deviceinfo` and includes `usb_f_ecm` in initramfs; clean-install validation remains. |
+| USB | Device mode / NCM | Partial | NCM previously carried stable SSH and a verified 32 MiB transfer on Linux and macOS. Clean-install audit found MTU3 built gadget-only, so the Type-C role-switch graph never reached the UDC; the next image enables dual-role with peripheral as the safe default. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPC reports reverse orientation, sink power, device data role and charging. MTU3 dual-role support is disabled, `/sys/class/usb_role` is empty, and host mode/wake remain unvalidated. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | The driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; shell, UI and repeated bounded effects work physically. Suspend/resume and three cold boots remain. |

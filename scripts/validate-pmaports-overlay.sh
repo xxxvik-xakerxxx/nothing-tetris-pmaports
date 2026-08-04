@@ -153,9 +153,9 @@ validate_connectivity_boot() {
 	grep -Fxq 'enable nothing-tetris-connectivity.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address-extract.service' "$preset"
 	grep -Fxq 'enable nothing-tetris-bluetooth-address.service' "$preset"
-	grep -Fxq 'deviceinfo_usb_network_function="ecm.usb0"' \
+	grep -Fxq 'deviceinfo_usb_network_function="ncm.usb0"' \
 		"$device_pkg/deviceinfo"
-	test "$(cat "$modules_initfs")" = usb_f_ecm
+	test "$(cat "$modules_initfs")" = usb_f_ncm
 	test "$(grep -Ev '^[[:space:]]*(#|$)' "$wifi_cfg")" = \
 		'DbgLevel0 0xffffffff 0x0f'
 	if grep -Fq 'multi-user.target.wants/nothing-tetris-' "$device_pkg/APKBUILD"; then
@@ -276,6 +276,9 @@ validate_power_and_audio_config() {
 	grep -Fq '+		audio_sram: sram@11059000 {' "$audio_patch"
 	grep -Fq '+#include "clk-gate.h"' "$audio_patch"
 	grep -Fq '+#define CLK_AUDDIV_2' "$audio_patch"
+	grep -Fq '+	FACTOR(CLK_TOP_ARMPLL_26M, "armpll_26m_ck",' \
+		"$audio_patch"
+	grep -Fq '+			"None", 1, 1),' "$audio_patch"
 	grep -Fq '+	DIV_GATE(CLK_TOP_APLL12_DIV_SI1, "apll12_div_si1",' \
 		"$audio_patch"
 	grep -Fq '+		"apll_SI1_m_sel", CLK_AUDDIV_0, 1,' "$audio_patch"
@@ -321,6 +324,21 @@ validate_power_and_audio_config() {
 		echo "mainline AFE must select the composite I2S4 state only once" >&2
 		return 1
 	fi
+}
+
+validate_usb_role() {
+	kernel_config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	usb_patch="$kernel_pkg/0021-usb-mtu3-native-role-switch.patch"
+
+	grep -Fxq 'CONFIG_USB_MTU3_DUAL_ROLE=y' "$kernel_config"
+	grep -Fxq '# CONFIG_USB_MTU3_GADGET is not set' "$kernel_config"
+	grep -Fxq 'CONFIG_USB_ROLE_SWITCH=y' "$kernel_config"
+	grep -Fq '+			usb-role-switch;' "$usb_patch"
+	grep -Fq '+			role-switch-default-mode = "peripheral";' "$usb_patch"
+	grep -Fq '+					remote-endpoint = <&typec_hs>;' "$usb_patch"
+	grep -Fxq 'deviceinfo_usb_network_function="ncm.usb0"' \
+		"$device_pkg/deviceinfo"
+	test "$(cat "$device_pkg/modules-initfs")" = usb_f_ncm
 }
 
 validate_haptics() {
@@ -448,6 +466,7 @@ validate_source_files "$firmware_pkg"
 validate_vendor_baseline
 validate_connectivity_boot
 validate_power_and_audio_config
+validate_usb_role
 validate_haptics
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
