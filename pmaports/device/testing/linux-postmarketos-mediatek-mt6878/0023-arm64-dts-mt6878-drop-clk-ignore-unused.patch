@@ -1,0 +1,17 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] arm64: dts: mediatek: mt6878: allow unused clocks to gate
+
+The bring-up command line kept every clock enabled, which prevents the
+common clock framework from gating unused hardware and causes substantial
+idle power consumption.  All currently enabled peripherals now describe
+their clock dependencies, so stop forcing clk_ignore_unused.
+
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -21,7 +21,6 @@
+ 	// NOTE: Will be replaced by our to-be-bootloader. Keep in for now.
+ 	chosen {
+-		bootargs = "clk_ignore_unused";
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+ 		ranges;
