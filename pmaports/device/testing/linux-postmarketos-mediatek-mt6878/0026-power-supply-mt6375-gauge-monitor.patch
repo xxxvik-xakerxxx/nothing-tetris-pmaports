@@ -115,7 +115,7 @@ new file mode 100644
 index 0000000..2c773d0
 --- /dev/null
 +++ b/drivers/power/supply/mt6375-gauge-monitor.c
-@@ -0,0 +1,350 @@
+@@ -0,0 +1,354 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Read-only MT6375 battery gauge telemetry for Nothing Tetris.
@@ -367,6 +367,7 @@ index 0000000..2c773d0
 +}
 +
 +static enum power_supply_property mt6375_gauge_properties[] = {
++	POWER_SUPPLY_PROP_SCOPE,
 +	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 +	POWER_SUPPLY_PROP_CURRENT_NOW,
 +	POWER_SUPPLY_PROP_TEMP,
@@ -380,6 +381,9 @@ index 0000000..2c773d0
 +	struct mt6375_gauge_monitor *monitor = power_supply_get_drvdata(psy);
 +
 +	switch (property) {
++	case POWER_SUPPLY_PROP_SCOPE:
++		value->intval = POWER_SUPPLY_SCOPE_DEVICE;
++		return 0;
 +	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 +		return mt6375_gauge_voltage_uv(monitor, &value->intval);
 +	case POWER_SUPPLY_PROP_CURRENT_NOW:

@@ -30,6 +30,33 @@ supply_has_property() {
 	' "$outdir/power.txt"
 }
 
+supply_property_value() {
+	awk -v supply="$1" -v property="$2" '
+		/^### / {
+			in_supply = ($0 == "### " supply)
+			next
+		}
+		in_supply && index($0, property "=") == 1 {
+			print substr($0, length(property) + 2)
+			exit
+		}
+	' "$outdir/power.txt"
+}
+
+require_supply_range() {
+	value=$(supply_property_value "$1" "$2")
+	case "$value" in
+		''|*[!0-9-]*) fail "$1 $2 is absent or non-numeric: $value" ;;
+	esac
+	[ "$value" -ge "$3" ] && [ "$value" -le "$4" ] ||
+		fail "$1 $2 is outside [$3, $4]: $value"
+}
+
+require_supply_value() {
+	value=$(supply_property_value "$1" "$2")
+	[ "$value" = "$3" ] || fail "$1 $2 expected $3, got ${value:-missing}"
+}
+
 if ! sshpass -p "$password" ssh $ssh_opts "$user@$host" sh -s -- "$password" \
 	> "$outdir/power.txt" 2> "$outdir/ssh.err" <<'EOF'
 password=$1
@@ -42,7 +69,7 @@ uptime
 echo "== power supplies =="
 for supply in /sys/class/power_supply/*; do
 	echo "### ${supply##*/}"
-	for property in type status online usb_type voltage_now voltage_max \
+	for property in type scope status online usb_type voltage_now voltage_max \
 		current_now current_max input_current_limit \
 		constant_charge_current input_voltage_limit \
 		constant_charge_voltage charge_term_current charge_behaviour \
@@ -148,12 +175,19 @@ awk '
 if [ "$mode" = charger ]; then
 	grep -q '^### mt6375-gauge$' "$outdir/power.txt" ||
 		fail "MT6375 battery gauge power supply is missing"
+	supply_has_property mt6375-gauge scope ||
+		fail "MT6375 telemetry scope is missing"
 	supply_has_property mt6375-gauge current_now ||
 		fail "MT6375 signed battery current is missing"
 	supply_has_property mt6375-gauge temp ||
 		fail "MT6375 battery temperature is missing"
 	supply_has_property mt6375-gauge charge_counter ||
 		fail "MT6375 coulomb counter is missing"
+	require_supply_range mt6375-gauge voltage_now 3000000 4500000
+	require_supply_range mt6375-gauge current_now -5000000 5000000
+	require_supply_range mt6375-gauge temp -100 700
+	require_supply_range mt6375-gauge charge_counter -1000000000000 1000000000000
+	require_supply_value mt6375-gauge scope Device
 	grep -q '^### mt6375-charger$' "$outdir/power.txt" ||
 		fail "MT6375 charger power supply is missing"
 	supply_has_property mt6375-charger input_current_limit ||
@@ -162,6 +196,15 @@ if [ "$mode" = charger ]; then
 		fail "MT6375 charger ICHG property is missing"
 	supply_has_property mt6375-charger charge_term_current ||
 		fail "MT6375 charger termination property is missing"
+	supply_has_property mt6375-charger input_voltage_limit ||
+		fail "MT6375 charger MIVR property is missing"
+	supply_has_property mt6375-charger constant_charge_voltage ||
+		fail "MT6375 charger CV property is missing"
+	require_supply_value mt6375-charger input_current_limit 1000000
+	require_supply_value mt6375-charger constant_charge_current 500000
+	require_supply_value mt6375-charger input_voltage_limit 4500000
+	require_supply_value mt6375-charger constant_charge_voltage 4350000
+	require_supply_value mt6375-charger charge_term_current 0
 fi
 if grep -Eiq 'BUG:|Oops:|Kernel panic' "$outdir/power.txt"; then
 	fail "kernel fatal pattern present in power log"
