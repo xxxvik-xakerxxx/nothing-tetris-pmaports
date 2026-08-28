@@ -462,7 +462,12 @@ validate_charging_policy() {
 		"$power_gate"
 	grep -Fq 'require_supply_value mt6375-charger input_voltage_limit 4400000' \
 		"$power_gate"
+	grep -Fq 'require_supply_value mt6375-charger constant_charge_voltage 4480000' \
+		"$power_gate"
 	grep -Fq 'require_supply_value mt6375-charger constant_charge_voltage 4490000' \
+		"$power_gate"
+	grep -Fq "*'[inhibit-charge]'*)" "$power_gate"
+	grep -Fq 'charging is inhibited inside the recovery temperature range' \
 		"$power_gate"
 }
 

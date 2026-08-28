@@ -228,11 +228,29 @@ if [ "$mode" = charger ]; then
 		fail "MT6375 charger MIVR property is missing"
 	supply_has_property mt6375-charger constant_charge_voltage ||
 		fail "MT6375 charger CV property is missing"
-	require_supply_value mt6375-charger input_current_limit 500000
-	require_supply_value mt6375-charger constant_charge_current 500000
-	require_supply_value mt6375-charger input_voltage_limit 4400000
-	require_supply_value mt6375-charger constant_charge_voltage 4490000
-	require_supply_value mt6375-charger charge_term_current 0
+	battery_temp=$(supply_property_value mt6375-gauge temp)
+	charge_behaviour=$(supply_property_value mt6375-charger charge_behaviour)
+	case "$charge_behaviour" in
+		*'[auto]'*)
+			require_supply_value mt6375-charger input_current_limit 500000
+			require_supply_value mt6375-charger constant_charge_current 500000
+			require_supply_value mt6375-charger input_voltage_limit 4400000
+			if [ "$battery_temp" -le 100 ]; then
+				require_supply_value mt6375-charger constant_charge_voltage 4480000
+			else
+				require_supply_value mt6375-charger constant_charge_voltage 4490000
+			fi
+			require_supply_value mt6375-charger charge_term_current 0
+			;;
+		*'[inhibit-charge]'*)
+			if [ "$battery_temp" -gt 60 ] && [ "$battery_temp" -lt 420 ]; then
+				fail "charging is inhibited inside the recovery temperature range: $battery_temp"
+			fi
+			;;
+		*)
+			fail "invalid charger charge_behaviour: ${charge_behaviour:-missing}"
+			;;
+	esac
 fi
 if grep -Eiq 'BUG:|Oops:|Kernel panic' "$outdir/power.txt"; then
 	fail "kernel fatal pattern present in power log"
