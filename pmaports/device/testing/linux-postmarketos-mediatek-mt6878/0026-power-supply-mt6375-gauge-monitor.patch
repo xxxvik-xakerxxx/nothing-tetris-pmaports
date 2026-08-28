@@ -3,22 +3,24 @@ new file mode 100644
 index 0000000..bbda033
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/power/supply/nothing,tetris-mt6375-gauge-monitor.yaml
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,46 @@
 +# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 +%YAML 1.2
 +---
 +$id: http://devicetree.org/schemas/power/supply/nothing,tetris-mt6375-gauge-monitor.yaml#
 +$schema: http://devicetree.org/meta-schemas/core.yaml#
 +
-+title: Nothing Tetris MT6375 read-only battery gauge monitor
++title: Nothing Tetris MT6375 battery gauge monitor
 +
 +maintainers:
 +  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 +
 +description:
-+  Read-only access to the MT6375 fuel-gauge current and coulomb counters and
-+  to the Nothing Tetris battery thermistor. The monitor is a child of the
-+  MT6375 PMIC and does not control charging or estimate state of charge.
++  Access to the MT6375 fuel-gauge current and coulomb counters and to the
++  Nothing Tetris battery thermistor. The monitor is a child of the MT6375
++  PMIC. It estimates state of charge from the measured voltage and current
++  using the battery characteristics referenced by monitored-battery, but does
++  not control charging.
 +
 +properties:
 +  compatible:
@@ -34,19 +36,25 @@ index 0000000..bbda033
 +      - const: battery-temperature
 +      - const: reference-voltage
 +
++  monitored-battery: true
++
 +required:
 +  - compatible
 +  - io-channels
 +  - io-channel-names
++  - monitored-battery
 +
-+additionalProperties: false
++allOf:
++  - $ref: power-supply.yaml#
++
++unevaluatedProperties: false
 +
 +...
 diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 index e7dbc47..0d6e38e 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -65,11 +65,6 @@ voldown-key {
+@@ -65,11 +65,25 @@ voldown-key {
  		};
  	};
  
@@ -55,15 +63,36 @@ index e7dbc47..0d6e38e 100644
 -		io-channels = <&mt6375_adc 4>, <&mt6375_adc 1>;
 -		io-channel-names = "battery-voltage", "usb-voltage";
 -	};
++	battery: battery {
++		compatible = "simple-battery";
++		device-chemistry = "lithium-ion-polymer";
++		voltage-min-design-microvolt = <3350000>;
++		voltage-max-design-microvolt = <4480000>;
++		charge-full-design-microamp-hours = <5060000>;
++		constant-charge-voltage-max-microvolt = <4350000>;
++		factory-internal-resistance-micro-ohms = <74000>;
++		ocv-capacity-celsius = <25>;
++		/* Nothing OS 4.1 MT6878 T1 profile, converted to uV and %. */
++		ocv-capacity-table-0 = <4479400 100>, <4424960 95>,
++			<4377764 90>, <4323630 85>, <4262896 80>,
++			<4200170 75>, <4139452 70>, <4082364 65>,
++			<4030100 60>, <3969034 55>, <3912080 50>,
++			<3877608 45>, <3849900 40>, <3827080 35>,
++			<3808444 30>, <3783900 25>, <3758476 20>,
++			<3731888 15>, <3700204 10>, <3688580 5>,
++			<3402600 0>;
++	};
  };
  
  &i2c2 {
-@@ -227,6 +222,16 @@ mt6375_auxadc: auxadc {
+@@ -227,6 +241,18 @@ mt6375_auxadc: auxadc {
  			#io-channel-cells = <1>;
  		};
  
 +		battery-gauge {
 +			compatible = "nothing,tetris-mt6375-gauge-monitor";
++			monitored-battery = <&battery>;
++			power-supplies = <&mt6375_charger>;
 +			io-channels = <&mt6375_auxadc 0>,
 +				      <&mt6375_auxadc 1>,
 +				      <&mt6375_auxadc 2>;
@@ -72,14 +101,15 @@ index e7dbc47..0d6e38e 100644
 +					   "reference-voltage";
 +		};
 +
- 		charger {
+-		charger {
++		mt6375_charger: charger {
  			compatible = "mediatek,mt6375-charger";
  		};
 diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
 index 659b19f..f069a41 100644
 --- a/drivers/power/supply/Kconfig
 +++ b/drivers/power/supply/Kconfig
-@@ -1110,12 +1110,13 @@ config FUEL_GAUGE_MM8013
+@@ -1110,12 +1110,15 @@ config FUEL_GAUGE_MM8013
  	  the state of charge, temperature, cycle count, actual and design
  	  capacity, etc.
  
@@ -93,11 +123,13 @@ index 659b19f..f069a41 100644
 +config BATTERY_MT6375_GAUGE_MONITOR
 +	tristate "Nothing Tetris MT6375 read-only gauge monitor"
 +	depends on IIO && MFD_MT6375
++	select ADC_BATTERY_HELPER
 +	help
 +	  Register a read-only battery power supply using the MT6375 battery
 +	  AUXADC and latched fuel-gauge counters. This driver reports voltage,
-+	  current, thermistor temperature and charge counter only. It does not
-+	  estimate state of charge or configure charging.
++	  current, thermistor temperature and charge counter, and estimates state
++	  of charge with the standard ADC battery helper. It does not configure
++	  charging.
  
  endif # POWER_SUPPLY
 diff --git a/drivers/power/supply/Makefile b/drivers/power/supply/Makefile
@@ -110,12 +142,24 @@ index 64918bc..e6ac8fa 100644
  obj-$(CONFIG_FUEL_GAUGE_MM8013)	+= mm8013.o
 -obj-$(CONFIG_BATTERY_MT6375_MONITOR)	+= mt6375-monitor.o
 +obj-$(CONFIG_BATTERY_MT6375_GAUGE_MONITOR)	+= mt6375-gauge-monitor.o
+diff --git a/drivers/power/supply/mt6375-charger.c b/drivers/power/supply/mt6375-charger.c
+index f8dd124..531a55a 100644
+--- a/drivers/power/supply/mt6375-charger.c
++++ b/drivers/power/supply/mt6375-charger.c
+@@ -413,6 +413,7 @@ static int mt6375_charger_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	config.drv_data = charger;
++	config.fwnode = dev_fwnode(&pdev->dev);
+ 	charger->psy = devm_power_supply_register(&pdev->dev,
+ 						  &mt6375_charger_desc,
+ 						  &config);
 diff --git a/drivers/power/supply/mt6375-gauge-monitor.c b/drivers/power/supply/mt6375-gauge-monitor.c
 new file mode 100644
 index 0000000..2c773d0
 --- /dev/null
 +++ b/drivers/power/supply/mt6375-gauge-monitor.c
-@@ -0,0 +1,354 @@
+@@ -0,0 +1,386 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Read-only MT6375 battery gauge telemetry for Nothing Tetris.
@@ -127,8 +171,11 @@ index 0000000..2c773d0
 +#include <linux/mutex.h>
 +#include <linux/of.h>
 +#include <linux/platform_device.h>
++#include <linux/pm.h>
 +#include <linux/power_supply.h>
 +#include <linux/regmap.h>
++
++#include "adc-battery-helper.h"
 +
 +#define MT6375_FGADC_CON2		0x26f
 +#define MT6375_FG_LATCHDATA_ST		BIT(7)
@@ -161,6 +208,7 @@ index 0000000..2c773d0
 +};
 +
 +struct mt6375_gauge_monitor {
++	struct adc_battery_helper helper;
 +	struct regmap *regmap;
 +	struct iio_channel *battery_voltage;
 +	struct iio_channel *battery_temperature;
@@ -367,12 +415,30 @@ index 0000000..2c773d0
 +}
 +
 +static enum power_supply_property mt6375_gauge_properties[] = {
++	POWER_SUPPLY_PROP_STATUS,
 +	POWER_SUPPLY_PROP_SCOPE,
 +	POWER_SUPPLY_PROP_VOLTAGE_NOW,
++	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 +	POWER_SUPPLY_PROP_CURRENT_NOW,
++	POWER_SUPPLY_PROP_CAPACITY,
++	POWER_SUPPLY_PROP_PRESENT,
 +	POWER_SUPPLY_PROP_TEMP,
 +	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 +};
++
++static int mt6375_gauge_get_voltage_and_current_now(struct power_supply *psy,
++						     int *voltage_uv,
++						     int *current_ua)
++{
++	struct mt6375_gauge_monitor *monitor = power_supply_get_drvdata(psy);
++	int ret;
++
++	ret = mt6375_gauge_voltage_uv(monitor, voltage_uv);
++	if (ret)
++		return ret;
++
++	return mt6375_gauge_current_ua(monitor, current_ua);
++}
 +
 +static int mt6375_gauge_get_property(struct power_supply *psy,
 +				     enum power_supply_property property,
@@ -381,13 +447,14 @@ index 0000000..2c773d0
 +	struct mt6375_gauge_monitor *monitor = power_supply_get_drvdata(psy);
 +
 +	switch (property) {
++	case POWER_SUPPLY_PROP_STATUS:
 +	case POWER_SUPPLY_PROP_SCOPE:
-+		value->intval = POWER_SUPPLY_SCOPE_DEVICE;
-+		return 0;
 +	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-+		return mt6375_gauge_voltage_uv(monitor, &value->intval);
++	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
 +	case POWER_SUPPLY_PROP_CURRENT_NOW:
-+		return mt6375_gauge_current_ua(monitor, &value->intval);
++	case POWER_SUPPLY_PROP_CAPACITY:
++	case POWER_SUPPLY_PROP_PRESENT:
++		return adc_battery_helper_get_property(psy, property, value);
 +	case POWER_SUPPLY_PROP_TEMP:
 +		return mt6375_gauge_temperature(monitor, &value->intval);
 +	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
@@ -403,6 +470,7 @@ index 0000000..2c773d0
 +	.properties = mt6375_gauge_properties,
 +	.num_properties = ARRAY_SIZE(mt6375_gauge_properties),
 +	.get_property = mt6375_gauge_get_property,
++	.external_power_changed = adc_battery_helper_external_power_changed,
 +};
 +
 +static int mt6375_gauge_probe(struct platform_device *pdev)
@@ -441,6 +509,7 @@ index 0000000..2c773d0
 +
 +	mutex_init(&monitor->latch_lock);
 +	config.drv_data = monitor;
++	config.fwnode = dev_fwnode(&pdev->dev);
 +
 +	monitor->psy = devm_power_supply_register(&pdev->dev,
 +						  &mt6375_gauge_desc,
@@ -450,8 +519,14 @@ index 0000000..2c773d0
 +				     "failed to register gauge\n");
 +
 +	platform_set_drvdata(pdev, monitor);
-+	return 0;
++	return adc_battery_helper_init(&monitor->helper, monitor->psy,
++				       mt6375_gauge_get_voltage_and_current_now,
++				       NULL);
 +}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(mt6375_gauge_pm_ops,
++				adc_battery_helper_suspend,
++				adc_battery_helper_resume);
 +
 +static const struct of_device_id mt6375_gauge_of_match[] = {
 +	{ .compatible = "nothing,tetris-mt6375-gauge-monitor" },
@@ -464,6 +539,7 @@ index 0000000..2c773d0
 +	.driver = {
 +		.name = "mt6375-gauge-monitor",
 +		.of_match_table = mt6375_gauge_of_match,
++		.pm = pm_sleep_ptr(&mt6375_gauge_pm_ops),
 +	},
 +};
 +module_platform_driver(mt6375_gauge_driver);

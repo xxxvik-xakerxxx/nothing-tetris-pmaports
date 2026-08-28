@@ -57,6 +57,14 @@ require_supply_value() {
 	[ "$value" = "$3" ] || fail "$1 $2 expected $3, got ${value:-missing}"
 }
 
+require_supply_status() {
+	value=$(supply_property_value "$1" status)
+	case "$value" in
+		Charging|Discharging|"Not charging"|Full) ;;
+		*) fail "$1 status is absent or invalid: ${value:-missing}" ;;
+	esac
+}
+
 if ! sshpass -p "$password" ssh $ssh_opts "$user@$host" sh -s -- "$password" \
 	> "$outdir/power.txt" 2> "$outdir/ssh.err" <<'EOF'
 password=$1
@@ -80,6 +88,9 @@ for supply in /sys/class/power_supply/*; do
 		fi
 	done
 done
+
+echo "== upower display device =="
+upower -i /org/freedesktop/UPower/devices/DisplayDevice
 
 echo "== type-c =="
 for property in /sys/class/typec/port*/data_role \
@@ -187,7 +198,22 @@ if [ "$mode" = charger ]; then
 	require_supply_range mt6375-gauge current_now -5000000 5000000
 	require_supply_range mt6375-gauge temp -100 700
 	require_supply_range mt6375-gauge charge_counter -1000000000000 1000000000000
-	require_supply_value mt6375-gauge scope Device
+	require_supply_range mt6375-gauge capacity 0 100
+	require_supply_value mt6375-gauge scope System
+	require_supply_status mt6375-gauge
+	awk '
+		/^== upower display device ==$/ { in_upower = 1; next }
+		/^== type-c ==$/ { in_upower = 0 }
+		in_upower && /power supply:/ && /yes/ { system_battery = 1 }
+		in_upower && /percentage:/ {
+			gsub(/%/, "", $2)
+			if ($2 ~ /^[0-9]+([.][0-9]+)?$/ && $2 >= 0 && $2 <= 100)
+				valid_percentage = 1
+		}
+		in_upower && /battery-missing-symbolic/ { missing_icon = 1 }
+		END { exit !(system_battery && valid_percentage && !missing_icon) }
+	' "$outdir/power.txt" ||
+		fail "UPower does not expose a valid system battery"
 	grep -q '^### mt6375-charger$' "$outdir/power.txt" ||
 		fail "MT6375 charger power supply is missing"
 	supply_has_property mt6375-charger input_current_limit ||
