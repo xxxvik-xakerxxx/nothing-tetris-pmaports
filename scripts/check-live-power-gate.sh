@@ -228,10 +228,10 @@ if [ "$mode" = charger ]; then
 		fail "MT6375 charger MIVR property is missing"
 	supply_has_property mt6375-charger constant_charge_voltage ||
 		fail "MT6375 charger CV property is missing"
-	require_supply_value mt6375-charger input_current_limit 1000000
+	require_supply_value mt6375-charger input_current_limit 500000
 	require_supply_value mt6375-charger constant_charge_current 500000
-	require_supply_value mt6375-charger input_voltage_limit 4500000
-	require_supply_value mt6375-charger constant_charge_voltage 4350000
+	require_supply_value mt6375-charger input_voltage_limit 4400000
+	require_supply_value mt6375-charger constant_charge_voltage 4490000
 	require_supply_value mt6375-charger charge_term_current 0
 fi
 if grep -Eiq 'BUG:|Oops:|Kernel panic' "$outdir/power.txt"; then

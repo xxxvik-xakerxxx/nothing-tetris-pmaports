@@ -433,6 +433,39 @@ validate_thermal() {
 	fi
 }
 
+validate_charging_policy() {
+	policy_patch="$kernel_pkg/0027-power-supply-nothing-tetris-charging-policy.patch"
+	config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	power_gate="$repo_root/scripts/check-live-power-gate.sh"
+
+	grep -Fq '0027-power-supply-nothing-tetris-charging-policy.patch' \
+		"$kernel_apkbuild"
+	grep -Fxq 'CONFIG_CHARGER_NOTHING_TETRIS_POLICY=m' "$config"
+	grep -Fq '+#define TETRIS_POLICY_AICR_UA' "$policy_patch"
+	grep -Fq '500000' "$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_MIVR_UV' "$policy_patch"
+	grep -Fq '4400000' "$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_COOL_CV_UV' "$policy_patch"
+	grep -Fq '4480000' "$policy_patch"
+	grep -Fq 'constant-charge-voltage-max-microvolt = <4490000>;' \
+		"$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_COLD_STOP' "$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_COLD_RECOVER' "$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_HOT_RECOVER' "$policy_patch"
+	grep -Fq '+#define TETRIS_POLICY_HOT_STOP' "$policy_patch"
+	grep -Fq 'return tetris_policy_inhibit(policy);' "$policy_patch"
+	grep -Fq 'ret = tetris_policy_inhibit(policy);' "$policy_patch"
+	grep -Fq '+static int tetris_policy_suspend(struct device *dev)' "$policy_patch"
+	grep -Fq '+static int tetris_policy_resume(struct device *dev)' "$policy_patch"
+	grep -Fq 'POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT, 0' "$policy_patch"
+	grep -Fq 'require_supply_value mt6375-charger input_current_limit 500000' \
+		"$power_gate"
+	grep -Fq 'require_supply_value mt6375-charger input_voltage_limit 4400000' \
+		"$power_gate"
+	grep -Fq 'require_supply_value mt6375-charger constant_charge_voltage 4490000' \
+		"$power_gate"
+}
+
 validate_ci_rootfs_module_checks() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
@@ -519,6 +552,7 @@ validate_power_and_audio_config
 validate_usb_role
 validate_haptics
 validate_thermal
+validate_charging_policy
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build
