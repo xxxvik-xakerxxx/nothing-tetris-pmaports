@@ -28,10 +28,10 @@ ip -br addr show usb0
 systemctl is-active sshd NetworkManager bluetooth nothing-tetris-connectivity.service 2>/dev/null
 
 echo "== thermal zones =="
-find /sys/class/thermal -maxdepth 2 -type f \( -name type -o -name temp -o -name mode -o -name policy \) -print -exec cat {} \; 2>/dev/null
+find -L /sys/class/thermal -maxdepth 2 -type f \( -name type -o -name temp -o -name mode -o -name policy \) -print -exec cat {} \; 2>/dev/null
 
 echo "== hwmon thermal =="
-find /sys/class/hwmon -maxdepth 3 -type f \( -name name -o -name "temp*_input" -o -name "temp*_label" \) -print -exec cat {} \; 2>/dev/null
+find -L /sys/class/hwmon -maxdepth 3 -type f \( -name name -o -name "temp*_input" -o -name "temp*_label" \) -print -exec cat {} \; 2>/dev/null
 
 echo "== lvts log =="
 dmesg -T | grep -Ei "lvts|thermal|devinfo|nvmem|usb0|ncm|gadget|BUG|WARNING|Oops|panic" | tail -n 700
@@ -58,12 +58,12 @@ awk '
 		}
 	}
 	END {
-		if (count == 0)
+		if (count < 24)
 			exit 2
 		if (bad > 0)
 			exit 3
 	}
 ' "$outdir/thermal.txt" ||
-	fail "thermal temperatures are absent or outside conservative range"
+	fail "fewer than 24 thermal temperatures are present or a value is outside the conservative range"
 
 printf 'PASS: thermal gate\nlogs: %s\n' "$outdir"
