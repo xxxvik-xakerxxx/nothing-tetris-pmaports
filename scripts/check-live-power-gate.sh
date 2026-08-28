@@ -207,7 +207,9 @@ if [ "$mode" = charger ]; then
 		in_upower && /power supply:/ && /yes/ { system_battery = 1 }
 		in_upower && /percentage:/ {
 			gsub(/%/, "", $2)
-			if ($2 ~ /^[0-9]+([.][0-9]+)?$/ && $2 >= 0 && $2 <= 100)
+			percentage = $2 + 0
+			if ($2 ~ /^[0-9]+([.][0-9]+)?$/ &&
+			    percentage >= 0 && percentage <= 100)
 				valid_percentage = 1
 		}
 		in_upower && /battery-missing-symbolic/ { missing_icon = 1 }
