@@ -1,0 +1,136 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] power: supply: mt6375: expose charge termination
+
+Expose the MT6375 termination current through the standard power-supply
+property.  A non-zero value programs IEOC and enables hardware termination;
+zero disables termination. Keep probe read-only so bootloader state remains
+unchanged until policy explicitly selects a termination current.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/power/supply/mt6375-charger.c b/drivers/power/supply/mt6375-charger.c
+--- a/drivers/power/supply/mt6375-charger.c
++++ b/drivers/power/supply/mt6375-charger.c
+@@ -20,6 +20,7 @@
+ #define MT6375_REG_CHG_MIVR	0x123
+ #define MT6375_REG_CHG_VCHG	0x125
+ #define MT6375_REG_CHG_ICHG	0x126
++#define MT6375_REG_CHG_EOC	0x128
+ #define MT6375_REG_CHG_STAT	0x134
+ 
+ enum mt6375_charger_field_id {
+@@ -28,6 +29,8 @@ enum mt6375_charger_field_id {
+ 	MT6375_FIELD_MIVR,
+ 	MT6375_FIELD_CV,
+ 	MT6375_FIELD_ICHG,
++	MT6375_FIELD_TERM_EN,
++	MT6375_FIELD_IEOC,
+ 	MT6375_FIELD_STATUS,
+ 	MT6375_FIELD_MAX,
+ };
+@@ -68,6 +71,10 @@ static const struct mt6375_charger_range mt6375_ichg_range = {
+ 	.range = LINEAR_RANGE(300000, 6, 63, 50000),
+ };
+ 
++static const struct mt6375_charger_range mt6375_ieoc_range = {
++	.range = LINEAR_RANGE(100000, 1, 15, 50000),
++};
++
+ static const struct mt6375_charger_range mt6375_mivr_range = {
+ 	.range = LINEAR_RANGE(3900000, 0, 95, 100000),
+ 	.round_up = true,
+@@ -97,6 +104,13 @@ static const struct mt6375_charger_field mt6375_charger_fields[] = {
+ 		.field = REG_FIELD(MT6375_REG_CHG_ICHG, 0, 5),
+ 		.range = &mt6375_ichg_range,
+ 	},
++	[MT6375_FIELD_TERM_EN] = {
++		.field = REG_FIELD(MT6375_REG_CHG_EOC, 1, 1),
++	},
++	[MT6375_FIELD_IEOC] = {
++		.field = REG_FIELD(MT6375_REG_CHG_EOC, 4, 7),
++		.range = &mt6375_ieoc_range,
++	},
+ 	[MT6375_FIELD_STATUS] = {
+ 		.field = REG_FIELD(MT6375_REG_CHG_STAT, 0, 3),
+ 	},
+@@ -211,6 +225,46 @@ static int mt6375_charger_get_status(struct mt6375_charger *charger,
+ 	return 0;
+ }
+ 
++static int mt6375_charger_get_term_current(struct mt6375_charger *charger,
++					   union power_supply_propval *value)
++{
++	unsigned int enabled;
++	unsigned int term_ua;
++	int ret;
++
++	ret = mt6375_charger_field_read(charger, MT6375_FIELD_TERM_EN,
++					&enabled);
++	if (ret)
++		return ret;
++	if (!enabled) {
++		value->intval = 0;
++		return 0;
++	}
++
++	ret = mt6375_charger_field_read(charger, MT6375_FIELD_IEOC, &term_ua);
++	if (!ret)
++		value->intval = term_ua;
++
++	return ret;
++}
++
++static int mt6375_charger_set_term_current(struct mt6375_charger *charger,
++					   int term_ua)
++{
++	int ret;
++
++	if (term_ua <= 0)
++		return mt6375_charger_field_write(charger,
++						 MT6375_FIELD_TERM_EN, 0);
++
++	ret = mt6375_charger_field_write(charger, MT6375_FIELD_IEOC,
++					 term_ua);
++	if (ret)
++		return ret;
++
++	return mt6375_charger_field_write(charger, MT6375_FIELD_TERM_EN, 1);
++}
++
+ static enum power_supply_property mt6375_charger_properties[] = {
+ 	POWER_SUPPLY_PROP_STATUS,
+ 	POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR,
+@@ -218,6 +272,7 @@ static enum power_supply_property mt6375_charger_properties[] = {
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+ 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
++	POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT,
+ };
+ 
+ static int mt6375_charger_get_property(struct power_supply *psy,
+@@ -252,6 +307,8 @@ static int mt6375_charger_get_property(struct power_supply *psy,
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+ 		ret = mt6375_charger_field_read(charger, MT6375_FIELD_CV, &raw);
+ 		break;
++	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
++		return mt6375_charger_get_term_current(charger, value);
+ 	default:
+ 		return -EINVAL;
+ 	}
+@@ -293,6 +350,8 @@ static int mt6375_charger_set_property(struct power_supply *psy,
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+ 		id = MT6375_FIELD_CV;
+ 		break;
++	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
++		return mt6375_charger_set_term_current(charger, value->intval);
+ 	default:
+ 		return -EINVAL;
+ 	}
+@@ -309,6 +368,7 @@ static int mt6375_charger_property_is_writeable(struct power_supply *psy,
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
+ 	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
++	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
+ 		return 1;
+ 	default:
+ 		return 0;

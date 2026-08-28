@@ -19,6 +19,17 @@ fail() {
 	exit 1
 }
 
+supply_has_property() {
+	awk -v supply="$1" -v property="$2" '
+		/^### / {
+			in_supply = ($0 == "### " supply)
+			next
+		}
+		in_supply && index($0, property "=") == 1 { found = 1 }
+		END { exit !found }
+	' "$outdir/power.txt"
+}
+
 if ! sshpass -p "$password" ssh $ssh_opts "$user@$host" sh -s -- "$password" \
 	> "$outdir/power.txt" 2> "$outdir/ssh.err" <<'EOF'
 password=$1
@@ -34,7 +45,8 @@ for supply in /sys/class/power_supply/*; do
 	for property in type status online usb_type voltage_now voltage_max \
 		current_now current_max input_current_limit \
 		constant_charge_current input_voltage_limit \
-		constant_charge_voltage charge_behaviour capacity temp; do
+		constant_charge_voltage charge_term_current charge_behaviour \
+		charge_counter capacity temp; do
 		if [ -r "$supply/$property" ]; then
 			printf '%s=' "$property"
 			cat "$supply/$property"
@@ -70,6 +82,19 @@ for device in /sys/bus/iio/devices/iio:device*; do
 	done
 done
 
+echo "== mt6375 battery auxadc =="
+for device in /sys/bus/iio/devices/iio:device*; do
+	[ -r "$device/name" ] || continue
+	[ "$(cat "$device/name")" = mt6375-auxadc ] || continue
+	echo "device=$device"
+	for property in "$device"/in_voltage*_raw "$device"/in_voltage*_scale; do
+		if [ -r "$property" ]; then
+			printf '%s=' "${property##*/}"
+			cat "$property"
+		fi
+	done
+done
+
 echo "== charger registers =="
 printf '%s\n' "$password" | sudo -S sh -c '
 	registers=/sys/kernel/debug/regmap/5-0034/registers
@@ -98,7 +123,7 @@ then
 	fail "power gate SSH command failed"
 fi
 
-grep -q '^### tetris-battery$' "$outdir/power.txt" ||
+grep -Eq '^### (tetris-battery|mt6375-gauge)$' "$outdir/power.txt" ||
 	fail "battery power supply is missing"
 grep -q '^device=/sys/bus/iio/devices/iio:device' "$outdir/power.txt" ||
 	fail "MT6375 ADC is missing"
@@ -121,12 +146,22 @@ awk '
 ' "$outdir/power.txt" ||
 	fail "MT6375 die temperature is absent or implausible"
 if [ "$mode" = charger ]; then
+	grep -q '^### mt6375-gauge$' "$outdir/power.txt" ||
+		fail "MT6375 battery gauge power supply is missing"
+	supply_has_property mt6375-gauge current_now ||
+		fail "MT6375 signed battery current is missing"
+	supply_has_property mt6375-gauge temp ||
+		fail "MT6375 battery temperature is missing"
+	supply_has_property mt6375-gauge charge_counter ||
+		fail "MT6375 coulomb counter is missing"
 	grep -q '^### mt6375-charger$' "$outdir/power.txt" ||
 		fail "MT6375 charger power supply is missing"
-	grep -q '^input_current_limit=' "$outdir/power.txt" ||
+	supply_has_property mt6375-charger input_current_limit ||
 		fail "MT6375 charger AICR property is missing"
-	grep -q '^constant_charge_current=' "$outdir/power.txt" ||
+	supply_has_property mt6375-charger constant_charge_current ||
 		fail "MT6375 charger ICHG property is missing"
+	supply_has_property mt6375-charger charge_term_current ||
+		fail "MT6375 charger termination property is missing"
 fi
 if grep -Eiq 'BUG:|Oops:|Kernel panic' "$outdir/power.txt"; then
 	fail "kernel fatal pattern present in power log"

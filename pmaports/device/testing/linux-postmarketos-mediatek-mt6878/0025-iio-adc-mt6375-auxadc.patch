@@ -1,0 +1,298 @@
+diff --git a/Documentation/devicetree/bindings/iio/adc/mediatek,mt6375-auxadc.yaml b/Documentation/devicetree/bindings/iio/adc/mediatek,mt6375-auxadc.yaml
+new file mode 100644
+index 0000000..e70f7af
+--- /dev/null
++++ b/Documentation/devicetree/bindings/iio/adc/mediatek,mt6375-auxadc.yaml
+@@ -0,0 +1,39 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/iio/adc/mediatek,mt6375-auxadc.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: MediaTek MT6375 battery auxiliary ADC
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description:
++  The MT6375 battery auxiliary ADC measures battery voltage, the battery
++  thermistor divider and its reference voltage. It is a child of the MT6375
++  PMIC and uses the regmap provided by the parent device.
++
++properties:
++  compatible:
++    const: mediatek,mt6375-auxadc
++
++  "#io-channel-cells":
++    const: 1
++
++required:
++  - compatible
++  - "#io-channel-cells"
++
++additionalProperties: false
++
++examples:
++  - |
++    pmic {
++        auxadc {
++            compatible = "mediatek,mt6375-auxadc";
++            #io-channel-cells = <1>;
++        };
++    };
++
++...
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+index 0b63391..e7dbc47 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -222,6 +222,11 @@ mt6375_adc: adc {
+ 			#io-channel-cells = <1>;
+ 		};
+ 
++		mt6375_auxadc: auxadc {
++			compatible = "mediatek,mt6375-auxadc";
++			#io-channel-cells = <1>;
++		};
++
+ 		charger {
+ 			compatible = "mediatek,mt6375-charger";
+ 		};
+diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
+index 9bf1cad..b7e17d6 100644
+--- a/drivers/iio/adc/Kconfig
++++ b/drivers/iio/adc/Kconfig
+@@ -1882,4 +1882,13 @@ config MT6375_ADC
+ 	  Enable direct IIO telemetry for the MT6375 companion PMIC,
+ 	  including battery, system, USB voltage, current and temperature.
+ 
++config MT6375_AUXADC
++	tristate "MediaTek MT6375 battery auxiliary ADC"
++	depends on MFD_MT6375
++	help
++	  Enable the battery voltage, battery thermistor and reference voltage
++	  channels in the MediaTek MT6375 companion PMIC. The driver performs
++	  conversions only when a consumer requests a sample and does not reset
++	  the ADC or configure interrupts.
++
+ endmenu
+diff --git a/drivers/iio/adc/Makefile b/drivers/iio/adc/Makefile
+index 144ef6f..4244930 100644
+--- a/drivers/iio/adc/Makefile
++++ b/drivers/iio/adc/Makefile
+@@ -159,6 +159,7 @@ obj-$(CONFIG_TI_TSC2046) += ti-tsc2046.o
+ obj-$(CONFIG_TWL4030_MADC) += twl4030-madc.o
+ obj-$(CONFIG_TWL6030_GPADC) += twl6030-gpadc.o
+ obj-$(CONFIG_MT6375_ADC) += mt6375-adc.o
++obj-$(CONFIG_MT6375_AUXADC) += mt6375-auxadc.o
+ obj-$(CONFIG_VF610_ADC) += vf610_adc.o
+ obj-$(CONFIG_VIPERBOARD_ADC) += viperboard_adc.o
+ obj-$(CONFIG_XILINX_AMS) += xilinx-ams.o
+diff --git a/drivers/iio/adc/mt6375-auxadc.c b/drivers/iio/adc/mt6375-auxadc.c
+new file mode 100644
+index 0000000..f217e73
+--- /dev/null
++++ b/drivers/iio/adc/mt6375-auxadc.c
+@@ -0,0 +1,186 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Read-only battery telemetry ADC for the MediaTek MT6375.
++ */
++
++#include <dt-bindings/iio/adc/mediatek,mt6375-auxadc.h>
++
++#include <linux/iio/iio.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++
++#define MT6375_AUXADC_OUT_BATON		0x408
++#define MT6375_AUXADC_OUT_VREF		0x40a
++#define MT6375_AUXADC_OUT_BATSNS		0x410
++#define MT6375_AUXADC_RQST0		0x438
++
++#define MT6375_AUXADC_RQST_BATSNS	BIT(0)
++#define MT6375_AUXADC_RQST_BATON		BIT(3)
++#define MT6375_AUXADC_RQST_VREF		BIT(4)
++#define MT6375_AUXADC_READY		BIT(7)
++
++struct mt6375_auxadc {
++	struct regmap *regmap;
++	struct mutex lock; /* Serialize conversion requests. */
++};
++
++struct mt6375_auxadc_channel {
++	unsigned int request;
++	unsigned int output;
++	unsigned int realbits;
++	unsigned int full_scale_mv;
++};
++
++static const struct mt6375_auxadc_channel mt6375_auxadc_channels[] = {
++	[MT6375_AUXADC_BATSNS] = {
++		.request = MT6375_AUXADC_RQST_BATSNS,
++		.output = MT6375_AUXADC_OUT_BATSNS,
++		.realbits = 15,
++		.full_scale_mv = 7360,
++	},
++	[MT6375_AUXADC_BATON] = {
++		.request = MT6375_AUXADC_RQST_BATON,
++		.output = MT6375_AUXADC_OUT_BATON,
++		.realbits = 12,
++		.full_scale_mv = 2760,
++	},
++	[MT6375_AUXADC_VREF] = {
++		.request = MT6375_AUXADC_RQST_VREF,
++		.output = MT6375_AUXADC_OUT_VREF,
++		.realbits = 12,
++		.full_scale_mv = 2760,
++	},
++};
++
++static int mt6375_auxadc_read_channel(struct mt6375_auxadc *adc,
++				      unsigned int channel, int *value)
++{
++	const struct mt6375_auxadc_channel *spec;
++	unsigned int ready;
++	__le16 raw;
++	int ret;
++
++	if (channel >= ARRAY_SIZE(mt6375_auxadc_channels))
++		return -EINVAL;
++
++	spec = &mt6375_auxadc_channels[channel];
++
++	guard(mutex)(&adc->lock);
++
++	ret = regmap_write(adc->regmap, MT6375_AUXADC_RQST0,
++			   spec->request);
++	if (ret)
++		return ret;
++
++	usleep_range(1000, 1200);
++
++	ret = regmap_read_poll_timeout(adc->regmap, spec->output + 1,
++				       ready, ready & MT6375_AUXADC_READY,
++				       500, 11000);
++	if (ret)
++		return ret;
++
++	ret = regmap_raw_read(adc->regmap, spec->output, &raw, sizeof(raw));
++	if (ret)
++		return ret;
++
++	*value = le16_to_cpu(raw) & GENMASK(spec->realbits - 1, 0);
++
++	return IIO_VAL_INT;
++}
++
++static int mt6375_auxadc_read_raw(struct iio_dev *indio_dev,
++				  const struct iio_chan_spec *channel,
++				  int *value, int *value2, long mask)
++{
++	struct mt6375_auxadc *adc = iio_priv(indio_dev);
++	const struct mt6375_auxadc_channel *spec;
++
++	if (channel->channel >= ARRAY_SIZE(mt6375_auxadc_channels))
++		return -EINVAL;
++
++	spec = &mt6375_auxadc_channels[channel->channel];
++
++	switch (mask) {
++	case IIO_CHAN_INFO_RAW:
++		return mt6375_auxadc_read_channel(adc, channel->channel, value);
++	case IIO_CHAN_INFO_SCALE:
++		*value = spec->full_scale_mv;
++		*value2 = BIT(spec->realbits);
++		return IIO_VAL_FRACTIONAL;
++	default:
++		return -EINVAL;
++	}
++}
++
++#define MT6375_AUXADC_CHANNEL(_index, _name, _bits) { \
++	.type = IIO_VOLTAGE, \
++	.indexed = 1, \
++	.channel = _index, \
++	.datasheet_name = _name, \
++	.info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | \
++			      BIT(IIO_CHAN_INFO_SCALE), \
++	.scan_type = { \
++		.sign = 'u', \
++		.realbits = _bits, \
++		.storagebits = 16, \
++		.endianness = IIO_LE, \
++	}, \
++}
++
++static const struct iio_chan_spec mt6375_auxadc_iio_channels[] = {
++	MT6375_AUXADC_CHANNEL(MT6375_AUXADC_BATSNS, "batsns", 15),
++	MT6375_AUXADC_CHANNEL(MT6375_AUXADC_BATON, "baton", 12),
++	MT6375_AUXADC_CHANNEL(MT6375_AUXADC_VREF, "vref", 12),
++};
++
++static const struct iio_info mt6375_auxadc_info = {
++	.read_raw = mt6375_auxadc_read_raw,
++};
++
++static int mt6375_auxadc_probe(struct platform_device *pdev)
++{
++	struct mt6375_auxadc *adc;
++	struct iio_dev *indio_dev;
++
++	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*adc));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	adc = iio_priv(indio_dev);
++	adc->regmap = dev_get_regmap(pdev->dev.parent, NULL);
++	if (!adc->regmap)
++		return dev_err_probe(&pdev->dev, -ENODEV,
++				     "failed to get parent regmap\n");
++
++	mutex_init(&adc->lock);
++
++	indio_dev->name = "mt6375-auxadc";
++	indio_dev->info = &mt6375_auxadc_info;
++	indio_dev->modes = INDIO_DIRECT_MODE;
++	indio_dev->channels = mt6375_auxadc_iio_channels;
++	indio_dev->num_channels = ARRAY_SIZE(mt6375_auxadc_iio_channels);
++
++	return devm_iio_device_register(&pdev->dev, indio_dev);
++}
++
++static const struct of_device_id mt6375_auxadc_of_match[] = {
++	{ .compatible = "mediatek,mt6375-auxadc" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, mt6375_auxadc_of_match);
++
++static struct platform_driver mt6375_auxadc_driver = {
++	.probe = mt6375_auxadc_probe,
++	.driver = {
++		.name = "mt6375-auxadc",
++		.of_match_table = mt6375_auxadc_of_match,
++	},
++};
++module_platform_driver(mt6375_auxadc_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6375 battery auxiliary ADC");
++MODULE_LICENSE("GPL");
+diff --git a/include/dt-bindings/iio/adc/mediatek,mt6375-auxadc.h b/include/dt-bindings/iio/adc/mediatek,mt6375-auxadc.h
+new file mode 100644
+index 0000000..f829d13
+--- /dev/null
++++ b/include/dt-bindings/iio/adc/mediatek,mt6375-auxadc.h
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause */
++#ifndef _DT_BINDINGS_MEDIATEK_MT6375_AUXADC_H
++#define _DT_BINDINGS_MEDIATEK_MT6375_AUXADC_H
++
++#define MT6375_AUXADC_BATSNS	0
++#define MT6375_AUXADC_BATON	1
++#define MT6375_AUXADC_VREF	2
++
++#endif
