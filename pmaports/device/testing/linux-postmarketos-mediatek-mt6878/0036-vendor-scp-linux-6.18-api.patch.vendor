@@ -1,0 +1,108 @@
+diff --git a/drivers/misc/mediatek/scp/rv/Makefile b/drivers/misc/mediatek/scp/rv/Makefile
+index 23c538b..5013436 100644
+--- a/drivers/misc/mediatek/scp/rv/Makefile
++++ b/drivers/misc/mediatek/scp/rv/Makefile
+@@ -24,3 +24,4 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/aee/aed/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/clk/mediatek/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/sound/soc/mediatek/common
++ccflags-y += -include $(DEVICE_MODULES_PATH)/include/linux/soc/mediatek/mtk_sip_svc.h
+diff --git a/drivers/misc/mediatek/scp/rv/scp_dvfs.c b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
+index f118f65..ce327cf 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_dvfs.c
++++ b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
+@@ -35,9 +35,9 @@
+ #include <linux/build_bug.h>
+ #include <clk-fmeter.h>
+ 
+-#if IS_ENABLED(CONFIG_DEVICE_MODULES_MFD_MT6397)
++#if IS_ENABLED(CONFIG_MFD_MT6397)
+ #include <linux/mfd/mt6397/core.h>
+-#endif /* IS_ENABLED(CONFIG_DEVICE_MODULES_MFD_MT6397) */
++#endif /* IS_ENABLED(CONFIG_MFD_MT6397) */
+ 
+ #if IS_ENABLED(CONFIG_OF)
+ #include <linux/of.h>
+@@ -56,7 +56,7 @@
+ #endif
+ #define pr_fmt(fmt)			"[scp_dvfs]: " fmt
+ 
+-#if IS_ENABLED(CONFIG_DEVICE_MODULES_MFD_MT6397)
++#if IS_ENABLED(CONFIG_MFD_MT6397)
+ #define pmic_main_chip			mt6397_chip
+ #endif
+ 
+@@ -2953,11 +2953,11 @@ DTS_INIT_FAILED:
+ /***************************************
+  * this function should never be called
+  ****************************************/
+-static int mt_scp_dvfs_pdrv_remove(struct platform_device *pdev)
++static void mt_scp_dvfs_pdrv_remove(struct platform_device *pdev)
+ {
+ 	if (!scp_dvfs_feature_enable()) {
+ 		pr_notice("bypass scp dvfs pdrv remove\n");
+-		return 0;
++		return;
+ 	}
+ 
+ 	kfree(g_dvfs_dev.opp);
+@@ -2966,7 +2966,6 @@ static int mt_scp_dvfs_pdrv_remove(struct platform_device *pdev)
+ 	kfree(g_dvfs_dev.ulposc_hw.cali_freq);
+ 	kfree(g_dvfs_dev.ulposc_hw.cali_configs);
+ 
+-	return 0;
+ }
+ 
+ static struct platform_driver mt_scp_dvfs_pdrv __refdata = {
+diff --git a/drivers/misc/mediatek/scp/rv/scp_excep.c b/drivers/misc/mediatek/scp/rv/scp_excep.c
+index d880da0..260c6bb 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_excep.c
++++ b/drivers/misc/mediatek/scp/rv/scp_excep.c
+@@ -812,7 +812,7 @@ void scp_aed_reset_bypass_once(void)
+ }
+ 
+ static ssize_t scp_A_dump_show(struct file *filep,
+-		struct kobject *kobj, struct bin_attribute *attr,
++		struct kobject *kobj, const struct bin_attribute *attr,
+ 		char *buf, loff_t offset, size_t size)
+ {
+ 	unsigned int length = 0;
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+index c54a25e..9560d2e 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -794,7 +794,7 @@ static void scp_A_set_ready(void)
+ 	if (IS_ERR_OR_NULL((void const *) scpreg.scpsys))
+ 		pr_notice("[SCP] scpreg.scpsys error\n");
+ 	else
+-		del_timer(&scp_ready_timer[SCP_A_ID].tl);
++		timer_delete(&scp_ready_timer[SCP_A_ID].tl);
+ #endif
+ 	scp_A_notify_work.flags = 1;
+ 	scp_schedule_work(&scp_A_notify_work);
+@@ -2972,7 +2972,7 @@ static void scp_device_shutdown(struct platform_device *dev)
+ 	system_shutdown = true;
+ }
+ 
+-static int scp_device_remove(struct platform_device *dev)
++static void scp_device_remove(struct platform_device *dev)
+ {
+ 	if (scp_mbox_info) {
+ 		kfree(scp_mbox_info);
+@@ -2987,7 +2987,6 @@ static int scp_device_remove(struct platform_device *dev)
+ 		scp_mbox_pin_send = NULL;
+ 	}
+ 
+-	return 0;
+ }
+ 
+ static int scpsys_device_probe(struct platform_device *pdev)
+@@ -3261,7 +3260,7 @@ static void __exit scp_exit(void)
+ 
+ #if SCP_BOOT_TIME_OUT_MONITOR
+ 	for (i = 0; i < SCP_CORE_TOTAL ; i++)
+-		del_timer(&scp_ready_timer[i].tl);
++		timer_delete_sync(&scp_ready_timer[i].tl);
+ #endif
+ }
+ 

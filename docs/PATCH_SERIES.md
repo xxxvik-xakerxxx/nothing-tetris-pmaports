@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=103`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=115`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -86,8 +86,11 @@ normal Alpine/postmarketOS practice.
 | `1102-vendor-audio-linux-6.18-api.patch.vendor` | Adapts the official MT6878/MT6369 ASoC stack to Linux 6.18 APIs and the Tetris composite I2S4 pinctrl state. |
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
 | `1200-vendor-sensor-framework-linux-6.18.patch.vendor` | Adapts the official MediaTek sensor framework core to Linux 6.18; only the framework module is staged and no sensor is advertised as working yet. |
+| `0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor` | Adapts the sensorhub transport to Linux 6.18, removes automatic SCP reset recovery and fails closed when shared memory or IPI setup is unavailable. |
+| `0036-vendor-scp-linux-6.18-api.patch.vendor` | Adapts the official SCP provider to Linux 6.18 timer, platform remove, bin-attribute and MT6397 APIs. |
+| `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 
-The `pkgrel=114` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=115` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -127,6 +130,12 @@ MT6878 connectivity modules themselves. The audio bridge
 uses `1101` for optional calibration handling and `1102` for Linux 6.18 ASoC
 helper and namespace API changes. Patch `1103` supplies MT6685 BBCK5 and the
 MTKAIF clock pin required by the codec.
+
+The package also builds and ships `mtk-mbox`, `mtk_rpmsg_mbox`,
+`mtk_tinysys_ipi`, `scp`, `hf_manager` and `sensorhub` as a dependency-checked
+set. None of these new SCP/sensor modules is autoloaded. Live module loading is
+gated on the reboot-to-fastboot rollback path, firmware/reserved-memory audit,
+idle-power baseline and USB NCM/SSH regression checks.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,

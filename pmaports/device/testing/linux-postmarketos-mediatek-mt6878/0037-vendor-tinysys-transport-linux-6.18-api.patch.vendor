@@ -1,0 +1,77 @@
+diff --git a/drivers/rpmsg/Makefile b/drivers/rpmsg/Makefile
+index 36bfc72..232405b 100644
+--- a/drivers/rpmsg/Makefile
++++ b/drivers/rpmsg/Makefile
+@@ -1,5 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ 
+ ccflags-y += -I$(srctree)/drivers/rpmsg
++ccflags-y += -include $(srctree)/include/linux/rpmsg.h
++ccflags-y += -include $(DEVICE_MODULES_PATH)/include/linux/rpmsg/mtk_rpmsg.h
+ 
+ obj-$(CONFIG_RPMSG_MTK)	+= mtk_rpmsg_mbox.o
+diff --git a/drivers/rpmsg/mtk_rpmsg_mbox.c b/drivers/rpmsg/mtk_rpmsg_mbox.c
+index 82ec9c5..a78d40c 100644
+--- a/drivers/rpmsg/mtk_rpmsg_mbox.c
++++ b/drivers/rpmsg/mtk_rpmsg_mbox.c
+@@ -10,6 +10,7 @@
+ #include <linux/of.h>
+ #include <linux/slab.h>
+ #include <linux/module.h>
++#include <linux/string.h>
+ 
+ #include "rpmsg_internal.h"
+ #include <linux/soc/mediatek/mtk-mbox.h>
+@@ -132,7 +133,7 @@ mtk_rpmsg_create_channel(struct mtk_rpmsg_device *mdev, u32 chan_id, char *name)
+ 	mbdev = mdev->mbdev;
+ 	spin_lock_init(&mchan->channel_lock);
+ 	mchan->info.src = chan_id;
+-	strlcpy(mchan->info.name, name, RPMSG_NAME_SIZE);
++	strscpy(mchan->info.name, name, RPMSG_NAME_SIZE);
+ 
+ 	count = mbdev->recv_count;
+ 	for (i = 0; i < count; ++i) {
+diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
+index 2e4f66d..c645668 100644
+--- a/drivers/soc/mediatek/Makefile
++++ b/drivers/soc/mediatek/Makefile
+@@ -6,6 +6,8 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/vcp/rv/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/mmdvfs/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/iommu/arm/arm-smmu-v3/
+ ccflags-y += -I$(srctree)/drivers/soc/mediatek/
++CFLAGS_mtk_tinysys_ipi.o += -include $(srctree)/include/linux/rpmsg.h
++CFLAGS_mtk_tinysys_ipi.o += -include $(DEVICE_MODULES_PATH)/include/linux/rpmsg/mtk_rpmsg.h
+ obj-$(CONFIG_MTK_CMDQ) += mtk-cmdq-helper.o
+ obj-$(CONFIG_MTK_DVFSRC) += mtk-dvfsrc.o mtk-dvfsrc-start.o
+ obj-$(CONFIG_MTK_IPI) += mtk_tinysys_ipi.o
+diff --git a/include/trace/events/mbox.h b/include/trace/events/mbox.h
+index 6828299..563a07e 100644
+--- a/include/trace/events/mbox.h
++++ b/include/trace/events/mbox.h
+@@ -23,7 +23,7 @@ TRACE_EVENT(mtk_mbox_isr_entry,
+ 	),
+ 
+ 	TP_fast_assign(
+-		__assign_str(name, name);
++		__assign_str(name);
+ 		__entry->irq_status = irq_status;
+ 	),
+ 
+@@ -42,7 +42,7 @@ TRACE_EVENT(mtk_mbox_isr_exit,
+ 	),
+ 
+ 	TP_fast_assign(
+-		__assign_str(name, name);
++		__assign_str(name);
+ 		__entry->irq_status = irq_status;
+ 	),
+ 
+@@ -62,7 +62,7 @@ TRACE_EVENT(mtk_mbox_polling,
+ 	),
+ 
+ 	TP_fast_assign(
+-		__assign_str(name, name);
++		__assign_str(name);
+ 		__entry->irq_status = irq_status;
+ 		__entry->recv_pin_index = recv_pin_index;
+ 	),

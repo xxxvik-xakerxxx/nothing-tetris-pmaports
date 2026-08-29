@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=114
+pkgrel=115
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -64,6 +64,9 @@ source="
 	0027-power-supply-nothing-tetris-charging-policy.patch
 	0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 	0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
+	0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+	0036-vendor-scp-linux-6.18-api.patch.vendor
+	0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -101,6 +104,12 @@ prepare() {
 		< "$srcdir"/1103-vendor-audio-mt6685-clock.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1200-vendor-sensor-framework-linux-6.18.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0036-vendor-scp-linux-6.18-api.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -294,8 +303,50 @@ _sensor_make() {
 		"$@" modules
 }
 
+_tinysys_make() {
+	_moddir="$1"
+	shift
+
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags)" \
+		"$@" modules
+}
+
 _build_sensor_modules() {
-	_sensor_make "$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core
+	_soc="$_devmods_dir"/drivers/soc/mediatek
+	_rpmsg="$_devmods_dir"/drivers/rpmsg
+	_scp="$_devmods_dir"/drivers/misc/mediatek/scp/rv
+	_sensor="$_devmods_dir"/drivers/misc/mediatek/sensor/2.0
+
+	_tinysys_make "$_soc" CONFIG_MTK_MBOX=m CONFIG_MTK_IPI=n
+	_symbols="$_soc/Module.symvers"
+
+	_tinysys_make "$_rpmsg" CONFIG_RPMSG_MTK=m \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_rpmsg/Module.symvers"
+
+	_tinysys_make "$_soc" CONFIG_MTK_MBOX=m CONFIG_MTK_IPI=m \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_soc/Module.symvers $_rpmsg/Module.symvers"
+
+	_tinysys_make "$_scp" \
+		CONFIG_MTK_TINYSYS_SCP_SUPPORT=m \
+		CONFIG_MTK_TINYSYS_SAP_SUPPORT=n \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	_symbols="$_symbols $_scp/Module.symvers"
+
+	_sensor_make "$_sensor"/core
+	_symbols="$_symbols $_sensor/core/Module.symvers"
+
+	_sensor_make "$_sensor"/sensorhub \
+		CONFIG_MTK_SENSORHUB=m \
+		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
 build() {
@@ -363,9 +414,15 @@ package() {
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-sensors"
-	install -Dm644 \
+	for _module in \
+		"$_devmods_dir"/drivers/soc/mediatek/mtk-mbox.ko \
+		"$_devmods_dir"/drivers/rpmsg/mtk_rpmsg_mbox.ko \
+		"$_devmods_dir"/drivers/soc/mediatek/mtk_tinysys_ipi.ko \
+		"$_devmods_dir"/drivers/misc/mediatek/scp/rv/scp.ko \
 		"$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/core/hf_manager.ko \
-		"$_extra/hf_manager.ko"
+		"$_devmods_dir"/drivers/misc/mediatek/sensor/2.0/sensorhub/sensorhub.ko; do
+		install -Dm644 "$_module" "$_extra/${_module##*/}"
+	done
 	depmod -b "$pkgdir" "$_release"
 
 	install -D "$builddir"/include/config/kernel.release \
@@ -406,6 +463,9 @@ bb8aa861a41f1656724149998f435b4e6e599b75309c5b7c6c2b43dc184f0366c223780d68710432
 75a87d50604ca9b3df175ab8ac4b8ceadbc480535e19ea94bb736c556d367939a148234ee92f5e3f4baf7a0f1f9775a74a4106c5ca4c74f25b721dc9313fc325  0027-power-supply-nothing-tetris-charging-policy.patch
 6c4064ec0f6c6287b5dcc1cd76baf1d25dbbc6adac6b3e841b5e2ebe1660b947ceab90bb291224f796dd0872addfed21eab16fde9c331306d476884d98327866  0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 9991e7ba81d46059c6a6afff0480c3cc7173b1f39c2bfcda2b12e527317b0a37e6e65077740bddbd5b86583c0f8f52ffd981de937836e298d8efedd6b30592ec  0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
+492b805fefef5a7b66a3bbdec02bd5e569cf9d308631c456fb7a14e208c8c357b1fe5c5a81ea928b969302381169ab70c32d2b4729a0eb64254a22f0a62a639f  0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+4b0b9827ff05255f32e7cd38556856874907a564f7b94b4dab2fc089a5d276953e48dd2ab39f2b6cf355765322293ccf3e56f95ba67dc9b6465e90110aa5c181  0036-vendor-scp-linux-6.18-api.patch.vendor
+affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor

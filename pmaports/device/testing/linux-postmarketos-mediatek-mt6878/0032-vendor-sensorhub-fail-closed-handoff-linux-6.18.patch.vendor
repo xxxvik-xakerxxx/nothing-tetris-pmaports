@@ -1,0 +1,172 @@
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/ipi_comm.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/ipi_comm.c
+index fa2594429d4f..a4e93b6d384d 100644
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/ipi_comm.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/ipi_comm.c
+@@ -306,13 +306,23 @@ int ipi_comm_init(void)
+ 	}
+ 	ret = mtk_ipi_register(&scp_ipidev, IPI_IN_SENSOR_CTRL,
+ 		ipi_comm_ctrl_handler, NULL, ctrl_payload);
+-	if (ret < 0)
++	if (ret < 0) {
+ 		pr_err("register ipi %u fail %d\n", IPI_IN_SENSOR_CTRL, ret);
++		goto err_workqueue;
++	}
+ 	ret = mtk_ipi_register(&scp_ipidev, IPI_IN_SENSOR_NOTIFY,
+ 		ipi_comm_notify_handler, NULL, notify_payload);
+-	if (ret < 0)
++	if (ret < 0) {
+ 		pr_err("register ipi %u fail %d\n", IPI_IN_SENSOR_NOTIFY, ret);
++		mtk_ipi_unregister(&scp_ipidev, IPI_IN_SENSOR_CTRL);
++		goto err_workqueue;
++	}
+ 	return 0;
++
++err_workqueue:
++	destroy_workqueue(controller.workqueue);
++	controller.workqueue = NULL;
++	return ret;
+ }
+ 
+ void ipi_comm_exit(void)
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/ready.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/ready.c
+index ff5b2c64fa52..f5282f3a99e5 100644
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/ready.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/ready.c
+@@ -122,8 +122,8 @@ static void sensor_rescure_work_fn(struct work_struct *work)
+ 
+ 	spin_lock_irqsave(&sensor_ready_lock, flags);
+ 	if (scp_platform_ready && !scp_sensor_ready) {
+-		pr_alert("rescure sensor by scp reset due to no ready ack\n");
+-		scp_wdt_reset(0);
++		pr_err("sensor firmware did not acknowledge host readiness; "
++		       "leaving shared SCP running\n");
+ 	}
+ 	spin_unlock_irqrestore(&sensor_ready_lock, flags);
+ }
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/share_memory.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/share_memory.c
+index 9f8c86c08768..987fae230dbe 100644
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/share_memory.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/share_memory.c
+@@ -278,7 +278,12 @@ int share_mem_init(struct share_mem *shm, struct share_mem_config *cfg)
+ {
+ 	int ret = 0;
+ 
+-	if (!shm->name || !shm->item_size)
++	if (!shm || !cfg || !cfg->base || !shm->name || !shm->item_size)
++		return -EINVAL;
++
++	if (cfg->buffer_size <= offsetof(struct share_mem_base, data) ||
++	    cfg->buffer_size - offsetof(struct share_mem_base, data) <
++			shm->item_size)
+ 		return -EINVAL;
+ 
+ 	mutex_init(&shm->lock);
+@@ -372,13 +377,13 @@ int share_mem_config(void)
+ 		if (usage->payload_type >= MAX_SHARE_MEM_PAYLOAD_TYPE) {
+ 			pr_err("payload type %u invalid index %u\n",
+ 				usage->payload_type, i);
+-			BUG_ON(1);
++			return -EINVAL;
+ 		}
+ 		handle = &shm_handle[usage->payload_type];
+ 		if (!handle->handler) {
+ 			pr_err("payload type %u handler NULL index %u\n",
+ 				usage->payload_type, i);
+-			BUG_ON(1);
++			return -ENODEV;
+ 		}
+ 		memset(&cfg, 0, sizeof(cfg));
+ 		cfg.payload_type = usage->payload_type;
+@@ -386,10 +391,17 @@ int share_mem_config(void)
+ 			(void *)(long)scp_get_reserve_mem_virt(usage->id);
+ 		cfg.buffer_size =
+ 			(uint32_t)scp_get_reserve_mem_size(usage->id);
+-		BUG_ON(!cfg.base);
++		if (!cfg.base || !cfg.buffer_size) {
++			pr_err("payload type %u has no SCP reserved memory for id %d\n",
++			       usage->payload_type, usage->id);
++			return -ENODEV;
++		}
+ 		ret = handle->handler(&cfg, handle->private_data);
+-		if (ret < 0)
+-			continue;
++		if (ret < 0) {
++			pr_err("payload type %u setup failed %d\n",
++			       usage->payload_type, ret);
++			return ret;
++		}
+ 		usage->init_status = true;
+ 	}
+ 
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
+index 180c07cec7a6..887b3bae5008 100755
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
+@@ -614,6 +614,9 @@ static int transceiver_comm_with(int sensor_type, int cmd,
+ 
+ 	ctrl_size = ipi_comm_size(sizeof(*ctrl) + length);
+ 	ctrl = kzalloc(ctrl_size, GFP_KERNEL);
++	if (!ctrl)
++		return -ENOMEM;
++
+ 	ctrl->sensor_type = sensor_type;
+ 	ctrl->command = cmd;
+ 	ctrl->length = length;
+@@ -947,7 +950,6 @@ static int __init transceiver_init(void)
+ {
+ 	int ret = 0;
+ 	struct transceiver_device *dev = &transceiver_dev;
+-	struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
+ 
+ 	mutex_init(&dev->enable_lock);
+ 	mutex_init(&dev->flush_lock);
+@@ -981,7 +983,7 @@ static int __init transceiver_init(void)
+ 	ret = hf_device_register(&dev->hf_dev);
+ 	if (ret < 0) {
+ 		pr_err("register hf device fail %d\n", ret);
+-		return ret;
++		goto out_wakeup;
+ 	}
+ 
+ 	ret = sensor_comm_init();
+@@ -1036,7 +1038,7 @@ static int __init transceiver_init(void)
+ 		pr_err("create thread fail %d\n", ret);
+ 		goto out_pm_notify;
+ 	}
+-	sched_setscheduler_nocheck(dev->task, SCHED_FIFO, &param);
++	sched_set_fifo(dev->task);
+ 
+ 	/*
+ 	 * NOTE: handler resgiter must before host ready to avoid lost
+@@ -1069,7 +1071,6 @@ static int __init transceiver_init(void)
+ 	return 0;
+ 
+ out_ready:
+-	host_ready_exit();
+ 	sensor_ready_notifier_chain_unregister(&transceiver_ready_notifier);
+ 	share_mem_config_handler_unregister(SHARE_MEM_SUPER_DATA_PAYLOAD_TYPE);
+ 	share_mem_config_handler_unregister(SHARE_MEM_DATA_PAYLOAD_TYPE);
+@@ -1095,6 +1096,9 @@ static int __init transceiver_init(void)
+ 	hf_device_unregister(&dev->hf_dev);
+ 	wakeup_source_unregister(dev->wakeup_src);
+ 	return ret;
++out_wakeup:
++	wakeup_source_unregister(dev->wakeup_src);
++	return ret;
+ }
+ 
+ static void __exit transceiver_exit(void)
+
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/timesync.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/timesync.c
+index 77c0498fac70..fffb3d1de4c5 100644
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/timesync.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/timesync.c
+@@ -211,7 +211,7 @@ void timesync_start(void)
+ 
+ void timesync_stop(void)
+ {
+-	del_timer_sync(&timesync_timer);
++	timer_delete_sync(&timesync_timer);
+ }
+ 
+ void timesync_resume(void)
