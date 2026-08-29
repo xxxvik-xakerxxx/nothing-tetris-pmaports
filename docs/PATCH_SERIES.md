@@ -53,6 +53,8 @@ normal Alpine/postmarketOS practice.
 | `0003-mfd-mt6363-keys-mt6375-telemetry.patch` | MT6363 PMIC core, hardware-tested power/volume-up press and release IRQ handling, and MT6375 telemetry foundation. |
 | `0007-power-supply-mt6375-monitor.patch` | Read-only battery/USB power monitor and platform registration. |
 | `0027-power-supply-nothing-tetris-charging-policy.patch` | Conservative board charging policy: 500 mA USB-debug limit, Nothing OS 4.1 battery CV, temperature cutoffs with hysteresis, fail-closed sensor handling and suspend inhibition. |
+| `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
+| `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
 
 ### Peripheral identification and staged bring-up
 
@@ -85,7 +87,7 @@ normal Alpine/postmarketOS practice.
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
 | `1200-vendor-sensor-framework-linux-6.18.patch.vendor` | Adapts the official MediaTek sensor framework core to Linux 6.18; only the framework module is staged and no sensor is advertised as working yet. |
 
-The `pkgrel=113` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=114` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and

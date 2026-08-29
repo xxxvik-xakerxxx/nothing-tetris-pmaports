@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 29 Aug 2026 16:30:00 +0300
+Subject: [PATCH 1/2] dt-bindings: watchdog: describe MT6878 reboot mode
+
+The MT6878 watchdog register block also provides the non-reset register
+used to pass named reboot modes to the bootloader.  Describe its complete
+compatible chain and syscon-reboot-mode child.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../bindings/watchdog/mediatek,mtk-wdt.yaml   | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml b/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
+index ba0bfd73a..dad465d5c 100644
+--- a/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
++++ b/Documentation/devicetree/bindings/watchdog/mediatek,mtk-wdt.yaml
+@@ -19,5 +19,10 @@ properties:
+   compatible:
+     oneOf:
++      - items:
++          - const: mediatek,mt6878-wdt
++          - const: mediatek,mt6589-wdt
++          - const: syscon
++          - const: simple-mfd
+       - enum:
+           - mediatek,mt2712-wdt
+           - mediatek,mt6589-wdt
+@@ -45,6 +50,9 @@ properties:
+               - mediatek,mt8516-wdt
+           - const: mediatek,mt6589-wdt
+ 
++  reboot-mode:
++    $ref: /schemas/power/reset/syscon-reboot-mode.yaml#
++
+   reg:
+     maxItems: 1
+ 
+-- 
+2.51.0

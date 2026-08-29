@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 29 Aug 2026 16:31:00 +0300
+Subject: [PATCH 2/2] arm64: dts: mediatek: populate MT6878 reboot mode
+
+The syscon-reboot-mode child below the MT6878 watchdog is not instantiated
+because the parent is not an OF population bus.  Consequently commands
+such as reboot bootloader leave the non-reset reboot-mode bits unchanged
+and the phone boots postmarketOS again.
+
+Mark the watchdog syscon as a simple MFD so normal OF platform population
+creates the reboot-mode device.  The watchdog register layout and reset
+driver remain unchanged.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/mediatek/mt6878.dtsi | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+index 898cd785b..cf52a6579 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -879,6 +879,7 @@ watchdog: watchdog@1c00a000 {
+ 			compatible = "mediatek,mt6878-wdt",
+ 				     "mediatek,mt6589-wdt",
+-				     "syscon";
++				     "syscon",
++				     "simple-mfd";
+ 			reg = <0x1c00a000 0x100>;
+ 
+ 			reboot-mode {
+-- 
+2.51.0
