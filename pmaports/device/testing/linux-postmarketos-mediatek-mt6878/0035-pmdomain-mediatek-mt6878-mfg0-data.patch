@@ -1,0 +1,68 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] pmdomain: mediatek: describe the MT6878 MFG0 domain
+
+Add the register and bus-protection data for the MT6878 MFG0 shutdown
+domain. The values come from the Nothing OS 4.1 Tetris device-module tree.
+Vendor source revision:
+
+  ee2be53cb75670b548948636a0db1d1ff112bf12
+
+Do not expose a DT power-domain node yet. The vendor implementation skips
+initial power-on for MFG0, while the generic MediaTek provider powers every
+described domain during registration. Mark the domain KEEP_DEFAULT_OFF so a
+future DT inventory node cannot power it before Panthor, clocks, regulator,
+IOMMU and reset ordering are ready. Keeping this as data only makes the
+dependency available for the later GPU policy work without changing boot
+state or relying on U-Boot state.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+
+--- a/drivers/pmdomain/mediatek/mt6878-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
+@@ -8,9 +8,17 @@
+ #include "mtk-pm-domains.h"
+ 
+ #define MT6878_PERI_PROT_AUDIO		BIT(6)
++#define MT6878_MD_PROT_MFG0		BIT(4)
++#define MT6878_INFRA_PROT_MFG0		BIT(9)
+ #define MT6878_PERI_PROT_SET		0x0c84
+ #define MT6878_PERI_PROT_CLR		0x0c88
+ #define MT6878_PERI_PROT_STA		0x0c8c
++#define MT6878_MD_PROT_SET		0x0ca4
++#define MT6878_MD_PROT_CLR		0x0ca8
++#define MT6878_MD_PROT_STA		0x0cac
++#define MT6878_INFRA_PROT_SET		0x0c44
++#define MT6878_INFRA_PROT_CLR		0x0c48
++#define MT6878_INFRA_PROT_STA		0x0c4c
+ 
+ static enum scpsys_bus_prot_block scpsys_bus_prot_blocks_mt6878[] = {
+ 	BUS_PROT_BLOCK_INFRA,
+@@ -34,6 +42,27 @@ scpsys_domain_data_mt6878[MT6878_POWER_DOMAIN_NR] = {
+ 		},
+ 		.caps = MTK_SCPD_STATUS_IN_CTL,
+ 	},
++	[MT6878_POWER_DOMAIN_MFG0_SHUTDOWN] = {
++		.name = "mfg0-shutdown",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0eb4,
++		.pwr_sta_offs = 0x0eb4,
++		.pwr_sta2nd_offs = 0x0eb4,
++		.sram_pdn_bits = BIT(8),
++		.sram_pdn_ack_bits = BIT(12),
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, MT6878_MD_PROT_MFG0,
++					MT6878_MD_PROT_SET,
++					MT6878_MD_PROT_CLR,
++					MT6878_MD_PROT_STA),
++			BUS_PROT_WR_IGN(INFRA, MT6878_INFRA_PROT_MFG0,
++					MT6878_INFRA_PROT_SET,
++					MT6878_INFRA_PROT_CLR,
++					MT6878_INFRA_PROT_STA),
++		},
++		.caps = MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_SRAM_ISO |
++			MTK_SCPD_STATUS_IN_CTL,
++	},
+ };
+ 
+ static const struct scpsys_soc_data mt6878_scpsys_data = {
