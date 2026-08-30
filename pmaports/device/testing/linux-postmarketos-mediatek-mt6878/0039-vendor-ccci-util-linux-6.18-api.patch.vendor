@@ -1,0 +1,26 @@
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_broadcast.c b/drivers/misc/mediatek/ccci_util/ccci_util_broadcast.c
+index c32253a995f7..684bd7766683 100644
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_broadcast.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_broadcast.c
+@@ -559,7 +559,7 @@ int ccci_util_broadcast_init(void)
+ 	spin_lock_init(&s_event_update_lock);
+ 	spin_lock_init(&s_md1_user_lock_cnt_lock);
+ 	spin_lock_init(&s_md3_user_lock_cnt_lock);
+-	s_ccci_bd_class = class_create(THIS_MODULE, "ccci_md_sta");
++	s_ccci_bd_class = class_create("ccci_md_sta");
+ 	s_md1_user_request_lock_cnt = 0;
+ 	s_md3_user_request_lock_cnt = 0;
+ 
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_pin_broadcast.c b/drivers/misc/mediatek/ccci_util/ccci_util_pin_broadcast.c
+index 3852525b53a9..23d08352f357 100644
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_pin_broadcast.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_pin_broadcast.c
+@@ -175,7 +175,7 @@ int ccci_util_pin_broadcast_init(void)
+ 		goto _exit_2;
+ 	}
+ 
+-	s_ccci_pin_class = class_create(THIS_MODULE, "ccci_pin_sta");
++	s_ccci_pin_class = class_create("ccci_pin_sta");
+ 	device_create(s_ccci_pin_class, NULL, s_pin_status_dev, NULL, "ccci_pin_sta");
+ 
+ 	return 0;
