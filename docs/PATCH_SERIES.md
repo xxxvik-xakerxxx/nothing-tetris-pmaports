@@ -18,7 +18,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=115`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=117`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -55,7 +55,8 @@ normal Alpine/postmarketOS practice.
 | `0027-power-supply-nothing-tetris-charging-policy.patch` | Conservative board charging policy: 500 mA USB-debug limit, Nothing OS 4.1 battery CV, temperature cutoffs with hysteresis, fail-closed sensor handling and suspend inhibition. |
 | `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
 | `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
-| `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the temporary `clk_ignore_unused` boot argument so unowned clocks can turn off; cold-boot USB, Wi-Fi, audio and thermal regression gates are required before promotion. |
+| `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the stale argument from the packaged DTB. The verified U-Boot revision currently injects it again at `bootm`, so this patch alone does not change runtime clock policy. A one-shot boot without the argument failed and reset; keep unused-clock cleanup gated until the missing clock ownership is identified. |
+| `0040-thermal-mediatek-mt6878-read-latched-msr.patch` | Uses the MT6878 vendor-style latched MSR read path. The `9afc17e` live baseline returned values for only 6 of 24 LVTS zones because mainline waited for a transient valid bit; `18a962a` carries the correction and requires CI plus live thermal regression. |
 
 ### Peripheral identification and staged bring-up
 
@@ -91,7 +92,7 @@ normal Alpine/postmarketOS practice.
 | `0036-vendor-scp-linux-6.18-api.patch.vendor` | Adapts the official SCP provider to Linux 6.18 timer, platform remove, bin-attribute and MT6397 APIs. |
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 
-The `pkgrel=115` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=117` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -136,7 +137,11 @@ The package also builds and ships `mtk-mbox`, `mtk_rpmsg_mbox`,
 `mtk_tinysys_ipi`, `scp`, `hf_manager` and `sensorhub` as a dependency-checked
 set. None of these new SCP/sensor modules is autoloaded. Live module loading is
 gated on the reboot-to-fastboot rollback path, firmware/reserved-memory audit,
-idle-power baseline and USB NCM/SSH regression checks.
+idle-power baseline and USB NCM/SSH regression checks. A manual `9afc17e` probe
+loaded the mailbox, RPMSG, IPI and HF framework modules, but `scp.ko` then hung
+in `wait_scp_dvfs_init_done()` and flooded WARN messages because the DVFS
+platform contract never completed. `sensorhub.ko` was not loaded. SCP remains
+manual-only until this path fails closed and the missing handoff is supplied.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,

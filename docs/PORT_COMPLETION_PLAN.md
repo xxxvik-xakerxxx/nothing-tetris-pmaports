@@ -7,10 +7,10 @@ postmarketOS port into a stable daily-phone build.
 
 | Track | Branch / path | State |
 | --- | --- | --- |
-| Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Live-verified on 2026-08-04. Current SHA `fa00144`, packages `linux-postmarketos-mediatek-mt6878 6.18-r106`, `device-nothing-tetris 8-r1`, `firmware-nothing-tetris 1-r3`. Automatic USB NCM, 32 MiB transfer, warm reboot and Wi-Fi reconnect passed. |
+| Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `fa00144adde95333fab32e19d63caa32968909c1`. Keep as the published rollback until the active candidate completes all promotion gates. |
 | Merged hardware baseline branch | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` | Already merged into `main`. Keep only as historical CI reference until branch cleanup. |
-| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | Clean live baseline `baf78e4` passed USB NCM/SSH transfer, reboot, charging, Wi-Fi scan, Bluetooth and audio enumeration. Commit `cd8fbdf` adds reboot-to-fastboot support and is awaiting CI plus live validation. |
-| Bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Keep verified commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef`. Replacing stock LK means no LK-generated `atag,devinfo` exists, so thermal must not depend on a previous-bootloader FDT handoff. |
+| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | `9afc17e886bcef00d01ce7f63cf33f58b94ee582` was clean-flashed to `super` and `userdata`. Kernel `6.18.0 #117`, USB NCM/SSH, an exact 32 MiB raw transfer, charger gate, Wi-Fi AP enumeration, Bluetooth HCI and audio enumeration passed. LVTS and SCP failed as documented below. `18a962ace0f86da173875d06b0440b077cfe5f29` adds the thermal correction and is in CI run `33309950811`; it is not live-verified yet. |
+| Bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Keep verified commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef`. Its built-in environment injects `clk_ignore_unused` while constructing dynamic pmOS UUID arguments. A temporary boot without that token produced a launch error/reset, so do not update U-Boot or force unused-clock cleanup until the dependency is identified. |
 
 ## Branch policy
 
@@ -68,10 +68,21 @@ the current staging notes for follow-up patch branches:
 
 ## Current blockers
 
-- Reboot-to-fastboot support at `cd8fbdf` still needs a green CI artifact and
-  live `reboot bootloader` validation before experimental module loading.
+- The `9afc17e` live thermal gate exposed only 6 of 24 LVTS values. The latched
+  MSR correction at `18a962a` must pass CI, clean flash and the full thermal
+  gate before promotion.
+- Manual `scp.ko` loading hangs in `wait_scp_dvfs_init_done()` and floods WARN
+  messages when the DVFS platform driver does not complete. Keep SCP and
+  sensorhub manual-only; add a proven fail-closed timeout and then solve the
+  real firmware, reserved-memory and boot handoff contract.
+- U-Boot reinjects `clk_ignore_unused` after the packaged DTB is checked. A
+  one-shot boot without the token failed and reset, with no ramoops record.
+  Capture the early failure before attempting kernel or U-Boot policy changes.
 - Current battery drain is too high for a stable-phone baseline. Capture idle,
   screen-on and Wi-Fi power data and fix suspend blockers before sensorhub,
   modem or GPU remote processors are enabled by default.
 - Thermal IRQs and hardware trips remain disabled until routing and reboot
   behavior are validated independently of the polling-only temperature path.
+- The USB suspend hook is installed, but this image exposes no RTC wake device.
+  Full suspend/resume therefore needs a coordinated physical power-button wake
+  while USB and Wi-Fi recovery are monitored.
