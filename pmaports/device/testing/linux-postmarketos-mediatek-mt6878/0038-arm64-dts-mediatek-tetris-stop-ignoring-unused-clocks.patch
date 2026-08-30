@@ -20,7 +20,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
  1 file changed, 2 deletions(-)
 
 diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-index 000000000000..111111111111 100644
+index 111111111111..222222222222 100644
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 @@ -19,9 +19,7 @@
