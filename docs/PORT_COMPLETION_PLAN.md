@@ -71,10 +71,12 @@ the current staging notes for follow-up patch branches:
 - The `9afc17e` live thermal gate exposed only 6 of 24 LVTS values. The latched
   MSR correction at `18a962a` must pass CI, clean flash and the full thermal
   gate before promotion.
-- Manual `scp.ko` loading hangs in `wait_scp_dvfs_init_done()` and floods WARN
-  messages when the DVFS platform driver does not complete. Keep SCP and
-  sensorhub manual-only; add a proven fail-closed timeout and then solve the
-  real firmware, reserved-memory and boot handoff contract.
+- Manual `scp.ko` loading on `9afc17e` hangs in
+  `wait_scp_dvfs_init_done()` and floods WARN messages when the DVFS platform
+  driver does not complete. `0041` now bounds and unwinds that failure in the
+  `pkgrel=118` candidate, but still needs CI and a manual live probe. Keep SCP
+  and sensorhub manual-only, then solve the real firmware, reserved-memory and
+  boot handoff contract.
 - U-Boot reinjects `clk_ignore_unused` after the packaged DTB is checked. A
   one-shot boot without the token failed and reset, with no ramoops record.
   Capture the early failure before attempting kernel or U-Boot policy changes.

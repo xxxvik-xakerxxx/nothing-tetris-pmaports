@@ -1,0 +1,93 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 15:00:00 +0300
+Subject: [PATCH] soc: mediatek: scp: fail module init when DVFS never probes
+
+Nothing OS 4.1 vendor source commit
+ee2be53cb75670b548948636a0db1d1ff112bf12 waits synchronously for the
+SCP DVFS platform driver's probe before continuing SCP initialization.
+When the expected DVFS device or bootloader handoff is absent, the probe
+never sets g_scp_dvfs_init_done.  After three seconds the current loop
+emits WARN_ON(1) once per millisecond forever, so init_module never
+returns and the warning flood obscures the first failure.
+
+Give the wait helper an explicit return value.  Preserve the existing
+three-second bound, but return -ETIMEDOUT after one diagnostic instead
+of continuing indefinitely.  Also propagate a direct
+scp_dvfs_init() failure.  On a wait timeout, unregister the DVFS driver
+before returning the error from scp_init(), leaving the optional SCP
+module unloaded rather than continuing without its required handoff.
+
+This deliberately does not bypass DVFS, retry the probe, reset SCP, or
+claim that SCP can run without the missing platform contract.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/scp/rv/scp_dvfs.c   | 13 +++++++------
+ drivers/misc/mediatek/scp/rv/scp_dvfs.h   |  2 +-
+ drivers/misc/mediatek/scp/rv/scp_helper.c | 12 ++++++++++--
+ 3 files changed, 18 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/misc/mediatek/scp/rv/scp_dvfs.c b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
+--- a/drivers/misc/mediatek/scp/rv/scp_dvfs.c
++++ b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
+@@ -857,18 +857,19 @@ int scp_request_freq(void)
+ 		return scp_request_freq_vcore();
+ }
+ 
+-void wait_scp_dvfs_init_done(void)
++int wait_scp_dvfs_init_done(void)
+ {
+ 	int count = 0;
+ 
+ 	while (atomic_read(&g_scp_dvfs_init_done) != 1) {
+-		mdelay(1);
+-		count++;
+-		if (count > 3000) {
+-			pr_notice("SCP dvfs driver init fail\n");
+-			WARN_ON(1);
++		if (count++ >= 3000) {
++			pr_err("SCP dvfs driver init timed out\n");
++			return -ETIMEDOUT;
+ 		}
++		mdelay(1);
+ 	}
++
++	return 0;
+ }
+ 
+ static int set_scp_clk_mux(unsigned int  pll_ctrl_flag)
+diff --git a/drivers/misc/mediatek/scp/rv/scp_dvfs.h b/drivers/misc/mediatek/scp/rv/scp_dvfs.h
+--- a/drivers/misc/mediatek/scp/rv/scp_dvfs.h
++++ b/drivers/misc/mediatek/scp/rv/scp_dvfs.h
+@@ -297,6 +297,6 @@ extern int scp_resource_req(unsigned int req);
+ extern uint32_t scp_get_freq(void);
+ extern void scp_init_vcore_request(void);
+-extern void wait_scp_dvfs_init_done(void);
++int wait_scp_dvfs_init_done(void);
+ extern bool sync_ulposc_cali_data_to_scp(void);
+ extern int __init scp_dvfs_init(void);
+ extern void scp_dvfs_exit(void);
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -3080,8 +3080,16 @@ static int __init scp_init(void)
+ 	}
+ 	scp_dvfs_cali_ready = 0;
+ 
+-	pr_notice("scp_dvfs_init status = %d\n", scp_dvfs_init());
+-	wait_scp_dvfs_init_done();
++	ret = scp_dvfs_init();
++	pr_notice("scp_dvfs_init status = %d\n", ret);
++	if (ret)
++		return ret;
++
++	ret = wait_scp_dvfs_init_done();
++	if (ret) {
++		scp_dvfs_exit();
++		return ret;
++	}
+ 
+ 	if (scp_dvfs_feature_enable()) {
+ 		/* pll maybe gate, request pll before access any scp reg/sram */
+-- 
+2.51.0
