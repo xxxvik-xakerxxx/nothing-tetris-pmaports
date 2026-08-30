@@ -323,10 +323,11 @@ _build_sensor_modules() {
 	_rpmsg="$_devmods_dir"/drivers/rpmsg
 	_scp="$_devmods_dir"/drivers/misc/mediatek/scp/rv
 	_sensor="$_devmods_dir"/drivers/misc/mediatek/sensor/2.0
+	_audio_symbols="$_devmods_dir/sound/soc/mediatek/common/Module.symvers"
 
 	_tinysys_make "$_soc" CONFIG_MTK_MBOX=m CONFIG_MTK_IPI=n
 	_symbols="$_soc/Module.symvers"
-	_symbols="$_symbols $_devmods_dir/sound/soc/mediatek/common/Module.symvers"
+	_symbols="$_symbols $_audio_symbols"
 
 	_tinysys_make "$_rpmsg" CONFIG_RPMSG_MTK=m \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
@@ -334,7 +335,7 @@ _build_sensor_modules() {
 
 	_tinysys_make "$_soc" CONFIG_MTK_MBOX=m CONFIG_MTK_IPI=m \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
-	_symbols="$_soc/Module.symvers $_rpmsg/Module.symvers"
+	_symbols="$_soc/Module.symvers $_rpmsg/Module.symvers $_audio_symbols"
 
 	_tinysys_make "$_scp" \
 		CONFIG_MTK_TINYSYS_SCP_SUPPORT=m \

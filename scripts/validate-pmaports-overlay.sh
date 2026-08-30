@@ -493,8 +493,9 @@ validate_sensor_transport() {
 		grep -Fq "$patch" "$kernel_apkbuild"
 	done
 
-	grep -Fq '_symbols="$_symbols $_devmods_dir/sound/soc/mediatek/common/Module.symvers"' \
+	grep -Fq '_audio_symbols="$_devmods_dir/sound/soc/mediatek/common/Module.symvers"' \
 		"$kernel_apkbuild"
+	test "$(grep -c '_audio_symbols"' "$kernel_apkbuild")" -eq 2
 	grep -Fq 'CONFIG_MTK_TINYSYS_SCP_SUPPORT=m' "$kernel_apkbuild"
 	grep -Fq 'CONFIG_MTK_SENSORHUB=m' "$kernel_apkbuild"
 	for module in \
