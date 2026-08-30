@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=116
+pkgrel=117
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -57,6 +57,7 @@ source="
 	0020-arm64-dts-mt6878-gnss.patch
 	0021-usb-mtu3-native-role-switch.patch
 	0022-thermal-mediatek-mt6878-lvts.patch
+	0040-thermal-mediatek-mt6878-read-latched-msr.patch
 	0023-power-supply-mt6375-charger.patch
 	0024-power-supply-mt6375-termination.patch
 	0025-iio-adc-mt6375-auxadc.patch
@@ -459,6 +460,7 @@ c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768da
 95f1dd6bf1d7488915e8e6d4904c5a22775cb9c1be23e8bc7393391f178c638616cb687cbc887092591d1a88597eb8e8754c621e887853bf9d7d911dae0d3379  0020-arm64-dts-mt6878-gnss.patch
 51e01558bf1ca92d17ad80540ebbea4bd684a1c2145123bd7163df03d61571bab924118858d42537225257c2c139ee17d5b2fd23373dbd4c30c79c8e45ed0760  0021-usb-mtu3-native-role-switch.patch
 34bf0f700863d0298d2105778bf0144ee9ed3cbbc6e622a5532b56aae711f40187531998032a91149402cd2e959282e7e7b4f4f2bd37b42978f3d3f72b27f6b9  0022-thermal-mediatek-mt6878-lvts.patch
+fcce5e11432c7226ae70bab8f9e660feacd62b01fb39699be471b1ff8a73390a1b6aa9cead1dad950021eaf52deaa49186d2ea6b47f51c80e9bdad045f665084  0040-thermal-mediatek-mt6878-read-latched-msr.patch
 43d60450a9893eb4b00e25d3fe37d8db192d0532534ad92839672d594437214cf141b3f7ecb90ef3d27f4721ed4536917ec1148825c14ab6fbc357b0966786c6  0023-power-supply-mt6375-charger.patch
 dbaf456f19b0fe298bbe242546671de32c4706af8e2d7ac2625c3c8c8b4bde0ef64aa71b0d28782cd9f9494de003bfc038730b524601bc3658692054355d8969  0024-power-supply-mt6375-termination.patch
 34ffe70a42a7836f32614c2b2065fa3d88fd8cc04e479a2ebe60102289699fefc0481f505c304c13d3864b8ea373072409c8f889741c12894f2cd6b4d4a7da92  0025-iio-adc-mt6375-auxadc.patch

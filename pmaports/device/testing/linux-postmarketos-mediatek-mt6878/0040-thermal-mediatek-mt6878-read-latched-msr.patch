@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 11:10:00 +0300
+Subject: [PATCH] thermal: mediatek: read latched MT6878 measurements
+
+The MT6878 LVTS controller only asserts the measurement valid bit when a
+new conversion completes.  Requiring that bit for every thermal-zone read
+makes userspace race the controller's 2.1 to 10.23 ms group interval and
+causes intermittent -EAGAIN errors.
+
+Follow the MT6878 vendor driver's read path for this generation: consume
+the latched 16-bit measurement directly and reject zero until the first
+conversion has completed.  Preserve the existing valid-bit polling for
+all other LVTS implementations.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/thermal/mediatek/lvts_thermal.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/thermal/mediatek/lvts_thermal.c b/drivers/thermal/mediatek/lvts_thermal.c
+index 0e3456c..a40e5a8 100644
+--- a/drivers/thermal/mediatek/lvts_thermal.c
++++ b/drivers/thermal/mediatek/lvts_thermal.c
+@@ -335,8 +335,16 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
+ 	 * 16	: Valid temperature
+ 	 * 15-0	: Raw temperature
+ 	 */
+-	rc = readl_poll_timeout(msr, value, value & BIT(16),
+-				LVTS_MSR_READ_WAIT_US, LVTS_MSR_READ_TIMEOUT_US);
++	if (lvts_ctrl->lvts_data->mt6878_calibration) {
++		value = readl(msr);
++		if (!(value & 0xffff))
++			return -EAGAIN;
++		rc = 0;
++	} else {
++		rc = readl_poll_timeout(msr, value, value & BIT(16),
++					LVTS_MSR_READ_WAIT_US,
++					LVTS_MSR_READ_TIMEOUT_US);
++	}
+ 
+ 	/*
+ 	 * As the thermal zone temperature will read before the
+@@ -353,8 +361,6 @@ static int lvts_get_temp(struct thermal_zone_device *tz, int *temp)
+ 	 */
+ 	if (rc)
+ 		return -EAGAIN;
+-	if (lvts_ctrl->lvts_data->mt6878_calibration && !(value & 0xffff))
+-		return -EAGAIN;
+ 
+ 	*temp = lvts_raw_to_temp(lvts_ctrl, lvts_sensor, value & 0xFFFF);
+ 
+-- 
+2.51.0
