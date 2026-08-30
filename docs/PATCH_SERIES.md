@@ -55,6 +55,7 @@ normal Alpine/postmarketOS practice.
 | `0027-power-supply-nothing-tetris-charging-policy.patch` | Conservative board charging policy: 500 mA USB-debug limit, Nothing OS 4.1 battery CV, temperature cutoffs with hysteresis, fail-closed sensor handling and suspend inhibition. |
 | `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
 | `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
+| `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the temporary `clk_ignore_unused` boot argument so unowned clocks can turn off; cold-boot USB, Wi-Fi, audio and thermal regression gates are required before promotion. |
 
 ### Peripheral identification and staged bring-up
 

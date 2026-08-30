@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 30 Aug 2026 09:20:00 +0300
+Subject: [PATCH] arm64: dts: mediatek: tetris: stop ignoring unused clocks
+
+The bring-up DT forces clk_ignore_unused on every boot. That prevents the
+clock framework from disabling clocks without active consumers and masks
+missing clock ownership, while also making a low-power idle baseline
+impossible.
+
+Drop the temporary command-line option now that the stable image has
+working USB NCM, Wi-Fi, Bluetooth, audio, charging and thermal telemetry.
+Keep this as a separate patch so the first CI image can be cold-booted with
+the existing image as rollback and every established subsystem can be
+regression-tested.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+index 000000000000..111111111111 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -19,9 +19,7 @@
+ 		serial0 = &uart0;
+ 	};
+ 
+-	// NOTE: Will be replaced by our to-be-bootloader. Keep in for now.
+ 	chosen {
+-		bootargs = "clk_ignore_unused";
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+ 		ranges;
+-- 
+2.51.0

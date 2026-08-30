@@ -344,6 +344,14 @@ jobs:
             fi
           done
           test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+          if bootargs=$(fdtget \
+              "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+              /chosen bootargs 2>/dev/null) && \
+              printf '%s\n' "$bootargs" | tr ' ' '\n' | \
+                grep -Fxq clk_ignore_unused; then
+            echo "unexpected clk_ignore_unused in packaged DTB"
+            exit 1
+          fi
           expected_conninfra_cfg=$(printf 'co_clock_flag=1\npre_cal_mode=0')
           actual_conninfra_cfg=$(cat "$rootfs/usr/lib/firmware/conninfra.cfg")
           test "$actual_conninfra_cfg" = "$expected_conninfra_cfg" || {

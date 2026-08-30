@@ -480,6 +480,16 @@ validate_charging_policy() {
 		"$power_gate"
 }
 
+validate_power_bootargs() {
+	clock_patch="$kernel_pkg/0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch"
+	workflow="$repo_root/.github/workflows/ci.yml"
+
+	grep -Fq '0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch' \
+		"$kernel_apkbuild"
+	grep -Eq '^-[[:space:]]+bootargs = "clk_ignore_unused";$' "$clock_patch"
+	grep -Fq 'unexpected clk_ignore_unused in packaged DTB' "$workflow"
+}
+
 validate_sensor_transport() {
 	sensor_patch="$kernel_pkg/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor"
 	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
@@ -621,6 +631,7 @@ validate_usb_role
 validate_haptics
 validate_thermal
 validate_charging_policy
+validate_power_bootargs
 validate_sensor_transport
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
