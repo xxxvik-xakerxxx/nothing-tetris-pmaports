@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=1
+pkgrel=2
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -44,6 +44,7 @@ source="
 	nothing-tetris-connectivity-setup
 	nothing-tetris-audio.conf
 	nothing-tetris-haptics.conf
+	nothing-tetris-usb-sleep
 	nothing-tetris-wifi-nvram-extract
 	nothing-tetris-wifi-nvram-load.c
 	nothing-tetris-wifi-nvram.service
@@ -69,10 +70,25 @@ check() {
 	sh -n "$srcdir"/nothing-tetris-audio-policy
 	sh -n "$srcdir"/nothing-tetris-bluetooth-address-extract
 	sh -n "$srcdir"/nothing-tetris-connectivity-setup
+	sh -n "$srcdir"/nothing-tetris-usb-sleep
 	sh -n "$srcdir"/nothing-tetris-wifi-nvram-extract
 
 	testdir=$(mktemp -d)
 	trap 'rm -rf "$testdir"' EXIT
+	mkdir -p "$testdir"/usb-gadget/g1 "$testdir"/udc/11201000.usb0
+	printf '%s\n' 11201000.usb0 > "$testdir"/usb-gadget/g1/UDC
+	USB_GADGET_ROOT="$testdir/usb-gadget" \
+	USB_UDC_ROOT="$testdir/udc" \
+	USB_SLEEP_STATE_FILE="$testdir/usb-sleep.state" \
+		"$srcdir"/nothing-tetris-usb-sleep pre suspend
+	[ -z "$(cat "$testdir"/usb-gadget/g1/UDC)" ]
+	[ -s "$testdir"/usb-sleep.state ]
+	USB_GADGET_ROOT="$testdir/usb-gadget" \
+	USB_UDC_ROOT="$testdir/udc" \
+	USB_SLEEP_STATE_FILE="$testdir/usb-sleep.state" \
+		"$srcdir"/nothing-tetris-usb-sleep post suspend
+	[ "$(cat "$testdir"/usb-gadget/g1/UDC)" = 11201000.usb0 ]
+	[ ! -e "$testdir"/usb-sleep.state ]
 
 	dd if=/dev/zero of="$testdir"/WIFI bs=6146 count=1 2>/dev/null
 	printf '\002\021\042\063\104\125' | \
@@ -165,6 +181,8 @@ package() {
 		"$pkgdir"/usr/share/alsa/ucm2/conf.d/mt6878-mt6369/mt6878-mt6369.conf
 	install -Dm644 "$srcdir"/nothing-tetris-haptics.conf \
 		"$pkgdir"/usr/lib/modules-load.d/nothing-tetris-haptics.conf
+	install -Dm755 "$srcdir"/nothing-tetris-usb-sleep \
+		"$pkgdir"/usr/lib/systemd/system-sleep/50-nothing-tetris-usb-gadget
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address-extract \
 		"$pkgdir"/usr/libexec/nothing-tetris-bluetooth-address-extract
 	install -Dm755 "$srcdir"/nothing-tetris-bluetooth-address \
@@ -210,6 +228,7 @@ a8b68de13cac4374d852fbddfc64645d39566d971791c5e305da549944937bac863c4d9b1f9a4c59
 d33eebdbde0cd1196e064524829c34c449994f89233e68b68332e05ef4aae2d3fb9007e50ccce7bad01c536f6376802fefe48e64897e86a9f69418c1c0c59fcd  nothing-tetris-connectivity-setup
 6d0738393d36a7f4a98d5f55d50d8319c5f4b82fc1f2907c4a39814d172597cdd64010bc3872ee06927c0e8289a72e8c9156a5c871a180267dd4d7911c9ab6cc  nothing-tetris-audio.conf
 e5842a03339a0c0e30864f442b368b8d6a00780ece38f67568571c68fe5dbe0714180b7c4a911b7e76022f3d9b2d8daf6d6fd28faf50261a32a51617c9a3800e  nothing-tetris-haptics.conf
+2083f594ea22a0be5cf7a9a0b10f046e267a162d67e3314704deffb90a0ddd892cddb168da58875afa54c352cf122cab350382f981beda4880377eb26a98b67d  nothing-tetris-usb-sleep
 a9574c65474ba420461cac734afc87396e7d97d031c0676dd218a17ac7542e5ff0aa9cd216d643c0e8d56255cbdabaca43bb72893f6fca5882cca0f7d5fd503a  nothing-tetris-wifi-nvram-extract
 28b6b865f7964ea73f072fe0f6f3188fe6e4d8c307c9ff5029d91d071144994733de37bcc85391d381e037180de2318425a531d46088a7dc89c9ed886d6c937d  nothing-tetris-wifi-nvram-load.c
 12186da839be456a98f281d1babe64f277123ceb1eaf4fd5c285d89d0dc7014333242862d2570012f3b5bb47dc212b694df704a9bd54dbb459004e61c1b88cfc  nothing-tetris-wifi-nvram.service

@@ -1,0 +1,75 @@
+#!/bin/sh
+set -eu
+
+phase=${1:-}
+gadget_root=${USB_GADGET_ROOT:-/sys/kernel/config/usb_gadget}
+udc_root=${USB_UDC_ROOT:-/sys/class/udc}
+state_file=${USB_SLEEP_STATE_FILE:-/run/nothing-tetris-usb-sleep.state}
+
+fail() {
+	printf 'nothing-tetris-usb-sleep: %s\n' "$*" >&2
+	exit 1
+}
+
+unbind_gadget() {
+	[ ! -e "$state_file" ] ||
+		fail "refusing to replace stale state at $state_file"
+
+	for udc_file in "$gadget_root"/*/UDC; do
+		[ -f "$udc_file" ] || continue
+
+		controller=$(cat "$udc_file")
+		[ -n "$controller" ] || continue
+		[ -e "$udc_root/$controller" ] ||
+			fail "active UDC $controller is not present"
+
+		umask 077
+		tmp_state="$state_file.$$"
+		printf '%s\n%s\n' "$udc_file" "$controller" > "$tmp_state"
+		mv "$tmp_state" "$state_file"
+
+		if ! printf '\n' > "$udc_file"; then
+			rm -f "$state_file"
+			fail "failed to unbind $controller from $udc_file"
+		fi
+		[ -z "$(cat "$udc_file")" ] ||
+			fail "UDC remained bound after disconnect request"
+		return 0
+	done
+
+	return 0
+}
+
+rebind_gadget() {
+	[ -s "$state_file" ] || return 0
+
+	{
+		IFS= read -r udc_file
+		IFS= read -r controller
+	} < "$state_file"
+
+	case "$udc_file" in
+		"$gadget_root"/*/UDC) ;;
+		*) fail "invalid UDC path in saved state: $udc_file" ;;
+	esac
+	[ -f "$udc_file" ] || fail "saved UDC attribute disappeared"
+	[ -e "$udc_root/$controller" ] ||
+		fail "saved UDC $controller is not present"
+
+	bound=$(cat "$udc_file")
+	case "$bound" in
+		"") printf '%s\n' "$controller" > "$udc_file" ;;
+		"$controller") ;;
+		*) fail "$udc_file is already bound to unexpected UDC $bound" ;;
+	esac
+
+	[ "$(cat "$udc_file")" = "$controller" ] ||
+		fail "failed to restore UDC $controller"
+	rm -f "$state_file"
+}
+
+case "$phase" in
+	pre) unbind_gadget ;;
+	post) rebind_gadget ;;
+	*) fail "expected pre or post phase" ;;
+esac

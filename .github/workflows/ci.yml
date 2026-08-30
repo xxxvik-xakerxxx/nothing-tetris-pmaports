@@ -370,6 +370,12 @@ jobs:
           check_contains "NCM deviceinfo selection" \
             'deviceinfo_usb_network_function="ncm.usb0"' \
             /tmp/nothing-tetris-initramfs.cpio
+          usb_sleep_hook="$rootfs/usr/lib/systemd/system-sleep/50-nothing-tetris-usb-gadget"
+          test -x "$usb_sleep_hook"
+          check_contains "USB gadget suspend quiesce" \
+            'printf '\''\n'\'' > "$udc_file"' "$usb_sleep_hook"
+          check_contains "USB gadget resume restore" \
+            'printf '\''%s\n'\'' "$controller" > "$udc_file"' "$usb_sleep_hook"
           rm -f /tmp/nothing-tetris-Image /tmp/nothing-tetris-initramfs.cpio \
             /tmp/conninfra.relocations
           test -s /work/out/nothing-tetris-root.sparse.img

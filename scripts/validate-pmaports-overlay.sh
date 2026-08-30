@@ -329,6 +329,8 @@ validate_power_and_audio_config() {
 validate_usb_role() {
 	kernel_config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 	usb_patch="$kernel_pkg/0021-usb-mtu3-native-role-switch.patch"
+	usb_sleep_hook="$device_pkg/nothing-tetris-usb-sleep"
+	workflow="$repo_root/.github/workflows/ci.yml"
 
 	grep -Fxq 'CONFIG_USB_MTU3_DUAL_ROLE=y' "$kernel_config"
 	grep -Fxq '# CONFIG_USB_MTU3_GADGET is not set' "$kernel_config"
@@ -347,6 +349,13 @@ validate_usb_role() {
 	grep -Fxq 'deviceinfo_usb_network_function="ncm.usb0"' \
 		"$device_pkg/deviceinfo"
 	test "$(cat "$device_pkg/modules-initfs")" = usb_f_ncm
+	sh -n "$usb_sleep_hook"
+	grep -Fq 'USB_SLEEP_STATE_FILE' "$usb_sleep_hook"
+	grep -Fq 'printf '\''\n'\'' > "$udc_file"' "$usb_sleep_hook"
+	grep -Fq 'printf '\''%s\n'\'' "$controller" > "$udc_file"' "$usb_sleep_hook"
+	grep -Fq '/usr/lib/systemd/system-sleep/50-nothing-tetris-usb-gadget' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'test -x "$usb_sleep_hook"' "$workflow"
 }
 
 validate_haptics() {
