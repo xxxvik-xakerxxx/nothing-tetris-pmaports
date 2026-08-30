@@ -1,5 +1,25 @@
+diff --git a/drivers/misc/mediatek/scp/include/scp.h b/drivers/misc/mediatek/scp/include/scp.h
+index ec4540eb8701..8b83788ba193 100644
+--- a/drivers/misc/mediatek/scp/include/scp.h
++++ b/drivers/misc/mediatek/scp/include/scp.h
+@@ -215,8 +215,9 @@ extern enum scp_ipi_status scp_ipi_registration(enum ipi_id id,
+ extern enum scp_ipi_status scp_ipi_unregistration(enum ipi_id id);
+ 
+ /* A common API to send message to SCP */
+-extern enum scp_ipi_status scp_ipi_send(enum ipi_id id, void *buf,
++extern enum scp_ipi_status mtk_vendor_scp_ipi_send(enum ipi_id id, void *buf,
+ 	unsigned int len, unsigned int wait, enum scp_core_id scp_id);
++#define scp_ipi_send mtk_vendor_scp_ipi_send
+ 
+ 
+ /* APIs to lock scp and make scp awaken */
+@@ -252,4 +253,3 @@ extern int get_scp_dram_region_manage(void);
+ extern void scp_send_thermal_wq(enum SCP_THERMAL_TYPE type);
+ 
+ #endif
+-
 diff --git a/drivers/misc/mediatek/scp/rv/Makefile b/drivers/misc/mediatek/scp/rv/Makefile
-index 23c538b..5013436 100644
+index 23c538b35733..50134360f555 100644
 --- a/drivers/misc/mediatek/scp/rv/Makefile
 +++ b/drivers/misc/mediatek/scp/rv/Makefile
 @@ -24,3 +24,4 @@ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include
@@ -8,7 +28,7 @@ index 23c538b..5013436 100644
  ccflags-y += -I$(DEVICE_MODULES_PATH)/sound/soc/mediatek/common
 +ccflags-y += -include $(DEVICE_MODULES_PATH)/include/linux/soc/mediatek/mtk_sip_svc.h
 diff --git a/drivers/misc/mediatek/scp/rv/scp_dvfs.c b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
-index f118f65..ce327cf 100644
+index f118f659bb4d..87a11c8f73f9 100644
 --- a/drivers/misc/mediatek/scp/rv/scp_dvfs.c
 +++ b/drivers/misc/mediatek/scp/rv/scp_dvfs.c
 @@ -35,9 +35,9 @@
@@ -32,7 +52,48 @@ index f118f65..ce327cf 100644
  #define pmic_main_chip			mt6397_chip
  #endif
  
-@@ -2953,11 +2953,11 @@ DTS_INIT_FAILED:
+@@ -1574,6 +1574,7 @@ static unsigned int __init _get_freq_by_fmeter(void)
+ 
+ static unsigned int __init _get_ulposc_clk_by_fmeter_wrapper(void)
+ {
++#if IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK)
+ 	unsigned int result_freq;
+ 
+ 	result_freq = mt_get_fmeter_freq(g_dvfs_dev.ccf_fmeter_id, g_dvfs_dev.ccf_fmeter_type);
+@@ -1584,6 +1585,9 @@ static unsigned int __init _get_ulposc_clk_by_fmeter_wrapper(void)
+ 		WARN_ON(1);
+ 	}
+ 	return FM_FREQ2CNT(result_freq) / 1000;
++#else
++	return 0;
++#endif
+ }
+ 
+ static unsigned int __init get_ulposc_clk_by_fmeter_topck_abist(void)
+@@ -2792,7 +2796,9 @@ static int __init mt_scp_dts_init(struct platform_device *pdev)
+ 	 */
+ 	g_dvfs_dev.not_support_vlp_fmeter = of_property_read_bool(node,
+ 					PROPNAME_NOT_SUPPORT_VLP_FM);
+-	g_dvfs_dev.ccf_fmeter_support = of_property_read_bool(node, PROPNAME_U2_FM_SUPPORT);
++	g_dvfs_dev.ccf_fmeter_support =
++		IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK) &&
++		of_property_read_bool(node, PROPNAME_U2_FM_SUPPORT);
+ 	if (!g_dvfs_dev.ccf_fmeter_support) {
+ 		pr_notice("[%s]: fmeter api havn't been provided, use legacy one\n", __func__);
+ 	} else {
+@@ -2803,7 +2809,11 @@ static int __init mt_scp_dts_init(struct platform_device *pdev)
+ 			g_dvfs_dev.ccf_fmeter_type = ABIST;
+ 
+ 		/* enum FMETER_ID */
++#if IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK)
+ 		ret = mt_get_fmeter_id(FID_ULPOSC2);
++#else
++		ret = FID_NULL;
++#endif
+ 		g_dvfs_dev.ccf_fmeter_id = ret;
+ 		pr_notice("[%s]: init ccf fmeter api, id: %d, type: %d\n",
+ 			__func__, g_dvfs_dev.ccf_fmeter_id, g_dvfs_dev.ccf_fmeter_type);
+@@ -2953,11 +2963,11 @@ static int __init mt_scp_dvfs_pdrv_probe(struct platform_device *pdev)
  /***************************************
   * this function should never be called
   ****************************************/
@@ -46,7 +107,7 @@ index f118f65..ce327cf 100644
  	}
  
  	kfree(g_dvfs_dev.opp);
-@@ -2966,7 +2966,6 @@ static int mt_scp_dvfs_pdrv_remove(struct platform_device *pdev)
+@@ -2966,7 +2976,6 @@ static int mt_scp_dvfs_pdrv_remove(struct platform_device *pdev)
  	kfree(g_dvfs_dev.ulposc_hw.cali_freq);
  	kfree(g_dvfs_dev.ulposc_hw.cali_configs);
  
@@ -54,11 +115,27 @@ index f118f65..ce327cf 100644
  }
  
  static struct platform_driver mt_scp_dvfs_pdrv __refdata = {
+@@ -3005,4 +3014,3 @@ void scp_dvfs_exit(void)
+ {
+ 	platform_driver_unregister(&mt_scp_dvfs_pdrv);
+ }
+-
 diff --git a/drivers/misc/mediatek/scp/rv/scp_excep.c b/drivers/misc/mediatek/scp/rv/scp_excep.c
-index d880da0..260c6bb 100644
+index d880da09e0fc..6b7a00b77990 100644
 --- a/drivers/misc/mediatek/scp/rv/scp_excep.c
 +++ b/drivers/misc/mediatek/scp/rv/scp_excep.c
-@@ -812,7 +812,7 @@ void scp_aed_reset_bypass_once(void)
+@@ -728,8 +728,10 @@ void scp_aed(enum SCP_RESET_TYPE type, enum scp_core_id id)
+ 
+ 	while (1) {
+ 		/* wait for previous coredump complete */
++#if IS_REACHABLE(CONFIG_MTK_AEE_AED)
+ 		if (aee_get_mode() == AEE_MODE_CUSTOMER_USER)
+ 			break;
++#endif
+ 		ret = wait_for_completion_interruptible_timeout(
+ 			&scp_coredump_comp, timeout);
+ 		if (ret == 0) {
+@@ -812,7 +814,7 @@ void scp_aed_reset_bypass_once(void)
  }
  
  static ssize_t scp_A_dump_show(struct file *filep,
@@ -67,8 +144,13 @@ index d880da0..260c6bb 100644
  		char *buf, loff_t offset, size_t size)
  {
  	unsigned int length = 0;
+@@ -971,4 +973,3 @@ void scp_excep_cleanup(void)
+ 
+ 	pr_debug("[SCP] %s ends\n", __func__);
+ }
+-
 diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
-index c54a25e..9560d2e 100644
+index c54a25e765f7..e8675ba1f51f 100644
 --- a/drivers/misc/mediatek/scp/rv/scp_helper.c
 +++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
 @@ -794,7 +794,7 @@ static void scp_A_set_ready(void)

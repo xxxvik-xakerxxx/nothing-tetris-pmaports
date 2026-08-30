@@ -269,7 +269,13 @@ jobs:
             extra/mediatek-audio/snd-soc-mtk-common.ko \
             extra/mediatek-audio/snd-soc-mt6369.ko \
             extra/mediatek-audio/snd-soc-mt6878-afe.ko \
-            extra/mediatek-audio/mt6878-mt6369.ko; do
+            extra/mediatek-audio/mt6878-mt6369.ko \
+            extra/mediatek-sensors/mtk-mbox.ko \
+            extra/mediatek-sensors/mtk_rpmsg_mbox.ko \
+            extra/mediatek-sensors/mtk_tinysys_ipi.ko \
+            extra/mediatek-sensors/scp.ko \
+            extra/mediatek-sensors/hf_manager.ko \
+            extra/mediatek-sensors/sensorhub.ko; do
             find "$rootfs/lib/modules" -path "*/$module" -print -quit |
               grep -q . || { echo "missing module: $module"; exit 1; }
           done
@@ -305,6 +311,15 @@ jobs:
           test "$(rootfs_modinfo -F depends gps_drv_dl_v050)" = conninfra
           test "$(rootfs_modinfo -F name mt6685_core)" = mt6685_core
           test "$(rootfs_modinfo -F name mt6685_audclk)" = mt6685_audclk
+          for sensor_module in \
+            mtk_mbox \
+            mtk_rpmsg_mbox \
+            mtk_tinysys_ipi \
+            scp \
+            hf_manager \
+            sensorhub; do
+            test "$(rootfs_modinfo -F name "$sensor_module")" = "$sensor_module"
+          done
           # CardId is expanded by ALSA UCM at runtime.
           # shellcheck disable=SC2016
           check_contains "direct two-channel DL6 transport" \

@@ -471,6 +471,59 @@ validate_charging_policy() {
 		"$power_gate"
 }
 
+validate_sensor_transport() {
+	sensor_patch="$kernel_pkg/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor"
+	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
+	workflow="$repo_root/.github/workflows/ci.yml"
+
+	for patch in \
+		0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor \
+		0036-vendor-scp-linux-6.18-api.patch.vendor \
+		0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor \
+		1200-vendor-sensor-framework-linux-6.18.patch.vendor; do
+		grep -Fq "$patch" "$kernel_apkbuild"
+	done
+
+	grep -Fq '_symbols="$_symbols $_devmods_dir/sound/soc/mediatek/common/Module.symvers"' \
+		"$kernel_apkbuild"
+	grep -Fq 'CONFIG_MTK_TINYSYS_SCP_SUPPORT=m' "$kernel_apkbuild"
+	grep -Fq 'CONFIG_MTK_SENSORHUB=m' "$kernel_apkbuild"
+	for module in \
+		mtk-mbox.ko \
+		mtk_rpmsg_mbox.ko \
+		mtk_tinysys_ipi.ko \
+		scp.ko \
+		hf_manager.ko \
+		sensorhub.ko; do
+		grep -Fq "/$module" "$kernel_apkbuild"
+		grep -Fq "extra/mediatek-sensors/$module" "$workflow"
+	done
+	grep -Fq 'for sensor_module in' "$workflow"
+
+	grep -Fq 'mtk_vendor_scp_ipi_send' "$scp_patch"
+	grep -Fq '#define scp_ipi_send mtk_vendor_scp_ipi_send' "$scp_patch"
+	grep -Fq '#if IS_REACHABLE(CONFIG_MTK_AEE_AED)' "$scp_patch"
+	grep -Fq '#if IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK)' \
+		"$scp_patch"
+	grep -Fq 'IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK) &&' \
+		"$scp_patch"
+
+	grep -Fq 'mtk_ipi_unregister(&scp_ipidev, IPI_IN_SENSOR_CTRL);' \
+		"$sensor_patch"
+	grep -Fq 'return -ENODEV;' "$sensor_patch"
+	grep -Fq 'leaving shared SCP running' "$sensor_patch"
+	if grep -Fq '+\t\t\tscp_wdt_reset(0);' "$sensor_patch"; then
+		echo "sensor handoff must not reset the shared SCP after a missing ready ack" >&2
+		return 1
+	fi
+
+	if grep -El '^[[:space:]]*(mtk-mbox|mtk_rpmsg_mbox|mtk_tinysys_ipi|scp|hf_manager|sensorhub)[[:space:]]*$' \
+		"$device_pkg"/*.conf >/dev/null 2>&1; then
+		echo "sensor transport modules must remain manual until live validation passes" >&2
+		return 1
+	fi
+}
+
 validate_ci_rootfs_module_checks() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
@@ -558,6 +611,7 @@ validate_usb_role
 validate_haptics
 validate_thermal
 validate_charging_policy
+validate_sensor_transport
 validate_ci_rootfs_module_checks
 validate_connectivity_firmware
 validate_connectivity_build
