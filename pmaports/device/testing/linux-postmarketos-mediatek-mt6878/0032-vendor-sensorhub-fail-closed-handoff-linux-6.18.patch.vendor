@@ -102,6 +102,15 @@ diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c b/drivers/
 index 180c07cec7a6..887b3bae5008 100755
 --- a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
 +++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
+@@ -106,7 +106,7 @@ static void transceiver_notify_func(struct sensor_comm_notify *n,
+ 	spin_unlock(&transceiver_fifo_lock);
+ 	end_time = ktime_get_boottime_ns();
+ 	if (end_time - start_time > timeout_ns && __ratelimit(&ratelimit))
+-		printk_deferred("time monitor:%llu, %llu, %llu, %llu, %llu, %llu\n",
++		pr_warn("time monitor:%llu, %llu, %llu, %llu, %llu, %llu\n",
+ 			start_time, wait_spin_lock_end_time, timesync_end_time,
+ 			kfifo_end_time, complete_end_time, end_time);
+ }
 @@ -614,6 +614,9 @@ static int transceiver_comm_with(int sensor_type, int cmd,
  
  	ctrl_size = ipi_comm_size(sizeof(*ctrl) + length);

@@ -530,6 +530,11 @@ validate_sensor_transport() {
 
 	grep -Fq 'mtk_ipi_unregister(&scp_ipidev, IPI_IN_SENSOR_CTRL);' \
 		"$sensor_patch"
+	grep -Fq 'pr_warn("time monitor:%llu' "$sensor_patch"
+	if grep -Eq '^\+.*printk_deferred\("time monitor:%llu' "$sensor_patch"; then
+		echo "sensorhub patch must not retain unexported printk_deferred" >&2
+		return 1
+	fi
 	grep -Fq 'return -ENODEV;' "$sensor_patch"
 	grep -Fq 'leaving shared SCP running' "$sensor_patch"
 	if grep -Fq '+\t\t\tscp_wdt_reset(0);' "$sensor_patch"; then
