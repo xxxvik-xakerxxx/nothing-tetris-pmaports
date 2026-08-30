@@ -56,7 +56,7 @@ normal Alpine/postmarketOS practice.
 | `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
 | `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
 | `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the stale argument from the packaged DTB. The verified U-Boot revision currently injects it again at `bootm`, so this patch alone does not change runtime clock policy. A one-shot boot without the argument failed and reset; keep unused-clock cleanup gated until the missing clock ownership is identified. |
-| `0040-thermal-mediatek-mt6878-read-latched-msr.patch` | Uses the MT6878 vendor-style latched MSR read path. The `9afc17e` live baseline returned values for only 6 of 24 LVTS zones because mainline waited for a transient valid bit; `18a962a` carries the correction and requires CI plus live thermal regression. |
+| `0040-thermal-mediatek-mt6878-read-latched-msr.patch` | Uses the MT6878 vendor-style latched MSR read path. The `9afc17e` baseline returned only 6 of 24 LVTS values because mainline waited for a transient valid bit. Clean-flashed `ba02998` passed two gates with all 24 plausible LVTS temperatures while USB remained healthy. |
 
 ### Peripheral identification and staged bring-up
 
@@ -91,7 +91,7 @@ normal Alpine/postmarketOS practice.
 | `0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor` | Adapts the sensorhub transport to Linux 6.18, removes automatic SCP reset recovery and fails closed when shared memory or IPI setup is unavailable. |
 | `0036-vendor-scp-linux-6.18-api.patch.vendor` | Adapts the official SCP provider to Linux 6.18 timer, platform remove, bin-attribute and MT6397 APIs. |
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
-| `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. This fixes failure containment only; it does not provide the missing SCP handoff. |
+| `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. This fixes failure containment only; it does not provide the missing SCP handoff. |
 
 The `pkgrel=118` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
@@ -141,8 +141,10 @@ gated on the reboot-to-fastboot rollback path, firmware/reserved-memory audit,
 idle-power baseline and USB NCM/SSH regression checks. A manual `9afc17e` probe
 loaded the mailbox, RPMSG, IPI and HF framework modules, but `scp.ko` then hung
 in `wait_scp_dvfs_init_done()` and flooded WARN messages because the DVFS
-platform contract never completed. `sensorhub.ko` was not loaded. SCP remains
-manual-only until this path fails closed and the missing handoff is supplied.
+platform contract never completed. Clean-flashed `ba02998` proved that this
+same missing contract now fails closed after 3.09 seconds without retaining
+`scp`, producing WARN/Oops, or losing USB. `sensorhub.ko` was not loaded. SCP
+remains manual-only until the missing handoff is supplied.
 
 The kernel config deliberately keeps `CONFIG_TYPEC_RT1711H` disabled. The
 detected `5-004e` I2C client is the MT6375 TCPC bank exposed by the MT6375 MFD,

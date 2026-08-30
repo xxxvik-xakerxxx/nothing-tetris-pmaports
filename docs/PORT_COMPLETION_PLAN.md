@@ -9,7 +9,7 @@ postmarketOS port into a stable daily-phone build.
 | --- | --- | --- |
 | Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `fa00144adde95333fab32e19d63caa32968909c1`. Keep as the published rollback until the active candidate completes all promotion gates. |
 | Merged hardware baseline branch | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` | Already merged into `main`. Keep only as historical CI reference until branch cleanup. |
-| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | `9afc17e886bcef00d01ce7f63cf33f58b94ee582` was clean-flashed to `super` and `userdata`. Kernel `6.18.0 #117`, USB NCM/SSH, an exact 32 MiB raw transfer, charger gate, Wi-Fi AP enumeration, Bluetooth HCI and audio enumeration passed. LVTS and SCP failed as documented below. `18a962ace0f86da173875d06b0440b077cfe5f29` adds the thermal correction and is in CI run `33309950811`; it is not live-verified yet. |
+| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | `ba0299888c5151b79d134c61cfcd57fc35f70f75` passed CI run `33312303262` and was clean-flashed to `super` and `userdata`. Kernel package `6.18-r118` (`6.18.0 #119`) passed two boots, two exact 32 MiB USB NCM/SSH transfers, two complete thermal gates, charger telemetry, Wi-Fi AP enumeration, Bluetooth HCI and audio enumeration. The manual SCP probe failed closed after 3.09 seconds without WARN/Oops or USB loss. |
 | Bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Keep verified commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef`. Its built-in environment injects `clk_ignore_unused` while constructing dynamic pmOS UUID arguments. A temporary boot without that token produced a launch error/reset, so do not update U-Boot or force unused-clock cleanup until the dependency is identified. |
 
 ## Branch policy
@@ -61,22 +61,21 @@ the current staging notes for follow-up patch branches:
 
 | Block | Draft path | Status |
 | --- | --- | --- |
-| Sensors/SCP | `0032`, `0036`, `0037` plus `APKBUILD` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. Build-only package integration is prepared; no autoload or DT enablement. |
+| Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment on the device; no sensor module autoload or DT enablement. The actual SCP firmware/handoff remains missing. |
 | SIM / modem | `local/patch-drafts/modem-sim/` | Draft CCCI/CCMNI/ECCCI plan and live gates. Compile-only branch should be next; no `conn_md`/`mddp` first pass. |
 | GPU | `local/patch-drafts/gpu/` | RFC Panthor path with MFG0 domain and disabled DT node drafts. Wait for thermal and regulator work. |
 | Camera foundation | `local/patch-drafts/camera/` | Source inventory and config draft for sensor ID/cam_cal/VCM/flash only. No ISP/autoload yet. |
 
 ## Current blockers
 
-- The `9afc17e` live thermal gate exposed only 6 of 24 LVTS values. The latched
-  MSR correction at `18a962a` must pass CI, clean flash and the full thermal
-  gate before promotion.
-- Manual `scp.ko` loading on `9afc17e` hangs in
-  `wait_scp_dvfs_init_done()` and floods WARN messages when the DVFS platform
-  driver does not complete. `0041` now bounds and unwinds that failure in the
-  `pkgrel=118` candidate, but still needs CI and a manual live probe. Keep SCP
-  and sensorhub manual-only, then solve the real firmware, reserved-memory and
-  boot handoff contract.
+- `ba02998` fixes the incomplete LVTS reads: both clean-boot thermal gates
+  exposed all 24 plausible MT6878 zones plus the battery temperature while USB
+  remained healthy. Thermal IRQs and hardware trips are still disabled pending
+  an independent routing and reboot-safety audit.
+- `ba02998` also contains the failure-containment-only SCP fix. A manual probe
+  returned `-ETIMEDOUT` after 3.09 seconds with one diagnostic, no loaded `scp`
+  module, no WARN/Oops and no USB loss. Keep SCP and sensorhub manual-only while
+  the real firmware, reserved-memory and boot handoff contract is solved.
 - U-Boot reinjects `clk_ignore_unused` after the packaged DTB is checked. A
   one-shot boot without the token failed and reset, with no ramoops record.
   Capture the early failure before attempting kernel or U-Boot policy changes.
