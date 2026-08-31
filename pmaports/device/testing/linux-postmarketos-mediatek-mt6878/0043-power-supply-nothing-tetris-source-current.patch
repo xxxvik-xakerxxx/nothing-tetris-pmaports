@@ -1,0 +1,357 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] power: supply: tetris: follow Type-C source current
+
+The initial Tetris charging policy deliberately limits every source to the
+USB default current. Use the TCPM power supply to raise AICR and ICHG only
+when Type-C Rp or a PD contract advertises a larger current. Keep a 500 mA
+fallback for default-current, malformed and partially unavailable source
+data, cap trusted sources at the production 2 A input limit, and inhibit
+charging while the source is offline.
+
+Listen for TCPM power-supply changes so a detach or a lower-current source
+is handled immediately. The periodic evaluation remains as a fallback.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../nothing,tetris-charging-policy.yaml         |   6 +
+ .../boot/dts/mediatek/mt6878-nothing-tetris.dts |   5 +-
+ drivers/power/supply/Kconfig                    |   2 +
+ .../nothing-tetris-charging-policy.c            | 142 +++++++++++++++---
+ 4 files changed, 135 insertions(+), 20 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/power/supply/nothing,tetris-charging-policy.yaml b/Documentation/devicetree/bindings/power/supply/nothing,tetris-charging-policy.yaml
+--- a/Documentation/devicetree/bindings/power/supply/nothing,tetris-charging-policy.yaml
++++ b/Documentation/devicetree/bindings/power/supply/nothing,tetris-charging-policy.yaml
+@@ -27,10 +27,15 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/phandle
+     description: Charger power supply controlled by the policy.
+ 
++  source-supply:
++    $ref: /schemas/types.yaml#/definitions/phandle
++    description: TCPM power supply which describes the connected source.
++
+ required:
+   - compatible
+   - battery-supply
+   - charger-supply
++  - source-supply
+ 
+ additionalProperties: false
+ 
+@@ -40,4 +45,5 @@ examples:
+         compatible = "nothing,tetris-charging-policy";
+         battery-supply = <&battery_gauge>;
+         charger-supply = <&charger>;
++        source-supply = <&tcpc>;
+     };
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -72,7 +72,7 @@
+ 		voltage-min-design-microvolt = <3350000>;
+ 		voltage-max-design-microvolt = <4480000>;
+ 		charge-full-design-microamp-hours = <5060000>;
+-		constant-charge-current-max-microamp = <500000>;
++		constant-charge-current-max-microamp = <2050000>;
+ 		constant-charge-voltage-max-microvolt = <4490000>;
+ 		factory-internal-resistance-micro-ohms = <74000>;
+ 		ocv-capacity-celsius = <25>;
+@@ -90,6 +90,7 @@
+ 		compatible = "nothing,tetris-charging-policy";
+ 		battery-supply = <&mt6375_gauge>;
+ 		charger-supply = <&mt6375_charger>;
++		source-supply = <&mt6375_typec>;
+ 	};
+ };
+ 
+@@ -204,7 +205,7 @@
+ 			#io-channel-cells = <1>;
+ 		};
+ 
+-		tcpc {
++		mt6375_typec: tcpc {
+ 			compatible = "mediatek,mt6375-tcpc";
+ 			interrupts = <120>;
+ 			interrupt-names = "pd_evt";
+diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
+--- a/drivers/power/supply/Kconfig
++++ b/drivers/power/supply/Kconfig
+@@ -1125,6 +1125,8 @@ config CHARGER_NOTHING_TETRIS_POLICY
+ 	depends on OF
+ 	depends on CHARGER_MT6375
+ 	depends on BATTERY_MT6375_GAUGE_MONITOR
++	depends on TYPEC_TCPM
++	depends on TYPEC_TCPCI_MT6375
+ 	help
+ 	  Enforce conservative charging limits and battery temperature cutoffs on
+ 	  the Nothing Tetris. The policy controls the MT6375 charger exclusively
+diff --git a/drivers/power/supply/nothing-tetris-charging-policy.c b/drivers/power/supply/nothing-tetris-charging-policy.c
+--- a/drivers/power/supply/nothing-tetris-charging-policy.c
++++ b/drivers/power/supply/nothing-tetris-charging-policy.c
+@@ -12,10 +12,13 @@
+ 
+ #define TETRIS_POLICY_POLL_INTERVAL	(10 * HZ)
+ 
+-#define TETRIS_POLICY_AICR_UA		500000
+-#define TETRIS_POLICY_ICHG_UA		500000
++#define TETRIS_POLICY_USB_FALLBACK_UA	500000
++#define TETRIS_POLICY_TYPEC_MIN_UA	1500000
++#define TETRIS_POLICY_INPUT_MAX_UA	2000000
++#define TETRIS_POLICY_BATTERY_MAX_UA	2050000
+ #define TETRIS_POLICY_MIVR_UV		4400000
+ #define TETRIS_POLICY_COOL_CV_UV	4480000
++#define TETRIS_POLICY_SOURCE_MAX_UV	21000000
+ 
+ /* POWER_SUPPLY_PROP_TEMP uses tenths of a degree Celsius. */
+ #define TETRIS_POLICY_COLD_STOP		0
+@@ -35,10 +38,13 @@ struct tetris_charging_policy {
+ 	struct device *dev;
+ 	struct power_supply *gauge;
+ 	struct power_supply *charger;
++	struct power_supply *source;
+ 	struct delayed_work work;
++	struct notifier_block source_nb;
+ 	struct mutex lock; /* Serialize policy updates with suspend and teardown. */
+ 	enum tetris_policy_zone zone;
+ 	int normal_cv_uv;
++	bool notifier_registered;
+ 	bool zone_valid;
+ 	bool suspended;
+ };
+@@ -72,15 +78,17 @@ static int tetris_policy_property_matches(struct tetris_charging_policy *policy,
+ }
+ 
+ static bool tetris_policy_needs_programming(struct tetris_charging_policy *policy,
+-					    int cv_uv)
++					    int input_current_ua,
++					    int charge_current_ua, int cv_uv,
++					    int charge_behaviour)
+ {
+ 	if (tetris_policy_property_matches(policy,
+ 					   POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-					   TETRIS_POLICY_AICR_UA))
++					   input_current_ua))
+ 		return true;
+ 	if (tetris_policy_property_matches(policy,
+ 					   POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+-					   TETRIS_POLICY_ICHG_UA))
++					   charge_current_ua))
+ 		return true;
+ 	if (tetris_policy_property_matches(policy,
+ 					   POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
+@@ -102,24 +110,26 @@ static bool tetris_policy_needs_programming(struct tetris_charging_policy *policy,
+ 
+ 	return tetris_policy_property_matches(policy,
+ 					      POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR,
+-					      POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO);
++					      charge_behaviour);
+ }
+ 
+-static int tetris_policy_program(struct tetris_charging_policy *policy, int cv_uv)
++static int tetris_policy_program(struct tetris_charging_policy *policy,
++				 int input_current_ua, int charge_current_ua,
++				 int cv_uv, int charge_behaviour)
+ {
+ 	int ret;
+ 
+ 	ret = tetris_policy_inhibit(policy);
+ 	if (ret)
+ 		return ret;
+ 
+ 	ret = tetris_policy_set(policy, POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+-				TETRIS_POLICY_AICR_UA);
++				input_current_ua);
+ 	if (ret)
+ 		return ret;
+ 
+ 	ret = tetris_policy_set(policy,
+ 				POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+-				TETRIS_POLICY_ICHG_UA);
++				charge_current_ua);
+ 	if (ret)
+ 		return ret;
+@@ -135,8 +145,60 @@ static int tetris_policy_program(struct tetris_charging_policy *policy, int cv_uv)
+ 	if (ret)
+ 		return ret;
+ 
+-	return tetris_policy_set(policy, POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR,
+-				 POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO);
++	return tetris_policy_set(policy, POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR,
++				 charge_behaviour);
++}
++
++static bool tetris_policy_source_limit(struct tetris_charging_policy *policy,
++				       int *current_ua)
++{
++	union power_supply_propval val;
++	enum power_supply_usb_type usb_type;
++	int source_current_ua;
++	int source_voltage_uv;
++	int ret;
++
++	*current_ua = TETRIS_POLICY_USB_FALLBACK_UA;
++
++	ret = power_supply_get_property(policy->source,
++					POWER_SUPPLY_PROP_ONLINE, &val);
++	if (ret || val.intval <= 0)
++		return false;
++
++	ret = power_supply_get_property(policy->source,
++					POWER_SUPPLY_PROP_USB_TYPE, &val);
++	if (ret)
++		return true;
++	usb_type = val.intval;
++
++	ret = power_supply_get_property(policy->source,
++					POWER_SUPPLY_PROP_CURRENT_MAX, &val);
++	if (ret || val.intval <= TETRIS_POLICY_USB_FALLBACK_UA)
++		return true;
++	source_current_ua = val.intval;
++
++	ret = power_supply_get_property(policy->source,
++					POWER_SUPPLY_PROP_VOLTAGE_MAX, &val);
++	if (ret || val.intval <= 0 || val.intval > TETRIS_POLICY_SOURCE_MAX_UV)
++		return true;
++	source_voltage_uv = val.intval;
++
++	switch (usb_type) {
++	case POWER_SUPPLY_USB_TYPE_C:
++		if (source_current_ua < TETRIS_POLICY_TYPEC_MIN_UA)
++			return true;
++		break;
++	case POWER_SUPPLY_USB_TYPE_PD:
++	case POWER_SUPPLY_USB_TYPE_PD_PPS:
++		break;
++	default:
++		return true;
++	}
++
++	if (source_voltage_uv > 0)
++		*current_ua = min_t(int, source_current_ua, TETRIS_POLICY_INPUT_MAX_UA);
++
++	return true;
+ }
+ 
+ static enum tetris_policy_zone
+@@ -177,30 +239,41 @@ static int tetris_policy_evaluate(struct tetris_charging_policy *policy)
+ {
+ 	union power_supply_propval val;
+ 	enum tetris_policy_zone zone;
++	int charge_behaviour;
++	int current_ua;
+ 	int cv_uv;
+ 	int ret;
++	bool online;
++
++	online = tetris_policy_source_limit(policy, &current_ua);
++	charge_behaviour = online ? POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO :
++				      POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE;
+ 
+ 	ret = power_supply_get_property(policy->gauge, POWER_SUPPLY_PROP_TEMP,
+ 					&val);
+ 	if (ret) {
+ 		dev_warn_ratelimited(policy->dev,
+ 				     "battery temperature unavailable: %d\n", ret);
+-		return tetris_policy_inhibit(policy);
++		return tetris_policy_program(policy, current_ua, current_ua,
++					     policy->normal_cv_uv,
++					     POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE);
+ 	}
+ 
+ 	zone = tetris_policy_next_zone(policy, val.intval);
+ 	policy->zone = zone;
+ 	policy->zone_valid = true;
+ 
+-	if (zone == TETRIS_POLICY_COLD || zone == TETRIS_POLICY_HOT)
+-		return tetris_policy_inhibit(policy);
+-
+ 	cv_uv = zone == TETRIS_POLICY_COOL ? TETRIS_POLICY_COOL_CV_UV :
+ 						 policy->normal_cv_uv;
+-	if (!tetris_policy_needs_programming(policy, cv_uv))
++	if (zone == TETRIS_POLICY_COLD || zone == TETRIS_POLICY_HOT)
++		charge_behaviour = POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE;
++
++	if (!tetris_policy_needs_programming(policy, current_ua, current_ua,
++					     cv_uv, charge_behaviour))
+ 		return 0;
+ 
+-	ret = tetris_policy_program(policy, cv_uv);
++	ret = tetris_policy_program(policy, current_ua, current_ua, cv_uv,
++				    charge_behaviour);
+ 	if (ret) {
+ 		tetris_policy_inhibit(policy);
+ 		dev_warn_ratelimited(policy->dev,
+@@ -210,6 +283,20 @@ static int tetris_policy_evaluate(struct tetris_charging_policy *policy)
+ 	return ret;
+ }
+ 
++static int tetris_policy_source_notifier(struct notifier_block *nb,
++					 unsigned long event, void *data)
++{
++	struct tetris_charging_policy *policy =
++		container_of(nb, struct tetris_charging_policy, source_nb);
++
++	if (event != PSY_EVENT_PROP_CHANGED || data != policy->source)
++		return NOTIFY_DONE;
++
++	mod_delayed_work(system_power_efficient_wq, &policy->work, 0);
++
++	return NOTIFY_OK;
++}
++
+ static void tetris_policy_work(struct work_struct *work)
+ {
+ 	struct tetris_charging_policy *policy =
+@@ -229,6 +316,9 @@ static void tetris_policy_stop(void *data)
+ {
+ 	struct tetris_charging_policy *policy = data;
+ 
++	if (policy->notifier_registered)
++		power_supply_unreg_notifier(&policy->source_nb);
++	policy->notifier_registered = false;
+ 	cancel_delayed_work_sync(&policy->work);
+ 	mutex_lock(&policy->lock);
+ 	tetris_policy_inhibit(policy);
+@@ -264,6 +354,15 @@ static int tetris_policy_probe(struct platform_device *pdev)
+ 		return dev_err_probe(&pdev->dev, -EPROBE_DEFER,
+ 				     "charger is not registered\n");
+ 
++	policy->source = devm_power_supply_get_by_reference(&pdev->dev,
++							    "source-supply");
++	if (IS_ERR(policy->source))
++		return dev_err_probe(&pdev->dev, PTR_ERR(policy->source),
++				     "failed to get Type-C source\n");
++	if (!policy->source)
++		return dev_err_probe(&pdev->dev, -EPROBE_DEFER,
++				     "Type-C source is not registered\n");
++
+ 	ret = power_supply_get_battery_info(policy->gauge, &info);
+ 	if (ret)
+ 		return dev_err_probe(&pdev->dev, ret,
+@@ -271,5 +370,5 @@ static int tetris_policy_probe(struct platform_device *pdev)
+ 
+-	if (info->constant_charge_current_max_ua != TETRIS_POLICY_ICHG_UA ||
++	if (info->constant_charge_current_max_ua != TETRIS_POLICY_BATTERY_MAX_UA ||
+ 	    info->constant_charge_voltage_max_uv != 4490000) {
+ 		ret = -EINVAL;
+ 		dev_err(&pdev->dev, "unsafe battery limits: ICHG=%d CV=%d\n",
+@@ -286,10 +385,17 @@ static int tetris_policy_probe(struct platform_device *pdev)
+ 	mutex_init(&policy->lock);
+ 	INIT_DELAYED_WORK(&policy->work, tetris_policy_work);
++	policy->source_nb.notifier_call = tetris_policy_source_notifier;
+ 	platform_set_drvdata(pdev, policy);
+ 
+ 	ret = tetris_policy_inhibit(policy);
+ 	if (ret)
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "failed to inhibit charging at probe\n");
+ 
++	ret = power_supply_reg_notifier(&policy->source_nb);
++	if (ret)
++		return dev_err_probe(&pdev->dev, ret,
++				     "failed to register source notifier\n");
++	policy->notifier_registered = true;
++
+ 	ret = devm_add_action_or_reset(&pdev->dev, tetris_policy_stop, policy);
+-- 
+2.51.0

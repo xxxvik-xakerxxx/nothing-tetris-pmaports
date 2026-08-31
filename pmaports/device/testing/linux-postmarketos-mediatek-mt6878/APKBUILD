@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=118
+pkgrel=119
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -63,6 +63,7 @@ source="
 	0025-iio-adc-mt6375-auxadc.patch
 	0026-power-supply-mt6375-gauge-monitor.patch
 	0027-power-supply-nothing-tetris-charging-policy.patch
+	0043-power-supply-nothing-tetris-source-current.patch
 	0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 	0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
@@ -507,6 +508,7 @@ dbaf456f19b0fe298bbe242546671de32c4706af8e2d7ac2625c3c8c8b4bde0ef64aa71b0d28782c
 34ffe70a42a7836f32614c2b2065fa3d88fd8cc04e479a2ebe60102289699fefc0481f505c304c13d3864b8ea373072409c8f889741c12894f2cd6b4d4a7da92  0025-iio-adc-mt6375-auxadc.patch
 bb8aa861a41f1656724149998f435b4e6e599b75309c5b7c6c2b43dc184f0366c223780d687104328b8e3be39d778b95c09353a55f9c6490dc591ea5f908726e  0026-power-supply-mt6375-gauge-monitor.patch
 75a87d50604ca9b3df175ab8ac4b8ceadbc480535e19ea94bb736c556d367939a148234ee92f5e3f4baf7a0f1f9775a74a4106c5ca4c74f25b721dc9313fc325  0027-power-supply-nothing-tetris-charging-policy.patch
+a6c28a29be81449b927b1bf8f0ccbc5f2e7bd038487ed34601b844fe49ab395caef73524aa2f2bf7f3bfbc90cd50e1a9b5410be67926f34f7f80cb6bafee1c6a  0043-power-supply-nothing-tetris-source-current.patch
 6c4064ec0f6c6287b5dcc1cd76baf1d25dbbc6adac6b3e841b5e2ebe1660b947ceab90bb291224f796dd0872addfed21eab16fde9c331306d476884d98327866  0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 9991e7ba81d46059c6a6afff0480c3cc7173b1f39c2bfcda2b12e527317b0a37e6e65077740bddbd5b86583c0f8f52ffd981de937836e298d8efedd6b30592ec  0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
