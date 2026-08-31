@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+module=gps_drv_dl_v050
+firmware_root=${FIRMWARE_ROOT:-/usr/lib/firmware}
+module_root=${MODULE_ROOT:-/sys/module}
+dev_root=${DEV_ROOT:-/dev}
+modprobe_cmd=${MODPROBE:-modprobe}
+
+log() {
+	printf '%s\n' "nothing-tetris-gnss: $*"
+}
+
+check_ready() {
+	[ -d "$module_root/$module" ] || {
+		log "$module is not loaded"
+		return 1
+	}
+
+	for node in gpsdl0 gpsdl1; do
+		[ -c "$dev_root/$node" ] || {
+			log "$dev_root/$node is unavailable"
+			return 1
+		}
+	done
+
+	log "transport ready at $dev_root/gpsdl0 and $dev_root/gpsdl1"
+}
+
+case "${1:-status}" in
+	start)
+		[ -s "$firmware_root/connsys_gnss_mt6878_mt6631.bin" ] || {
+			log "packaged MT6878/MT6631 GNSS firmware is missing"
+			exit 1
+		}
+		[ -d "$module_root/conninfra" ] || {
+			log "conninfra is not ready; start nothing-tetris-connectivity.service first"
+			exit 1
+		}
+		if [ ! -d "$module_root/$module" ]; then
+			"$modprobe_cmd" "$module"
+		fi
+		check_ready
+		;;
+	status)
+		check_ready
+		;;
+	*)
+		echo "usage: $0 {start|status}" >&2
+		exit 2
+		;;
+esac

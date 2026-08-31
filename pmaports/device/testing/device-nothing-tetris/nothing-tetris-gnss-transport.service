@@ -1,0 +1,11 @@
+[Unit]
+Description=Nothing Tetris GNSS transport
+Requires=nothing-tetris-connectivity.service
+After=nothing-tetris-connectivity.service
+ConditionPathExists=/usr/lib/firmware/connsys_gnss_mt6878_mt6631.bin
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-gnss-transport start
+ExecReload=/usr/libexec/nothing-tetris-gnss-transport status
+RemainAfterExit=yes
