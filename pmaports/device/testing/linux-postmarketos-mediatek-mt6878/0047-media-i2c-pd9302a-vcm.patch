@@ -1,0 +1,386 @@
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index e6d7dfe..0c784e9 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -856,6 +856,14 @@ config VIDEO_DW9807_VCM
+ 	  capability. This is designed for linear control of
+ 	  voice coil motors, controlled via I2C serial interface.
+ 
++config VIDEO_PD9302A
++	tristate "PD9302A lens voice coil support"
++	help
++	  This is a driver for the Puya Semiconductor PD9302A camera lens
++	  voice coil. The device provides a 10-bit position control and is
++	  controlled over I2C. This option is intentionally disabled unless
++	  selected by a platform with complete regulator descriptions.
++
+ endif
+ 
+ menu "Flash devices"
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index 5de06f8..413c096 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -92,6 +92,7 @@ obj-$(CONFIG_VIDEO_OV9734) += ov9734.o
+ obj-$(CONFIG_VIDEO_RDACM20) += rdacm20.o
+ obj-$(CONFIG_VIDEO_RDACM21) += rdacm21.o
+ obj-$(CONFIG_VIDEO_RJ54N1) += rj54n1cb0c.o
++obj-$(CONFIG_VIDEO_PD9302A) += pd9302a.o
+ obj-$(CONFIG_VIDEO_S5C73M3) += s5c73m3/
+ obj-$(CONFIG_VIDEO_S5K5BAF) += s5k5baf.o
+ obj-$(CONFIG_VIDEO_S5K6A3) += s5k6a3.o
+diff --git a/drivers/media/i2c/pd9302a.c b/drivers/media/i2c/pd9302a.c
+new file mode 100644
+index 0000000..32be820
+--- /dev/null
++++ b/drivers/media/i2c/pd9302a.c
+@@ -0,0 +1,331 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Puya Semiconductor PD9302A voice coil motor driver
++ *
++ * The register sequence and motion limits are derived from the shipping
++ * Nothing/MediaTek driver. This implementation exposes only standard V4L2
++ * controls and runtime power management.
++ */
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/pm_runtime.h>
++#include <linux/regulator/consumer.h>
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-device.h>
++
++#define PD9302A_REG_CONTROL		0x02
++#define PD9302A_REG_POSITION		0x03
++#define PD9302A_REG_CONFIG_1		0x06
++#define PD9302A_REG_CONFIG_2		0x07
++
++#define PD9302A_CONTROL_RESET		0x01
++#define PD9302A_CONTROL_ACTIVE		0x02
++#define PD9302A_CONTROL_STANDBY		0x20
++#define PD9302A_CONFIG_1_DEFAULT	0x40
++#define PD9302A_CONFIG_2_DEFAULT	0x60
++
++#define PD9302A_MAX_FOCUS_POS		1023
++#define PD9302A_ORIGIN_FOCUS_POS	512
++#define PD9302A_MOVE_STEP		100
++#define PD9302A_MOVE_DELAY_US		5000
++#define PD9302A_POWER_DELAY_US		10000
++
++static const char * const pd9302a_supply_names[] = {
++	"vin",
++	"vdd",
++};
++
++struct pd9302a_device {
++	struct v4l2_ctrl_handler ctrls;
++	struct v4l2_subdev sd;
++	struct v4l2_ctrl *focus;
++	struct regulator_bulk_data supplies[ARRAY_SIZE(pd9302a_supply_names)];
++	u16 position;
++	bool active;
++};
++
++static inline struct pd9302a_device *to_pd9302a(struct v4l2_subdev *sd)
++{
++	return container_of(sd, struct pd9302a_device, sd);
++}
++
++static int pd9302a_write8(struct pd9302a_device *pd9302a, u8 reg, u8 value)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&pd9302a->sd);
++	u8 buf[] = { reg, value };
++	int ret;
++
++	ret = i2c_master_send(client, buf, sizeof(buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(buf))
++		return -EIO;
++
++	return 0;
++}
++
++static int pd9302a_set_position(struct pd9302a_device *pd9302a, u16 position)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&pd9302a->sd);
++	u8 buf[] = { PD9302A_REG_POSITION, position >> 8, position & 0xff };
++	int ret;
++
++	ret = i2c_master_send(client, buf, sizeof(buf));
++	if (ret < 0)
++		return ret;
++	if (ret != sizeof(buf))
++		return -EIO;
++
++	pd9302a->position = position;
++	return 0;
++}
++
++static int pd9302a_initialize(struct pd9302a_device *pd9302a)
++{
++	static const struct {
++		u8 reg;
++		u8 value;
++	} init_sequence[] = {
++		{ PD9302A_REG_CONTROL, PD9302A_CONTROL_RESET },
++		{ PD9302A_REG_CONTROL, 0x00 },
++		{ PD9302A_REG_CONTROL, PD9302A_CONTROL_ACTIVE },
++		{ PD9302A_REG_CONFIG_1, PD9302A_CONFIG_1_DEFAULT },
++		{ PD9302A_REG_CONFIG_2, PD9302A_CONFIG_2_DEFAULT },
++	};
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(init_sequence); i++) {
++		ret = pd9302a_write8(pd9302a, init_sequence[i].reg,
++				     init_sequence[i].value);
++		if (ret)
++			return ret;
++
++		if (i == 1 || i == ARRAY_SIZE(init_sequence) - 1)
++			usleep_range(100, 200);
++	}
++
++	return 0;
++}
++
++static int pd9302a_park(struct pd9302a_device *pd9302a)
++{
++	int position = pd9302a->position;
++	int ret;
++
++	while (abs(position - PD9302A_ORIGIN_FOCUS_POS) > PD9302A_MOVE_STEP) {
++		position += position < PD9302A_ORIGIN_FOCUS_POS ?
++			PD9302A_MOVE_STEP : -PD9302A_MOVE_STEP;
++		ret = pd9302a_set_position(pd9302a, position);
++		if (ret)
++			return ret;
++		usleep_range(PD9302A_MOVE_DELAY_US,
++			     PD9302A_MOVE_DELAY_US + 1000);
++	}
++
++	return pd9302a_set_position(pd9302a, PD9302A_ORIGIN_FOCUS_POS);
++}
++
++static int pd9302a_set_ctrl(struct v4l2_ctrl *ctrl)
++{
++	struct pd9302a_device *pd9302a = container_of(ctrl->handler,
++							 struct pd9302a_device, ctrls);
++
++	if (ctrl->id != V4L2_CID_FOCUS_ABSOLUTE)
++		return -EINVAL;
++
++	if (!pd9302a->active)
++		return -EHOSTDOWN;
++
++	return pd9302a_set_position(pd9302a, ctrl->val);
++}
++
++static const struct v4l2_ctrl_ops pd9302a_ctrl_ops = {
++	.s_ctrl = pd9302a_set_ctrl,
++};
++
++static int pd9302a_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
++{
++	return pm_runtime_resume_and_get(sd->dev);
++}
++
++static int pd9302a_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
++{
++	pm_runtime_put(sd->dev);
++	return 0;
++}
++
++static const struct v4l2_subdev_internal_ops pd9302a_internal_ops = {
++	.open = pd9302a_open,
++	.close = pd9302a_close,
++};
++
++static const struct v4l2_subdev_ops pd9302a_subdev_ops = { };
++
++static int pd9302a_suspend(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct pd9302a_device *pd9302a = to_pd9302a(sd);
++	int disable_ret;
++	int ret;
++
++	if (!pd9302a->active)
++		return 0;
++
++	ret = pd9302a_park(pd9302a);
++	if (ret)
++		dev_warn(dev, "failed to park lens: %d\n", ret);
++	else
++		ret = pd9302a_write8(pd9302a, PD9302A_REG_CONTROL,
++				     PD9302A_CONTROL_STANDBY);
++	if (ret)
++		dev_warn(dev, "failed to enter standby: %d\n", ret);
++
++	disable_ret = regulator_bulk_disable(ARRAY_SIZE(pd9302a_supply_names),
++					     pd9302a->supplies);
++	if (disable_ret)
++		return disable_ret;
++
++	pd9302a->active = false;
++
++	return 0;
++}
++
++static int pd9302a_resume(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct pd9302a_device *pd9302a = to_pd9302a(sd);
++	int ret;
++
++	if (pd9302a->active)
++		return 0;
++
++	ret = regulator_bulk_enable(ARRAY_SIZE(pd9302a_supply_names),
++				    pd9302a->supplies);
++	if (ret)
++		return ret;
++
++	usleep_range(PD9302A_POWER_DELAY_US, PD9302A_POWER_DELAY_US + 500);
++
++	ret = pd9302a_initialize(pd9302a);
++	if (ret)
++		goto disable_supplies;
++
++	pd9302a->active = true;
++	ret = pd9302a_set_position(pd9302a, pd9302a->focus->val);
++	if (ret)
++		goto disable_supplies;
++
++	return 0;
++
++disable_supplies:
++	regulator_bulk_disable(ARRAY_SIZE(pd9302a_supply_names),
++			       pd9302a->supplies);
++	pd9302a->active = false;
++	return ret;
++}
++
++static void pd9302a_cleanup(struct pd9302a_device *pd9302a)
++{
++	v4l2_async_unregister_subdev(&pd9302a->sd);
++	v4l2_ctrl_handler_free(&pd9302a->ctrls);
++	media_entity_cleanup(&pd9302a->sd.entity);
++}
++
++static int pd9302a_probe(struct i2c_client *client)
++{
++	struct pd9302a_device *pd9302a;
++	unsigned int i;
++	int ret;
++
++	pd9302a = devm_kzalloc(&client->dev, sizeof(*pd9302a), GFP_KERNEL);
++	if (!pd9302a)
++		return -ENOMEM;
++
++	for (i = 0; i < ARRAY_SIZE(pd9302a_supply_names); i++)
++		pd9302a->supplies[i].supply = pd9302a_supply_names[i];
++
++	ret = devm_regulator_bulk_get(&client->dev,
++				      ARRAY_SIZE(pd9302a_supply_names),
++				      pd9302a->supplies);
++	if (ret)
++		return dev_err_probe(&client->dev, ret,
++				     "failed to get regulators\n");
++
++	v4l2_i2c_subdev_init(&pd9302a->sd, client, &pd9302a_subdev_ops);
++	pd9302a->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	pd9302a->sd.internal_ops = &pd9302a_internal_ops;
++	pd9302a->sd.entity.function = MEDIA_ENT_F_LENS;
++	pd9302a->position = PD9302A_ORIGIN_FOCUS_POS;
++
++	v4l2_ctrl_handler_init(&pd9302a->ctrls, 1);
++	pd9302a->focus = v4l2_ctrl_new_std(&pd9302a->ctrls,
++					   &pd9302a_ctrl_ops,
++					  V4L2_CID_FOCUS_ABSOLUTE, 0,
++					  PD9302A_MAX_FOCUS_POS, 1, 0);
++	if (pd9302a->ctrls.error) {
++		ret = pd9302a->ctrls.error;
++		goto free_ctrls;
++	}
++	pd9302a->sd.ctrl_handler = &pd9302a->ctrls;
++
++	ret = media_entity_pads_init(&pd9302a->sd.entity, 0, NULL);
++	if (ret)
++		goto free_ctrls;
++
++	ret = v4l2_async_register_subdev(&pd9302a->sd);
++	if (ret)
++		goto cleanup_entity;
++
++	ret = pm_runtime_set_suspended(&client->dev);
++	if (ret)
++		goto unregister_subdev;
++	pm_runtime_enable(&client->dev);
++
++	return 0;
++
++unregister_subdev:
++	v4l2_async_unregister_subdev(&pd9302a->sd);
++cleanup_entity:
++	media_entity_cleanup(&pd9302a->sd.entity);
++free_ctrls:
++	v4l2_ctrl_handler_free(&pd9302a->ctrls);
++	return ret;
++}
++
++static void pd9302a_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct pd9302a_device *pd9302a = to_pd9302a(sd);
++
++	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev))
++		pd9302a_suspend(&client->dev);
++	pd9302a_cleanup(pd9302a);
++}
++
++static const struct of_device_id pd9302a_of_match[] = {
++	{ .compatible = "puya,pd9302a" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, pd9302a_of_match);
++
++static DEFINE_RUNTIME_DEV_PM_OPS(pd9302a_pm_ops, pd9302a_suspend,
++				 pd9302a_resume, NULL);
++
++static struct i2c_driver pd9302a_i2c_driver = {
++	.driver = {
++		.name = "pd9302a",
++		.of_match_table = pd9302a_of_match,
++		.pm = pm_ptr(&pd9302a_pm_ops),
++	},
++	.probe = pd9302a_probe,
++	.remove = pd9302a_remove,
++};
++module_i2c_driver(pd9302a_i2c_driver);
++
++MODULE_AUTHOR("xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>");
++MODULE_DESCRIPTION("Puya Semiconductor PD9302A VCM driver");
++MODULE_LICENSE("GPL");
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 8085c64..5b880e6 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -20756,6 +20756,13 @@ L:	linux-wireless@vger.kernel.org
+ S:	Supported
+ F:	drivers/net/wireless/purelifi/
+ 
++PUYA PD9302A LENS VOICE COIL DRIVER
++M:	xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++L:	linux-media@vger.kernel.org
++S:	Maintained
++F:	Documentation/devicetree/bindings/media/i2c/puya,pd9302a.yaml
++F:	drivers/media/i2c/pd9302a.c
++
+ PVRUSB2 VIDEO4LINUX DRIVER
+ M:	Mike Isely <isely@pobox.com>
+ L:	pvrusb2@isely.net	(subscribers-only)

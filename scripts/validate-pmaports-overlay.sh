@@ -575,6 +575,32 @@ validate_ci_rootfs_module_checks() {
 	fi
 }
 
+validate_compile_only_boundaries() {
+	workflow="$repo_root/.github/workflows/ci.yml"
+
+	for source in \
+		0030-phy-mediatek-mt6878-mipi-tx-use-sleepable-pll-prepare.patch \
+		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
+		0046-dt-bindings-media-i2c-pd9302a.patch \
+		0047-media-i2c-pd9302a-vcm.patch \
+		0048-vendor-eccci-core-linux-6.18-api.patch.vendor; do
+		grep -Fq "$source" "$kernel_apkbuild"
+	done
+
+	grep -Fq '_build_pd9302a_compile_only' "$kernel_apkbuild"
+	grep -Fq 'drivers/media/i2c/pd9302a.o' "$kernel_apkbuild"
+	grep -Fq '_build_ccci_core_compile_only' "$kernel_apkbuild"
+	grep -Fq 'ccci_core.o ccci_bm.o' "$kernel_apkbuild"
+	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
+	grep -Fq 'compile-only CCCI core must not be packaged' "$workflow"
+
+	if grep -El '^[[:space:]]*(pd9302a|ccci_md_all|ccci_all)[[:space:]]*$' \
+		"$device_pkg"/*.conf >/dev/null 2>&1; then
+		echo "compile-only camera and CCCI core modules must not autoload" >&2
+		return 1
+	fi
+}
+
 validate_connectivity_firmware() {
 	config="$firmware_pkg/conninfra.cfg"
 	expected_config=$(printf 'co_clock_flag=1\npre_cal_mode=0')
@@ -651,6 +677,7 @@ validate_charging_policy
 validate_power_bootargs
 validate_sensor_transport
 validate_ci_rootfs_module_checks
+validate_compile_only_boundaries
 validate_connectivity_firmware
 validate_connectivity_build
 

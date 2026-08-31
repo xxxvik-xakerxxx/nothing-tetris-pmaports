@@ -1,0 +1,20 @@
+diff --git a/drivers/misc/mediatek/eccci/ccci_core.c b/drivers/misc/mediatek/eccci/ccci_core.c
+index 25ab47a..7749cb9 100644
+--- a/drivers/misc/mediatek/eccci/ccci_core.c
++++ b/drivers/misc/mediatek/eccci/ccci_core.c
+@@ -111,6 +111,6 @@ static int __init ccci_init(void)
+ {
+ 	CCCI_INIT_LOG(-1, CORE, "ccci core init\n");
+-	dev_class = class_create(THIS_MODULE, "ccci_node");
++	dev_class = class_create("ccci_node");
+ 	ccci_subsys_bm_init();
+ 	return 0;
+ }
+@@ -126,6 +126,6 @@ int ccci_init(void)
+ {
+ 	CCCI_INIT_LOG(-1, CORE, "ccci core init\n");
+-	dev_class = class_create(THIS_MODULE, "ccci_node");
++	dev_class = class_create("ccci_node");
+ 	ccci_subsys_bm_init();
+ 	return 0;
+ }

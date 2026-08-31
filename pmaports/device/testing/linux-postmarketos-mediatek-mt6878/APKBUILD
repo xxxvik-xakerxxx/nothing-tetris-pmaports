@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=121
+pkgrel=122
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -67,6 +67,10 @@ source="
 	0043-power-supply-nothing-tetris-source-current.patch
 	0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 	0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
+	0030-phy-mediatek-mt6878-mipi-tx-use-sleepable-pll-prepare.patch
+	0035-pmdomain-mediatek-mt6878-mfg0-data.patch
+	0046-dt-bindings-media-i2c-pd9302a.patch
+	0047-media-i2c-pd9302a-vcm.patch
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 	0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
 	0045-vendor-sensorhub-runtime-inventory.patch.vendor
@@ -74,6 +78,7 @@ source="
 	0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
+	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -123,6 +128,8 @@ prepare() {
 		< "$srcdir"/0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -398,6 +405,55 @@ _build_ccci_util_compile_only() {
 	modinfo "$_module"
 }
 
+_build_ccci_core_compile_only() {
+	_moddir="$_devmods_dir"/drivers/misc/mediatek/eccci
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	test -s "$builddir"/Module.symvers || \
+		die "CCCI core validation requires the fully built kernel Module.symvers"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_ECCCI_DRIVER=m \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n \
+		CONFIG_MTK_AEE_IPANIC=n \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types \
+			-Werror=int-conversion \
+			$(_vendor_kcflags)" \
+		ccci_core.o ccci_bm.o
+
+	test -s "$_moddir"/ccci_core.o
+	test -s "$_moddir"/ccci_bm.o
+	if find "$_moddir" -maxdepth 1 -name 'ccci*.ko' -print -quit | grep -q .; then
+		die "CCCI core compile-only validation emitted a loadable module"
+	fi
+}
+
+_build_pd9302a_compile_only() {
+	_object="$builddir/drivers/media/i2c/pd9302a.o"
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	make -j"$_jobs" -C "$builddir" \
+		ARCH="$_carch" LLVM=1 \
+		CONFIG_MEDIA_SUPPORT=y \
+		CONFIG_MEDIA_CAMERA_SUPPORT=y \
+		CONFIG_MEDIA_CONTROLLER=y \
+		CONFIG_VIDEO_DEV=y \
+		CONFIG_VIDEO_V4L2_SUBDEV_API=y \
+		CONFIG_VIDEO_CAMERA_LENS=y \
+		CONFIG_VIDEO_PD9302A=m \
+		drivers/media/i2c/pd9302a.o
+
+	test -s "$_object" || die "PD9302A compile-only object is missing"
+	test ! -e "$builddir/drivers/media/i2c/pd9302a.ko" || \
+		die "PD9302A compile-only validation must not produce a module"
+}
+
 build() {
 	unset LDFLAGS
 	export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -408,7 +464,9 @@ build() {
 		mediatek/mt6878-nothing-tetris.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
+	_build_pd9302a_compile_only
 	_build_ccci_util_compile_only
+	_build_ccci_core_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
@@ -516,6 +574,10 @@ bb8aa861a41f1656724149998f435b4e6e599b75309c5b7c6c2b43dc184f0366c223780d68710432
 a6c28a29be81449b927b1bf8f0ccbc5f2e7bd038487ed34601b844fe49ab395caef73524aa2f2bf7f3bfbc90cd50e1a9b5410be67926f34f7f80cb6bafee1c6a  0043-power-supply-nothing-tetris-source-current.patch
 6c4064ec0f6c6287b5dcc1cd76baf1d25dbbc6adac6b3e841b5e2ebe1660b947ceab90bb291224f796dd0872addfed21eab16fde9c331306d476884d98327866  0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 9991e7ba81d46059c6a6afff0480c3cc7173b1f39c2bfcda2b12e527317b0a37e6e65077740bddbd5b86583c0f8f52ffd981de937836e298d8efedd6b30592ec  0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
+152660c3fe9eecbe86e8a08d7b94dd3301bf4f34245e5da92e8a7632173574e58fdc2a1f5c3e8c0246d7fedfd3b6b1e43483ce867e6f2ef7a844d8f2d4fba28c  0030-phy-mediatek-mt6878-mipi-tx-use-sleepable-pll-prepare.patch
+910bf1a0f85491ee3931c005f458e8314205b650ef20232f155e98b795b0a7f7dfdfdcb2e339019f05eb952eae3cc54c3723568df85486eeeca19da1065aed69  0035-pmdomain-mediatek-mt6878-mfg0-data.patch
+45a6c19c379011df1ee3fc65eddcdb8db5e8966a5f960aa783d625be5fcadda3051f6da79323a962bd1c3a55c186eb5eaa4d10bad3725e9e06533875cfdd7bc6  0046-dt-bindings-media-i2c-pd9302a.patch
+ec3cd512247c1e9eb09e7ed175388588e84ddec752a3de11fba12b03e69020a349f6caf7304dd01a60f6b2b2ccfedccbb00609ca483135b0426c6f46fadfbb39  0047-media-i2c-pd9302a-vcm.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d5313b32ac42251a0fe20761e9473a3b03b0e1b5ca66a377f  0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
 81d50a030158a21e8b3e3673eb63f5375c4ff70a4e5370a6704304216d1e060049dea309b273d9a73f0c06a02e97688e30e179d7239c1a18ca58c3b49fc5ccd8  0045-vendor-sensorhub-runtime-inventory.patch.vendor
@@ -523,6 +585,7 @@ bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d
 affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85f554633b8cc2e112e5a16726818cd0d191148065d19a9b55  0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
+c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor

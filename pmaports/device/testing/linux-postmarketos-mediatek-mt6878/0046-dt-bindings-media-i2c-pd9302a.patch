@@ -1,0 +1,56 @@
+diff --git a/Documentation/devicetree/bindings/media/i2c/puya,pd9302a.yaml b/Documentation/devicetree/bindings/media/i2c/puya,pd9302a.yaml
+new file mode 100644
+index 0000000..0e2a712
+--- /dev/null
++++ b/Documentation/devicetree/bindings/media/i2c/puya,pd9302a.yaml
+@@ -0,0 +1,39 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/media/i2c/puya,pd9302a.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Puya Semiconductor PD9302A voice coil lens actuator
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description:
++  The PD9302A is a 10-bit voice coil motor camera lens actuator controlled
++  over I2C.
++
++properties:
++  compatible:
++    const: puya,pd9302a
++
++  reg:
++    maxItems: 1
++
++  vin-supply:
++    description: Actuator motor supply
++
++  vdd-supply:
++    description: Digital and I/O supply
++
++required:
++  - compatible
++  - reg
++  - vin-supply
++  - vdd-supply
++
++additionalProperties: false
++
++examples:
++  - |
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        lens@c {
++            compatible = "puya,pd9302a";
++            reg = <0x0c>;
++            vin-supply = <&camera_vcm>;
++            vdd-supply = <&camera_vio>;
++        };
++    };
++...
