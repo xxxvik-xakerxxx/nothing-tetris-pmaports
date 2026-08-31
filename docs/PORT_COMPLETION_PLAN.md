@@ -62,7 +62,7 @@ the current staging notes for follow-up patch branches:
 | Block | Draft path | Status |
 | --- | --- | --- |
 | Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment on the device; no sensor module autoload or DT enablement. The actual SCP firmware/handoff remains missing. |
-| SIM / modem | `local/patch-drafts/modem-sim/` | Draft CCCI/CCMNI/ECCCI plan and live gates. Compile-only branch should be next; no `conn_md`/`mddp` first pass. |
+| SIM / modem | `0039`, compile-only `APKBUILD` gate and `local/patch-drafts/modem-sim/` | `6bc2096` / CI `33356899792` proves clean `ccci_util_lib.ko` modpost and matching `6.18.0` vermagic while explicitly rejecting the module from rootfs. No DT, packaging, autoload, firmware, modem power/reset, `mddriver`, DPMAIF or CCMNI yet. |
 | GPU | `local/patch-drafts/gpu/` | RFC Panthor path with MFG0 domain and disabled DT node drafts. Wait for thermal and regulator work. |
 | Camera foundation | `local/patch-drafts/camera/` | Source inventory and config draft for sensor ID/cam_cal/VCM/flash only. No ISP/autoload yet. |
 

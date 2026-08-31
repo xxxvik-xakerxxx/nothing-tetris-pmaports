@@ -48,11 +48,22 @@ and remains outside this first layer.
 
 ## Evidence state
 
-The earlier isolated object build established the source/API boundary. The
-next full package build must prove clean modpost against the exact generated
-`Module.symvers` and record `modinfo` from the emitted validation-only module.
-Until that CI result exists, final `.ko`, `vermagic` and symbol-version evidence
-remain pending.
+Commit `6bc2096` passed GitHub CI run `33356899792`. The exact kernel build
+completed all 15 objects, linked `ccci_util_lib.o`, completed modpost against
+the generated top-level `Module.symvers`, and emitted the validation-only
+`ccci_util_lib.ko`. Recorded metadata was:
+
+```text
+description:    MTK CCCI UTIL Driver
+license:        GPL
+name:           ccci_util_lib
+depends:
+vermagic:       6.18.0 SMP preempt mod_unload aarch64
+```
+
+The same run built the install images and passed the explicit rootfs rejection
+check for `ccci_util_lib.ko`, proving that the validation module was not
+packaged.
 
 This gate does not install, package or autoload `ccci_util_lib.ko`. It does not
 enable a kernel config symbol in the shipped `.config`, add a DT node, supply
