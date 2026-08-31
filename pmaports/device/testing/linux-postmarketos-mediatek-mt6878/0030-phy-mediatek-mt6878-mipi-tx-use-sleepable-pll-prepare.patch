@@ -1,0 +1,60 @@
+From 9f43a85a7da935a8e87f6d40dc8171b78e6e9357 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 29 Aug 2026 03:20:00 +0300
+Subject: [PATCH] phy: mediatek: mt6878: use sleepable PLL prepare callbacks
+
+The MT6878 MIPI TX power-up sequence contains three mandatory settling
+delays.  Running it from a clk_ops enable callback is invalid because the
+common clock framework invokes enable and disable while holding its
+enable spinlock.  Native display bring-up consequently reports
+"BUG: scheduling while atomic" from usleep_range().
+
+Nothing OS 4.1 runs the equivalent N4 D-PHY sequence from pll_prepare
+and pll_unprepare.  Do the same in the mainline draft: keep the register
+sequence and delays unchanged, but move them to the sleepable CCF
+prepare path.  clk_prepare_enable() used by the PHY already provides the
+required sequencing.
+
+This only fixes callback context.  It does not enable the native display
+device tree or replace the simple-framebuffer fallback.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6878.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6878.c b/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6878.c
+index f4f0e313df74..b52f925ba92a 100644
+--- a/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6878.c
++++ b/drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6878.c
+@@ -49,7 +49,7 @@ static u32 mtk_mipi_tx_mt6878_get_pcw(unsigned long data_rate, u32 txdiv)
+ 	return lower_32_bits(pcw);
+ }
+
+-static int mtk_mipi_tx_mt6878_pll_enable(struct clk_hw *hw)
++static int mtk_mipi_tx_mt6878_pll_prepare(struct clk_hw *hw)
+ {
+ 	struct mtk_mipi_tx *mipi_tx = mtk_mipi_tx_from_clk_hw(hw);
+ 	void __iomem *base = mipi_tx->regs;
+@@ -139,7 +139,7 @@ static int mtk_mipi_tx_mt6878_pll_enable(struct clk_hw *hw)
+ 	return 0;
+ }
+
+-static void mtk_mipi_tx_mt6878_pll_disable(struct clk_hw *hw)
++static void mtk_mipi_tx_mt6878_pll_unprepare(struct clk_hw *hw)
+ {
+ 	struct mtk_mipi_tx *mipi_tx = mtk_mipi_tx_from_clk_hw(hw);
+ 	void __iomem *base = mipi_tx->regs;
+@@ -157,8 +157,8 @@ static long mtk_mipi_tx_mt6878_pll_round_rate(struct clk_hw *hw,
+ }
+
+ static const struct clk_ops mtk_mipi_tx_mt6878_pll_ops = {
+-	.enable = mtk_mipi_tx_mt6878_pll_enable,
+-	.disable = mtk_mipi_tx_mt6878_pll_disable,
++	.prepare = mtk_mipi_tx_mt6878_pll_prepare,
++	.unprepare = mtk_mipi_tx_mt6878_pll_unprepare,
+ 	.round_rate = mtk_mipi_tx_mt6878_pll_round_rate,
+ 	.set_rate = mtk_mipi_tx_pll_set_rate,
+ 	.recalc_rate = mtk_mipi_tx_pll_recalc_rate,
+--
+2.51.0

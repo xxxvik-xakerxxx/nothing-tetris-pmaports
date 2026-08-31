@@ -1,28 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 13:20:00 +0300
 Subject: [PATCH] pmdomain: mediatek: describe the MT6878 MFG0 domain
 
 Add the register and bus-protection data for the MT6878 MFG0 shutdown
-domain. The values come from the Nothing OS 4.1 Tetris device-module tree.
-Vendor source revision:
-
-  ee2be53cb75670b548948636a0db1d1ff112bf12
+domain. The values come from the Nothing OS 4.1 Tetris device-module tree
+at revision ee2be53cb75670b548948636a0db1d1ff112bf12.
 
 Do not expose a DT power-domain node yet. The vendor implementation skips
 initial power-on for MFG0, while the generic MediaTek provider powers every
 described domain during registration. Mark the domain KEEP_DEFAULT_OFF so a
 future DT inventory node cannot power it before Panthor, clocks, regulator,
-IOMMU and reset ordering are ready. Keeping this as data only makes the
-dependency available for the later GPU policy work without changing boot
-state or relying on U-Boot state.
+IOMMU and reset ordering are ready.
 
 Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 ---
+ drivers/pmdomain/mediatek/mt6878-pm-domains.h | 29 ++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
 
+diff --git a/drivers/pmdomain/mediatek/mt6878-pm-domains.h b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
 --- a/drivers/pmdomain/mediatek/mt6878-pm-domains.h
 +++ b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
 @@ -8,9 +8,17 @@
  #include "mtk-pm-domains.h"
- 
+
  #define MT6878_PERI_PROT_AUDIO		BIT(6)
 +#define MT6878_MD_PROT_MFG0		BIT(4)
 +#define MT6878_INFRA_PROT_MFG0		BIT(9)
@@ -35,7 +36,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
 +#define MT6878_INFRA_PROT_SET		0x0c44
 +#define MT6878_INFRA_PROT_CLR		0x0c48
 +#define MT6878_INFRA_PROT_STA		0x0c4c
- 
+
  static enum scpsys_bus_prot_block scpsys_bus_prot_blocks_mt6878[] = {
  	BUS_PROT_BLOCK_INFRA,
 @@ -34,6 +42,27 @@ scpsys_domain_data_mt6878[MT6878_POWER_DOMAIN_NR] = {
@@ -64,5 +65,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
 +			MTK_SCPD_STATUS_IN_CTL,
 +	},
  };
- 
+
  static const struct scpsys_soc_data mt6878_scpsys_data = {
+--
+2.51.0
