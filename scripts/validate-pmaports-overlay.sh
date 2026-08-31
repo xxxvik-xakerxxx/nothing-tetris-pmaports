@@ -579,7 +579,6 @@ validate_compile_only_boundaries() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 
 	for source in \
-		0030-phy-mediatek-mt6878-mipi-tx-use-sleepable-pll-prepare.patch \
 		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
 		0046-dt-bindings-media-i2c-pd9302a.patch \
 		0047-media-i2c-pd9302a-vcm.patch \
