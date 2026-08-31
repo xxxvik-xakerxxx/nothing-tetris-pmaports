@@ -28,8 +28,9 @@ another release must never be reused.
 - Package modules before enabling their DT consumers.
 - Do not autoload experimental display, GPU, camera, modem or sensorhub stacks.
 - Preserve the inherited framebuffer until native KMS is proven on hardware.
-- Keep GNSS manual until position data, repeated power cycles and suspend/resume
-  pass while Wi-Fi, Bluetooth and USB remain healthy.
+- Keep the GNSS transport service manual until position data, repeated power
+  cycles and suspend/resume pass while Wi-Fi, Bluetooth and USB remain healthy.
+  The vendor `gpsdl0`/`gpsdl1` ABI is not an NMEA stream for `gpsd`.
 
 ## Migration classes
 
