@@ -70,6 +70,7 @@ source="
 	0036-vendor-scp-linux-6.18-api.patch.vendor
 	0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
+	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -115,6 +116,8 @@ prepare() {
 		< "$srcdir"/0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -356,6 +359,40 @@ _build_sensor_modules() {
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
 
+_build_ccci_util_compile_only() {
+	_moddir="$_devmods_dir"/drivers/misc/mediatek/ccci_util
+	_module="$_moddir"/ccci_util_lib.ko
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	test -s "$builddir"/Module.symvers || \
+		die "CCCI util validation requires the fully built kernel Module.symvers"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_ECCCI_DRIVER=m \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n \
+		CONFIG_MTK_AEE_IPANIC=n \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types \
+			-Werror=int-conversion \
+			$(_vendor_kcflags)" \
+		ccci_util_lib.ko
+
+	test "$(modinfo -F name "$_module")" = ccci_util_lib
+	test "$(modinfo -F license "$_module")" = GPL
+	test "$(modinfo -F description "$_module")" = "MTK CCCI UTIL Driver"
+	_release="$(cat "$builddir"/include/config/kernel.release)"
+	case "$(modinfo -F vermagic "$_module")" in
+		"$_release "*) ;;
+		*) die "CCCI util module vermagic does not match $_release" ;;
+	esac
+	modinfo "$_module"
+}
+
 build() {
 	unset LDFLAGS
 	export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -366,6 +403,7 @@ build() {
 		mediatek/mt6878-nothing-tetris.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
+	_build_ccci_util_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
@@ -476,6 +514,7 @@ bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d
 1fd6fa4f2c7afb9cc741c181194ceb2fcac7754a19e7ea0b5207ab546d108c53caf2560e4be8d415cb7681b94dd99ef52fdd14ea43a26ca80c8d35e1594a28d3  0036-vendor-scp-linux-6.18-api.patch.vendor
 affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85f554633b8cc2e112e5a16726818cd0d191148065d19a9b55  0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
+45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor

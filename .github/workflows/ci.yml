@@ -283,6 +283,10 @@ jobs:
             echo "legacy wmt_drv module must not be packaged"
             exit 1
           fi
+          if find "$rootfs/lib/modules" -name ccci_util_lib.ko -print -quit | grep -q .; then
+            echo "compile-only ccci_util_lib module must not be packaged"
+            exit 1
+          fi
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
           conninfra_module=$(find "$rootfs/lib/modules" -name conninfra.ko -print -quit)
           wifi_module=$(find "$rootfs/lib/modules" -name wlan_drv_gen4m_6878.ko -print -quit)

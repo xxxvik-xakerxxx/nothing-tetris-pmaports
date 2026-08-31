@@ -21,16 +21,17 @@ The unmodified B4.1 source stopped on two calls to the pre-6.4
 argument from the broadcast and SIM pin status classes.
 
 After the patch, all 15 `ccci_util_lib` objects compiled and linked into the
-composite `ccci_util_lib.o` with Clang/LLVM. The build used hard errors for
+composite `ccci_util_lib.o` with Clang/LLVM. The build uses hard errors for
 implicit declarations, incompatible pointer types and integer conversions.
-Only existing missing-prototype warnings remained.
+Only existing missing-prototype warnings remain.
 
-Final module modpost could not be completed because the prepared local Linux
-tree has no top-level `Module.symvers`. Consequently modpost reported ordinary
-kernel APIs such as `_printk`, `class_create`, `ioremap_prot` and
-`of_find_compatible_node` as unresolved. This is a kernel build-output gap, not
-evidence that these APIs need another modem module. No `.ko` was emitted, so
-`modinfo` is also pending.
+`APKBUILD` now applies the patch only to the vendor source tree and runs a
+dedicated compile-only external-module gate after the exact Linux 6.18 kernel
+and its top-level `Module.symvers` have been built. The gate requires clean
+modpost, emits `ccci_util_lib.ko` only inside the temporary vendor build tree,
+and validates its module name, GPL license, description and exact kernel
+release prefix in `vermagic`. CI separately rejects the module if it appears in
+the packaged rootfs.
 
 ## Static dependency audit
 
@@ -45,9 +46,15 @@ The source requires the vendor public header
 audited separately before enabling it. The MASP security path was also disabled
 and remains outside this first layer.
 
-## Remaining gate
+## Evidence state
 
-Repeat the same isolated module build against a fully built copy of the exact
-Linux 6.18 kernel with its matching `Module.symvers`. Require clean modpost,
-`ccci_util_lib.ko`, `modinfo`, and a reviewed symbol/version list. Do not add the
-patch to `APKBUILD`, install or load the module as part of that compile gate.
+The earlier isolated object build established the source/API boundary. The
+next full package build must prove clean modpost against the exact generated
+`Module.symvers` and record `modinfo` from the emitted validation-only module.
+Until that CI result exists, final `.ko`, `vermagic` and symbol-version evidence
+remain pending.
+
+This gate does not install, package or autoload `ccci_util_lib.ko`. It does not
+enable a kernel config symbol in the shipped `.config`, add a DT node, supply
+firmware, invoke an SMC, or control modem power/reset. `mddriver`, DPMAIF and
+CCMNI remain outside this boundary, so runtime modem behavior is unchanged.
