@@ -1,0 +1,106 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 12:00:00 +0300
+Subject: [PATCH] sensors: fail closed and expose SCP firmware inventory
+
+The Nothing OS 4.1 sensor transport ignored ipi_comm_init() failures.
+It kept registering sensorhub, which can leave /dev/hf_manager present even
+though no control or notification IPI was registered.
+
+Propagate the IPI setup failure so the composite sensorhub module unwinds.
+Also expose read-only module parameters.  They become true/non-zero only
+after the SCP firmware ready handshake, shared-memory sensor-list transfer
+and HF manager registration all succeed.  Log the firmware-provided sensor
+name, vendor and gain then, providing a bounded runtime inventory without
+probing any physical bus from Linux.
+
+The parameters remain false and zero when the SCP handoff is absent or its
+firmware list is invalid.  This patch does not autoload the transport,
+reset the shared SCP, enable DT nodes or control sensor power.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../sensor/2.0/sensorhub/sensor_comm.c        |  6 +++++-
+ .../sensor/2.0/sensorhub/transceiver.c        | 31 ++++++++++++++++++++++++++++---
+ 2 files changed, 33 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c
+index 4f89ab4749fb..60f819979a01 100644
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c
+@@ -209,8 +209,12 @@ static struct notifier_block sensor_comm_ready_notifier = {
+ int sensor_comm_init(void)
+ {
++	int ret;
++
+ 	sensor_comm_sequence = 0;
+-	ipi_comm_init();
++	ret = ipi_comm_init();
++	if (ret)
++		return ret;
+ 	ipi_comm_notify_handler_register(sensor_comm_notify_handler);
+ 	sensor_ready_notifier_chain_register(&sensor_comm_ready_notifier);
+ 	return 0;
+ }
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
+index 887b3bae5008..bc9677f2a344 100755
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
+@@ -64,6 +64,16 @@ struct transceiver_device {
+ };
+ 
+ static struct transceiver_device transceiver_dev;
++static bool firmware_ready;
++static unsigned int sensor_count;
++
++module_param_named(firmware_ready, firmware_ready, bool, 0444);
++MODULE_PARM_DESC(firmware_ready,
++		 "SCP sensor firmware handshake and inventory are ready");
++module_param_named(sensor_count, sensor_count, uint, 0444);
++MODULE_PARM_DESC(sensor_count,
++		 "Number of sensors reported by the SCP firmware inventory");
++
+ static DEFINE_RATELIMIT_STATE(ratelimit, 5 * HZ, 10);
+ DEFINE_SPINLOCK(transceiver_fifo_lock);
+ DECLARE_COMPLETION(transceiver_done);
+@@ -822,5 +832,6 @@ static int transceiver_create_manager(struct transceiver_device *dev)
+ {
+ 	int ret = 0;
++	unsigned int i;
+ 	struct hf_device *hf_dev = &dev->hf_dev;
+ 
+ 	memset(dev->support_list, 0, sizeof(dev->support_list));
+@@ -834,7 +845,18 @@ static int transceiver_create_manager(struct transceiver_device *dev)
+ 	/* refill support_list and support_size then create manager */
+ 	dev->hf_dev.support_list = dev->support_list;
+ 	dev->hf_dev.support_size = dev->support_size;
+-	return hf_manager_create(hf_dev);
++	ret = hf_manager_create(hf_dev);
++	if (ret)
++		return ret;
++
++	WRITE_ONCE(sensor_count, dev->support_size);
++	WRITE_ONCE(firmware_ready, true);
++	for (i = 0; i < dev->support_size; i++)
++		pr_info("firmware sensor %u: %s (%s), gain %u\n",
++			dev->support_list[i].sensor_type, dev->support_list[i].name,
++			dev->support_list[i].vendor, dev->support_list[i].gain);
++
++	return 0;
+ }
+ 
+ static void transceiver_destroy_manager(struct transceiver_device *dev)
+@@ -867,7 +889,10 @@ static int transceiver_ready_notifier_call(struct notifier_block *this,
+ {
+-	if (event)
++	if (event) {
+ 		transceiver_sensor_bootup(&transceiver_dev);
+-
++	} else {
++		WRITE_ONCE(firmware_ready, false);
++		WRITE_ONCE(sensor_count, 0);
++	}
+ 	return NOTIFY_DONE;
+ }
+ 
+-- 
+2.51.0

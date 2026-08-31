@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=120
+pkgrel=121
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -69,6 +69,7 @@ source="
 	0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 	0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+	0045-vendor-sensorhub-runtime-inventory.patch.vendor
 	0036-vendor-scp-linux-6.18-api.patch.vendor
 	0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
@@ -112,6 +113,8 @@ prepare() {
 		< "$srcdir"/1200-vendor-sensor-framework-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0045-vendor-sensorhub-runtime-inventory.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0036-vendor-scp-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -515,6 +518,7 @@ a6c28a29be81449b927b1bf8f0ccbc5f2e7bd038487ed34601b844fe49ab395caef73524aa2f2bf7
 9991e7ba81d46059c6a6afff0480c3cc7173b1f39c2bfcda2b12e527317b0a37e6e65077740bddbd5b86583c0f8f52ffd981de937836e298d8efedd6b30592ec  0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d5313b32ac42251a0fe20761e9473a3b03b0e1b5ca66a377f  0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
+81d50a030158a21e8b3e3673eb63f5375c4ff70a4e5370a6704304216d1e060049dea309b273d9a73f0c06a02e97688e30e179d7239c1a18ca58c3b49fc5ccd8  0045-vendor-sensorhub-runtime-inventory.patch.vendor
 1fd6fa4f2c7afb9cc741c181194ceb2fcac7754a19e7ea0b5207ab546d108c53caf2560e4be8d415cb7681b94dd99ef52fdd14ea43a26ca80c8d35e1594a28d3  0036-vendor-scp-linux-6.18-api.patch.vendor
 affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85f554633b8cc2e112e5a16726818cd0d191148065d19a9b55  0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor

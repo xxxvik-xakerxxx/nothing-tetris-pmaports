@@ -492,11 +492,13 @@ validate_power_bootargs() {
 
 validate_sensor_transport() {
 	sensor_patch="$kernel_pkg/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor"
+	inventory_patch="$kernel_pkg/0045-vendor-sensorhub-runtime-inventory.patch.vendor"
 	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
 	workflow="$repo_root/.github/workflows/ci.yml"
 
 	for patch in \
 		0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor \
+		0045-vendor-sensorhub-runtime-inventory.patch.vendor \
 		0036-vendor-scp-linux-6.18-api.patch.vendor \
 		0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor \
 		1200-vendor-sensor-framework-linux-6.18.patch.vendor; do
@@ -541,6 +543,16 @@ validate_sensor_transport() {
 		echo "sensor handoff must not reset the shared SCP after a missing ready ack" >&2
 		return 1
 	fi
+	grep -Fq 'ret = ipi_comm_init();' "$inventory_patch"
+	grep -Fq 'if (ret)' "$inventory_patch"
+	grep -Fq 'return ret;' "$inventory_patch"
+	grep -Fq 'module_param_named(firmware_ready, firmware_ready, bool, 0444);' \
+		"$inventory_patch"
+	grep -Fq 'module_param_named(sensor_count, sensor_count, uint, 0444);' \
+		"$inventory_patch"
+	grep -Fq 'ret = hf_manager_create(hf_dev);' "$inventory_patch"
+	grep -Fq 'WRITE_ONCE(firmware_ready, true);' "$inventory_patch"
+	grep -Fq 'WRITE_ONCE(sensor_count, dev->support_size);' "$inventory_patch"
 
 	if grep -El '^[[:space:]]*(mtk-mbox|mtk_rpmsg_mbox|mtk_tinysys_ipi|scp|hf_manager|sensorhub)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
