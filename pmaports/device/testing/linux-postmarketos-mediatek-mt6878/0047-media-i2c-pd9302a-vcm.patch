@@ -34,7 +34,7 @@ new file mode 100644
 index 0000000..32be820
 --- /dev/null
 +++ b/drivers/media/i2c/pd9302a.c
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,339 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Puya Semiconductor PD9302A voice coil motor driver
@@ -268,7 +268,9 @@ index 0000000..32be820
 +{
 +	v4l2_async_unregister_subdev(&pd9302a->sd);
 +	v4l2_ctrl_handler_free(&pd9302a->ctrls);
++#if IS_ENABLED(CONFIG_MEDIA_CONTROLLER)
 +	media_entity_cleanup(&pd9302a->sd.entity);
++#endif
 +}
 +
 +static int pd9302a_probe(struct i2c_client *client)
@@ -294,7 +296,9 @@ index 0000000..32be820
 +	v4l2_i2c_subdev_init(&pd9302a->sd, client, &pd9302a_subdev_ops);
 +	pd9302a->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 +	pd9302a->sd.internal_ops = &pd9302a_internal_ops;
++#if IS_ENABLED(CONFIG_MEDIA_CONTROLLER)
 +	pd9302a->sd.entity.function = MEDIA_ENT_F_LENS;
++#endif
 +	pd9302a->position = PD9302A_ORIGIN_FOCUS_POS;
 +
 +	v4l2_ctrl_handler_init(&pd9302a->ctrls, 1);
@@ -308,9 +312,11 @@ index 0000000..32be820
 +	}
 +	pd9302a->sd.ctrl_handler = &pd9302a->ctrls;
 +
++#if IS_ENABLED(CONFIG_MEDIA_CONTROLLER)
 +	ret = media_entity_pads_init(&pd9302a->sd.entity, 0, NULL);
 +	if (ret)
 +		goto free_ctrls;
++#endif
 +
 +	ret = v4l2_async_register_subdev(&pd9302a->sd);
 +	if (ret)
@@ -326,7 +332,9 @@ index 0000000..32be820
 +unregister_subdev:
 +	v4l2_async_unregister_subdev(&pd9302a->sd);
 +cleanup_entity:
++#if IS_ENABLED(CONFIG_MEDIA_CONTROLLER)
 +	media_entity_cleanup(&pd9302a->sd.entity);
++#endif
 +free_ctrls:
 +	v4l2_ctrl_handler_free(&pd9302a->ctrls);
 +	return ret;
