@@ -23,6 +23,14 @@ memory and that the generic IOMMU core starts in translated, strict mode:
 They do not prove MFG power sequencing, GPUEB startup, GPU MMU operation, or
 successful access to GPU registers.
 
+The phone also exposes slot-specific `gpueb_a` and `gpueb_b` partitions, 2 MiB
+each. The vendor Linux GPUEB driver attaches to MMIO, mailbox and reserved
+memory but does not implement a complete firmware loader, so preloader/LK or
+secure firmware likely owns this image and startup. This is an inference from
+the partition and driver contract, not a validated handoff. These partitions
+must not be copied into rootfs or confused with Panthor CSF firmware, which is
+requested separately as `arm/mali/arch<major>.<minor>/mali_csffw.bin`.
+
 ## Authoritative source trace
 
 The reference device-module source is Nothing OS 4.1 for Tetris at commit
@@ -101,7 +109,7 @@ functional benefit on its own.
    USB/Wi-Fi behavior.
 4. Model MFG RPC clocks/domains and validate register ownership against B4.1.
 5. Identify and package the exact Panthor CSF firmware by GPU architecture.
-6. Add a disabled standards-compliant `arm,mali-valhall-csf` node. Validate
+6. Add a disabled standards-compliant MT6878/`arm,mali-valhall-csf` node. Validate
    binding and DT first; enable it only in a recovery image with a persistent
    USB control connection and an immediate fastboot rollback path.
 7. Require three cold probes, render-node creation, short offscreen rendering,

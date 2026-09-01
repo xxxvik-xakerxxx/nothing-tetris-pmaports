@@ -33,6 +33,13 @@ The shared-memory and loader carveouts are distinct and must never be
 substituted for one another. Physical addresses captured from this phone are
 evidence for validation fixtures, not constants for production DT or U-Boot.
 
+The live partition table contains 16 MiB `scp_a` and `scp_b` images. Their
+container format, active-slot selection, authentication state and relationship
+to the TCM `scp_region_info` ABI remain unknown. They are firmware inputs, not
+generic sensor calibration blobs, and must not be copied into rootfs. Sensor
+calibration ownership is still unlocated; it may be supplied by SCP firmware
+rather than directly from `nvdata`, `nvcfg` or `persist`.
+
 ## Completed host-only boundary
 
 A standalone libfdt test against U-Boot

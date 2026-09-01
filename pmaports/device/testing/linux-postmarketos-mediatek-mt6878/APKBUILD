@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=127
+pkgrel=128
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -214,7 +214,7 @@ _build_connectivity_modules() {
 		USE_DEVICE_NODE=0 \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 
-	_connectivity_make "$_conn"/gps/data_link/plat/v050 \
+	_connectivity_make "$_conn"/gps/data_link/plat/v051 \
 		CONFIG_MTK_GPS_SUPPORT=y \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 }
@@ -555,7 +555,7 @@ package() {
 		"$_connmods_dir"/connectivity/wlan/adaptor/wmtWifi.ko \
 		"$_connmods_dir"/connectivity/wlan/core/gen4m/wlan_drv_gen4m_6878.ko \
 		"$_connmods_dir"/connectivity/bt/mt66xx/6878/bt_drv_6878.ko \
-		"$_connmods_dir"/connectivity/gps/data_link/plat/v050/gps_drv_dl_v050.ko; do
+		"$_connmods_dir"/connectivity/gps/data_link/plat/v051/gps_drv_dl_v051.ko; do
 		install -Dm644 "$_module" "$_extra/${_module##*/}"
 	done
 	_extra="$pkgdir/lib/modules/$_release/extra/mediatek-audio"
@@ -639,7 +639,7 @@ f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
-175c206cdd5138338288a60de10d970a75d486544c30981e526c24754a0023213498b22e9e5ba1a87d4c79a3d1a20d8503d7d95aad4f14849723d960111a4d96  1002-vendor-gnss-linux-6.18-compat.patch.vendor
+ed6852100df01b7fc6596a5c135c8cf9fa2c887497f144550aea52883a5706e993aa7b0196190660d46bfe62a5b2575f4b1efaf67c844b39956013be53e8d701  1002-vendor-gnss-linux-6.18-compat.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 2656201fec02b789f1affb7371622134de53507c49d50f1173281d6fc3b78bcedc5e65ce90347215c65966a93841208ee19300f801c0deca282853b5a8b0e128  1102-vendor-audio-linux-6.18-api.patch.vendor
 e390543280ac810da413bbc629744ba9e418ab8a433ad523acce8679d9f334d273e01a6d54a0083e081d24773674e844ee425e979a68a81b01e560701cc7fbca  1103-vendor-audio-mt6685-clock.patch.vendor

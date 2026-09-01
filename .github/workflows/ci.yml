@@ -263,7 +263,7 @@ jobs:
             extra/mediatek-connectivity/wmtWifi.ko \
             extra/mediatek-connectivity/wlan_drv_gen4m_6878.ko \
             extra/mediatek-connectivity/bt_drv_6878.ko \
-            extra/mediatek-connectivity/gps_drv_dl_v050.ko \
+            extra/mediatek-connectivity/gps_drv_dl_v051.ko \
             extra/mediatek-audio/mt6685-core.ko \
             extra/mediatek-audio/mt6685-audclk.ko \
             extra/mediatek-audio/snd-soc-mtk-common.ko \
@@ -326,8 +326,8 @@ jobs:
             'HCI device registration failed' "$bt_module"
           check_contains "native HCI address programming path" \
             'setting MT6631 public address failed' "$bt_module"
-          test "$(rootfs_modinfo -F name gps_drv_dl_v050)" = gps_drv_dl_v050
-          test "$(rootfs_modinfo -F depends gps_drv_dl_v050)" = conninfra
+          test "$(rootfs_modinfo -F name gps_drv_dl_v051)" = gps_drv_dl_v051
+          test "$(rootfs_modinfo -F depends gps_drv_dl_v051)" = conninfra
           test "$(rootfs_modinfo -F name mt6685_core)" = mt6685_core
           test "$(rootfs_modinfo -F name mt6685_audclk)" = mt6685_audclk
           for sensor_module in \
@@ -346,6 +346,9 @@ jobs:
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
           check_contains "mono speaker remap" \
             'sink_name=tetris_mono_speaker' \
+            "$rootfs/usr/libexec/nothing-tetris-audio-policy"
+          check_not_contains "eager mono speaker remap" \
+            'module-remap-sink' \
             "$rootfs/etc/pulse/default.pa.d/90-nothing-tetris-audio.pa"
           check_contains "speaker lifecycle policy" \
             'pactl subscribe' \

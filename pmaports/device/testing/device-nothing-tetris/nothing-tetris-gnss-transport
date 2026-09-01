@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-module=gps_drv_dl_v050
+module=gps_drv_dl_v051
 firmware_root=${FIRMWARE_ROOT:-/usr/lib/firmware}
 module_root=${MODULE_ROOT:-/sys/module}
 dev_root=${DEV_ROOT:-/dev}

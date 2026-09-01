@@ -19,7 +19,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The active CI candidate uses `pkgver=6.18` and `pkgrel=127` at pmaports commit
+The installed CI image uses `pkgver=6.18` and `pkgrel=127` at pmaports commit
 `fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed overlay
 validation, the full kernel and device packages, install-image construction and
 artifact upload. The downloaded image ZIP has SHA-256 `c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`, and all
@@ -95,7 +95,7 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `1000-vendor-connectivity-adapter-linux-6.18.patch.vendor` | Adapts the official MediaTek connectivity adapter from Nothing OS 4.1 to the Linux 6.18 kernel ABI used by this package. |
 | `1001-vendor-connectivity-linux-6.18-compat.patch.vendor` | Adapts the official MT6878/MT6631 conninfra, Wi-Fi and Bluetooth modules to Linux 6.18 and exposes Bluetooth through native Linux HCI. |
-| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
+| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v051 external module selected by stock-derived Tetris product configuration to Linux 6.18. |
 | `1101-vendor-audio-optional-calibration.patch.vendor` | Keeps optional PMIC calibration failures explicit while allowing the MT6369 codec to probe when a provider is unavailable. |
 | `1102-vendor-audio-linux-6.18-api.patch.vendor` | Adapts the official MT6878/MT6369 ASoC stack to Linux 6.18 APIs and the Tetris composite I2S4 pinctrl state. |
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
@@ -105,13 +105,14 @@ normal Alpine/postmarketOS practice.
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 | `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. Contract validation confirms the immediate cause is no matching `mediatek,scp-dvfs` platform device; adding that node alone is rejected until firmware, TCM and carveout handoff is proven. This patch fixes failure containment only. |
 
-The active `pkgrel=127` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The next `pkgrel=128` source package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
 loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
 stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
-Bluetooth and the staged GNSS v050 transport.
+Bluetooth and the manual GNSS v051 transport. Installed `pkgrel=127` still
+uses the previously validated v050 transport.
 The boot service loads the bridge, WLAN and native-HCI Bluetooth modules in the
 hardware-tested order. It extracts the 6146-byte per-device Wi-Fi calibration
 from `nvdata`, performs one WMT NVRAM write, completes joint pre-calibration and

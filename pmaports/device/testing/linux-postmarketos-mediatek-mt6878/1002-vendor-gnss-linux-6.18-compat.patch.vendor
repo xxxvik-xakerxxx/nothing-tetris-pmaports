@@ -1,28 +1,18 @@
 From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
-Subject: [PATCH] vendor: gnss: adapt MT6878 data-link v050 to Linux 6.18
+Subject: [PATCH] vendor: gnss: adapt MT6878 data-link v051 to Linux 6.18
 
 Keep the Nothing OS 4.1 MT6878 GNSS data-link implementation buildable as an
 external module. Fix source path resolution in Kbuild and update the class,
 platform remove, and timer APIs removed after the vendor Linux 6.1 baseline.
 
-The v050 implementation is the vendor profile that explicitly supports
-MT6878. Newer v060/v061 profiles target different SoCs and must not be used for
-Tetris.
+Nothing's stock-derived Tetris device configuration selects gps_drv_dl_v051,
+and the matching vendor_dlkm module list ships that profile. Unlike v050,
+v051 also uses the ATF MVCD backend required by the MT6878 boot-info path.
 
-diff --git a/connectivity/gps/data_link/plat/v050/Kbuild b/connectivity/gps/data_link/plat/v050/Kbuild
---- a/connectivity/gps/data_link/plat/v050/Kbuild
-+++ b/connectivity/gps/data_link/plat/v050/Kbuild
-@@ -74,22 +74,23 @@ obj-m += $(MODULE_NAME).o
- 
- ifeq ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6897),y)
-     ccflags-y += -D GPS_DL_EMI_BASE_TO_VLP=1
--else if ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6878),y)
-+else ifeq ($(CONFIG_MTK_COMBO_CHIP_CONSYS_6878),y)
-     ccflags-y += -D GPS_DL_EMI_BASE_TO_VLP=1
- else
- 
- endif
- 
+diff --git a/connectivity/gps/data_link/plat/v051/Kbuild b/connectivity/gps/data_link/plat/v051/Kbuild
+--- a/connectivity/gps/data_link/plat/v051/Kbuild
++++ b/connectivity/gps/data_link/plat/v051/Kbuild
+@@ -75,13 +75,14 @@ obj-m += $(MODULE_NAME).o
  GPS_DRV_CONTROL_LNA := n
  GPS_DL_HAS_MOCK := n
 -GPS_SRC_FOLDER := $(srctree)/$(src)/../..

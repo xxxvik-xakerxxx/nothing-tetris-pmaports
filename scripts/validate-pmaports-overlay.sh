@@ -258,6 +258,10 @@ validate_power_and_audio_config() {
 	grep -Fq 'pactl subscribe' "$audio_policy"
 	grep -Fq "Event 'new' on sink #" "$audio_policy"
 	grep -Fq 'pactl set-default-sink "$mono_sink"' "$audio_policy"
+	grep -Fq '"$rootfs/usr/libexec/nothing-tetris-audio-policy"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_not_contains "eager mono speaker remap"' \
+		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
 	grep -Fxq 'After=graphical-session-pre.target' "$audio_policy_unit"
@@ -567,7 +571,7 @@ validate_ci_rootfs_module_checks() {
 
 	grep -Eq '^[[:space:]]+dtc file findutils git kmod linux-headers' "$workflow"
 	grep -Fq 'modinfo -b "$rootfs" -k "$release" "$@"' "$workflow"
-	grep -Fq 'test "$(rootfs_modinfo -F name gps_drv_dl_v050)"' "$workflow"
+	grep -Fq 'test "$(rootfs_modinfo -F name gps_drv_dl_v051)"' "$workflow"
 	grep -Fq 'if rootfs_modinfo -F depends "$radio_module"' "$workflow"
 	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
 		grep -Fq 'if modinfo -F' "$workflow"; then
@@ -646,15 +650,15 @@ validate_connectivity_build() {
 		exit 1
 	fi
 	grep -Fq "'-DCONFIG_MTK_COMBO_CHIP_CONSYS_6878=1 '" "$kernel_apkbuild"
-	grep -Fq 'gps/data_link/plat/v050' "$kernel_apkbuild"
+	grep -Fq 'gps/data_link/plat/v051' "$kernel_apkbuild"
 	grep -Fq 'CONFIG_MTK_GPS_SUPPORT=y' "$kernel_apkbuild"
-	grep -Fq 'gps_drv_dl_v050.ko' "$kernel_apkbuild"
-	if grep -Eq 'gps/data_link/plat/v06(0|1)|gps_drv_dl_v06(0|1)' \
+	grep -Fq 'gps_drv_dl_v051.ko' "$kernel_apkbuild"
+	if grep -Eq 'gps/data_link/plat/v0(50|60|61)|gps_drv_dl_v0(50|60|61)' \
 			"$kernel_apkbuild" "$gnss_patch"; then
-		echo "Tetris must use the MT6878 GNSS v050 profile" >&2
+		echo "Tetris must use its stock-derived MT6878 GNSS v051 profile" >&2
 		return 1
 	fi
-	if grep -Fq 'gps_drv_dl_v050' "$device_pkg/nothing-tetris-connectivity-setup"; then
+	if grep -Fq 'gps_drv_dl_v051' "$device_pkg/nothing-tetris-connectivity-setup"; then
 		echo "GNSS must remain manual until position data and suspend are validated" >&2
 		return 1
 	fi

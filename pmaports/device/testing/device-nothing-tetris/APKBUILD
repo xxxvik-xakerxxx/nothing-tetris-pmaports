@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=4
+pkgrel=5
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -146,7 +146,7 @@ check() {
 	ln -s /dev/null "$testdir"/dev/gpsdl0
 	ln -s /dev/null "$testdir"/dev/gpsdl1
 	printf '%s\n' '#!/bin/sh' \
-		'mkdir -p "$MODULE_ROOT/gps_drv_dl_v050"' > "$testdir"/modprobe
+		'mkdir -p "$MODULE_ROOT/gps_drv_dl_v051"' > "$testdir"/modprobe
 	chmod +x "$testdir"/modprobe
 	FIRMWARE_ROOT="$testdir/firmware" \
 	MODULE_ROOT="$testdir/modules" \
@@ -260,7 +260,7 @@ ce093b67bf0f1c67542e6c7417c052b17bc203406ecaacae0997633700dcb2422ebacb73cf1e3814
 84817bfd5b9a9b7370c5ab299ddbe652c043ef36352a8bc2f088eecdc55372436a4e82717c1cb135d9845158c34b1dfa21b167516114fda87fdff3c61ae02208  nothing-tetris-bluetooth.service.conf
 a8b68de13cac4374d852fbddfc64645d39566d971791c5e305da549944937bac863c4d9b1f9a4c59fe5ca606ec12659df173e553c82e516d92a529d07f6398eb  nothing-tetris-connectivity.service
 d33eebdbde0cd1196e064524829c34c449994f89233e68b68332e05ef4aae2d3fb9007e50ccce7bad01c536f6376802fefe48e64897e86a9f69418c1c0c59fcd  nothing-tetris-connectivity-setup
-57d9ccd6d75f3812291adc3e348d7b21f41d8616e20e63bf45272f2c62e9d340b20f3f7895447a125d39f3f581feb134c5720ea89e865fa5e101d84e4d7e3282  nothing-tetris-gnss-transport
+82e6063f5b521daa7777c83a6e1deda50fd076c7505b66e26c69cf090899c6820d654f7a686da5c687542bf420f0de23fc5a9fa2978766755270d419d9f26b4a  nothing-tetris-gnss-transport
 1f6a80953ceff3280fe8d5ae4efe7e17c867682b5477df050a89662d03bcd4617c383c333330580f7abc102880c6f1e16e672efd317ca12b1436933b4f0f61df  nothing-tetris-gnss-transport.service
 6d0738393d36a7f4a98d5f55d50d8319c5f4b82fc1f2907c4a39814d172597cdd64010bc3872ee06927c0e8289a72e8c9156a5c871a180267dd4d7911c9ab6cc  nothing-tetris-audio.conf
 e5842a03339a0c0e30864f442b368b8d6a00780ece38f67568571c68fe5dbe0714180b7c4a911b7e76022f3d9b2d8daf6d6fd28faf50261a32a51617c9a3800e  nothing-tetris-haptics.conf

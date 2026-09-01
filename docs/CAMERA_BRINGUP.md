@@ -39,6 +39,13 @@ identity. The alternate IDs show that module-vendor selection is required and
 must not be hard-coded from one handset. EEPROM contents and calibration are
 per-device data and must never be committed.
 
+The live phone also has 4 MiB `ccu_a` and `ccu_b` partitions. Vendor sources
+name secure and non-secure CCU firmware as `lib3a.ccu_dummy` and `lib3a.ccu`,
+but do not prove that Linux should read those partitions directly. Main/front
+AWB, LSC, PDAF and module identity remain owned by each camera's EEPROM at
+7-bit address `0x50`; neither CCU partition nor an EEPROM dump may be copied
+into the image.
+
 The vendor DTS also describes a dual LM3644 flash controller on I2C6 at
 `0x63`. Flash bring-up remains a separate bounded power experiment; it is not a
 prerequisite for identifying the three camera modules.

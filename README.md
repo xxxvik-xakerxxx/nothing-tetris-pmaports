@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=127` in the active CI candidate) |
+| Kernel version | `6.18` (installed `pkgrel=127`; next GNSS candidate `pkgrel=128`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -54,15 +54,18 @@ The measured charging path, source-classification blocker and idle-drain test
 contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
-The active `pkgrel=127` candidate is pmaports commit
+The installed `pkgrel=127` image is pmaports commit
 `fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed and
 published images whose manifest pins U-Boot `b76e47e`. That exact U-Boot is
 installed in both boot partitions and the CI image is installed as kernel
 `6.18.0 #128`; clean boot, warm reboot and exact 32 MiB USB SSH transfers pass.
-The installed device package remains `device-nothing-tetris-8-r3`. Source
-candidate `8-r4` moves the PulseAudio speaker policy from every user manager to
-the real graphical session and excludes the `greetd` account; it is not
-installed or hardware-validated yet.
+The installed device package remains `device-nothing-tetris-8-r3`. Audio CI
+candidate `384f155` uses `8-r4` and moves the PulseAudio speaker policy from
+every user manager to the real graphical session while excluding the `greetd`
+account; it is not installed or hardware-validated yet.
+The following isolated GNSS source candidate uses kernel `pkgrel=128` and
+device package `8-r5` to package only Tetris profile `gps_drv_dl_v051`; it is
+manual-only and has not been installed.
 
 Per-device data remains outside the image. The live phone exposes separate
 `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
@@ -99,7 +102,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean kernel #128 registers `wlan0`; association to `DistributedLabDev`, DHCP, the default route, DNS and HTTPS pass while USB and Bluetooth remain active. Cold reconnect, suspend/resume and stress remain. |
 | Connectivity | Bluetooth | Partial | Native BlueZ `hci0` performs discovery and found more than 40 nearby devices while USB/Wi-Fi survived. One bounded scan left `Discovering` stuck until only `bluetooth.service` was restarted, so pair/reconnect, profile and teardown lifecycle work remains. |
-| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth. Boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub; stock-derived Tetris property and module trees select v051, now the next isolated compile/clean-boot candidate. |
+| Connectivity | GPS/GNSS | Partial | Installed v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth, but boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub. Stock-derived Tetris property and module trees select v051; source now packages v051 as a manual-only clean-boot candidate. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. An isolated CCIF patch replaces `from_timer()`/`del_timer()` with Linux 6.18 lifetime-equivalent APIs and advances `ccci_hif_ccif.o` to the next first blocker: unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. No modem module, DT or runtime path is enabled. |
 | Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A host-only U-Boot parser now validates two bounded, non-overlapping SCP carveouts without modifying the FDT, but active-slot firmware identity and TCM region-info remain unknown; no publication, DVFS or sensorhub is enabled. |
@@ -137,7 +140,7 @@ On the clean CI image from pmaports commit `fdeeda0` with kernel
 - NCM USB networking is active as `usb0`/`en4` and transferred exact 32 MiB
   zero streams with matching SHA after clean boot, warm reboot and the manual
   GNSS transport test.
-- The manual GNSS v050 transport creates `/dev/gpsdl0` and `/dev/gpsdl1`; a
+- The installed manual GNSS v050 transport creates `/dev/gpsdl0` and `/dev/gpsdl1`; a
   bounded link0 open/close passes without a consumer leak or radio/USB loss.
   This is not a satellite position fix.
 - All 24 MT6878 LVTS thermal zones report plausible polling-mode values.

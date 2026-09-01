@@ -27,21 +27,20 @@ does not authorize loading a modem module or enabling a DT node.
 ## Boot-chain trace
 
 The installed boot path does not reproduce the Nothing OS modem handoff. A
-newer U-Boot candidate now validates its structure but deliberately does not
-start the modem:
+newer installed U-Boot validates its structure but deliberately does not start
+the modem:
 
 1. The MediaTek early boot stages and stock LK execute before the replacement
    U-Boot container. Trusted firmware remains resident and may implement the
    MediaTek SiP ABI, but support for each CCCI request has not been measured.
-2. Installed U-Boot `8aa048f93bb7569e4107ef85aa994c630f85de48`
-   preserves the prior LK/FDT and conninfra handoff work but does not publish a
-   validated CCCI contract to Linux.
-3. Candidate U-Boot `b76e47e774304ab550a6354f3286860b7caffb3a`
+2. Previous rollback U-Boot `8aa048f93bb7569e4107ef85aa994c630f85de48`
+   preserves the prior LK/FDT and conninfra handoff work.
+3. Installed U-Boot `b76e47e774304ab550a6354f3286860b7caffb3a`
    validates the bounded B4.1 descriptor, required payload tags, modem/check
    headers, image and shared-memory layouts. It publishes sanitized status and
    sizes only: no physical addresses, SMC call, power/reset, firmware load or
-   `runtime-ready` claim. CI run `33492618726` passed, but this revision is not
-   flashed yet.
+   `runtime-ready` claim. CI run `33492618726`, normal boot and Linux-to-fastboot
+   reboot pass with this revision installed in both boot slots.
 4. The postmarketOS FIT embeds its own `mt6878-nothing-tetris.dtb` and loads it
    at `0x47000000`. The FIT configuration selects that FDT explicitly. No code
    in the current boot path copies `ccci,modem_info_v2`,
@@ -76,6 +75,21 @@ one of two explicitly designed owners:
 
 Silently depending on whatever stock LK left in RAM is not an acceptable cold
 boot contract.
+
+## Partition and calibration ownership
+
+The live phone exposes 200 MiB `modem_a`/`modem_b` slot firmware partitions,
+an 8 MiB `md_sec` partition, ext4 `nvdata`/`nvcfg`, and a separate raw `nvram`
+device. The exact B4.1 modem image is 90214400 bytes, but Linux's vendor FSM
+explicitly bypasses image loading and expects the authenticated LK handoff.
+The owner and format of `md_sec` are not yet proven. CCCI also defines an
+`SMEM_USER_MD_NVRAM_CACHE` region without identifying the userspace component
+which fills it from persistent storage.
+
+Never copy IMEI, SIM-lock/provisioning, radio calibration, anti-clone data,
+whole NV partitions, `md_sec`, LK tag buffers or physical addresses between
+handsets. Any future extractor must read a bounded, versioned record from the
+same device and fail closed on absence or mismatch.
 
 ## Status of draft 0031
 

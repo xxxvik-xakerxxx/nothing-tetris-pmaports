@@ -2,8 +2,10 @@
 
 ## Current boundary
 
-The kernel package builds and installs the Nothing OS 4.1 MT6878 v050 data-link
-module from commit `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. Patch `0020`
+The installed kernel package uses the Nothing OS 4.1 MT6878 v050 data-link
+module from commit `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. The next source
+candidate builds only stock-derived Tetris profile v051 from the same commit.
+Patch `0020`
 publishes its DT platform device. The firmware package installs the exact
 MT6878/MT6631 GNSS payload as
 `connsys_gnss_mt6878_mt6631.bin`.
@@ -20,11 +22,11 @@ existing reserved-memory layout and secure EMI mappings validate. Their joint
 transport and link-power behavior is now tested on the phone. No position fix
 is claimed.
 
-`nothing-tetris-gnss-transport.service` is intentionally static and manual. It
-requires the proven connectivity service, checks the packaged firmware, loads
-`gps_drv_dl_v050`, and verifies both character devices. It never opens either
-device, never loads modem modules, and does not unload the shared connectivity
-stack on stop.
+`nothing-tetris-gnss-transport.service` remains intentionally static and
+manual. The next package requires the proven connectivity service, checks the
+packaged firmware, loads `gps_drv_dl_v051`, and verifies both character
+devices. It never opens either device, never loads modem modules, and does not
+unload the shared connectivity stack on stop.
 
 ## Live transport test
 
@@ -33,7 +35,7 @@ Capture the boot ID, USB/Wi-Fi state and kernel log before starting. Then run:
 ```sh
 sudo systemctl start nothing-tetris-gnss-transport.service
 systemctl status nothing-tetris-gnss-transport.service --no-pager
-test -d /sys/module/gps_drv_dl_v050
+test -d /sys/module/gps_drv_dl_v051
 test -c /dev/gpsdl0
 test -c /dev/gpsdl1
 ```
@@ -79,9 +81,10 @@ closed normally; USB, routed Wi-Fi, Bluetooth and HTTPS all survived. Source
 tracing explains the result: the exact v050 Kbuild links
 `hw/gps_dl_hw_gps.o`, whose boot-info implementation reports that ATF is not
 supported and returns failure. The available ATF MVCD backend is linked by
-v051/v061 instead, but the public Kleaf build compiles every GNSS variant and
-does not identify which one the Tetris product loads. Switching profiles or
-mixing backend objects is therefore not justified yet. Evidence is in
+v051/v061 instead. The generic public Kleaf build compiles every GNSS variant,
+so it was insufficient by itself to identify the product profile; the
+stock-derived product configuration below resolves that ambiguity. Mixing
+backend objects between profiles remains unjustified. Evidence is in
 `gnss-mvcd-boot-info.txt` in the same directory.
 
 Two stock-derived Tetris integration trees independently select v051: the
@@ -95,9 +98,10 @@ currently active shared radio stack.
 
 ## Next gate
 
-The next gate is an isolated v051 compile/package candidate, followed by a clean
-boot that loads only that profile and repeats transport plus read-only boot-info
-tests. Then a maintainable MediaTek MNL bridge or Linux GNSS subsystem driver
+The v051 compile/package candidate is now staged in source. Its next gate is
+patch/package CI followed by a clean boot that loads only that profile and
+repeats transport plus read-only boot-info tests. Then a maintainable MediaTek
+MNL bridge or Linux GNSS subsystem driver
 can implement MVCD and expose standard position data. Do not interpret raw
 reads from `gpsdl0` as NMEA, load v051 over the current v050 session, or graft
 its ATF objects into v050. Promotion requires a timed and accurate fix, three
