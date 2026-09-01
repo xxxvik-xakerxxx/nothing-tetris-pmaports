@@ -2,21 +2,84 @@ From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 Subject: [PATCH] arm64: dts: mt6878: enable Tetris GNSS transport
 
 Enable the MT6878 GNSS platform device after validating the Nothing OS 4.1
-v050 data-link driver live on Tetris. Boot, probe, IRQ registration and a
-short power on/off cycle preserve USB networking, Wi-Fi and Bluetooth.
+v050 data-link driver probe live on Tetris. Describe the L1 and L5 external
+LNA controls exactly as the Tetris vendor device tree does so the transport
+can put both antenna paths in a bounded state.
 
-Keep module loading manual until a standard Linux GNSS userspace bridge can
-confirm position data and suspend/resume behavior.
+The bootloader must still publish the validated GNSS EMI address before a
+link may be opened. Keep module loading manual until that handoff and a
+standard Linux GNSS userspace bridge confirm position data and lifecycle.
 
 diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 --- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
-@@ -383,7 +383,7 @@ gps: gnss@18c00000 {
+@@ -446,7 +446,18 @@
  		emi-alignment = <0x100000>;
  		emi-max-addr = <0xc0000000>;
  		b13b14-status-addr = <0x1c000008>;
 -		status = "disabled";
++		pinctrl-names = "default",
++				"gps_l1_lna_disable", "gps_l1_lna_dsp_ctrl",
++				"gps_l1_lna_enable", "gps_l5_lna_disable",
++				"gps_l5_lna_dsp_ctrl", "gps_l5_lna_enable";
++		pinctrl-0 = <&gps_pins_default>;
++		pinctrl-1 = <&gps_l1_lna_pins_ol>;
++		pinctrl-2 = <&gps_l1_lna_pins_dsp_ctrl>;
++		pinctrl-3 = <&gps_l1_lna_pins_oh>;
++		pinctrl-4 = <&gps_l5_lna_pins_ol>;
++		pinctrl-5 = <&gps_l5_lna_pins_dsp_ctrl>;
++		pinctrl-6 = <&gps_l5_lna_pins_oh>;
 +		status = "okay";
  	};
  };
  
+@@ -471,6 +482,49 @@
+ };
+ 
+ &pio {
++	gps_pins_default: gps-default {
++	};
++
++	gps_l1_lna_pins_ol: gps-l1-lna-disable {
++		pins {
++			pinmux = <PINMUX_GPIO143__FUNC_GPIO143>;
++			output-low;
++		};
++	};
++
++	gps_l1_lna_pins_dsp_ctrl: gps-l1-lna-dsp-ctrl {
++		pins {
++			pinmux = <PINMUX_GPIO143__FUNC_GPS_L1_ELNA_EN>;
++		};
++	};
++
++	gps_l1_lna_pins_oh: gps-l1-lna-enable {
++		pins {
++			pinmux = <PINMUX_GPIO143__FUNC_GPIO143>;
++			output-high;
++		};
++	};
++
++	gps_l5_lna_pins_ol: gps-l5-lna-disable {
++		pins {
++			pinmux = <PINMUX_GPIO144__FUNC_GPIO144>;
++			output-low;
++		};
++	};
++
++	gps_l5_lna_pins_dsp_ctrl: gps-l5-lna-dsp-ctrl {
++		pins {
++			pinmux = <PINMUX_GPIO144__FUNC_GPS_L5_ELNA_EN>;
++		};
++	};
++
++	gps_l5_lna_pins_oh: gps-l5-lna-enable {
++		pins {
++			pinmux = <PINMUX_GPIO144__FUNC_GPIO144>;
++			output-high;
++		};
++	};
++
+ 	aud_clk_mosi_off: aud-clk-mosi-off {
+ 		pins {
+ 			pinmux = <PINMUX_GPIO164__FUNC_GPIO164>;
