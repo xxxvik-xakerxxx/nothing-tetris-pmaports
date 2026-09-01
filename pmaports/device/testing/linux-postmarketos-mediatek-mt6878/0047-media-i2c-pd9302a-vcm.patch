@@ -34,7 +34,7 @@ new file mode 100644
 index 0000000..32be820
 --- /dev/null
 +++ b/drivers/media/i2c/pd9302a.c
-@@ -0,0 +1,339 @@
+@@ -0,0 +1,368 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Puya Semiconductor PD9302A voice coil motor driver
@@ -52,6 +52,7 @@ index 0000000..32be820
 +#include <media/v4l2-ctrls.h>
 +#include <media/v4l2-device.h>
 +
++#define PD9302A_REG_REVISION		0x00
 +#define PD9302A_REG_CONTROL		0x02
 +#define PD9302A_REG_POSITION		0x03
 +#define PD9302A_REG_CONFIG_1		0x06
@@ -60,8 +61,11 @@ index 0000000..32be820
 +#define PD9302A_CONTROL_RESET		0x01
 +#define PD9302A_CONTROL_ACTIVE		0x02
 +#define PD9302A_CONTROL_STANDBY		0x20
-+#define PD9302A_CONFIG_1_DEFAULT	0x40
-+#define PD9302A_CONFIG_2_DEFAULT	0x60
++#define PD9302A_REVISION_F0		0xf0
++#define PD9302A_CONFIG_1_F0		0x10
++#define PD9302A_CONFIG_2_F0		0x6f
++#define PD9302A_CONFIG_1_DEFAULT	0x80
++#define PD9302A_CONFIG_2_DEFAULT	0x39
 +
 +#define PD9302A_MAX_FOCUS_POS		1023
 +#define PD9302A_ORIGIN_FOCUS_POS	512
@@ -80,6 +84,7 @@ index 0000000..32be820
 +	struct v4l2_ctrl *focus;
 +	struct regulator_bulk_data supplies[ARRAY_SIZE(pd9302a_supply_names)];
 +	u16 position;
++	bool position_valid;
 +	bool active;
 +};
 +
@@ -103,6 +108,13 @@ index 0000000..32be820
 +	return 0;
 +}
 +
++static int pd9302a_read8(struct pd9302a_device *pd9302a, u8 reg)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(&pd9302a->sd);
++
++	return i2c_smbus_read_byte_data(client, reg);
++}
++
 +static int pd9302a_set_position(struct pd9302a_device *pd9302a, u16 position)
 +{
 +	struct i2c_client *client = v4l2_get_subdevdata(&pd9302a->sd);
@@ -116,33 +128,51 @@ index 0000000..32be820
 +		return -EIO;
 +
 +	pd9302a->position = position;
++	pd9302a->position_valid = true;
 +	return 0;
 +}
 +
 +static int pd9302a_initialize(struct pd9302a_device *pd9302a)
 +{
-+	static const struct {
-+		u8 reg;
-+		u8 value;
-+	} init_sequence[] = {
-+		{ PD9302A_REG_CONTROL, PD9302A_CONTROL_RESET },
-+		{ PD9302A_REG_CONTROL, 0x00 },
-+		{ PD9302A_REG_CONTROL, PD9302A_CONTROL_ACTIVE },
-+		{ PD9302A_REG_CONFIG_1, PD9302A_CONFIG_1_DEFAULT },
-+		{ PD9302A_REG_CONFIG_2, PD9302A_CONFIG_2_DEFAULT },
-+	};
-+	unsigned int i;
++	u8 config_1;
++	u8 config_2;
++	int revision;
 +	int ret;
 +
-+	for (i = 0; i < ARRAY_SIZE(init_sequence); i++) {
-+		ret = pd9302a_write8(pd9302a, init_sequence[i].reg,
-+				     init_sequence[i].value);
-+		if (ret)
-+			return ret;
++	ret = pd9302a_write8(pd9302a, PD9302A_REG_CONTROL,
++			     PD9302A_CONTROL_RESET);
++	if (ret)
++		return ret;
 +
-+		if (i == 1 || i == ARRAY_SIZE(init_sequence) - 1)
-+			usleep_range(100, 200);
++	ret = pd9302a_write8(pd9302a, PD9302A_REG_CONTROL, 0x00);
++	if (ret)
++		return ret;
++	usleep_range(100, 200);
++
++	ret = pd9302a_write8(pd9302a, PD9302A_REG_CONTROL,
++			     PD9302A_CONTROL_ACTIVE);
++	if (ret)
++		return ret;
++
++	revision = pd9302a_read8(pd9302a, PD9302A_REG_REVISION);
++	if (revision < 0)
++		return revision;
++
++	if (revision == PD9302A_REVISION_F0) {
++		config_1 = PD9302A_CONFIG_1_F0;
++		config_2 = PD9302A_CONFIG_2_F0;
++	} else {
++		config_1 = PD9302A_CONFIG_1_DEFAULT;
++		config_2 = PD9302A_CONFIG_2_DEFAULT;
 +	}
++
++	ret = pd9302a_write8(pd9302a, PD9302A_REG_CONFIG_1, config_1);
++	if (ret)
++		return ret;
++	ret = pd9302a_write8(pd9302a, PD9302A_REG_CONFIG_2, config_2);
++	if (ret)
++		return ret;
++	usleep_range(100, 200);
 +
 +	return 0;
 +}
@@ -151,6 +181,9 @@ index 0000000..32be820
 +{
 +	int position = pd9302a->position;
 +	int ret;
++
++	if (!pd9302a->position_valid)
++		return 0;
 +
 +	while (abs(position - PD9302A_ORIGIN_FOCUS_POS) > PD9302A_MOVE_STEP) {
 +		position += position < PD9302A_ORIGIN_FOCUS_POS ?
@@ -223,11 +256,11 @@ index 0000000..32be820
 +	disable_ret = regulator_bulk_disable(ARRAY_SIZE(pd9302a_supply_names),
 +					     pd9302a->supplies);
 +	if (disable_ret)
-+		return disable_ret;
++		return ret ? ret : disable_ret;
 +
 +	pd9302a->active = false;
 +
-+	return 0;
++	return ret;
 +}
 +
 +static int pd9302a_resume(struct device *dev)
@@ -251,10 +284,6 @@ index 0000000..32be820
 +		goto disable_supplies;
 +
 +	pd9302a->active = true;
-+	ret = pd9302a_set_position(pd9302a, pd9302a->focus->val);
-+	if (ret)
-+		goto disable_supplies;
-+
 +	return 0;
 +
 +disable_supplies:
