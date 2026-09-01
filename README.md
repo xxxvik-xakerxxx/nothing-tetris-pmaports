@@ -64,6 +64,12 @@ candidate `8-r4` moves the PulseAudio speaker policy from every user manager to
 the real graphical session and excludes the `greetd` account; it is not
 installed or hardware-validated yet.
 
+Per-device data remains outside the image. The live phone exposes separate
+`nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
+`md_sec` stores plus A/B subsystem firmware partitions. Wi-Fi/BT use bounded
+records from `nvdata`; future modem, GNSS, sensor and camera work must identify
+its exact calibration records without committing whole dumps or unique IDs.
+
 ## Feature Status
 
 | Area | Feature | Status | Notes |
@@ -92,8 +98,8 @@ installed or hardware-validated yet.
 | Camera | Flash strobe | Untested | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 bridge are not validated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean kernel #128 registers `wlan0`; association to `DistributedLabDev`, DHCP, the default route, DNS and HTTPS pass while USB and Bluetooth remain active. Cold reconnect, suspend/resume and stress remain. |
-| Connectivity | Bluetooth | Partial | Clean kernel #128 automatically registers powered native BlueZ `hci0` with a provisioned factory address; RFCOMM/BNEP are present. Pair/reconnect, audio/data profiles and suspend remain. |
-| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth. Read-only boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub; the exact Tetris stock profile must be recovered before MVCD/MNL work. |
+| Connectivity | Bluetooth | Partial | Native BlueZ `hci0` performs discovery and found more than 40 nearby devices while USB/Wi-Fi survived. One bounded scan left `Discovering` stuck until only `bluetooth.service` was restarted, so pair/reconnect, profile and teardown lifecycle work remains. |
+| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth. Boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub; stock-derived Tetris property and module trees select v051, now the next isolated compile/clean-boot candidate. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. An isolated CCIF patch replaces `from_timer()`/`del_timer()` with Linux 6.18 lifetime-equivalent APIs and advances `ccci_hif_ccif.o` to the next first blocker: unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. No modem module, DT or runtime path is enabled. |
 | Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A host-only U-Boot parser now validates two bounded, non-overlapping SCP carveouts without modifying the FDT, but active-slot firmware identity and TCM region-info remain unknown; no publication, DVFS or sensorhub is enabled. |

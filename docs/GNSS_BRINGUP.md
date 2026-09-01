@@ -84,12 +84,21 @@ does not identify which one the Tetris product loads. Switching profiles or
 mixing backend objects is therefore not justified yet. Evidence is in
 `gnss-mvcd-boot-info.txt` in the same directory.
 
+Two stock-derived Tetris integration trees independently select v051: the
+device property has specified `ro.vendor.gps.chrdev=gps_drv_dl_v051` since its
+initial import, and its prebuilt `vendor_dlkm` contains and loads only
+`gps_drv_dl_v051.ko`. The exact B4.1 `vendor_boot` archive does not carry late
+`vendor_dlkm` modules, so this is strong corroborating evidence rather than a
+byte-for-byte B4.1 load-list extraction. It is sufficient to prepare and
+compile-check an isolated v051 candidate, but not to live-load v051 over the
+currently active shared radio stack.
+
 ## Next gate
 
-The next gate is authoritative selection of the Tetris GNSS data-link profile
-and boot-info backend from an exact stock `vendor_dlkm` module/load list or
-equivalent product configuration. Then a maintainable MediaTek MNL bridge or
-Linux GNSS subsystem driver can implement MVCD and expose standard position
-data. Do not interpret raw reads from `gpsdl0` as NMEA, load v051 live, or graft
-its ATF objects into v050 without that evidence. Promotion requires a timed and
-accurate fix, three cold starts, restart, coexistence and suspend/resume tests.
+The next gate is an isolated v051 compile/package candidate, followed by a clean
+boot that loads only that profile and repeats transport plus read-only boot-info
+tests. Then a maintainable MediaTek MNL bridge or Linux GNSS subsystem driver
+can implement MVCD and expose standard position data. Do not interpret raw
+reads from `gpsdl0` as NMEA, load v051 over the current v050 session, or graft
+its ATF objects into v050. Promotion requires a timed and accurate fix, three
+cold starts, restart, coexistence and suspend/resume tests.
