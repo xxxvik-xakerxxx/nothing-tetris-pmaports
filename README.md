@@ -56,53 +56,54 @@ contract are documented in
 
 The active `pkgrel=127` candidate is pmaports commit
 `fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed and
-published images whose manifest pins U-Boot `b76e47e`; the images have not been
-installed or hardware-tested yet.
+published images whose manifest pins U-Boot `b76e47e`. That exact U-Boot is
+installed in both boot partitions and the CI image is installed as kernel
+`6.18.0 #128`; clean boot, warm reboot and exact 32 MiB USB SSH transfers pass.
 
 ## Feature Status
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Boot | U-Boot boot flow | Works | Uses `fastboot oem board:boot_pmos` and FIT image handoff. |
-| Boot | Kernel boot | Works | Mainline MT6878 kernel reaches userspace. |
+| Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in `boot_a` and `boot_b`; normal boot and Linux `reboot bootloader` both pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
+| Boot | Kernel boot | Works | CI image `fdeeda0` boots mainline `6.18.0 #128` to userspace on clean and warm boots. |
 | Display | Simple framebuffer | Partial | Inherited U-Boot framebuffer provides basic scanout through `simpledrm`, but has no native brightness, vblank/page-flip or validated suspend/resume path and desktop rendering is CPU-bound. |
 | Display | Native DSI/panel | Broken | `pkgrel=127` stages a bounded S6E8FC3X02 driver and binding for a compile-only object. The shipped config remains off and no module or DT client is packaged. MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY, lane-rate validation and an opt-in DT graph remain. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
-| Power | Battery/USB telemetry | Partial | MT6375 telemetry and the bounded 500 mA path work; +284424 uA net battery current was measured with the system active. TCPM reported Type-C default mode and `CURRENT_MAX=0`. The native MT6375 driver still lacks BC1.2 SDP/CDP/DCP classification; Type-C Rp needs a known-source test and PD/PPS remains disabled. |
+| Power | Battery/USB telemetry | Partial | MT6375 telemetry and the bounded 500 mA path work; clean kernel #128 measured +195312 uA net battery current at 87%. TCPM still reports Type-C default mode and `CURRENT_MAX=0`. The native MT6375 driver lacks BC1.2 SDP/CDP/DCP classification; Type-C Rp needs a known-source test and PD/PPS remains disabled. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
 | Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. Existing captures kept USB connected and the controller runtime-active, so they cannot identify the unplugged cause. The next valid test is local, physically unplugged and screen-off, comparing separate Wi-Fi-on/off boots with coulomb, wake and IRQ deltas. |
 | Power | Thermal management | Partial | The installed baseline exposes all 24 MT6878 LVTS zones with plausible polling-mode values. Hardware trips/IRQ routing and sustained-load lifecycle tests remain disabled. |
-| USB | Device mode / NCM | Partial | The clean baseline automatically exposes `usb0`; exact 32 MiB SSH transfers passed across clean and warm boots. Repeated reconnect and suspend/resume remain. |
+| USB | Device mode / NCM | Partial | Kernel #128 automatically exposes `usb0`; exact 32 MiB SSH transfers passed after its clean boot and warm reboot. Repeated physical reconnect and suspend/resume remain. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPM reports orientation, sink power and device data role. Peripheral/NCM is the safe default; host VBUS ownership, PD and wake remain unvalidated. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
-| Haptics | RT6010 rumble | Partial | The driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; shell, UI and repeated bounded effects work physically. Suspend/resume and three cold boots remain. |
+| Haptics | RT6010 rumble | Partial | A bounded `feedbackd` effect works physically on clean kernel #128 and stops without affecting USB. Suspend/resume and three cold boots remain. |
 | Audio | Upper earpiece | Partial | Physical playback and the desktop speaker test work through MT6369. Lifecycle tests remain. |
-| Audio | Lower main speaker | Partial | Direct ALSA playback works through AW88261. The current kernel exposes its MCK as a fixed gate, so 44.1/48 kHz streams fail `clk_set_rate()` and can truncate; the next kernel stages the native SI1 divider fix. |
+| Audio | Lower main speaker | Partial | A bounded PulseAudio 440 Hz test plays physically through AW88261 on clean kernel #128 and the sink returns to `SUSPENDED`. System sounds remain inconsistent and microphone paths still need a #128 regression test. |
 | Audio | Built-in microphones | Partial | AIN0 and AIN2 capture physically through the packaged UCM profile. Per-input recordings, suspend/resume and cold-boot repetition remain. |
-| Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. The main-speaker stream lifecycle is not stable. |
+| Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. Direct playback works, but normal system sounds behave inconsistently; `feedbackd` is D-Bus activated and running, so its event profile/routing is the next userspace gate. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
 | Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. The candidate compile-checks a disabled, bounded IMX882 physical-ID probe, but it is not packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, clocks, power domains, IOMMU and userspace remain. |
 | Camera | Torch | Partial | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off. Clean-install and lifecycle tests remain. |
 | Camera | Flash strobe | Untested | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 bridge are not validated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
-| Connectivity | Wi-Fi | Partial | The clean CI image automatically registers `wlan0`; NetworkManager scans, associates and routes traffic while Bluetooth remains active. Three cold boots, suspend/resume and a second unit remain. |
-| Connectivity | Bluetooth | Partial | The clean CI image automatically registers native BlueZ `hci0` with the factory address and the UI works alongside connected Wi-Fi. RFCOMM/BNEP are staged for the next kernel; lifecycle/second-unit checks remain. |
-| Connectivity | GPS/GNSS | Broken | A manual B4.1 v050 probe creates both `gpsdl` device nodes, but the installed boot chain lacks a valid GPS EMI handoff and exact LNA pinctrl. No position fix is confirmed and the module is not autoloaded. |
+| Connectivity | Wi-Fi | Partial | Clean kernel #128 registers `wlan0`; association to `DistributedLabDev`, DHCP, the default route, DNS and HTTPS pass while USB and Bluetooth remain active. Cold reconnect, suspend/resume and stress remain. |
+| Connectivity | Bluetooth | Partial | Clean kernel #128 automatically registers powered native BlueZ `hci0` with a provisioned factory address; RFCOMM/BNEP are present. Pair/reconnect, audio/data profiles and suspend remain. |
+| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, the manual B4.1 v050 transport creates both `gpsdl` nodes and a bounded `gpsdl0` open/close completes while USB, routed Wi-Fi and Bluetooth remain healthy. No MNL bridge, satellite fix, restart or suspend evidence exists, and the module remains manual-only. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. An isolated CCIF patch replaces `from_timer()`/`del_timer()` with Linux 6.18 lifetime-equivalent APIs and advances `ccci_hif_ccif.o` to the next first blocker: unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. No modem module, DT or runtime path is enabled. |
 | Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A host-only U-Boot parser now validates two bounded, non-overlapping SCP carveouts without modifying the FDT, but active-slot firmware identity and TCM region-info remain unknown; no publication, DVFS or sensorhub is enabled. |
 | Sensors | Ambient light/proximity | Broken | Shares the blocked SCP sensorhub path. Adding only the vendor DVFS node is rejected because it would touch ULPOSC, fmeter and clocks before firmware handoff is proven. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | UFS/root I/O | Works | UFS is stable and `/dev/sdc82` mounts read-write as ext4. |
-| Storage | Automatic root grow | Partial | The pmOS initramfs runs `e2fsck` and `resize2fs` before mounting root. The current filesystem is 104.6 GiB; a fresh sparse-image flash still needs the clean-install gate. |
+| Storage | Automatic root grow | Works | The clean sparse-image flash ran the standard pmOS initramfs path and mounted a writable 104.6 GiB root filesystem without a device-specific resize service. |
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |
 | Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters. GNOME 50.3 ignores ARM `CPU implementer`/`CPU part` fields and therefore leaves the Settings processor row blank; this needs a portable GNOME/libgtop fix. |
 
 ## Installed Baseline Findings
 
-On the clean CI image from pmaports commit `f607513` with kernel
-`6.18.0 #123`:
+On the clean CI image from pmaports commit `fdeeda0` with kernel
+`6.18.0 #128` and U-Boot `b76e47e`:
 
 - Power, volume-up and volume-down generate balanced press/release events without stuck keys.
 - `/` is mounted from `/dev/sdc82` as ext4 and currently exposes 104.6 GiB.
@@ -115,14 +116,18 @@ On the clean CI image from pmaports commit `f607513` with kernel
 - UDisks sees the whole Android GPT with many small firmware partitions. The
   device package now installs `80-nothing-tetris-udisks.rules` to hide
   non-postmarketOS partitions from desktop storage UIs.
-- Wi-Fi association and routed traffic, native BlueZ Bluetooth, feedbackd
-  haptics, earpiece playback and both microphone inputs survive the clean boot.
-  The lower speaker stream lifecycle remains the known audio regression. Live
-  clock-tree evidence identified its first error as a non-programmable
-  `apll12_div_si1`; the next kernel models the official B4.1 divider fields in
-  CCF instead of retrying playback in userspace.
-- ECM USB networking is active as `usb0`/`en4` and transferred 32 MiB without
-  RX/TX errors while Wi-Fi and Bluetooth remained active.
+- Wi-Fi association, DHCP, the default route, DNS and HTTPS work while USB and
+  powered native BlueZ Bluetooth remain active.
+- ALSA playback/capture devices plus PulseAudio stereo speaker, mono remap and
+  microphone endpoints register after the desktop session settles. Bounded
+  speaker playback and haptics are physically confirmed on #128; normal system
+  sounds remain inconsistent and microphone capture needs a #128 repeat.
+- NCM USB networking is active as `usb0`/`en4` and transferred exact 32 MiB
+  zero streams with matching SHA after clean boot, warm reboot and the manual
+  GNSS transport test.
+- The manual GNSS v050 transport creates `/dev/gpsdl0` and `/dev/gpsdl1`; a
+  bounded link0 open/close passes without a consumer leak or radio/USB loss.
+  This is not a satellite position fix.
 - All 24 MT6878 LVTS thermal zones report plausible polling-mode values.
   Standard GNSS position, modem/WWAN, camera/media, user-sensor IIO and DRM
   render nodes are absent. The existing IIO devices are PMIC ADCs.

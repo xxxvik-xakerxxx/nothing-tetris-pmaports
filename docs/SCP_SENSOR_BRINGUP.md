@@ -71,3 +71,9 @@ tests pass offline.
 This proves the fail-closed staging contract only. It does not prove firmware
 execution, remoteproc readiness, sensor enumeration, calibration, idle power,
 warm reboot or suspend/resume.
+
+The clean `fdeeda0` / kernel #128 boot still logs failure to reserve the captured
+`mblock-27-SCP-reserved` range at `0xb8000000` (35 MiB). This is live evidence
+that the current LK-derived loader-memory contract is not usable by Linux; it
+reinforces the fail-closed gate and must not be bypassed by hard-coding that
+physical address.

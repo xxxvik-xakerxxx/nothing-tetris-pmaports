@@ -14,13 +14,11 @@ it is not a standard NMEA stream and cannot be passed directly to `gpsd`.
 Opening a device starts the associated GNSS link, so transport staging and
 position testing must remain separate experiments.
 
-The installed U-Boot does not supply the vendor driver's `emi-addr`, and the
-manual 2026-09-01 probe therefore stopped at the missing EMI/pinctrl contract
-after creating both device nodes. Candidate pmaports commit `11befa5` adds the
-exact Tetris LNA pinctrl states. Candidate U-Boot `b76e47e` writes the 64-bit
-GPS EMI address only after the existing reserved-memory layout and secure EMI
-mappings validate. Neither candidate has been tested together on the phone,
-and no position fix is claimed.
+The installed pmaports image includes the exact Tetris LNA pinctrl states and
+installed U-Boot `b76e47e` writes the 64-bit GPS EMI address only after the
+existing reserved-memory layout and secure EMI mappings validate. Their joint
+transport and link-power behavior is now tested on the phone. No position fix
+is claimed.
 
 `nothing-tetris-gnss-transport.service` is intentionally static and manual. It
 requires the proven connectivity service, checks the packaged firmware, loads
@@ -62,13 +60,24 @@ modem module appeared, Wi-Fi scan remained functional, and the USB transfer
 passed. This proves transport staging only, not satellite acquisition or a
 position fix.
 
+On 2026-09-01 the clean `fdeeda0` image, kernel `#128`, boot ID
+`20e9eb59-7d0f-400e-84cf-2b6e0757af9e` and U-Boot `b76e47e` repeated the
+transport gate. Firmware SHA-256 was `7ad6007c...`, both nodes appeared, no
+consumer or modem module appeared, and the exact 32 MiB USB transfer retained
+SHA-256 `83ee4724...` while routed Wi-Fi and powered Bluetooth remained active.
+
+One separate bounded experiment then opened only `/dev/gpsdl0` for three
+seconds and closed it normally. The operation returned success, left no owner,
+and preserved USB, Wi-Fi/HTTPS and Bluetooth. This demonstrates the link0
+power lifecycle and bootloader handoff boundary, not GNSS protocol operation or
+a satellite fix. Raw evidence is under
+`local/live-logs/20260901T161500Z-fdeeda0-clean1/`.
+
 ## Next gate
 
-First install the exact pmaports and U-Boot candidates and repeat the
-transport-only gate. If EMI, pinctrl and firmware initialization are clean, the
-next live test must open only `gpsdl0`, preserve the first firmware or protocol
-error, close the link cleanly, and verify USB, Wi-Fi and Bluetooth. A
-maintainable userspace bridge for MediaTek MNL or a Linux GNSS subsystem driver
-is still required for position service integration. Promotion requires
-time-to-fix and accuracy evidence, three cold starts, restart, coexistence and
-suspend/resume testing.
+The next gate is a maintainable userspace bridge for the MediaTek MNL protocol
+or a Linux GNSS subsystem driver. It must start link0, preserve the first
+firmware/protocol error, expose standard position data and close cleanly. Do not
+interpret raw reads from `gpsdl0` as NMEA. Promotion requires time-to-fix and
+accuracy evidence, three cold starts, restart, coexistence and suspend/resume
+testing.

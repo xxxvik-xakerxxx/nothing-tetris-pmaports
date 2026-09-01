@@ -22,6 +22,11 @@ This proves useful telemetry and a bounded 500 mA path. It does not prove fast
 or production charging. The policy must not infer a higher safe current from
 voltage, cable presence, charger state or raw ADC values.
 
+The clean `fdeeda0` image with kernel `6.18.0 #128` reproduces the same boundary:
+AICR/ICHG 500000 uA, +195312 uA net battery current at 87%, 31.9 C battery
+temperature and TCPM `CURRENT_MAX=0`. This is a clean-install confirmation of
+the fallback, not a source-classification improvement.
+
 ## First charging blocker
 
 The native path has MT6375 TCPC attach state and a conservative policy consumer.
