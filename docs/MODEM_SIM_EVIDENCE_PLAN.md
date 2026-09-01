@@ -91,6 +91,24 @@ whole NV partitions, `md_sec`, LK tag buffers or physical addresses between
 handsets. Any future extractor must read a bounded, versioned record from the
 same device and fail closed on absence or mismatch.
 
+## Stock userspace contract
+
+The stock-derived Tetris device tree confirms a dual-SIM DSDS configuration
+with `ro.vendor.mtk_ril_mode=c6m_1rild`. Its proprietary manifest requires
+`ccci_mdinit`, `ccci_rpcd`, `mtkfusionrild`, `libccci_util.so` and the MediaTek
+RIL libraries. The product enables Android Radio AIDL v2 services for data,
+messaging, modem, network, SIM and voice, plus MediaTek extension interfaces.
+This is evidence for the expected control plane, not permission to copy the
+Android blobs into pmOS.
+
+The preferred maintainable path is a bounded native bridge from documented
+CCCI control/port messages to a standard Linux telephony API. A compatibility
+fallback could retain the matching Android `IRadio` service behind an
+oFono/Binder adapter, but that imports a much larger proprietary Android ABI
+and must be evaluated separately. ModemManager has no generic MediaTek CCCI
+plugin; a CCMNI interface or `/dev/ccci*` node alone is not calls/SMS/SIM
+support.
+
 ## Status of draft 0031
 
 `0031-arm64-dts-mediatek-mt6878-modem-foundation-disabled.patch` is inventory,
