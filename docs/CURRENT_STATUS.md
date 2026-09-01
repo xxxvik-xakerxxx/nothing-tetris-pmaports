@@ -19,9 +19,10 @@ Its manifest matches `fdeeda0` and requires U-Boot `b76e47e` with SHA-256
 `869303227941e0f050d083c74eeffcfb9bf90bf80a59978780b915d22722b9c4`.
 Streaming verification passed for `boot_image.itb` (`d4c97120...`), the 512 MiB
 boot image (`edfb650a...`) and the root sparse image (`0fdcff2f...`). The CI
-artifact contains no separately named `super` or `userdata` image, so its
-partition mapping must be taken from the existing validated installation path
-before flashing.
+filenames are generic, but the package's `fastboot-bootpart` contract and the
+validated installation path map `nothing-tetris-boot.img` to `super` and
+`nothing-tetris-root.sparse.img` to `userdata`. `boot_image.itb` is retained as
+the independently verifiable FIT payload; it is not a third fastboot partition.
 
 `Works` means the end-user function was physically demonstrated. `Partial`
 means useful behavior works but lifecycle, integration or portability gates are
