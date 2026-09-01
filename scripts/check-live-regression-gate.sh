@@ -10,7 +10,7 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 outdir="$repo_root/local/live-logs/$stamp-$host-regression-gate"
 control_path="/tmp/nothing-tetris-regression-$stamp-$$"
-ssh_opts="-o ConnectTimeout=10 -o PreferredAuthentications=password -o PubkeyAuthentication=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPersist=60 -o ControlPath=$control_path"
+ssh_opts="-o ConnectTimeout=10 -o PreferredAuthentications=keyboard-interactive,password -o KbdInteractiveAuthentication=yes -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPersist=60 -o ControlPath=$control_path"
 
 mkdir -p "$outdir"
 

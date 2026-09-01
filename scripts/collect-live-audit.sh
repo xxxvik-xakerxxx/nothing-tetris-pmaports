@@ -13,8 +13,10 @@ mkdir -p "$outdir"
 
 sshpass -p "$password" ssh \
 	-o ConnectTimeout=10 \
-	-o PreferredAuthentications=password \
+	-o PreferredAuthentications=keyboard-interactive,password \
+	-o KbdInteractiveAuthentication=yes \
 	-o PubkeyAuthentication=no \
+	-o NumberOfPasswordPrompts=1 \
 	-o StrictHostKeyChecking=no \
 	-o UserKnownHostsFile=/dev/null \
 	"$user@$host" 'set +e
