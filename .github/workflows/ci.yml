@@ -291,6 +291,11 @@ jobs:
             echo "compile-only pd9302a module must not be packaged"
             exit 1
           fi
+          if find "$rootfs/lib/modules" -name panel-samsung-s6e8fc3x02.ko \
+              -print -quit | grep -q .; then
+            echo "compile-only S6E8FC3X02 module must not be packaged"
+            exit 1
+          fi
           if find "$rootfs/lib/modules" \
               \( -name ccci_md_all.ko -o -name ccci_all.ko \) \
               -print -quit | grep -q .; then

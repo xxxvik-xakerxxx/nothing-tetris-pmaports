@@ -582,6 +582,7 @@ validate_compile_only_boundaries() {
 		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
 		0046-dt-bindings-media-i2c-pd9302a.patch \
 		0047-media-i2c-pd9302a-vcm.patch \
+		0050-drm-panel-samsung-s6e8fc3x02.patch \
 		0048-vendor-eccci-core-linux-6.18-api.patch.vendor; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
@@ -590,12 +591,17 @@ validate_compile_only_boundaries() {
 	grep -Fq 'drivers/media/i2c/pd9302a.o' "$kernel_apkbuild"
 	grep -Fq '_build_ccci_core_compile_only' "$kernel_apkbuild"
 	grep -Fq 'ccci_core.o ccci_bm.o' "$kernel_apkbuild"
+	grep -Fq '_build_s6e8fc3x02_compile_only' "$kernel_apkbuild"
+	grep -Fq 'drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o' "$kernel_apkbuild"
+	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
+	grep -Fq "grep -Eq '^CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=(y|m)$'" "$kernel_apkbuild"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI core must not be packaged' "$workflow"
+	grep -Fq 'compile-only S6E8FC3X02 module must not be packaged' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|ccci_md_all|ccci_all)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
-		echo "compile-only camera and CCCI core modules must not autoload" >&2
+		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1
 	fi
 }

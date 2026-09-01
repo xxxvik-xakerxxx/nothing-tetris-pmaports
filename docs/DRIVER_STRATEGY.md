@@ -67,12 +67,17 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | Audio calibration | MT6369 AUXADC plus PMIC efuse | Vendor providers in the kernel package, patch `0013`. |
 | Rear flash | Dual-channel LM3644 at I2C6 address `0x63`, enable GPIO155 | Small native LED/V4L2 driver; do not import Android flashlight-core. |
 | Fingerprint | Goodix SPI1, IRQ GPIO18, reset GPIO73, MT6369 VFP | Experimental vendor bridge also requires the TEE userspace contract. |
-| Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires SCP firmware, SCP core, HF manager and sensorhub as one group. |
+| Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires validated bootloader publication of SCP firmware identity, TCM region-info and both carveouts before SCP DVFS, core, HF manager or sensorhub can be enabled. |
 | Cameras | IMX882, GC16B3C and SC202CS through MT6878 seninf/ISP | Experimental camera group after clocks, power domains and IOMMU. |
 | Modem/SIM | CCCI/DPMAIF, SIM detect GPIO46/GPIO47 | Experimental modem group plus userspace daemon and firmware. |
 | SoC thermal | MT6878 LVTS, 24 sensors in MCU/AP/GPU domains, four efuse cells | Port the official B4.1 calibration/controller data to Linux thermal; start with read-only zones and conservative critical trips. |
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
 | Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
+
+The standalone S6E8FC3X02 panel source and binding now pass exact patch
+application and a targeted arm64 compile against the pinned Linux baseline.
+That is a source-compatibility result only: the panel remains disabled until
+the MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY pipeline and lane rate are proven.
 
 The live hardware audits confirmed a 108 GiB root partition and all eight CPUs.
 `lscpu` correctly decodes four Cortex-A55 and four Cortex-A78 cores. The blank

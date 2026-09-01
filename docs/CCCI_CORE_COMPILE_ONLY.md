@@ -74,10 +74,17 @@ This is compile evidence only, not a link or runtime result.
    boundaries, with no packaging or autoload.
 7. Verify CCCI-SCP shared-memory/IPI ABI without disturbing the working sensor
    SCP path.
+
 8. Prove SIM1/SIM2 EINT pin ownership and debounce from authoritative board
    data; do not request the IRQs before the modem handoff gate passes.
 9. Define a standard WWAN/ModemManager userspace interface and firmware
    provisioning path; `/dev/ccci*` alone is not functional modem support.
+
+The first follow-up CCIF build now proves `ccci_ringbuf.o` but fails closed in
+`ccci_hif_ccif.o` at removed `from_timer()`/`del_timer()` APIs. It also exposes
+the unresolved `MTK_SIP_KERNEL_CCCI_CONTROL` dependency. No CCIF patch or
+module is integrated until timer lifetime and secure ABI ownership are reviewed
+as separate boundaries.
 
 The first runtime experiment is allowed only after a probe-only driver can
 validate every handoff and dependency above, then exit with the modem, DMA,

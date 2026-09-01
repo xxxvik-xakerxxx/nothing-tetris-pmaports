@@ -141,6 +141,7 @@ The B4.1 ECCCI stack is not a single driver. Its minimum path is:
 6. Trusted firmware support for `MTK_SIP_KERNEL_CCCI_CONTROL`. Vendor code uses
    this SMC for power configuration, boot release, flight mode, clock requests,
    boot status, SCP synchronization and debug operations.
+
 7. A legitimate, version-matched modem firmware image and modem memory layout.
 8. A Linux userspace integration that exposes standard WWAN/ModemManager
    behavior without depending silently on Android daemons or userdata.
@@ -150,6 +151,24 @@ groundwork and PMIC register definitions, but does not have a validated MD power
 domain sequence, the required infracfg modem clocks, the bootloader/ATF modem
 handoff, modem reserved memory, firmware provenance, or a standard userspace
 control path.
+
+## Current CCIF compile boundary
+
+An isolated LLVM 21/aarch64 build against pinned Linux `d84b264a` and Nothing
+OS 4.1 device modules `ee2be53c` now reaches the first CCIF-specific ABI
+boundary without creating a module:
+
+- `ccci_ringbuf.o`: compiles;
+- `ccci_hif_ccif.o`: stops at removed `from_timer()` and `del_timer()` APIs;
+- the same translation unit then reaches the unowned
+  `MTK_SIP_KERNEL_CCCI_CONTROL` dependency;
+- `ccci_ccif.ko`: neither requested nor emitted.
+
+The include-graph-only patch passes dry-run and strict checkpatch, but remains
+outside the active package until timer callback lifetime and teardown are
+reviewed. The timer conversion must use the Linux 6.18 ownership model rather
+than a compatibility macro. The secure command must come from an authoritative
+firmware/LK contract rather than a copied numeric constant.
 
 ### Memory and isolation trace
 

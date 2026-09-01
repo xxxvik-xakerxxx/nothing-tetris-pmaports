@@ -86,6 +86,12 @@ known-good display path, native DRM should be developed as a separate patch set
 or branch and only merged into the stable build after it shows a real userspace
 KMS framebuffer on hardware.
 
+A bounded native panel candidate derived from the official Tetris contract now
+applies to pinned Linux `d84b264a54a37611f2f46bc19363cb9b41606205` and passes
+a targeted arm64 translation-unit compile. It adds no active DSI graph,
+autoload, Kconfig enablement or framebuffer change. This does not reduce the
+remaining DRM host, DSC, PHY, lane-rate or lifecycle requirements.
+
 ## Maintenance rule
 
 Do not copy entire vendor subsystems into the mainline kernel patch series as

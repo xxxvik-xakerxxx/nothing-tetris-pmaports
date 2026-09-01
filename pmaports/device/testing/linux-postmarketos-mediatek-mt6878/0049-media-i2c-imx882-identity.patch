@@ -89,26 +89,6 @@ index 0000000..e0fc73d
 +        };
 +    };
 +...
- };
- 
- &pio {
-+	camera_mclk_off: camera-mclk-off {
-+		pins {
-+			pinmux = <PINMUX_GPIO93__FUNC_GPIO93>;
-+			output-low;
-+		};
-+	};
-+
-+	camera_mclk_4ma: camera-mclk-4ma {
-+		pins {
-+			pinmux = <PINMUX_GPIO93__FUNC_CMMCLK1>;
-+			drive-strength = <4>;
-+		};
-+	};
-+
- 	gps_pins_default: gps-default {
- 	};
- 
 diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
 index 78018da..26f35f3 100644
 --- a/drivers/media/i2c/Kconfig

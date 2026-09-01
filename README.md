@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=126` in the active candidate) |
+| Kernel version | `6.18` (`pkgrel=127` in the prepared candidate) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -48,6 +48,8 @@ The current mainline promotion policy and remaining hardware order are tracked
 in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 The concise installed-versus-candidate hardware matrix is maintained in
 [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md).
+The fail-closed SCP and sensorhub ownership boundary is documented in
+[docs/SCP_SENSOR_BRINGUP.md](docs/SCP_SENSOR_BRINGUP.md).
 
 ## Feature Status
 
@@ -56,7 +58,7 @@ The concise installed-versus-candidate hardware matrix is maintained in
 | Boot | U-Boot boot flow | Works | Uses `fastboot oem board:boot_pmos` and FIT image handoff. |
 | Boot | Kernel boot | Works | Mainline MT6878 kernel reaches userspace. |
 | Display | Simple framebuffer | Partial | Inherited U-Boot framebuffer provides basic scanout through `simpledrm`, but has no native brightness, vblank/page-flip or validated suspend/resume path and desktop rendering is CPU-bound. |
-| Display | Native DSI/panel | Broken | MT6878 DSI/DSC and the AMOLED panel driver are not integrated. |
+| Display | Native DSI/panel | Broken | `pkgrel=127` stages a bounded S6E8FC3X02 driver and binding for a compile-only object. The shipped config remains off and no module or DT client is packaged. MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY, lane-rate validation and an opt-in DT graph remain. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 telemetry and a conservative charging policy work. The current USB 2.0 default-current source is correctly limited to 500 mA; BC1.2, Type-C Rp and PD current detection still need implementation and charger testing. |
@@ -80,9 +82,9 @@ The concise installed-versus-candidate hardware matrix is maintained in
 | Connectivity | Bluetooth | Partial | The clean CI image automatically registers native BlueZ `hci0` with the factory address and the UI works alongside connected Wi-Fi. RFCOMM/BNEP are staged for the next kernel; lifecycle/second-unit checks remain. |
 | Connectivity | GPS/GNSS | Broken | A manual B4.1 v050 probe creates both `gpsdl` device nodes, but the installed boot chain lacks a valid GPS EMI handoff and exact LNA pinctrl. No position fix is confirmed and the module is not autoloaded. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
-| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. The generic Phosh SIM UI is not evidence of modem support. |
-| Sensors | Rotation/accelerometer | Broken | Requires the MT6878 SCP remoteproc and vendor sensorhub transport before IIO clients can be exposed safely. |
-| Sensors | Ambient light/proximity | Broken | Shares the unported SCP sensorhub path; no blind client probing. |
+| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. The next CCIF boundary compiles `ccci_ringbuf.o` but stops fail-closed at removed Linux 6.18 timer APIs in `ccci_hif_ccif.o`; secure `MTK_SIP_KERNEL_CCCI_CONTROL` ownership is also unproven. No modem module or runtime path is enabled. |
+| Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. SCP firmware identity, TCM region-info and both carveouts must be validated and published by the boot chain before DVFS or sensorhub is enabled. |
+| Sensors | Ambient light/proximity | Broken | Shares the blocked SCP sensorhub path. Adding only the vendor DVFS node is rejected because it would touch ULPOSC, fmeter and clocks before firmware handoff is proven. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | UFS/root I/O | Works | UFS is stable and `/dev/sdc82` mounts read-write as ext4. |
 | Storage | Automatic root grow | Partial | The pmOS initramfs runs `e2fsck` and `resize2fs` before mounting root. The current filesystem is 104.6 GiB; a fresh sparse-image flash still needs the clean-install gate. |

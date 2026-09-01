@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=126
+pkgrel=127
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -72,6 +72,7 @@ source="
 	0046-dt-bindings-media-i2c-pd9302a.patch
 	0047-media-i2c-pd9302a-vcm.patch
 	0049-media-i2c-imx882-identity.patch
+	0050-drm-panel-samsung-s6e8fc3x02.patch
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 	0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
 	0045-vendor-sensorhub-runtime-inventory.patch.vendor
@@ -459,8 +460,9 @@ _build_imx882_identity_compile_only() {
 	_object="$builddir/drivers/media/i2c/imx882-identity.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
 
-	grep -qx '# CONFIG_VIDEO_IMX882_IDENTITY is not set' .config || \
+	if grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$' .config; then
 		die "IMX882 identity probe must stay disabled in the shipped kernel"
+	fi
 	make -j"$_jobs" -C "$builddir" \
 		ARCH="$_carch" LLVM=1 \
 		CONFIG_I2C=y \
@@ -477,6 +479,28 @@ _build_imx882_identity_compile_only() {
 		die "IMX882 identity validation must not produce a module"
 }
 
+_build_s6e8fc3x02_compile_only() {
+	_object="$builddir/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o"
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	if grep -Eq '^CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=(y|m)$' .config; then
+		die "S6E8FC3X02 panel must stay disabled in the shipped kernel"
+	fi
+	make -j"$_jobs" -C "$builddir" \
+		ARCH="$_carch" LLVM=1 \
+		CONFIG_DRM=y \
+		CONFIG_OF=y \
+		CONFIG_DRM_MIPI_DSI=y \
+		CONFIG_BACKLIGHT_CLASS_DEVICE=y \
+		CONFIG_DRM_DISPLAY_DSC_HELPER=y \
+		CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=m \
+		drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o
+
+	test -s "$_object" || die "S6E8FC3X02 compile-only object is missing"
+	test ! -e "$builddir/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko" || \
+		die "S6E8FC3X02 validation must not produce a module"
+}
+
 build() {
 	unset LDFLAGS
 	export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -487,6 +511,7 @@ build() {
 		mediatek/mt6878-nothing-tetris.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
+	_build_s6e8fc3x02_compile_only
 	_build_imx882_identity_compile_only
 	_build_pd9302a_compile_only
 	_build_ccci_util_compile_only
@@ -602,7 +627,8 @@ a6c28a29be81449b927b1bf8f0ccbc5f2e7bd038487ed34601b844fe49ab395caef73524aa2f2bf7
 910bf1a0f85491ee3931c005f458e8314205b650ef20232f155e98b795b0a7f7dfdfdcb2e339019f05eb952eae3cc54c3723568df85486eeeca19da1065aed69  0035-pmdomain-mediatek-mt6878-mfg0-data.patch
 45a6c19c379011df1ee3fc65eddcdb8db5e8966a5f960aa783d625be5fcadda3051f6da79323a962bd1c3a55c186eb5eaa4d10bad3725e9e06533875cfdd7bc6  0046-dt-bindings-media-i2c-pd9302a.patch
 8fb270dfe47c9a9a8f94fec5a518951dd07bef7cf7f78d03509ab9454078c208109d6df105ba64393a24abc141b14cffd1bfa7bc9e18771a21a42d2122500538  0047-media-i2c-pd9302a-vcm.patch
-e07d458b0bcd3e5435fc9733374bd08c6728a518083be42b7e05adafdd428f3ba1a30288bf8d8400d1226b34e4557a4aeb1874c339191ea037170535b82b806c  0049-media-i2c-imx882-identity.patch
+f10207ccadc5f3f731fb75930c3f411cbfd1d02aab46da0a401be566a5dc62e1c851e6e2a688148e18f7311372f7589187fb190ca4225f9eb07d38bd8fdd46e7  0049-media-i2c-imx882-identity.patch
+748244c2b455b8457f69ae572ef24e43675cff6626bbfa35159fb5f135fbbc564ae4af72ba5e2473f8c249562448f7b70d0fcb95feca8a703ce87f598d1e9d3b  0050-drm-panel-samsung-s6e8fc3x02.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d5313b32ac42251a0fe20761e9473a3b03b0e1b5ca66a377f  0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
 81d50a030158a21e8b3e3673eb63f5375c4ff70a4e5370a6704304216d1e060049dea309b273d9a73f0c06a02e97688e30e179d7239c1a18ca58c3b49fc5ccd8  0045-vendor-sensorhub-runtime-inventory.patch.vendor
