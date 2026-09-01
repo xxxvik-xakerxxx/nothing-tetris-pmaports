@@ -73,11 +73,23 @@ power lifecycle and bootloader handoff boundary, not GNSS protocol operation or
 a satellite fix. Raw evidence is under
 `local/live-logs/20260901T161500Z-fdeeda0-clean1/`.
 
+A second read-only experiment opened link0 and issued ioctl 23 for DSP boot
+information with an eight-second process deadline. It returned `EFAULT` and
+closed normally; USB, routed Wi-Fi, Bluetooth and HTTPS all survived. Source
+tracing explains the result: the exact v050 Kbuild links
+`hw/gps_dl_hw_gps.o`, whose boot-info implementation reports that ATF is not
+supported and returns failure. The available ATF MVCD backend is linked by
+v051/v061 instead, but the public Kleaf build compiles every GNSS variant and
+does not identify which one the Tetris product loads. Switching profiles or
+mixing backend objects is therefore not justified yet. Evidence is in
+`gnss-mvcd-boot-info.txt` in the same directory.
+
 ## Next gate
 
-The next gate is a maintainable userspace bridge for the MediaTek MNL protocol
-or a Linux GNSS subsystem driver. It must start link0, preserve the first
-firmware/protocol error, expose standard position data and close cleanly. Do not
-interpret raw reads from `gpsdl0` as NMEA. Promotion requires time-to-fix and
-accuracy evidence, three cold starts, restart, coexistence and suspend/resume
-testing.
+The next gate is authoritative selection of the Tetris GNSS data-link profile
+and boot-info backend from an exact stock `vendor_dlkm` module/load list or
+equivalent product configuration. Then a maintainable MediaTek MNL bridge or
+Linux GNSS subsystem driver can implement MVCD and expose standard position
+data. Do not interpret raw reads from `gpsdl0` as NMEA, load v051 live, or graft
+its ATF objects into v050 without that evidence. Promotion requires a timed and
+accurate fix, three cold starts, restart, coexistence and suspend/resume tests.

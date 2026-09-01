@@ -10,7 +10,7 @@ Updated: 2026-09-01.
 | Previous rollback image | `f607513` | Kernel `6.18.0 #123`; preserved stable artifacts and prior clean/warm regression evidence. |
 | Stable pmaports source | `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266` | Rollback source of truth. |
 | Previous pmaports CI candidate | `codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`; CI run `33495661863` applied the patch series and completed the main kernel build, then failed before the IMX882 object check because a disabled Kconfig symbol was absent rather than serialized as `# ... is not set`. No image was produced or installed. |
-| Active pmaports source | `codex/next-hardware` | Image code is exact commit `fdeeda0`; subsequent `[skip ci]` commits update documentation only. |
+| Active pmaports source | `codex/next-hardware` | Installed image code is exact commit `fdeeda0`. The next source candidate bumps only `device-nothing-tetris` to `8-r4` for graphical-session audio ownership; it is not installed yet. |
 | Installed U-Boot | `b76e47e774304ab550a6354f3286860b7caffb3a` | Flashed to `boot_a` and `boot_b`; clean boot, warm boot and Linux-to-fastboot reboot pass. |
 | Previous U-Boot rollback | `8aa048f93bb7569e4107ef85aa994c630f85de48` | Preserved rollback artifact. |
 
@@ -39,11 +39,11 @@ still open. A compile-only patch does not improve the end-user status.
 | Bluetooth | Partial | Clean #128 registers powered BlueZ `hci0` with its provisioned factory address; RFCOMM/BNEP are present. | Pair/reconnect and audio/data profiles across suspend. |
 | Touch and keys | Works | Touch plus balanced power/volume press and release events passed. | Regression check after native display work. |
 | Haptics | Partial | The user physically confirmed the bounded RT6010 effect on clean #128; USB remained healthy. | Cold-boot repetition and suspend/resume. |
-| Audio | Partial | The user physically confirmed bounded speaker playback on clean #128. PulseAudio endpoints register and return to `SUSPENDED`, but normal system sounds are inconsistent; `feedbackd` is running through D-Bus activation. | Fix the system-event profile/routing, repeat both speaker and microphone paths, then calls and suspend/resume. |
+| Audio | Partial | Bounded speaker playback is physically confirmed and both sinks return to `SUSPENDED`. A five-second stereo capture contains two distinct active microphone channels with less than 0.002% clipping. Logs prove pre-login SSH user managers autostart PulseAudio without seat ACLs, producing ALSA, BlueZ and feedbackd ownership failures. | Build/install device r4, then require one PulseAudio/feedbackd owner across pre-login SSH, login, relogin and suspend; test system events and calls afterward. |
 | Thermal | Partial | All 24 MT6878 zones return plausible polling-mode values without USB loss. | IRQ/trip routing and sustained load remain disabled/unverified. |
 | Charging | Partial | Clean #128 reports AICR/ICHG 500000 uA and +195312 uA net battery current at 87%. TCPM still reports Type-C default mode and `CURRENT_MAX=0`, so the conservative fallback is correct. Native BC1.2 SDP/CDP/DCP classification is absent. | Observe a USB 2.0 host, known Rp 1.5 A source and known 5 V BC1.2 DCP. Validate USB2 PHY DP/DM ownership before implementing only the MT6375 BC1.2 boundary. Keep PD/PPS and OTG disabled. |
 | Idle battery drain | Broken | Roughly half the battery was reported lost during an uncontrolled overnight period. Existing captures retained `usb0`, kept MTU3 runtime-active with `power/control=on`, and sometimes charged, so they cannot identify an unplugged cause. Wi-Fi runtime PM is unsupported and its wake/IRQ counters make it the first A/B candidate, not a proven fault. | Run local, physically unplugged, screen-off intervals on separate clean boots with Wi-Fi associated and disabled. Record start/end coulomb counter, monotonic time, suspend result and wake/IRQ deltas; reconnect USB only after each interval. |
-| GNSS | Partial | On #128 with U-Boot `b76e47e`, the manual v050 service loads, creates both `gpsdl` nodes and completes one bounded `gpsdl0` open/close. No owner remains; routed Wi-Fi, powered Bluetooth and a matching 32 MiB USB transfer survive. | Provide a maintainable MTK MNL/Linux GNSS userspace bridge, obtain a timed/accurate position fix, then repeat cold start, restart and suspend/resume. |
+| GNSS | Partial | On #128 with U-Boot `b76e47e`, v050 creates both `gpsdl` nodes and completes a bounded link0 open/close without connectivity regressions. A read-only ioctl 23 returns `EFAULT` because the exact v050 build links a non-ATF boot-info stub. | Recover the exact Tetris stock module/load selection before changing the data-link profile; then implement MVCD/MNL, obtain a timed/accurate fix and pass lifecycle gates. |
 | Modem / SIM | Broken | No ModemManager modem, CCCI/DPMAIF/WWAN device or SIM state. U-Boot validates the LK CCCI payload; kernel CCCI core remains compile-only. An isolated patch converts `from_timer()` to `timer_container_of()` and non-sync `del_timer()` to `timer_delete()`; both timer errors are gone and `ccci_hif_ccif.o` now fails first at unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. | Prove the exact installed trusted-firmware CCCI secure ABI and return semantics, then compile/link CCIF without producing or shipping a module. DPMAIF, DT and runtime remain later gates. |
 | Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub sources compile and fail closed; no accelerometer, gyro, proximity or light sensor is exposed. A host-only parser against U-Boot `b76e47e` now validates unique 64-bit shared/loader carveouts, DRAM containment, size and non-overlap without changing the FDT. It does not validate SCP firmware or TCM. | Establish authoritative active `scp1`/`scp2` authentication/selection and TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Panthor is configured, but no Mali platform device or render node exists. | `c8f02ca` inventories VSRAM/VGPU provider support without enabling it. MFG0 power domain, DT consumer, CSF firmware and protected memory are still required. |
@@ -59,10 +59,10 @@ hardware works. Current gate state:
 1. Boot/root expansion: passed on clean and warm boots.
 2. Automatic USB NCM/SSH and exact 32 MiB transfer: passed after clean boot, warm reboot and the GNSS transport gate.
 3. Bluetooth registration plus Wi-Fi association, DHCP, DNS and HTTPS: passed concurrently with USB.
-4. Physical bounded speaker playback and haptics: passed; system sounds and microphone capture remain partial.
+4. Physical bounded speaker playback/haptics plus measured stereo microphone capture: passed; system-event ownership remains partial.
 5. Warm reboot with automatic USB return: passed once.
 6. Manual GNSS transport and bounded link0 open/close: passed without USB/Wi-Fi/BT regression; no position fix yet.
 
 Modem, GPU, sensorhub, camera pipeline and native display stay disabled in this
-boot. The next GNSS gate is userspace protocol integration and a real position
-fix, not another raw device-node probe.
+boot. The next GNSS gate is authoritative Tetris profile/backend selection,
+then userspace protocol integration and a real fix, not another raw node probe.

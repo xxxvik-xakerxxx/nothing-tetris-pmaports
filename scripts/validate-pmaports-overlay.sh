@@ -247,22 +247,23 @@ validate_power_and_audio_config() {
 	fi
 	grep -Fq 'unload-module module-stream-restore' "$audio_pulse"
 	grep -Fq 'load-module module-stream-restore restore_device=false' "$audio_pulse"
-	grep -Fq 'load-module module-remap-sink sink_name=tetris_mono_speaker' \
-		"$audio_pulse"
-	grep -Fq 'master=alsa_output.platform-sound.HiFi__Speaker__sink' \
-		"$audio_pulse"
-	grep -Fq 'channels=1 channel_map=mono master_channel_map=front-left' \
-		"$audio_pulse"
-	grep -Fq 'device.class=filter' "$audio_pulse"
-	grep -Fq 'device.class=sound' "$audio_pulse"
-	grep -Fq 'set-default-sink tetris_mono_speaker' "$audio_pulse"
+	if grep -Fq 'module-remap-sink' "$audio_pulse"; then
+		echo "audio remap must wait for the graphical-session policy" >&2
+		return 1
+	fi
 	sh -n "$audio_policy"
+	grep -Fq 'pactl load-module module-remap-sink' "$audio_policy"
+	grep -Fq 'master="$speaker_sink"' "$audio_policy"
+	grep -Fq 'channels=1 channel_map=mono' "$audio_policy"
 	grep -Fq 'pactl subscribe' "$audio_policy"
 	grep -Fq "Event 'new' on sink #" "$audio_policy"
 	grep -Fq 'pactl set-default-sink "$mono_sink"' "$audio_policy"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
-	grep -Fxq 'WantedBy=default.target' "$audio_policy_unit"
+	grep -Fxq 'After=graphical-session-pre.target' "$audio_policy_unit"
+	grep -Fxq 'PartOf=graphical-session.target' "$audio_policy_unit"
+	grep -Fxq 'ConditionUser=!greetd' "$audio_policy_unit"
+	grep -Fxq 'WantedBy=graphical-session.target' "$audio_policy_unit"
 	grep -Fxq 'enable nothing-tetris-audio-policy.service' \
 		"$audio_user_preset"
 	grep -Fq 'I2SOUT4_CH1 DL6_CH1' "$audio_ucm"

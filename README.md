@@ -59,6 +59,10 @@ The active `pkgrel=127` candidate is pmaports commit
 published images whose manifest pins U-Boot `b76e47e`. That exact U-Boot is
 installed in both boot partitions and the CI image is installed as kernel
 `6.18.0 #128`; clean boot, warm reboot and exact 32 MiB USB SSH transfers pass.
+The installed device package remains `device-nothing-tetris-8-r3`. Source
+candidate `8-r4` moves the PulseAudio speaker policy from every user manager to
+the real graphical session and excludes the `greetd` account; it is not
+installed or hardware-validated yet.
 
 ## Feature Status
 
@@ -79,9 +83,9 @@ installed in both boot partitions and the CI image is installed as kernel
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | A bounded `feedbackd` effect works physically on clean kernel #128 and stops without affecting USB. Suspend/resume and three cold boots remain. |
 | Audio | Upper earpiece | Partial | Physical playback and the desktop speaker test work through MT6369. Lifecycle tests remain. |
-| Audio | Lower main speaker | Partial | A bounded PulseAudio 440 Hz test plays physically through AW88261 on clean kernel #128 and the sink returns to `SUSPENDED`. System sounds remain inconsistent and microphone paths still need a #128 regression test. |
-| Audio | Built-in microphones | Partial | AIN0 and AIN2 capture physically through the packaged UCM profile. Per-input recordings, suspend/resume and cold-boot repetition remain. |
-| Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. Direct playback works, but normal system sounds behave inconsistently; `feedbackd` is D-Bus activated and running, so its event profile/routing is the next userspace gate. |
+| Audio | Lower main speaker | Partial | A bounded PulseAudio 440 Hz test plays physically through AW88261 on clean kernel #128 and the sink returns to `SUSPENDED`. System sounds remain inconsistent; measured microphone capture passes separately. |
+| Audio | Built-in microphones | Partial | A clean #128 five-second stereo capture contains two distinct active channels with near-zero DC and less than 0.002% clipped samples. Physical per-input mapping, suspend/resume and cold-boot repetition remain. |
+| Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. Clean-boot logs prove pre-login SSH user managers repeatedly autostart PulseAudio without seat ACLs, causing ALSA/BlueZ/feedbackd conflicts. Candidate device package r4 gates the policy on `graphical-session.target`; CI and clean-session lifecycle tests remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
 | Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. The candidate compile-checks a disabled, bounded IMX882 physical-ID probe, but it is not packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, clocks, power domains, IOMMU and userspace remain. |
 | Camera | Torch | Partial | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off. Clean-install and lifecycle tests remain. |
@@ -89,7 +93,7 @@ installed in both boot partitions and the CI image is installed as kernel
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean kernel #128 registers `wlan0`; association to `DistributedLabDev`, DHCP, the default route, DNS and HTTPS pass while USB and Bluetooth remain active. Cold reconnect, suspend/resume and stress remain. |
 | Connectivity | Bluetooth | Partial | Clean kernel #128 automatically registers powered native BlueZ `hci0` with a provisioned factory address; RFCOMM/BNEP are present. Pair/reconnect, audio/data profiles and suspend remain. |
-| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, the manual B4.1 v050 transport creates both `gpsdl` nodes and a bounded `gpsdl0` open/close completes while USB, routed Wi-Fi and Bluetooth remain healthy. No MNL bridge, satellite fix, restart or suspend evidence exists, and the module remains manual-only. |
+| Connectivity | GPS/GNSS | Partial | With U-Boot `b76e47e`, v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth. Read-only boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub; the exact Tetris stock profile must be recovered before MVCD/MNL work. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. An isolated CCIF patch replaces `from_timer()`/`del_timer()` with Linux 6.18 lifetime-equivalent APIs and advances `ccci_hif_ccif.o` to the next first blocker: unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. No modem module, DT or runtime path is enabled. |
 | Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A host-only U-Boot parser now validates two bounded, non-overlapping SCP carveouts without modifying the FDT, but active-slot firmware identity and TCM region-info remain unknown; no publication, DVFS or sensorhub is enabled. |
@@ -120,8 +124,10 @@ On the clean CI image from pmaports commit `fdeeda0` with kernel
   powered native BlueZ Bluetooth remain active.
 - ALSA playback/capture devices plus PulseAudio stereo speaker, mono remap and
   microphone endpoints register after the desktop session settles. Bounded
-  speaker playback and haptics are physically confirmed on #128; normal system
-  sounds remain inconsistent and microphone capture needs a #128 repeat.
+  speaker playback and haptics are physically confirmed on #128. A five-second
+  stereo microphone capture has two distinct valid channels; normal system
+  sounds remain inconsistent because pre-login user-manager churn races audio
+  ownership.
 - NCM USB networking is active as `usb0`/`en4` and transferred exact 32 MiB
   zero streams with matching SHA after clean boot, warm reboot and the manual
   GNSS transport test.
