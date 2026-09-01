@@ -19,7 +19,11 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The prepared kernel package uses `pkgver=6.18` and `pkgrel=127`. The previous
+The active CI candidate uses `pkgver=6.18` and `pkgrel=127` at pmaports commit
+`fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed overlay
+validation, the full kernel and device packages, install-image construction and
+artifact upload. The downloaded image ZIP has SHA-256 `c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`, and all
+three payload hashes match its manifest. The previous
 `pkgrel=126` CI run `33495661863` completed the main kernel build but stopped on
 a brittle disabled-Kconfig text check before compile-only IMX882 validation;
 it produced no image.
@@ -101,7 +105,7 @@ normal Alpine/postmarketOS practice.
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 | `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. Contract validation confirms the immediate cause is no matching `mediatek,scp-dvfs` platform device; adding that node alone is rejected until firmware, TCM and carveout handoff is proven. This patch fixes failure containment only. |
 
-The prepared `pkgrel=127` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The active `pkgrel=127` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -172,9 +176,10 @@ not a confirmed external RT1711H controller.
 
 ## Next clean patch targets
 
-1. Validate MT6375 attach/orientation/role handling after correcting the TCPCI
-   register window. The r63 live regmap confirms vendor ID `0x29cf` and product
-   ID `0x6375` in the main bank; the old `0xf200` mapping read only zeros.
+1. Observe MT6375 source classification with a USB 2.0 host, a known Type-C Rp
+   1.5 A source and a known 5 V BC1.2 DCP. The bounded 500 mA path works, but
+   TCPM reported `CURRENT_MAX=0` and native BC1.2 SDP/CDP/DCP publication is
+   missing. Preserve USB NCM while validating DP/DM ownership; leave PD/OTG off.
 2. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
    native Bluetooth discovery and factory Bluetooth address provisioning.
 3. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera

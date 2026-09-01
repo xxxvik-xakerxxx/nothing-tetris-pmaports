@@ -71,6 +71,7 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | Cameras | IMX882, GC16B3C and SC202CS through MT6878 seninf/ISP | Experimental camera group after clocks, power domains and IOMMU. |
 | Modem/SIM | CCCI/DPMAIF, SIM detect GPIO46/GPIO47 | Experimental modem group plus userspace daemon and firmware. |
 | SoC thermal | MT6878 LVTS, 24 sensors in MCU/AP/GPU domains, four efuse cells | Port the official B4.1 calibration/controller data to Linux thermal; start with read-only zones and conservative critical trips. |
+| Charging | MT6375 charger plus MT6375 TCPM and USB2 PHY BC1.2 routing | Keep the measured 500 mA fallback. Observe known host/Rp/DCP sources, then add only native BC1.2 detection/publication after DP/DM ownership is proven; leave PD/PPS and OTG disabled for this gate. |
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
 | Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
 

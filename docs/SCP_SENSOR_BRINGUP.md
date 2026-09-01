@@ -22,7 +22,7 @@ shared-memory ownership.
 | --- | --- | --- |
 | Image selection | Active `scp1`/`scp2` slot, authenticated identity and bounded size | Unknown |
 | Firmware state | Valid LK/preloader launch state and TCM region-info ABI | Unknown |
-| LK FDT input | Structurally valid preserved FDT with portable carveout data | Pointer preserved, payload not validated |
+| LK FDT input | Structurally valid preserved FDT with portable carveout data | Host parser validates shape/ranges without mutation; live payload unobserved |
 | Linux publication | Sanitized ranges and firmware state from U-Boot | Missing |
 | Shared memory | Non-overlapping region below `0x90000000`, at least `0x11a9b00` bytes | One captured unit has `0x11c8000`; portability unproven |
 | Loader memory | Separate `mediatek,SCP-reserved` region | Captured only; ownership unproven |
@@ -33,15 +33,24 @@ The shared-memory and loader carveouts are distinct and must never be
 substituted for one another. Physical addresses captured from this phone are
 evidence for validation fixtures, not constants for production DT or U-Boot.
 
+## Completed host-only boundary
+
+A standalone libfdt test against U-Boot
+`b76e47e774304ab550a6354f3286860b7caffb3a` now validates exactly one shared
+and one loader carveout, two-cell 64-bit encoding, overflow, DRAM containment,
+minimum shared size, non-overlap and byte-for-byte FDT immutability. Its positive
+and malformed fixtures pass on the host. It is not called from the board boot
+path and publishes nothing to Linux.
+
 ## Next patch boundary
 
 The next runtime-facing work belongs in U-Boot and must remain observation-only:
 
-1. Parse the preserved LK FDT and active-slot metadata.
-2. Locate both SCP carveouts by compatible and validate 64-bit arithmetic,
-   DRAM containment, non-overlap and minimum shared-memory size.
-3. Validate `scp1`/`scp2` payload identity and TCM region-info against an
+1. Establish an authoritative active-slot metadata ABI.
+2. Validate `scp1`/`scp2` payload identity and TCM region-info against an
    authoritative loader ABI.
+3. Integrate the already host-tested carveout parser only after those inputs
+   can be validated from the live preserved LK data.
 4. Publish only sanitized status/ranges to Linux; do not start, stop or reset
    SCP.
 5. Fail closed with no SCP/Sensorhub DT activation on any mismatch.

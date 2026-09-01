@@ -80,11 +80,11 @@ This is compile evidence only, not a link or runtime result.
 9. Define a standard WWAN/ModemManager userspace interface and firmware
    provisioning path; `/dev/ccci*` alone is not functional modem support.
 
-The first follow-up CCIF build now proves `ccci_ringbuf.o` but fails closed in
-`ccci_hif_ccif.o` at removed `from_timer()`/`del_timer()` APIs. It also exposes
-the unresolved `MTK_SIP_KERNEL_CCCI_CONTROL` dependency. No CCIF patch or
-module is integrated until timer lifetime and secure ABI ownership are reviewed
-as separate boundaries.
+The follow-up CCIF build proves `ccci_ringbuf.o`. An isolated patch replaces
+`from_timer()` with `timer_container_of()` and the old non-sync `del_timer()`
+with `timer_delete()`; both timer errors are gone. `ccci_hif_ccif.o` now fails
+first at unresolved `MTK_SIP_KERNEL_CCCI_CONTROL`. No CCIF patch or module is
+integrated until the secure ABI ownership is proven separately.
 
 The first runtime experiment is allowed only after a probe-only driver can
 validate every handoff and dependency above, then exit with the modem, DMA,

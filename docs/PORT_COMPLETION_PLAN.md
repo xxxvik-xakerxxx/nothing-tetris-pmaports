@@ -10,9 +10,15 @@ postmarketOS port into a stable daily-phone build.
 | Stable source baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `ee994e4236d69c9f3eb18e81614dd0dff9e60266`. Keep as the published rollback until the active candidate completes all promotion gates. |
 | Installed device baseline | CI image from `f607513` | Kernel `6.18.0 #123` passed clean installation, USB NCM/SSH, an exact 32 MiB transfer, Wi-Fi, Bluetooth, audio, touch, haptics, root I/O, thermal and warm-reboot regression gates. |
 | Previous CI candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`. CI run `33495661863` applied the series and completed the main kernel build, then failed on a brittle disabled-Kconfig text check before the IMX882 object gate. It produced no install image. |
-| Prepared next candidate | local `codex/next-hardware` worktree | `pkgrel=127` fixes the guard to reject only `=y`/`=m`, removes ignored stale DTS text from `0049`, and carries the bounded S6E8FC3X02 panel/binding as an object-only gate. The shipped config is off; no module, DT graph, autoload or framebuffer change is present. |
+| Active CI candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` at `fdeeda042144e5ff1d2159f1590dbc5fb6b9392c` | `pkgrel=127` fixes the guard to reject only `=y`/`=m`, removes ignored stale DTS text from `0049`, and carries the bounded S6E8FC3X02 panel/binding as an object-only gate. CI run `33502390335` passed overlay, full kernel/device packages, install-image construction and artifact upload. The shipped config is off; no module, DT graph, autoload or framebuffer change is present. Hardware gates remain. |
 | Flashed bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Commit `8aa048f93bb7569e4107ef85aa994c630f85de48` remains installed and passed the Linux reboot-mode fix. |
 | Bootloader candidate | `xxxvik-xakerxxx/u-boot:master` | Commit `b76e47e774304ab550a6354f3286860b7caffb3a` passed CI run `33492618726`. It validates the LK CCCI payload and writes the exact GNSS EMI address only after the existing layout and secure mappings validate; it does not start either subsystem. |
+
+The verified image archive for run `33502390335` has SHA-256
+`c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`.
+Its three payload hashes match `SHA256SUMS`, and `BUILD-MANIFEST` pins the exact
+pmaports head plus U-Boot `b76e47e`/`86930322...`. It publishes no separately
+named `super` or `userdata` image; do not infer a new partition mapping.
 
 ## Branch policy
 
@@ -50,7 +56,7 @@ stable baseline:
 | Order | Block | Goal | Promotion gate |
 | --- | --- | --- | --- |
 | 1 | Thermal / devinfo | Boot MT6878 LVTS thermal zones in polling-only mode with per-device calibration read from MT6878 read-only devinfo registers. | CI build, clean boot, `/sys/class/thermal` zones, plausible idle/load temps, USB/Wi-Fi/BT/audio regression pass. |
-| 2 | Power / suspend | Measure and fix the currently high battery drain before enabling more remote processors. Audit suspend residency, wakeup sources, IRQ rate, clocks, regulators and runtime PM for USB, Wi-Fi, audio, thermal and remoteproc. | Repeatable idle/screen-on/Wi-Fi power baselines, no IRQ or wakelock storm, one-hour idle discharge gate, suspend/resume and automatic USB/Wi-Fi recovery pass. |
+| 2 | Power / suspend | Complete safe source classification and isolate the high unplugged drain before enabling more remote processors. The bounded 500 mA path works, but native MT6375 BC1.2 classification is absent and the existing USB-connected logs cannot measure unplugged idle. | Observe a USB 2.0 host, known Rp 1.5 A source and known 5 V BC1.2 DCP without losing USB; then run local unplugged screen-off Wi-Fi-on/off intervals with coulomb, suspend, wake and IRQ evidence. Pass charge-rate/thermal/termination and suspend/recovery lifecycle tests before promotion. |
 | 3 | Sensorhub | Build-only/manual-gated transport: `mtk-mbox.ko`, `mtk_rpmsg_mbox.ko`, `mtk_tinysys_ipi.ko`, `scp.ko`, `hf_manager.ko`, `sensorhub.ko`. The exact Nothing OS 4.1 source set compiles on Linux 6.18. The first runtime blocker is the absent `mediatek,scp-dvfs` platform device, but adding it alone is unsafe before SCP firmware/TCM/carveout handoff is proven. | U-Boot validation/publication of active `scp1`/`scp2`, TCM region-info and both carveouts; disabled DVFS provider compile gate; one observation-only boot; then one DVFS-only probe. Sensorhub and nanohub remain off until SCP lifecycle and idle-power gates pass. |
 | 4 | GNSS | Complete the bootloader EMI handoff and LNA pinctrl first, then test one cold manual link start without unloading conninfra. | `/dev/gpsdl*`, firmware/DSP open, position fix with accuracy, restart, coexistence with Wi-Fi/BT, suspend/resume and USB regression pass. |
 | 5 | SIM / modem | Validate the bootloader CCCI descriptor, then stage CCCI/CCIF/DPMAIF/CCMNI boundaries without autoload. Keep `conn_md` and `mddp` disabled until basic modem boot is clean. | ModemManager sees modem, SIM state is readable, calls, SMS and data pass, no radio regression with Wi-Fi/BT/GNSS. |
@@ -65,11 +71,11 @@ the current staging notes for follow-up patch branches:
 
 | Block | Draft path | Status |
 | --- | --- | --- |
-| Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment on the device. Source/DT contract validation identifies missing `mediatek,scp-dvfs` probe as the first blocker and rejects premature DT activation. The actual firmware identity, TCM region-info and boot handoff remain missing. |
-| SIM / modem | `0039`, `0048`, compile-only `APKBUILD` gates and isolated CCIF review bundle | `6bc2096` / CI `33356899792` proves clean `ccci_util_lib.ko` modpost; ECCCI core objects also compile without a module. The next CCIF boundary restores only source includes and compiles `ccci_ringbuf.o`; `ccci_hif_ccif.o` fails closed at removed timer APIs and unproven secure CCCI control ownership. No DT, packaging, autoload, firmware, power/reset, DMA, DPMAIF or CCMNI. |
+| Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` and `local/agent-results/scp-uboot-next/` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment. A host-only U-Boot parser validates unique 64-bit shared/loader carveouts, DRAM containment, minimum size, non-overlap and FDT immutability. Active-slot firmware identity, TCM region-info and boot publication remain missing. |
+| SIM / modem | `0039`, `0048`, compile-only `APKBUILD` gates and `local/agent-results/modem-timer-next/` | `6bc2096` / CI `33356899792` proves clean `ccci_util_lib.ko` modpost; ECCCI core objects also compile without a module. The isolated CCIF boundary compiles `ccci_ringbuf.o`, replaces the removed timer APIs with reviewed Linux 6.18 equivalents, and now fails first at unproven `MTK_SIP_KERNEL_CCCI_CONTROL`. No DT, packaging, autoload, firmware, power/reset, DMA, DPMAIF or CCMNI. |
 | GPU | `local/patch-drafts/gpu/` | RFC Panthor path with MFG0 domain and disabled DT node drafts. Wait for thermal and regulator work. |
 | Camera foundation | `local/patch-drafts/camera/` | Source inventory and config draft for sensor ID/cam_cal/VCM/flash only. No ISP/autoload yet. |
-| Native panel | `0050` plus `APKBUILD` | S6E8FC3X02 binding/driver passed standalone patch application and arm64 translation-unit compilation. `pkgrel=127` expresses the same boundary as an object-only package gate with no shipped module or DT client; full pmaports CI remains. |
+| Native panel | `0050` plus `APKBUILD` | S6E8FC3X02 binding/driver passed standalone patch application, arm64 translation-unit compilation and full pmaports CI run `33502390335`. `pkgrel=127` keeps it object-only with no shipped module or DT client; no runtime panel claim exists. |
 
 ## Current blockers
 
@@ -81,20 +87,25 @@ the current staging notes for follow-up patch branches:
   returned `-ETIMEDOUT` after 3.09 seconds with one diagnostic, no loaded `scp`
   module, no WARN/Oops and no USB loss. Keep SCP and sensorhub manual-only while
   the real firmware, reserved-memory and boot handoff contract is solved.
-- The SCP contract validator confirms that the captured shared carveout is
-  large enough for the Nothing OS 4.1 table, but its address is not portable
-  evidence. U-Boot must derive and validate both carveouts from LK data and
-  fail closed before Linux gains any `scp-dvfs` node.
-- The next modem compile gate must adapt CCIF timer lifetime semantics and
-  establish the exact `MTK_SIP_KERNEL_CCCI_CONTROL` secure ABI. Do not hide
-  either blocker with a compatibility macro or copied SiP number, and do not
-  proceed to DPMAIF DMA ownership before CCIF links cleanly.
+- The SCP host validator proves parser behavior for two portable carveout
+  ranges without modifying the FDT. It does not prove active-slot firmware
+  identity or TCM region-info. Establish those authoritative ABIs before any
+  U-Boot publication or Linux `scp-dvfs` node.
+- The CCIF timer lifetime conversion is complete in an isolated compile-only
+  patch. The next first blocker is the exact `MTK_SIP_KERNEL_CCCI_CONTROL`
+  secure ABI. Do not copy a SiP number or proceed to DPMAIF DMA ownership before
+  trusted-firmware ownership and return semantics are proven.
 - U-Boot reinjects `clk_ignore_unused` after the packaged DTB is checked. A
   one-shot boot without the token failed and reset, with no ramoops record.
   Capture the early failure before attempting kernel or U-Boot policy changes.
-- Current battery drain is too high for a stable-phone baseline. Capture idle,
-  screen-on and Wi-Fi power data and fix suspend blockers before sensorhub,
-  modem or GPU remote processors are enabled by default.
+- The 500 mA charging path is measured, but TCPM reports `CURRENT_MAX=0` and
+  the native MT6375 driver lacks BC1.2 SDP/CDP/DCP detection/publication. Test
+  known host, Rp and DCP sources before adding only that boundary; DP/DM
+  ownership must not disrupt USB NCM, and PD/PPS/OTG remain disabled.
+- Current battery drain is too high for a stable-phone baseline. Existing
+  USB-connected captures cannot prove the unplugged cause. Run local screen-off
+  Wi-Fi-on/off intervals on separate boots before sensorhub, modem or GPU remote
+  processors are enabled by default.
 - Thermal IRQs and hardware trips remain disabled until routing and reboot
   behavior are validated independently of the polling-only temperature path.
 - The USB suspend hook is installed, but this image exposes no RTC wake device.

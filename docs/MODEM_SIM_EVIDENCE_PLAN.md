@@ -159,16 +159,19 @@ OS 4.1 device modules `ee2be53c` now reaches the first CCIF-specific ABI
 boundary without creating a module:
 
 - `ccci_ringbuf.o`: compiles;
-- `ccci_hif_ccif.o`: stops at removed `from_timer()` and `del_timer()` APIs;
-- the same translation unit then reaches the unowned
-  `MTK_SIP_KERNEL_CCCI_CONTROL` dependency;
+- an isolated compatibility patch replaces `from_timer()` with
+  `timer_container_of()` and the old non-sync `del_timer()` with
+  `timer_delete()`;
+- `ccci_hif_ccif.o`: both timer errors are gone and the first failure is now
+  the unowned `MTK_SIP_KERNEL_CCCI_CONTROL` dependency;
 - `ccci_ccif.ko`: neither requested nor emitted.
 
-The include-graph-only patch passes dry-run and strict checkpatch, but remains
-outside the active package until timer callback lifetime and teardown are
-reviewed. The timer conversion must use the Linux 6.18 ownership model rather
-than a compatibility macro. The secure command must come from an authoritative
-firmware/LK contract rather than a copied numeric constant.
+The include-graph and timer patches pass dry-run, strict checkpatch and their
+targeted object gates, but remain outside the active package. The timer lifetime
+review preserves the old rearm-permitted non-sync semantics and does not approve
+the vendor driver's broader missing teardown path for runtime. The secure
+command must come from an authoritative firmware/LK contract rather than a
+copied numeric constant.
 
 ### Memory and isolation trace
 

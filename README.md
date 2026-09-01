@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=127` in the prepared candidate) |
+| Kernel version | `6.18` (`pkgrel=127` in the active CI candidate) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -50,6 +50,14 @@ The concise installed-versus-candidate hardware matrix is maintained in
 [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md).
 The fail-closed SCP and sensorhub ownership boundary is documented in
 [docs/SCP_SENSOR_BRINGUP.md](docs/SCP_SENSOR_BRINGUP.md).
+The measured charging path, source-classification blocker and idle-drain test
+contract are documented in
+[docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
+
+The active `pkgrel=127` candidate is pmaports commit
+`fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed and
+published images whose manifest pins U-Boot `b76e47e`; the images have not been
+installed or hardware-tested yet.
 
 ## Feature Status
 
@@ -61,9 +69,9 @@ The fail-closed SCP and sensorhub ownership boundary is documented in
 | Display | Native DSI/panel | Broken | `pkgrel=127` stages a bounded S6E8FC3X02 driver and binding for a compile-only object. The shipped config remains off and no module or DT client is packaged. MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY, lane-rate validation and an opt-in DT graph remain. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
-| Power | Battery/USB telemetry | Partial | MT6375 telemetry and a conservative charging policy work. The current USB 2.0 default-current source is correctly limited to 500 mA; BC1.2, Type-C Rp and PD current detection still need implementation and charger testing. |
+| Power | Battery/USB telemetry | Partial | MT6375 telemetry and the bounded 500 mA path work; +284424 uA net battery current was measured with the system active. TCPM reported Type-C default mode and `CURRENT_MAX=0`. The native MT6375 driver still lacks BC1.2 SDP/CDP/DCP classification; Type-C Rp needs a known-source test and PD/PPS remains disabled. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
-| Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. CPU cluster-off works, but a repeatable unplugged screen-off/suspend measurement has not yet isolated the cause. |
+| Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. Existing captures kept USB connected and the controller runtime-active, so they cannot identify the unplugged cause. The next valid test is local, physically unplugged and screen-off, comparing separate Wi-Fi-on/off boots with coulomb, wake and IRQ deltas. |
 | Power | Thermal management | Partial | The installed baseline exposes all 24 MT6878 LVTS zones with plausible polling-mode values. Hardware trips/IRQ routing and sustained-load lifecycle tests remain disabled. |
 | USB | Device mode / NCM | Partial | The clean baseline automatically exposes `usb0`; exact 32 MiB SSH transfers passed across clean and warm boots. Repeated reconnect and suspend/resume remain. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPM reports orientation, sink power and device data role. Peripheral/NCM is the safe default; host VBUS ownership, PD and wake remain unvalidated. |
@@ -82,8 +90,8 @@ The fail-closed SCP and sensorhub ownership boundary is documented in
 | Connectivity | Bluetooth | Partial | The clean CI image automatically registers native BlueZ `hci0` with the factory address and the UI works alongside connected Wi-Fi. RFCOMM/BNEP are staged for the next kernel; lifecycle/second-unit checks remain. |
 | Connectivity | GPS/GNSS | Broken | A manual B4.1 v050 probe creates both `gpsdl` device nodes, but the installed boot chain lacks a valid GPS EMI handoff and exact LNA pinctrl. No position fix is confirmed and the module is not autoloaded. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
-| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. The next CCIF boundary compiles `ccci_ringbuf.o` but stops fail-closed at removed Linux 6.18 timer APIs in `ccci_hif_ccif.o`; secure `MTK_SIP_KERNEL_CCCI_CONTROL` ownership is also unproven. No modem module or runtime path is enabled. |
-| Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. SCP firmware identity, TCM region-info and both carveouts must be validated and published by the boot chain before DVFS or sensorhub is enabled. |
+| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. An isolated CCIF patch replaces `from_timer()`/`del_timer()` with Linux 6.18 lifetime-equivalent APIs and advances `ccci_hif_ccif.o` to the next first blocker: unowned `MTK_SIP_KERNEL_CCCI_CONTROL`. No modem module, DT or runtime path is enabled. |
+| Sensors | Rotation/accelerometer | Broken | The vendor SCP probe currently stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A host-only U-Boot parser now validates two bounded, non-overlapping SCP carveouts without modifying the FDT, but active-slot firmware identity and TCM region-info remain unknown; no publication, DVFS or sensorhub is enabled. |
 | Sensors | Ambient light/proximity | Broken | Shares the blocked SCP sensorhub path. Adding only the vendor DVFS node is rejected because it would touch ULPOSC, fmeter and clocks before firmware handoff is proven. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | UFS/root I/O | Works | UFS is stable and `/dev/sdc82` mounts read-write as ext4. |
@@ -151,8 +159,9 @@ The next useful hardware targets, in roughly pragmatic order:
    coexistence, cpuidle residency and temperature.
 2. Validate a clean CI image boot, automatic Wi-Fi startup, association/DHCP,
    native Bluetooth discovery and the factory Bluetooth address.
-3. Validate MT6375 Type-C attach/detach, orientation, sink/device roles and wake;
-   preserve USB gadget recovery before adding host role switching.
+3. Observe a USB 2.0 host, known Type-C Rp 1.5 A source and known 5 V BC1.2
+   DCP. Add only the missing MT6375 BC1.2 detection/publication boundary if the
+   DCP stays unclassified; preserve USB gadget recovery and leave PD/OTG off.
 4. Validate packaged RT6010 haptics from a clean CI installation, including
    cold boots, cancellation and suspend/resume.
 5. Validate packaged UCM audio from a clean CI artifact, then repeat both
