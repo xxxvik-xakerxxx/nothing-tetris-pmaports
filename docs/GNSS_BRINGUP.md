@@ -99,7 +99,12 @@ currently active shared radio stack.
 ## Next gate
 
 The v051 compile/package candidate is now staged in source. Its next gate is
-patch/package CI followed by a clean boot that loads only that profile and
+patch/package CI. Run `33532308762` reached the v051 ATF objects and proved
+that mainline's SiP header lacks `MTK_SIP_KERNEL_GPS_CONTROL`; the exact B4.1
+header defines it as `MTK_SIP_SMC_CMD(0x537)`. The compatibility patch now
+carries that identifier behind `#ifndef`, which is compile evidence rather
+than proof that installed trusted firmware implements every operation. After
+CI, use a clean boot that loads only that profile and
 repeats transport plus read-only boot-info tests. Then a maintainable MediaTek
 MNL bridge or Linux GNSS subsystem driver
 can implement MVCD and expose standard position data. Do not interpret raw

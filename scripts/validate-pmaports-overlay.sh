@@ -653,6 +653,8 @@ validate_connectivity_build() {
 	grep -Fq 'gps/data_link/plat/v051' "$kernel_apkbuild"
 	grep -Fq 'CONFIG_MTK_GPS_SUPPORT=y' "$kernel_apkbuild"
 	grep -Fq 'gps_drv_dl_v051.ko' "$kernel_apkbuild"
+	grep -Fq '#define MTK_SIP_KERNEL_GPS_CONTROL MTK_SIP_SMC_CMD(0x537)' \
+		"$gnss_patch"
 	if grep -Eq 'gps/data_link/plat/v0(50|60|61)|gps_drv_dl_v0(50|60|61)' \
 			"$kernel_apkbuild" "$gnss_patch"; then
 		echo "Tetris must use its stock-derived MT6878 GNSS v051 profile" >&2

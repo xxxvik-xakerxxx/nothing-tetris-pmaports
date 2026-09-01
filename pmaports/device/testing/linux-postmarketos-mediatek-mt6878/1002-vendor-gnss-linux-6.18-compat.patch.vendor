@@ -4,6 +4,8 @@ Subject: [PATCH] vendor: gnss: adapt MT6878 data-link v051 to Linux 6.18
 Keep the Nothing OS 4.1 MT6878 GNSS data-link implementation buildable as an
 external module. Fix source path resolution in Kbuild and update the class,
 platform remove, and timer APIs removed after the vendor Linux 6.1 baseline.
+Carry the exact B4.1 GPS secure-service identifier when the mainline MediaTek
+SiP header does not expose that vendor ABI.
 
 Nothing's stock-derived Tetris device configuration selects gps_drv_dl_v051,
 and the matching vendor_dlkm module list ships that profile. Unlike v050,
@@ -32,6 +34,20 @@ diff --git a/connectivity/gps/data_link/plat/v051/Kbuild b/connectivity/gps/data
  ccflags-y += -I$(CONNINFRA_SRC_FOLDER)/include
  ccflags-y += -I$(CONNINFRA_SRC_FOLDER)/conn_drv/connv2/debug_utility/metlog
  ccflags-y += -DGPS_DL_HAS_CONNINFRA_DRV=1
+diff --git a/connectivity/gps/data_link/hw/inc/gps_dl_hw_atf.h b/connectivity/gps/data_link/hw/inc/gps_dl_hw_atf.h
+--- a/connectivity/gps/data_link/hw/inc/gps_dl_hw_atf.h
++++ b/connectivity/gps/data_link/hw/inc/gps_dl_hw_atf.h
+@@ -6,6 +6,10 @@
+ #include <linux/arm-smccc.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
+ 
++/* Exact Nothing OS 4.1 MT6878 GPS service ID; runtime support is gated. */
++#ifndef MTK_SIP_KERNEL_GPS_CONTROL
++#define MTK_SIP_KERNEL_GPS_CONTROL MTK_SIP_SMC_CMD(0x537)
++#endif
+ 
+ enum conn_smc_opid {
+ 	/* gps_hw_ops */
 diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
 --- a/connectivity/gps/data_link/linux/gps_each_device.c
 +++ b/connectivity/gps/data_link/linux/gps_each_device.c
