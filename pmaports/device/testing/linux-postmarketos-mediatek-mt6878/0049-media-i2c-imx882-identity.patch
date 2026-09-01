@@ -1,0 +1,499 @@
+diff --git a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml
+new file mode 100644
+index 0000000..e0fc73d
+--- /dev/null
++++ b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml
+@@ -0,0 +1,85 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/media/i2c/nothing,tetris-imx882-identity.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Nothing Tetris IMX882 identity probe
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description:
++  Identity-only description of the main IMX882 camera sensor on Nothing
++  Tetris. This binding is limited to a bounded physical ID read and does not
++  describe a media graph or streaming interface.
++
++properties:
++  compatible:
++    const: nothing,tetris-imx882-identity
++
++  reg:
++    maxItems: 1
++
++  clocks:
++    maxItems: 1
++
++  clock-names:
++    const: xclk
++
++  afvdd-supply:
++    description: 2.8 V autofocus supply
++
++  avdd-supply:
++    description: 2.8 V analog supply
++
++  dvdd-supply:
++    description: 1.2 V digital core supply
++
++  dovdd-supply:
++    description: 1.8 V digital I/O supply
++
++  reset-gpios:
++    maxItems: 1
++
++  pinctrl-names:
++    items:
++      - const: mclk-off
++      - const: mclk-4ma
++
++required:
++  - compatible
++  - reg
++  - clocks
++  - clock-names
++  - afvdd-supply
++  - avdd-supply
++  - dvdd-supply
++  - dovdd-supply
++  - reset-gpios
++  - pinctrl-names
++
++additionalProperties: false
++
++examples:
++  - |
++    i2c {
++        #address-cells = <1>;
++        #size-cells = <0>;
++
++        camera@1a {
++            compatible = "nothing,tetris-imx882-identity";
++            reg = <0x1a>;
++            clocks = <&camera_clk>;
++            clock-names = "xclk";
++            afvdd-supply = <&camera_afvdd>;
++            avdd-supply = <&camera_avdd>;
++            dvdd-supply = <&camera_dvdd>;
++            dovdd-supply = <&camera_dovdd>;
++            reset-gpios = <&gpio 25 0>;
++            pinctrl-names = "mclk-off", "mclk-4ma";
++            pinctrl-0 = <&camera_mclk_off>;
++            pinctrl-1 = <&camera_mclk_4ma>;
++        };
++    };
++...
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+index cce515b..920db83 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -23,6 +23,46 @@
+ 		serial0 = &uart0;
+ 	};
+ 
++	camera_afvdd: regulator-camera-afvdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-afvdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		gpio = <&pio 1 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_avdd: regulator-camera-avdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-avdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		gpio = <&pio 22 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_dvdd: regulator-camera-dvdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-dvdd";
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++		gpio = <&pio 21 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_dovdd: regulator-camera-dovdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-dovdd";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		gpio = <&pio 23 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
+ 	chosen {
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+@@ -93,6 +133,28 @@
+ 	};
+ };
+ 
++&i2c8 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	camera@1a {
++		compatible = "nothing,tetris-imx882-identity";
++		reg = <0x1a>;
++		clocks = <&topckgen CLK_TOP_CAMTG2_SEL>;
++		clock-names = "xclk";
++		afvdd-supply = <&camera_afvdd>;
++		avdd-supply = <&camera_avdd>;
++		dvdd-supply = <&camera_dvdd>;
++		dovdd-supply = <&camera_dovdd>;
++		reset-gpios = <&pio 25 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "mclk-off", "mclk-4ma";
++		pinctrl-0 = <&camera_mclk_off>;
++		pinctrl-1 = <&camera_mclk_4ma>;
++		status = "disabled";
++	};
++};
++
+ &i2c2 {
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+@@ -531,6 +593,20 @@
+ };
+ 
+ &pio {
++	camera_mclk_off: camera-mclk-off {
++		pins {
++			pinmux = <PINMUX_GPIO93__FUNC_GPIO93>;
++			output-low;
++		};
++	};
++
++	camera_mclk_4ma: camera-mclk-4ma {
++		pins {
++			pinmux = <PINMUX_GPIO93__FUNC_CMMCLK1>;
++			drive-strength = <4>;
++		};
++	};
++
+ 	gps_pins_default: gps-default {
+ 	};
+ 
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+index 78018da..26f35f3 100644
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -775,6 +775,15 @@ config VIDEO_VGXY61
+ 	  This is a Video4Linux2 sensor driver for the ST VGXY61
+ 	  camera sensor.
+ 
++config VIDEO_IMX882_IDENTITY
++	tristate "Nothing Tetris IMX882 identity probe"
++	depends on I2C && OF && GPIOLIB && COMMON_CLK && REGULATOR && PINCTRL
++	help
++	  Build a bounded identity-only probe for the main IMX882 sensor on
++	  Nothing Tetris. The driver powers the sensor only long enough to read
++	  its physical ID, never initializes or streams it, and is intended for
++	  explicitly selected bring-up device trees only.
++
+ source "drivers/media/i2c/ccs/Kconfig"
+ source "drivers/media/i2c/et8ek8/Kconfig"
+ 
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+index 8f5b108..85f7d9b 100644
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -123,6 +123,7 @@ obj-$(CONFIG_VIDEO_OV9734) += ov9734.o
+ obj-$(CONFIG_VIDEO_RDACM20) += rdacm20.o
+ obj-$(CONFIG_VIDEO_RDACM21) += rdacm21.o
+ obj-$(CONFIG_VIDEO_RJ54N1) += rj54n1cb0c.o
++obj-$(CONFIG_VIDEO_IMX882_IDENTITY) += imx882-identity.o
+ obj-$(CONFIG_VIDEO_PD9302A) += pd9302a.o
+ obj-$(CONFIG_VIDEO_S5C73M3) += s5c73m3/
+ obj-$(CONFIG_VIDEO_S5K5BAF) += s5k5baf.o
+diff --git a/drivers/media/i2c/imx882-identity.c b/drivers/media/i2c/imx882-identity.c
+new file mode 100644
+index 0000000..7c0b261
+--- /dev/null
++++ b/drivers/media/i2c/imx882-identity.c
+@@ -0,0 +1,270 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Bounded IMX882 identity probe for Nothing Tetris.
++ *
++ * This is deliberately not a V4L2 sensor driver. It implements only the
++ * board power sequence and physical ID read needed before camera streaming
++ * infrastructure is available.
++ */
++
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/regulator/consumer.h>
++
++#define IMX882_REG_CHIP_ID_HIGH		0x0016
++#define IMX882_REG_CHIP_ID_LOW		0x0017
++#define IMX882_CHIP_ID			0x8202
++#define IMX882_XCLK_RATE		24000000
++
++enum imx882_supply_id {
++	IMX882_SUPPLY_AFVDD,
++	IMX882_SUPPLY_AVDD,
++	IMX882_SUPPLY_DVDD,
++	IMX882_SUPPLY_DOVDD,
++	IMX882_NUM_SUPPLIES,
++};
++
++static const char * const imx882_supply_names[IMX882_NUM_SUPPLIES] = {
++	[IMX882_SUPPLY_AFVDD] = "afvdd",
++	[IMX882_SUPPLY_AVDD] = "avdd",
++	[IMX882_SUPPLY_DVDD] = "dvdd",
++	[IMX882_SUPPLY_DOVDD] = "dovdd",
++};
++
++static const int imx882_supply_uv[IMX882_NUM_SUPPLIES] = {
++	[IMX882_SUPPLY_AFVDD] = 2800000,
++	[IMX882_SUPPLY_AVDD] = 2800000,
++	[IMX882_SUPPLY_DVDD] = 1200000,
++	[IMX882_SUPPLY_DOVDD] = 1800000,
++};
++
++struct imx882_identity {
++	struct clk *xclk;
++	struct gpio_desc *reset;
++	struct pinctrl *pinctrl;
++	struct pinctrl_state *mclk_4ma;
++	struct pinctrl_state *mclk_off;
++	struct regulator_bulk_data supplies[IMX882_NUM_SUPPLIES];
++};
++
++static int imx882_read_reg(struct i2c_client *client, u16 reg, u8 *value)
++{
++	u8 address[] = { reg >> 8, reg & 0xff };
++	struct i2c_msg messages[] = {
++		{
++			.addr = client->addr,
++			.flags = 0,
++			.len = sizeof(address),
++			.buf = address,
++		},
++		{
++			.addr = client->addr,
++			.flags = I2C_M_RD,
++			.len = sizeof(*value),
++			.buf = value,
++		},
++	};
++	int ret;
++
++	ret = i2c_transfer(client->adapter, messages, ARRAY_SIZE(messages));
++	if (ret < 0)
++		return ret;
++	if (ret != ARRAY_SIZE(messages))
++		return -EIO;
++
++	return 0;
++}
++
++static int imx882_enable_supply(struct imx882_identity *imx882,
++				int supply)
++{
++	int ret;
++
++	ret = regulator_set_voltage(imx882->supplies[supply].consumer,
++				    imx882_supply_uv[supply],
++				    imx882_supply_uv[supply]);
++	if (ret)
++		return ret;
++
++	return regulator_enable(imx882->supplies[supply].consumer);
++}
++
++static void imx882_disable_supply(struct imx882_identity *imx882,
++				  int supply)
++{
++	regulator_disable(imx882->supplies[supply].consumer);
++}
++
++static void imx882_power_off(struct imx882_identity *imx882,
++			     unsigned long enabled_supplies, bool clock_enabled)
++{
++	gpiod_set_value_cansleep(imx882->reset, 0);
++
++	if (clock_enabled)
++		clk_disable_unprepare(imx882->xclk);
++	pinctrl_select_state(imx882->pinctrl, imx882->mclk_off);
++
++	if (enabled_supplies & BIT(IMX882_SUPPLY_DOVDD))
++		imx882_disable_supply(imx882, IMX882_SUPPLY_DOVDD);
++	if (enabled_supplies & BIT(IMX882_SUPPLY_DVDD))
++		imx882_disable_supply(imx882, IMX882_SUPPLY_DVDD);
++	if (enabled_supplies & BIT(IMX882_SUPPLY_AVDD))
++		imx882_disable_supply(imx882, IMX882_SUPPLY_AVDD);
++	if (enabled_supplies & BIT(IMX882_SUPPLY_AFVDD))
++		imx882_disable_supply(imx882, IMX882_SUPPLY_AFVDD);
++}
++
++static int imx882_power_on(struct imx882_identity *imx882,
++			   unsigned long *enabled_supplies,
++			   bool *clock_enabled)
++{
++	int ret;
++
++	ret = clk_set_rate(imx882->xclk, IMX882_XCLK_RATE);
++	if (ret)
++		return ret;
++
++	gpiod_set_value_cansleep(imx882->reset, 0);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AFVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_AFVDD);
++	usleep_range(1000, 1100);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_AVDD);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_DVDD);
++	usleep_range(1000, 1100);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DOVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);
++
++	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_4ma);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(imx882->xclk);
++	if (ret)
++		return ret;
++	*clock_enabled = true;
++	usleep_range(5000, 5100);
++
++	gpiod_set_value_cansleep(imx882->reset, 1);
++	usleep_range(1000, 1100);
++
++	return 0;
++}
++
++static int imx882_identity_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct imx882_identity *imx882;
++	unsigned long enabled_supplies = 0;
++	bool clock_enabled = false;
++	u16 chip_id;
++	u8 id_high;
++	u8 id_low;
++	int ret;
++	int i;
++
++	imx882 = devm_kzalloc(dev, sizeof(*imx882), GFP_KERNEL);
++	if (!imx882)
++		return -ENOMEM;
++
++	for (i = 0; i < IMX882_NUM_SUPPLIES; i++)
++		imx882->supplies[i].supply = imx882_supply_names[i];
++
++	ret = devm_regulator_bulk_get(dev, IMX882_NUM_SUPPLIES,
++				      imx882->supplies);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to get camera supplies\n");
++
++	imx882->xclk = devm_clk_get(dev, "xclk");
++	if (IS_ERR(imx882->xclk))
++		return dev_err_probe(dev, PTR_ERR(imx882->xclk),
++				     "failed to get xclk\n");
++
++	imx882->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
++	if (IS_ERR(imx882->reset))
++		return dev_err_probe(dev, PTR_ERR(imx882->reset),
++				     "failed to get reset GPIO\n");
++
++	imx882->pinctrl = devm_pinctrl_get(dev);
++	if (IS_ERR(imx882->pinctrl))
++		return dev_err_probe(dev, PTR_ERR(imx882->pinctrl),
++				     "failed to get pinctrl\n");
++
++	imx882->mclk_4ma = pinctrl_lookup_state(imx882->pinctrl, "mclk-4ma");
++	if (IS_ERR(imx882->mclk_4ma))
++		return dev_err_probe(dev, PTR_ERR(imx882->mclk_4ma),
++				     "missing mclk-4ma pinctrl state\n");
++
++	imx882->mclk_off = pinctrl_lookup_state(imx882->pinctrl, "mclk-off");
++	if (IS_ERR(imx882->mclk_off))
++		return dev_err_probe(dev, PTR_ERR(imx882->mclk_off),
++				     "missing mclk-off pinctrl state\n");
++
++	ret = imx882_power_on(imx882, &enabled_supplies, &clock_enabled);
++	if (ret) {
++		dev_err_probe(dev, ret, "failed to power sensor for identity read\n");
++		goto power_off;
++	}
++
++	ret = imx882_read_reg(client, IMX882_REG_CHIP_ID_HIGH, &id_high);
++	if (ret)
++		goto read_failed;
++
++	ret = imx882_read_reg(client, IMX882_REG_CHIP_ID_LOW, &id_low);
++	if (ret)
++		goto read_failed;
++
++	chip_id = (id_high << 8) | id_low;
++	if (chip_id != IMX882_CHIP_ID) {
++		dev_err(dev, "unexpected physical sensor ID %#06x\n", chip_id);
++		ret = -ENODEV;
++		goto power_off;
++	}
++
++	dev_info(dev, "detected IMX882 physical sensor ID %#06x\n", chip_id);
++	ret = 0;
++	goto power_off;
++
++read_failed:
++	dev_err_probe(dev, ret, "failed to read physical sensor ID\n");
++power_off:
++	imx882_power_off(imx882, enabled_supplies, clock_enabled);
++	return ret;
++}
++
++static const struct of_device_id imx882_identity_of_match[] = {
++	{ .compatible = "nothing,tetris-imx882-identity" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, imx882_identity_of_match);
++
++static struct i2c_driver imx882_identity_driver = {
++	.probe = imx882_identity_probe,
++	.driver = {
++		.name = "tetris-imx882-identity",
++		.of_match_table = imx882_identity_of_match,
++	},
++};
++module_i2c_driver(imx882_identity_driver);
++
++MODULE_AUTHOR("xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>");
++MODULE_DESCRIPTION("Nothing Tetris IMX882 bounded identity probe");
++MODULE_LICENSE("GPL");
