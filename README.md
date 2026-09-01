@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=125` in the active candidate) |
+| Kernel version | `6.18` (`pkgrel=126` in the active candidate) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 

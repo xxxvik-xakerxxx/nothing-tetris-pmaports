@@ -19,7 +19,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=125`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=126`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -79,7 +79,7 @@ normal Alpine/postmarketOS practice.
 | `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3 and selects kernel dual-role support while keeping peripheral mode as the safe default. Host mode remains unsupported until OTG VBUS ownership is implemented and validated. |
 | `0030-regulator-mediatek-mt6878-gpu-rails.patch` | Adds compile-only MT6363 VSRAM_CPUM inventory and enables the existing MT6319-compatible regulator provider config. No GPU rail DT consumer or Mali node is enabled. |
 | `0047-media-i2c-pd9302a-vcm.patch` | Stages the PD9302A VCM driver with the corrected revision-specific initialization and a bounded suspend park path. It remains compile-only and is not autoloaded. |
-| `0049-media-i2c-imx882-identity.patch` | Adds a disabled, compile-only IMX882 physical-ID probe using the exact B4.1 `0x0016/0x0017` ID registers and bounded board power sequence. The shipped config remains off, the build produces no module, and the disabled DT node performs no I2C or regulator access. |
+| `0049-media-i2c-imx882-identity.patch` | Adds a compile-only IMX882 physical-ID probe using the exact B4.1 `0x0016/0x0017` ID registers and bounded board power sequence. The shipped config remains off, the build produces no module, and no camera DT client is added. |
 
 ### NothingOSS module adaptations
 
@@ -97,7 +97,7 @@ normal Alpine/postmarketOS practice.
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 | `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. This fixes failure containment only; it does not provide the missing SCP handoff. |
 
-The `pkgrel=125` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=126` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
