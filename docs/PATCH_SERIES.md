@@ -10,7 +10,8 @@ The current baseline is intentionally conservative:
 
 - display uses the inherited framebuffer through `simpledrm`;
 - native MediaTek DSI/DSC/panel support is not part of the active baseline;
-- charger and PMIC telemetry is read-only where possible;
+- charger and PMIC telemetry uses a conservative 500 mA USB-debug policy until
+  the source current is classified through BC1.2, Type-C Rp or PD;
 - risky Android vendor stacks stay disabled until they are split into small,
   reviewable Linux-facing patches;
 - NFC is not tracked because CMF Phone 1 / `nothing-tetris` has no NFC
@@ -18,7 +19,7 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=118`.
+The kernel package currently uses `pkgver=6.18` and `pkgrel=125`.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -74,8 +75,11 @@ normal Alpine/postmarketOS practice.
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 | `0018-pmdomain-mediatek-mt6878-audio.patch` | MT6878 audio power-domain wiring required by the staged ASoC card. |
 | `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Corrects CPU0-3 to Cortex-A55 and CPU4-7 to Cortex-A78 from live MIDR evidence, and limits the first PSCI cpuidle rollout to per-CPU power-off. Cluster, MCU and system states remain gated behind live USB/SSH validation. |
-| `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation. `nothing-tetris-gnss-transport.service` loads it manually and verifies both vendor devnodes without opening or powering the GNSS links. |
+| `0020-arm64-dts-mt6878-gnss.patch` | Publishes the manual MT6878 GNSS transport and exact Tetris LNA pinctrl states. The service verifies both vendor devnodes without opening the links. A position fix is not yet proven. |
 | `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3 and selects kernel dual-role support while keeping peripheral mode as the safe default. Host mode remains unsupported until OTG VBUS ownership is implemented and validated. |
+| `0030-regulator-mediatek-mt6878-gpu-rails.patch` | Adds compile-only MT6363 VSRAM_CPUM inventory and enables the existing MT6319-compatible regulator provider config. No GPU rail DT consumer or Mali node is enabled. |
+| `0047-media-i2c-pd9302a-vcm.patch` | Stages the PD9302A VCM driver with the corrected revision-specific initialization and a bounded suspend park path. It remains compile-only and is not autoloaded. |
+| `0049-media-i2c-imx882-identity.patch` | Adds a disabled, compile-only IMX882 physical-ID probe using the exact B4.1 `0x0016/0x0017` ID registers and bounded board power sequence. The shipped config remains off, the build produces no module, and the disabled DT node performs no I2C or regulator access. |
 
 ### NothingOSS module adaptations
 
@@ -93,7 +97,7 @@ normal Alpine/postmarketOS practice.
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
 | `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. This fixes failure containment only; it does not provide the missing SCP handoff. |
 
-The `pkgrel=118` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The `pkgrel=125` package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
@@ -170,8 +174,11 @@ not a confirmed external RT1711H controller.
    native Bluetooth discovery and factory Bluetooth address provisioning.
 3. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
    stack; both torch channels already pass bounded live tests.
-4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
+4. Validate the GNSS EMI handoff and LNA states, then obtain a position fix
+   while Wi-Fi, Bluetooth and USB remain stable.
 5. Validate the packaged audio stack from a clean CI image, then repeat both
    speaker/microphone paths and suspend/resume lifecycle tests.
 6. Sensorhub/IIO for rotation, proximity and ambient light.
-7. Modem/SIM and cameras as later large projects.
+7. Continue compile-only modem/CCIF/DPMAIF and camera sensor boundaries in
+   parallel; activate each only after its power, memory and firmware contract
+   is complete.

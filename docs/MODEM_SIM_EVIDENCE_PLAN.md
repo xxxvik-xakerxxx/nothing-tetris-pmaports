@@ -6,7 +6,11 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Source identity
 
-- Port branch at review time: `codex/scp-thermal`, commit `cd8fbdf`.
+- Current port branch: `codex/next-hardware`, current candidate recorded in
+  `docs/CURRENT_STATUS.md`.
+- The original source audit was performed on historical branch
+  `codex/scp-thermal` at `cd8fbdf`; its vendor-source conclusions remain the
+  input to the current compile-only work.
 - Mainline kernel package source: Linux 6.18 at the commit pinned by the
   package.
 - Authoritative vendor device modules:
@@ -22,27 +26,29 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Boot-chain trace
 
-The current boot path does not reproduce the Nothing OS modem handoff:
+The installed boot path does not reproduce the Nothing OS modem handoff. A
+newer U-Boot candidate now validates its structure but deliberately does not
+start the modem:
 
 1. The MediaTek early boot stages and stock LK execute before the replacement
    U-Boot container. Trusted firmware remains resident and may implement the
    MediaTek SiP ABI, but support for each CCCI request has not been measured.
-2. The verified U-Boot commit
-   `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef` captures a valid prior-stage FDT
-   passed in `x0`, validates and copies its bounded `atag,devinfo` payload, and
-   separately prepares conninfra EMI mappings. It does not copy, validate or
-   regenerate CCCI modem tags or their referenced buffer.
-3. The newer local U-Boot commit
-   `5fcc080a1908470e31d303dce7f3493ef56e4459` can select an LK FDT from `x2`
-   when it contains `atag,devinfo`. This commit is not the verified live
-   bootloader baseline and still has no CCCI-specific merge or validation.
+2. Installed U-Boot `8aa048f93bb7569e4107ef85aa994c630f85de48`
+   preserves the prior LK/FDT and conninfra handoff work but does not publish a
+   validated CCCI contract to Linux.
+3. Candidate U-Boot `b76e47e774304ab550a6354f3286860b7caffb3a`
+   validates the bounded B4.1 descriptor, required payload tags, modem/check
+   headers, image and shared-memory layouts. It publishes sanitized status and
+   sizes only: no physical addresses, SMC call, power/reset, firmware load or
+   `runtime-ready` claim. CI run `33492618726` passed, but this revision is not
+   flashed yet.
 4. The postmarketOS FIT embeds its own `mt6878-nothing-tetris.dtb` and loads it
    at `0x47000000`. The FIT configuration selects that FDT explicitly. No code
    in the current boot path copies `ccci,modem_info_v2`,
    `ccci,modem_info`, or the referenced LK tag buffer into this DT.
-5. Linux therefore receives the maintained pmOS DT, not a proven LK modem
-   handoff. Adding disabled modem inventory does not restore the missing
-   firmware and memory contract.
+5. Linux therefore still lacks an enabled modem consumer and a proven runtime
+   memory/power/secure-world contract. Adding disabled inventory or parsing a
+   valid descriptor does not make the modem usable.
 
 The B4.1 kernel expects `ccci,modem_info_v2` on the `mediatek,mddriver` node.
 That property points to a physical LK tag buffer containing at least the modem

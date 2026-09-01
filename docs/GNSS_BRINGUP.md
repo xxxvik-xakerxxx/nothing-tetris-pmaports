@@ -14,6 +14,14 @@ it is not a standard NMEA stream and cannot be passed directly to `gpsd`.
 Opening a device starts the associated GNSS link, so transport staging and
 position testing must remain separate experiments.
 
+The installed U-Boot does not supply the vendor driver's `emi-addr`, and the
+manual 2026-09-01 probe therefore stopped at the missing EMI/pinctrl contract
+after creating both device nodes. Candidate pmaports commit `11befa5` adds the
+exact Tetris LNA pinctrl states. Candidate U-Boot `b76e47e` writes the 64-bit
+GPS EMI address only after the existing reserved-memory layout and secure EMI
+mappings validate. Neither candidate has been tested together on the phone,
+and no position fix is claimed.
+
 `nothing-tetris-gnss-transport.service` is intentionally static and manual. It
 requires the proven connectivity service, checks the packaged firmware, loads
 `gps_drv_dl_v050`, and verifies both character devices. It never opens either
@@ -56,9 +64,11 @@ position fix.
 
 ## Next gate
 
-The next implementation must provide a maintainable userspace bridge for the
-MediaTek MNL protocol or replace the vendor ABI with a Linux GNSS subsystem
-driver. Its first live test must open only `gpsdl0`, preserve the first firmware
-or protocol error, close the link cleanly, and verify USB, Wi-Fi and Bluetooth
-before any position claim. Promotion requires time-to-fix and accuracy evidence,
-three cold starts, restart, coexistence and suspend/resume testing.
+First install the exact pmaports and U-Boot candidates and repeat the
+transport-only gate. If EMI, pinctrl and firmware initialization are clean, the
+next live test must open only `gpsdl0`, preserve the first firmware or protocol
+error, close the link cleanly, and verify USB, Wi-Fi and Bluetooth. A
+maintainable userspace bridge for MediaTek MNL or a Linux GNSS subsystem driver
+is still required for position service integration. Promotion requires
+time-to-fix and accuracy evidence, three cold starts, restart, coexistence and
+suspend/resume testing.

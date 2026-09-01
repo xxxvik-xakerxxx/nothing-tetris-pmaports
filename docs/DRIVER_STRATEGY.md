@@ -74,12 +74,12 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
 | Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
 
-The live hardware audits confirmed a 108 GiB root partition with about 97 GiB
-free and all eight CPUs. `lscpu` correctly decodes four Cortex-A55 and four
-Cortex-A78 cores. The blank processor row in GNOME 50.3 is a userspace parser
-limitation, not missing kernel topology. The running kernel has no thermal
-class, so thermal support remains a blocker before sustained GPU/modem/camera
-loads.
+The live hardware audits confirmed a 108 GiB root partition and all eight CPUs.
+`lscpu` correctly decodes four Cortex-A55 and four Cortex-A78 cores. The blank
+processor row in GNOME 50.3 is a userspace parser limitation, not missing kernel
+topology. The installed baseline exposes all 24 LVTS sensors in polling mode;
+thermal IRQs/trips and sustained-load lifecycle validation remain blockers
+before GPU, modem or camera loads are enabled.
 
 ## Promotion gate
 

@@ -3,6 +3,15 @@
 Status: inventory only. No camera rail, clock, reset, SENINF, CAMSYS, CCU,
 sensor, EEPROM, actuator, or flash node is approved for automatic probing.
 
+Candidate patch `0049-media-i2c-imx882-identity.patch` adds the first bounded
+native identification boundary for the main camera. It reads only physical ID
+registers `0x0016/0x0017` and expects raw silicon ID `0x8202`; the TXD module's
+vendor ID `0x8203` is derived by the vendor stack from the same raw silicon ID
+plus EEPROM module ID `0x07`, so this probe intentionally does not guess the
+module vendor. Its Kconfig remains disabled, CI compiles only the object, no
+module is shipped, and the DT client plus all four GPIO-backed rails remain
+disabled. This is not camera detection on the phone and not preview support.
+
 ## Authoritative source baseline
 
 The board inventory is derived from the matching Nothing OS 4.1 source set:

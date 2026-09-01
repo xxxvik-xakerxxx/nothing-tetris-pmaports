@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (`pkgrel=103` in this overlay) |
+| Kernel version | `6.18` (`pkgrel=125` in the active candidate) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -46,6 +46,8 @@ Driver packaging and vendor-to-native migration are documented in
 [docs/DRIVER_STRATEGY.md](docs/DRIVER_STRATEGY.md).
 The current mainline promotion policy and remaining hardware order are tracked
 in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
+The concise installed-versus-candidate hardware matrix is maintained in
+[docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md).
 
 ## Feature Status
 
@@ -57,11 +59,12 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 | Display | Native DSI/panel | Broken | MT6878 DSI/DSC and the AMOLED panel driver are not integrated. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
-| Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |
+| Power | Battery/USB telemetry | Partial | MT6375 telemetry and a conservative charging policy work. The current USB 2.0 default-current source is correctly limited to 500 mA; BC1.2, Type-C Rp and PD current detection still need implementation and charger testing. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
-| Power | Thermal management | Broken | The running kernel has no thermal class or zones. Nothing OS 4.1 provides MT6878 LVTS data for 24 sensors across MCU/AP/GPU domains, but it is not integrated yet. |
-| USB | Device mode / NCM | Partial | NCM previously carried stable SSH and a verified 32 MiB transfer on Linux and macOS. Clean-install audit found MTU3 built gadget-only, so the Type-C role-switch graph never reached the UDC; the next image enables dual-role with peripheral as the safe default. |
-| USB-C | Type-C attach/orientation | Partial | MT6375 TCPC reports reverse orientation, sink power, device data role and charging. MTU3 dual-role support is disabled, `/sys/class/usb_role` is empty, and host mode/wake remain unvalidated. |
+| Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. CPU cluster-off works, but a repeatable unplugged screen-off/suspend measurement has not yet isolated the cause. |
+| Power | Thermal management | Partial | The installed baseline exposes all 24 MT6878 LVTS zones with plausible polling-mode values. Hardware trips/IRQ routing and sustained-load lifecycle tests remain disabled. |
+| USB | Device mode / NCM | Partial | The clean baseline automatically exposes `usb0`; exact 32 MiB SSH transfers passed across clean and warm boots. Repeated reconnect and suspend/resume remain. |
+| USB-C | Type-C attach/orientation | Partial | MT6375 TCPM reports orientation, sink power and device data role. Peripheral/NCM is the safe default; host VBUS ownership, PD and wake remain unvalidated. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | The driver uses the official B4.1 RAM waveform through `FF_RUMBLE`; shell, UI and repeated bounded effects work physically. Suspend/resume and three cold boots remain. |
 | Audio | Upper earpiece | Partial | Physical playback and the desktop speaker test work through MT6369. Lifecycle tests remain. |
@@ -69,13 +72,13 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 | Audio | Built-in microphones | Partial | AIN0 and AIN2 capture physically through the packaged UCM profile. Per-input recordings, suspend/resume and cold-boot repetition remain. |
 | Audio | Desktop integration | Partial | PulseAudio exposes earpiece, mono main-speaker and internal-microphone endpoints. The main-speaker stream lifecycle is not stable. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. |
-| Camera | Front/rear cameras | Broken | No V4L2/media nodes are present. Sensors, SENINF/ISP, clocks, power domains, IOMMU and userspace still need a staged port. |
+| Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. The candidate compile-checks a disabled, bounded IMX882 physical-ID probe, but it is not packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, clocks, power domains, IOMMU and userspace remain. |
 | Camera | Torch | Partial | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off. Clean-install and lifecycle tests remain. |
 | Camera | Flash strobe | Untested | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 bridge are not validated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | The clean CI image automatically registers `wlan0`; NetworkManager scans, associates and routes traffic while Bluetooth remains active. Three cold boots, suspend/resume and a second unit remain. |
 | Connectivity | Bluetooth | Partial | The clean CI image automatically registers native BlueZ `hci0` with the factory address and the UI works alongside connected Wi-Fi. RFCOMM/BNEP are staged for the next kernel; lifecycle/second-unit checks remain. |
-| Connectivity | GPS/GNSS | Partial | The B4.1 MT6878 v050 module probes seven IRQs and completes a real DSP open/close power cycle without disturbing Wi-Fi, Bluetooth or USB. Reserved-memory handoff, position data, suspend and a standard Linux GNSS userspace bridge remain unvalidated, so it is not autoloaded. |
+| Connectivity | GPS/GNSS | Broken | A manual B4.1 v050 probe creates both `gpsdl` device nodes, but the installed boot chain lacks a valid GPS EMI handoff and exact LNA pinctrl. No position fix is confirmed and the module is not autoloaded. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. The generic Phosh SIM UI is not evidence of modem support. |
 | Sensors | Rotation/accelerometer | Broken | Requires the MT6878 SCP remoteproc and vendor sensorhub transport before IIO clients can be exposed safely. |
@@ -86,9 +89,10 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 | Desktop UI | Storage panel | Partial | UDisks sees many Android GPT partitions; r8 device package hides non-pmOS partitions. |
 | Desktop UI | CPU name | Partial | `lscpu` identifies Cortex-A55/A78 clusters. GNOME 50.3 ignores ARM `CPU implementer`/`CPU part` fields and therefore leaves the Settings processor row blank; this needs a portable GNOME/libgtop fix. |
 
-## Current Live Findings
+## Installed Baseline Findings
 
-On the clean CI image from pmaports commit `6fcaf8b08a7a192e3e0b0820ede3af1fa1f519fe`:
+On the clean CI image from pmaports commit `f607513` with kernel
+`6.18.0 #123`:
 
 - Power, volume-up and volume-down generate balanced press/release events without stuck keys.
 - `/` is mounted from `/dev/sdc82` as ext4 and currently exposes 104.6 GiB.
@@ -109,8 +113,9 @@ On the clean CI image from pmaports commit `6fcaf8b08a7a192e3e0b0820ede3af1fa1f5
   CCF instead of retrying playback in userspace.
 - ECM USB networking is active as `usb0`/`en4` and transferred 32 MiB without
   RX/TX errors while Wi-Fi and Bluetooth remained active.
-- `/sys/class/thermal`, standard GNSS, modem/WWAN, camera/media and DRM render
-  nodes are absent. The two IIO devices are PMIC ADCs, not user sensors.
+- All 24 MT6878 LVTS thermal zones report plausible polling-mode values.
+  Standard GNSS position, modem/WWAN, camera/media, user-sensor IIO and DRM
+  render nodes are absent. The existing IIO devices are PMIC ADCs.
 - Both LM3644 torch class devices are present. Earlier bounded physical tests
   illuminated each channel independently and returned it to off.
 

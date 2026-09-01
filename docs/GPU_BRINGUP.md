@@ -8,6 +8,11 @@ platform device, so Panthor cannot probe and no render node is expected.
 from patch `0009` are present. This is build support, not proof that the GPU
 power, clock, firmware, or memory paths are usable.
 
+Candidate `c8f02ca` additionally stages a compile-only MT6363 VSRAM_CPUM
+descriptor and enables the existing MT6319-compatible regulator provider
+config. There is still no VSRAM/VGPU DT child or GPU consumer, so the candidate
+does not register or switch a GPU rail at runtime.
+
 Live logs only prove that the inherited device tree reserves the following
 memory and that the generic IOMMU core starts in translated, strict mode:
 
@@ -65,10 +70,11 @@ functional benefit on its own.
 1. **Safe genpd policy.** A later patch must add
    `MTK_SCPD_KEEP_DEFAULT_OFF` for MFG0 and prove that registering the domain
    leaves SPM `MFG0_PWR_CON` unchanged before any GPU consumer is added.
-2. **GPU regulator.** Mainline DT has no MT6319 USID 6 VBUCK2 GPU supply and
-   the package config currently disables `CONFIG_REGULATOR_MT6315`. The
-   compatible, voltage table, mode handling, enable state, and cold-boot
-   ownership must be validated without changing the rail on the first probe.
+2. **GPU regulator.** Mainline DT still has no MT6319 USID 6 VBUCK2 GPU supply.
+   The candidate enables the compatible provider module and inventories
+   VSRAM_CPUM without a DT consumer. VGPU voltage/mode handling, enable state,
+   provider USID and cold-boot ownership must be validated before adding a
+   disabled DT child, and the first probe must not change either rail.
 3. **MFG RPC and clocks.** Patch `0009` provides PLLs and top muxes only. It
    does not model the MFG RPC subdomains, gate/reset ordering, stack clock, or
    vendor SCMI/GPUEB frequency ownership.
@@ -87,9 +93,9 @@ functional benefit on its own.
 
 ## Next safe sequence
 
-1. Land and live-test reboot-to-fastboot support while keeping GPU absent.
-2. Add a compile-only MT6319 USID 6 regulator description with the consumer
-   disabled; verify binding, DT, and regulator driver support.
+1. Keep the proven reboot-to-fastboot rollback while GPU remains absent.
+2. Complete the MT6319 USID 6 VGPU provider description with no enabled
+   consumer; verify binding, voltage/mode tables and cold-state ownership.
 3. Add MFG0 keep-default-off policy and a disabled DT domain node. On a clean
    image, prove provider registration does not alter the MFG0 register or
    USB/Wi-Fi behavior.

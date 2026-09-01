@@ -7,10 +7,11 @@ postmarketOS port into a stable daily-phone build.
 
 | Track | Branch / path | State |
 | --- | --- | --- |
-| Stable hardware baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `fa00144adde95333fab32e19d63caa32968909c1`. Keep as the published rollback until the active candidate completes all promotion gates. |
-| Merged hardware baseline branch | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` | Already merged into `main`. Keep only as historical CI reference until branch cleanup. |
-| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/scp-thermal` | `ba0299888c5151b79d134c61cfcd57fc35f70f75` passed CI run `33312303262` and was clean-flashed to `super` and `userdata`. Kernel package `6.18-r118` (`6.18.0 #119`) passed two boots, two exact 32 MiB USB NCM/SSH transfers, two complete thermal gates, charger telemetry, Wi-Fi AP enumeration, Bluetooth HCI and audio enumeration. The manual SCP probe failed closed after 3.09 seconds without WARN/Oops or USB loss. |
-| Bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Keep verified commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef`. Its built-in environment injects `clk_ignore_unused` while constructing dynamic pmOS UUID arguments. A temporary boot without that token produced a launch error/reset, so do not update U-Boot or force unused-clock cleanup until the dependency is identified. |
+| Stable source baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `ee994e4236d69c9f3eb18e81614dd0dff9e60266`. Keep as the published rollback until the active candidate completes all promotion gates. |
+| Installed device baseline | CI image from `f607513` | Kernel `6.18.0 #123` passed clean installation, USB NCM/SSH, an exact 32 MiB transfer, Wi-Fi, Bluetooth, audio, touch, haptics, root I/O, thermal and warm-reboot regression gates. |
+| Active candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` | Code SHA `f8df318` (`pkgrel=125`). It adds a PD9302A revision fix, exact GNSS LNA pinctrl, compile-only GPU regulator inventory and a disabled compile-only IMX882 identity probe. The integrated CI pin is U-Boot `b76e47e`; no experimental module is newly autoloaded and native GPU/display remain disabled. |
+| Flashed bootloader baseline | `xxxvik-xakerxxx/u-boot:master` | Commit `8aa048f93bb7569e4107ef85aa994c630f85de48` remains installed and passed the Linux reboot-mode fix. |
+| Bootloader candidate | `xxxvik-xakerxxx/u-boot:master` | Commit `b76e47e774304ab550a6354f3286860b7caffb3a` passed CI run `33492618726`. It validates the LK CCCI payload and writes the exact GNSS EMI address only after the existing layout and secure mappings validate; it does not start either subsystem. |
 
 ## Branch policy
 
@@ -23,9 +24,10 @@ for CI and hardware bring-up, but they must not be merged to `main` until:
 4. The branch has a documented rollback point and no automatic loading of
    unvalidated high-risk modules.
 
-`codex/next-hardware` meets this bar and was merged into `main`. Thermal,
-Sensors/SCP, Modem/SIM, GPU and Camera remain staged or draft work until their
-own gates pass.
+`codex/next-hardware` is the current promotion candidate. It must remain
+separate from `main` until the CI image boots and completes the hard regression
+gates below. Sensors/SCP, Modem/SIM, GPU, Camera and native display remain
+staged or compile-only until their own gates pass.
 
 ## Hard regression gates
 
@@ -49,10 +51,11 @@ stable baseline:
 | 1 | Thermal / devinfo | Boot MT6878 LVTS thermal zones in polling-only mode with per-device calibration read from MT6878 read-only devinfo registers. | CI build, clean boot, `/sys/class/thermal` zones, plausible idle/load temps, USB/Wi-Fi/BT/audio regression pass. |
 | 2 | Power / suspend | Measure and fix the currently high battery drain before enabling more remote processors. Audit suspend residency, wakeup sources, IRQ rate, clocks, regulators and runtime PM for USB, Wi-Fi, audio, thermal and remoteproc. | Repeatable idle/screen-on/Wi-Fi power baselines, no IRQ or wakelock storm, one-hour idle discharge gate, suspend/resume and automatic USB/Wi-Fi recovery pass. |
 | 3 | Sensorhub | Build-only/manual-gated transport: `mtk-mbox.ko`, `mtk_rpmsg_mbox.ko`, `mtk_tinysys_ipi.ko`, `scp.ko`, `hf_manager.ko`, `sensorhub.ko`. The exact Nothing OS 4.1 source set now compiles on Linux 6.18; do not autoload SCP, sensorhub or nanohub. | Full CI modpost, firmware/reserved-memory audit, manual fail-closed probe, at least one standard Linux/IIO or documented bridge path, idle-power and USB debug regression pass. |
-| 4 | SIM / modem | Stage CCCI/CCMNI/ECCCI modules without autoload. Keep `conn_md` and `mddp` disabled until basic modem boot is clean. | ModemManager sees modem, SIM state is readable, SMS/data smoke test, no radio regression with Wi-Fi/BT/GNSS. |
-| 5 | GPU | Prefer native DRM Panthor over vendor Mali/GED/GPUEB. Solve thermal, MFG0 genpd, MT6319 GPU rail, firmware path and IOMMU mapping first. | `/dev/dri/renderD*`, short GL/offscreen smoke test, thermal zones active, suspend and USB debug regression pass. |
-| 6 | Camera foundation | Build-only sensor inventory, cam_cal, `pd9302a` VCM and LM3644 V4L2 flash bridge before ISP. Do not autoload camsys/imgsys/hcp/aie/OIS. | Sensor IDs visible without hangs, media nodes documented, torch unchanged, no blanket camera stack autoload. |
-| 7 | Native display | Separate DSI/DSC/panel branch while keeping simpledrm as fallback. | KMS framebuffer works, brightness works, suspend/resume works, fallback boot path documented. |
+| 4 | GNSS | Complete the bootloader EMI handoff and LNA pinctrl first, then test one cold manual link start without unloading conninfra. | `/dev/gpsdl*`, firmware/DSP open, position fix with accuracy, restart, coexistence with Wi-Fi/BT, suspend/resume and USB regression pass. |
+| 5 | SIM / modem | Validate the bootloader CCCI descriptor, then stage CCCI/CCIF/DPMAIF/CCMNI boundaries without autoload. Keep `conn_md` and `mddp` disabled until basic modem boot is clean. | ModemManager sees modem, SIM state is readable, calls, SMS and data pass, no radio regression with Wi-Fi/BT/GNSS. |
+| 6 | GPU | Prefer native DRM Panthor over vendor Mali/GED/GPUEB. The MT6363 VSRAM descriptor and MT6319-compatible regulator config are compile-only; MFG0 genpd, VGPU DT, firmware and protected memory remain blockers. | `/dev/dri/renderD*`, short GL/offscreen smoke test, sustained load, thermal zones active, suspend and USB debug regression pass. |
+| 7 | Camera foundation | Build-only sensor inventory, cam_cal, corrected `pd9302a` VCM and LM3644 V4L2 flash bridge before ISP. Do not autoload camsys/imgsys/hcp/aie/OIS. | Sensor IDs visible without hangs, media nodes documented, preview/capture, torch unchanged, repeated start/stop and USB regression pass. |
+| 8 | Native display | Compile the S6E8FC3X02 panel independently, then use a separate opt-in DSI/DSC DTB while keeping simpledrm as fallback. | KMS framebuffer, 60/120 Hz modes, brightness, blank/unblank, suspend/resume and fallback boot path all work. |
 
 ## Draft workspaces
 
