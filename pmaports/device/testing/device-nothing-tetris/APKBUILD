@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=5
+pkgrel=6
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -29,6 +29,8 @@ source="
 	89-nothing-tetris-user.preset
 	boot_image.its
 	deviceinfo
+	greetd-pulse-client.conf
+	greetd-pulseaudio.desktop
 	greetd-tetris-display.conf
 	HiFi.conf
 	modules-initfs
@@ -172,6 +174,10 @@ package() {
 
 	install -Dm644 "$srcdir"/greetd-tetris-display.conf \
 		"$pkgdir"/etc/systemd/system/greetd.service.d/override.conf
+	install -Dm644 "$srcdir"/greetd-pulseaudio.desktop \
+		"$pkgdir"/var/lib/greetd/.config/autostart/pulseaudio.desktop
+	install -Dm644 "$srcdir"/greetd-pulse-client.conf \
+		"$pkgdir"/var/lib/greetd/.config/pulse/client.conf
 	install -Dm644 "$srcdir"/phoc.ini \
 		"$pkgdir"/etc/phosh/phoc.ini
 	install -Dm644 "$srcdir"/phoc.ini \
@@ -247,6 +253,8 @@ f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486
 813581aefd3554f9c929a4c46344c3d218032acaf70afc143c4fe3ce34d39c77c71bde81300e05f752f5be5695b84bce564f2d02630819f331399fda0ceec7ed  89-nothing-tetris-user.preset
 06190b31f164f33c10d26c711302a94e8674752723e469f1cee3975d90d7f5032783eab77b3bd887efaedbe9e4dbfe8c8c83e5d51593ff55bb42f39f1fdaab89  boot_image.its
 48a6ab9c19964669bfb193aad48109df5ef78631b435f255fb021481f6765aceab097e7472f07f998d7c7c31ab26c19b17d8b7272c20d9099db3157a402c01a4  deviceinfo
+7a5fee2f67d34246fcf2a2ca3a69d9fcc93c7206bf434216153952883e591d0e122bb3e2e98384724d06b08a7dd1b9861dfc5a250f950298cf5d7f2c35d33e81  greetd-pulse-client.conf
+de30cc66011addd6443b236855115692c7947717b71745d2a51155e7931dd61e969cbf39ef7e637ee0ccbd56196eb41bccac03b6e6f6261e6068abe5b9d80a5e  greetd-pulseaudio.desktop
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
 2f660c612ab20083e7c1ba0a3075fe670695dd7684c73f899f99fdbb75ef8e6a2f40b4aa4db0c81651dde01448ede4a21b39f28f624cef33d0c877891c57b263  HiFi.conf
 88790459deb841a215b8e72d535d4618f600ffb5ca2ace61e296c36dda92085f64f4eae469788eb30a0cabdc52c1e5c818aec3a37f924abec350aee4b6a609e8  modules-initfs

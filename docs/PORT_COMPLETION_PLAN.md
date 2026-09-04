@@ -80,7 +80,7 @@ driver is packaged, autoloaded or safe to probe on hardware:
 | Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` and `local/agent-results/scp-uboot-next/` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment. A host-only U-Boot parser validates unique 64-bit shared/loader carveouts, DRAM containment, minimum size, non-overlap and FDT immutability. Active-slot firmware identity, TCM region-info and boot publication remain missing. |
 | SIM / modem | `0039`, `0048`, `0053` and compile-only `APKBUILD` gates | `6bc2096` / CI `33356899792` proves clean `ccci_util_lib.ko` modpost; ECCCI core objects compile without a module. The isolated CCIF boundary now compiles `ccci_ringbuf.o` and `ccci_hif_ccif.o` with reviewed Linux 6.18 timer APIs and guarded exact B4.1 service ID `0x505`. No CCIF `.ko`, DT, packaging, autoload, firmware, power/reset, DMA, DPMAIF or CCMNI. |
 | GPU | `0035`, `0052`, `docs/GPU_BRINGUP.md` and `APKBUILD` | MFG0 data and the B4.1 MFG RPC topology are present with both RPC provider levels disabled. Exact active-series apply and direct DT compilation pass; no GPU consumer, register access or runtime claim. |
-| Camera foundation | `0046`, `0047`, `0049`, `0051`, `docs/CAMERA_COMPILE_ONLY_AUDIT.md` and `APKBUILD` | Object-only gates cover PD9302A, IMX882 identity and the six-variant/four-layout Tetris inventory. CI rejects a camera-audit `.ko`; no sensor, SENINF/ISP, CCU or media graph is enabled. |
+| Camera foundation | `0046`, `0047`, `0049`, `0051`, `0055`, `docs/CAMERA_COMPILE_ONLY_AUDIT.md` and `APKBUILD` | Object-only gates cover PD9302A, IMX882 identity and the six-variant/four-layout Tetris inventory. The stock-derived main-IMX882 fixture keeps its client and all four rails disabled, does not alter shared I2C8, and adds no EEPROM, actuator or graph. CI rejects camera runtime modules; no sensor, SENINF/ISP or CCU is enabled. |
 | Native panel | `0050` plus `APKBUILD` | S6E8FC3X02 binding/driver passed standalone patch application, arm64 translation-unit compilation and full pmaports CI run `33502390335`. `pkgrel=127` keeps it object-only with no shipped module or DT client; no runtime panel claim exists. |
 
 The audio lifecycle candidate is tracked directly in the device package rather
@@ -89,6 +89,14 @@ manager, whose default-target audio policy autospawns PulseAudio before the
 active seat grants ALSA/haptics access. Device r4 starts that policy only as
 part of the graphical session and leaves mono-remap creation to the existing
 idempotent policy after UCM publishes the master sink.
+Clean #130 showed that r5 still allowed the standard XDG desktop entry and
+libpulse clients to autospawn a separate `greetd` PulseAudio process. Device r6
+adds overrides only under `/var/lib/greetd/.config`; the real user's PulseAudio
+startup and policy are unchanged until clean-session testing proves one owner.
+A reversible r6 overlay on installed #130 passed one normal reboot with zero
+greeter PulseAudio owners, no new ALSA/BlueZ ownership errors, no failed units,
+and automatic USB/Wi-Fi/Bluetooth recovery. Packaged clean-install and real-user
+login/relogin gates remain open.
 
 ## Current blockers
 

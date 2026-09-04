@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed `pkgrel=127`; next GNSS candidate `pkgrel=128`) |
+| Kernel version | `6.18` (installed `pkgrel=129`; source candidate `pkgrel=131`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -57,11 +57,12 @@ contract are documented in
 The installed image is pmaports commit
 `3571519b667936352a423200a52b7ada6975084a`. CI run `33867526529` passed every
 build, image and rootfs gate and pins U-Boot `b76e47e`, which remains installed
-in both boot partitions. A clean flash of `super` and `userdata` boots kernel
+in both `lk_a` and `lk_b`. A clean flash of `super` and `userdata` boots kernel
 package `6.18-r129` (`6.18.0 #130`) with device package
 `device-nothing-tetris-8-r5`; automatic root expansion, USB SSH, an exact
 32 MiB transfer and USB recovery after a normal reboot pass. The audio session
-ownership fix is installed but still needs physical lifecycle regression.
+ownership fix in device r5 is incomplete; source candidate r6 suppresses only
+the greeter PulseAudio owner and still needs clean-session lifecycle regression.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
 transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
@@ -95,9 +96,9 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Audio | Upper earpiece | Partial | Physical playback and the desktop speaker test work through MT6369. Lifecycle tests remain. |
 | Audio | Lower main speaker | Partial | A bounded PulseAudio 440 Hz test plays physically through AW88261 on clean kernel #128 and the sink returns to `SUSPENDED`. System sounds remain inconsistent; measured microphone capture passes separately. |
 | Audio | Built-in microphones | Partial | A clean #130 five-second stereo capture contains 387856 samples, 386262 nonzero, zero clipping and 193359 pairs with distinct channels. Physical per-input mapping, suspend/resume and cold-boot repetition remain. |
-| Audio | Desktop integration | Partial | PulseAudio exposes speaker and internal-microphone endpoints, but clean #130 proves device r5 only fixes the policy layer: the `greetd` and real-user sessions still autospawn separate PulseAudio instances, causing ALSA and BlueZ ownership errors. The greeter/pre-login owner must be suppressed before system sounds and Bluetooth audio are stable. |
+| Audio | Desktop integration | Partial | PulseAudio exposes speaker and internal-microphone endpoints, but clean #130 proves device r5 only fixes the policy layer. A reversible r6 live overlay followed by a normal reboot produced zero `greetd` PulseAudio owners and no fresh ALSA/BlueZ ownership errors while USB/Wi-Fi/BT returned normally. CI, clean install, one real-user owner, login/relogin and physical audio regression remain. |
 | GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. A disabled MFG RPC topology inventory is under static validation and performs no register access. |
-| Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. Compile-only gates inventory the six stock Tetris sensor variants, four external EEPROM layouts and a disabled IMX882 physical-ID probe; none is packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, clocks, power domains, IOMMU, CCU and userspace remain. |
+| Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. The source candidate adds a fully disabled main-IMX882 DT fixture matching the reviewed stock I2C8, CAMTG2, reset and four-rail topology. Compile-only gates inventory six sensor variants, four EEPROM layouts and the disabled identity probe; no camera component is enabled, packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, power domains, IOMMU, CCU and userspace remain. |
 | Camera | Torch | Partial | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off. Clean-install and lifecycle tests remain. |
 | Camera | Flash strobe | Untested | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 bridge are not validated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |

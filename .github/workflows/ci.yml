@@ -373,12 +373,30 @@ jobs:
           check_contains "audio policy user preset" \
             'enable nothing-tetris-audio-policy.service' \
             "$rootfs/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset"
+          check_contains "greeter PulseAudio autostart disabled" \
+            'Hidden=true' \
+            "$rootfs/var/lib/greetd/.config/autostart/pulseaudio.desktop"
+          check_contains "greeter PulseAudio client autospawn disabled" \
+            'autospawn = no' \
+            "$rootfs/var/lib/greetd/.config/pulse/client.conf"
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /gnss@18c00000 status)" = okay
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /soc@0/syscon@13f90000 status)" = disabled
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /soc@0/syscon@13f90000/power-controller status)" = disabled
+          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+            /soc@0/i2c@11e03000/camera@1a status)" = disabled
+          for camera_supply in afvdd avdd dvdd dovdd; do
+            test "$(fdtget \
+              "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+              "/regulator-camera-main-$camera_supply" status)" = disabled
+          done
+          if fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+              /soc@0/i2c@11e03000 clock-frequency >/dev/null 2>&1; then
+            echo "disabled camera fixture changed shared I2C8 frequency"
+            exit 1
+          fi
           for radio_module in wlan_drv_gen4m_6878 bt_drv_6878; do
             if rootfs_modinfo -F depends "$radio_module" | tr ',' '\n' | \
                 grep -Fxq wmt_drv; then

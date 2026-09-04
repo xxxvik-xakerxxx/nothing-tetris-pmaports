@@ -177,6 +177,8 @@ validate_power_and_audio_config() {
 	audio_policy="$device_pkg/nothing-tetris-audio-policy"
 	audio_policy_unit="$device_pkg/nothing-tetris-audio-policy.service"
 	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
+	greetd_pulse_client="$device_pkg/greetd-pulse-client.conf"
+	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 
@@ -275,6 +277,14 @@ validate_power_and_audio_config() {
 	grep -Fxq 'WantedBy=graphical-session.target' "$audio_policy_unit"
 	grep -Fxq 'enable nothing-tetris-audio-policy.service' \
 		"$audio_user_preset"
+	grep -Fxq 'autospawn = no' "$greetd_pulse_client"
+	grep -Fxq 'Hidden=true' "$greetd_pulse_autostart"
+	grep -Fq 'var/lib/greetd/.config/autostart/pulseaudio.desktop' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'var/lib/greetd/.config/pulse/client.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'greeter PulseAudio autostart disabled' \
+		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'I2SOUT4_CH1 DL6_CH1' "$audio_ucm"
 	grep -Fq "name='RCV Mux' 'Voice Playback'" "$audio_ucm"
 	grep -Fq "name='PGA_L_Mux' AIN0" "$audio_ucm"
@@ -603,9 +613,19 @@ validate_compile_only_boundaries() {
 		0050-drm-panel-samsung-s6e8fc3x02.patch \
 		0048-vendor-eccci-core-linux-6.18-api.patch.vendor \
 		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor \
-		0054-power-supply-mt6375-bc12-compile-only.patch; do
+		0054-power-supply-mt6375-bc12-compile-only.patch \
+		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
+	camera_fixture="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch"
+	[ "$(grep -Fc 'status = "disabled";' "$camera_fixture")" -eq 5 ]
+	grep -Fq 'compatible = "nothing,tetris-imx882-identity";' "$camera_fixture"
+	grep -Fq 'reg = <0x1a>;' "$camera_fixture"
+	grep -Fq 'clocks = <&topckgen CLK_TOP_CAMTG2>;' "$camera_fixture"
+	if grep -Eq '^\+[[:space:]]+clock-frequency[[:space:]]*=' "$camera_fixture"; then
+		echo "disabled camera fixture must not change the shared I2C8 controller" >&2
+		return 1
+	fi
 	[ "$(grep -Fc 'status = "disabled";' "$mfg_rpc_patch")" -ge 2 ]
 	grep -Fq 'MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_STATUS_IN_CTL' \
 		"$mfg_rpc_patch"
@@ -647,6 +667,8 @@ validate_compile_only_boundaries() {
 		"$workflow"
 	grep -Fq 'compile-only S6E8FC3X02 module must not be packaged' "$workflow"
 	grep -Fq 'compile-only MT6375 BC1.2 object must not be packaged' "$workflow"
+	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
+	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"
 
 	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|mt6375-bc12-decode)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then

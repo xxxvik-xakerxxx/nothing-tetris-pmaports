@@ -75,7 +75,8 @@ Required checks are:
    kernel configuration and compiler where available;
 3. confirm the patch contains no registration, hardware-write, PHY, IRQ-request,
    DT or module-metadata path;
-4. confirm the source is absent from `Kconfig` and `Makefile`.
+4. confirm the source is absent from kernel `Kconfig` and `Makefile` and is
+   invoked only by the package's explicit object-only build gate.
 
 Runtime BC1.2 work remains blocked until USB2 DP/DM ownership, attach/detach
 ordering and the publication bridge to TCPM are independently proven without
@@ -97,5 +98,9 @@ tree:
 - static searches found no registration, module metadata, regmap/MMIO write,
   PHY mode change, IRQ request, DT, notifier, workqueue or power-supply
   publication path;
-- repository searches confirmed that neither `Kconfig`, `Makefile` nor the
-  kernel package references the new translation unit.
+- repository searches confirmed that neither kernel `Kconfig` nor `Makefile`
+  references the new translation unit;
+- pmaports CI run `33880650257` at commit `ab97ff85966495b60fc206f616f39f72109392c5`
+  completed overlay validation, kernel/device package builds, final images and
+  artifact uploads. Rootfs checks rejected any decoder object, module or
+  runtime loader from the produced image.
