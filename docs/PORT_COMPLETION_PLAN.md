@@ -8,7 +8,7 @@ postmarketOS port into a stable daily-phone build.
 | Track | Branch / path | State |
 | --- | --- | --- |
 | Stable source baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `ee994e4236d69c9f3eb18e81614dd0dff9e60266`. Keep as the published rollback until the active candidate completes all promotion gates. |
-| Installed device candidate | CI image from `3571519` | Kernel package `6.18-r129` (`6.18.0 #130`) and device `8-r5` passed clean flash/root expansion, automatic USB NCM/SSH, exact 32 MiB transfer and warm reboot with automatic USB return. #130 radio/audio/input regressions and manual GNSS v051 remain open. |
+| Installed device candidate | CI image from `3571519` | Kernel package `6.18-r129` (`6.18.0 #130`) and device `8-r5` pass clean flash/root expansion, USB NCM/SSH, warm reboot, Wi-Fi 64 MiB transfer, bounded Bluetooth discovery, stereo microphone capture and manual GNSS v051 handoff/boot-info. Audio session ownership, physical input/haptics regression and lifecycle gates remain open. |
 | Previous rollback image | CI image from `f607513` | Kernel `6.18.0 #123` retains the prior full physical regression evidence and preserved rollback artifacts. |
 | Previous CI candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`. CI run `33495661863` applied the series and completed the main kernel build, then failed on a brittle disabled-Kconfig text check before the IMX882 object gate. It produced no install image. |
 | Installed image source | `xxxvik-xakerxxx/nothing-tetris-pmaports` at `3571519b667936352a423200a52b7ada6975084a` | Kernel `pkgrel=129` and device package `8-r5`; CI run `33867526529` produced the installed and hash-verified artifacts. |
