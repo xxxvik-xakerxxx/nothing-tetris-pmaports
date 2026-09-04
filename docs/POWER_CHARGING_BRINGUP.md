@@ -1,6 +1,6 @@
 # Nothing Tetris power and charging bring-up
 
-Updated: 2026-09-01.
+Updated: 2026-09-04.
 
 This document records the measured power state and the next safe experiments.
 It does not authorize charger-register writes, forced current limits, PD/PPS,
@@ -27,6 +27,33 @@ AICR/ICHG 500000 uA, +195312 uA net battery current at 87%, 31.9 C battery
 temperature and TCPM `CURRENT_MAX=0`. This is a clean-install confirmation of
 the fallback, not a source-classification improvement.
 
+The same installed image later observed a USB PD power bank contract without
+any manual runtime writes or package changes. TCPM published 5 V, 2000000 uA,
+`USB_TYPE_C PD [PD_PPS]`, sink power role and device data role. The existing
+source-current policy set both AICR and ICHG to 2000000 uA, while Wi-Fi and SSH
+remained available. The battery was already at 100 percent, 4.493 V and 32.7 C;
+its +61645 uA net current therefore demonstrated near-full taper. A later
+snapshot kept the same source contract and limits while the gauge changed to
+`Not charging` at +20141 uA and 33.5 C. This supports full-battery termination,
+but does not prove a complete charge cycle, sustained 2 A charging, programmable
+PPS operation or production-safe thermal behavior.
+
+On 2026-09-04 the same installed kernel was connected to the development host
+and USB SSH succeeded at `172.16.42.1`. Type-C reported sink power role, device
+data role and `default` power operation mode. The sysfs list `[C] PD PD_PPS`
+therefore selected plain Type-C (`C`); PD and PD_PPS were supported alternatives,
+not the active contract. `CURRENT_MAX=0` correctly retained AICR/ICHG at 500000
+uA. At 100 percent and 4.492 V the gauge reported +103759 uA and 32.2 C. This is
+a second valid USB-host fallback/taper snapshot, not evidence of failed PD or a
+charge-rate measurement.
+
+A later 2026-09-04 snapshot used a fast-charge-capable power bank while SSH ran
+over Wi-Fi. This attachment still selected plain Type-C at 5 V with
+`CURRENT_MAX=0`; the policy held AICR/ICHG at 500000 uA. The gauge was at 100
+percent, 4.493 V and 33.6 C. The source being capable of fast charging does not
+prove that this cable/attach negotiated PD, so this run is recorded as another
+fallback case and not counted as a PD regression or fast-charge result.
+
 ## First charging blocker
 
 The native path has MT6375 TCPC attach state and a conservative policy consumer.
@@ -42,17 +69,19 @@ Patch `0043-power-supply-nothing-tetris-source-current.patch` can consume a
 classified Type-C Rp or PD current, but correctly falls back to 500 mA when
 `CURRENT_MAX` is zero. It cannot classify the saved source by itself.
 
-The next gate is observation with exactly three known sources: a USB 2.0 data
-host, a Type-C Rp 1.5 A source and a 5 V BC1.2 DCP. Do not test PD yet. If the
-Rp source publishes a valid limit, test the existing policy unchanged. If the
-DCP remains unclassified, implement only a disabled MT6375 BC1.2
-detection/publication boundary. Validate USB2 PHY ownership and attach/detach
-ordering before enabling it because incorrect DP/DM routing can break USB
-debugging.
+The next source-classification gate still needs a USB 2.0 data host, a known
+Type-C Rp source and a 5 V BC1.2 DCP. If the Rp source publishes a valid limit,
+test the existing policy unchanged. If the DCP remains unclassified, implement
+only a disabled MT6375 BC1.2 detection/publication boundary. Independently
+repeat the now-observed 5 V / 2 A PD path from a partially discharged battery
+with rate, battery/connector temperature, taper, termination and detach logs.
+Keep PPS and higher-voltage requests disabled. Validate USB2 PHY ownership and
+attach/detach ordering because incorrect DP/DM routing can break USB debugging.
 
 Charging remains `Partial` until multiple real chargers pass rate, battery and
 connector temperature, termination, detach, reboot and suspend/resume tests.
-BC1.2 and PD/PPS remain `Broken`; Type-C Rp selection remains `Untested`.
+Fixed 5 V PD current selection is `Partial`; BC1.2 and PPS remain `Broken`, and
+Type-C Rp selection remains `Untested`.
 
 ## Idle drain blocker
 

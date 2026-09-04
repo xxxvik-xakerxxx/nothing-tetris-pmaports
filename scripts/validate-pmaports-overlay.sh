@@ -252,6 +252,7 @@ validate_power_and_audio_config() {
 		return 1
 	fi
 	sh -n "$audio_policy"
+	grep -Fq 'mono_sink=tetris_mono_speaker' "$audio_policy"
 	grep -Fq 'pactl load-module module-remap-sink' "$audio_policy"
 	grep -Fq 'master="$speaker_sink"' "$audio_policy"
 	grep -Fq 'channels=1 channel_map=mono' "$audio_policy"
@@ -261,6 +262,10 @@ validate_power_and_audio_config() {
 	grep -Fq '"$rootfs/usr/libexec/nothing-tetris-audio-policy"' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'check_not_contains "eager mono speaker remap"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "mono speaker sink identity"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "deferred mono speaker remap"' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
@@ -555,9 +560,14 @@ validate_sensor_transport() {
 		"$inventory_patch"
 	grep -Fq 'module_param_named(sensor_count, sensor_count, uint, 0444);' \
 		"$inventory_patch"
+	grep -Fq 'module_param_named(physical_sensor_mask, physical_sensor_mask, uint, 0444);' \
+		"$inventory_patch"
 	grep -Fq 'ret = hf_manager_create(hf_dev);' "$inventory_patch"
 	grep -Fq 'WRITE_ONCE(firmware_ready, true);' "$inventory_patch"
 	grep -Fq 'WRITE_ONCE(sensor_count, dev->support_size);' "$inventory_patch"
+	grep -Fq 'WRITE_ONCE(physical_sensor_mask, mask);' "$inventory_patch"
+	grep -Fq 'WRITE_ONCE(physical_sensor_mask, 0);' "$inventory_patch"
+	grep -Fq 'transceiver_clear_inventory();' "$inventory_patch"
 
 	if grep -El '^[[:space:]]*(mtk-mbox|mtk_rpmsg_mbox|mtk_tinysys_ipi|scp|hf_manager|sensorhub)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
@@ -582,29 +592,57 @@ validate_ci_rootfs_module_checks() {
 
 validate_compile_only_boundaries() {
 	workflow="$repo_root/.github/workflows/ci.yml"
+	mfg_rpc_patch="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch"
 
 	for source in \
 		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
+		0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch \
 		0046-dt-bindings-media-i2c-pd9302a.patch \
 		0047-media-i2c-pd9302a-vcm.patch \
+		0051-vendor-camera-tetris-compile-only-audit.patch.vendor \
 		0050-drm-panel-samsung-s6e8fc3x02.patch \
-		0048-vendor-eccci-core-linux-6.18-api.patch.vendor; do
+		0048-vendor-eccci-core-linux-6.18-api.patch.vendor \
+		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
+	[ "$(grep -Fc 'status = "disabled";' "$mfg_rpc_patch")" -ge 2 ]
+	grep -Fq 'MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_STATUS_IN_CTL' \
+		"$mfg_rpc_patch"
+	grep -Fq '/soc@0/syscon@13f90000 status)" = disabled' "$workflow"
+	grep -Fq '/soc@0/syscon@13f90000/power-controller status)" = disabled' \
+		"$workflow"
+
+	awk '
+		/patch -p1 -d "\$_connmods_dir"/ { target = "connmods"; next }
+		/patch -p1 -d "\$_devmods_dir"/ { target = "devmods"; next }
+		target == "connmods" && /0051-vendor-camera-tetris-compile-only-audit/ { camera = 1 }
+		target == "devmods" && /0048-vendor-eccci-core-linux-6.18-api/ { core = NR }
+		target == "devmods" && /0053-vendor-eccci-ccif-linux-6.18-compile-only/ { ccif = NR }
+		END { exit !(camera && core && ccif && core < ccif) }
+	' "$kernel_apkbuild"
 
 	grep -Fq '_build_pd9302a_compile_only' "$kernel_apkbuild"
 	grep -Fq 'drivers/media/i2c/pd9302a.o' "$kernel_apkbuild"
+	grep -Fq '_build_tetris_camera_audit_compile_only' "$kernel_apkbuild"
+	grep -Fq 'tetris-camera-audit.o' "$kernel_apkbuild"
 	grep -Fq '_build_ccci_core_compile_only' "$kernel_apkbuild"
 	grep -Fq 'ccci_core.o ccci_bm.o' "$kernel_apkbuild"
+	grep -Fq '_build_ccci_ccif_compile_only' "$kernel_apkbuild"
+	grep -Fq 'hif/ccci_ringbuf.o hif/ccci_hif_ccif.o' "$kernel_apkbuild"
 	grep -Fq '_build_s6e8fc3x02_compile_only' "$kernel_apkbuild"
 	grep -Fq 'drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o' "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=(y|m)$'" "$kernel_apkbuild"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
-	grep -Fq 'compile-only CCCI core must not be packaged' "$workflow"
+	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
+	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
+	grep -Fq -- "-name 'ccci*.ko*'" "$workflow"
+	grep -Fq -- "-name 'tetris-camera-audit.*'" "$workflow"
+	grep -Fq 'compile-only hardware code has a runtime loader' \
+		"$workflow"
 	grep -Fq 'compile-only S6E8FC3X02 module must not be packaged' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1

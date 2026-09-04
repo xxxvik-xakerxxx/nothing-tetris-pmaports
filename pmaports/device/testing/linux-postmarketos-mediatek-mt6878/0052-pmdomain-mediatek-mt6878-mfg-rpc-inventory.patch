@@ -1,0 +1,230 @@
+From f788006fb7e7aa564c8cee61b2eeb84c2d75b014 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 21:16:15 +0300
+Subject: [PATCH] pmdomain: mediatek: inventory MT6878 MFG RPC topology
+
+Describe the nested MT6878 MFG RPC domains from Nothing OS 4.1.
+
+Keep the RPC syscon and provider disabled. No MFG register is read or written at boot.
+
+SRAM, clock, reset and firmware sequencing remains a runtime gate.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../power/mediatek,power-controller.yaml      |  1 +
+ .../soc/mediatek/mediatek,mt6878-mfg-rpc.yaml | 37 +++++++++++++
+ arch/arm64/boot/dts/mediatek/mt6878.dtsi      | 53 +++++++++++++++++++
+ drivers/pmdomain/mediatek/mt6878-pm-domains.h | 31 +++++++++++
+ drivers/pmdomain/mediatek/mtk-pm-domains.c    |  4 ++
+ .../power/mediatek,mt6878-mfg-power.h         | 14 +++++
+ 6 files changed, 140 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/soc/mediatek/mediatek,mt6878-mfg-rpc.yaml
+ create mode 100644 include/dt-bindings/power/mediatek,mt6878-mfg-power.h
+
+diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+index 500d989..80c6a3f 100644
+--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
++++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+@@ -25,4 +25,5 @@ properties:
+     enum:
+       - mediatek,mt6735-power-controller
+       - mediatek,mt6795-power-controller
++      - mediatek,mt6878-mfg-power-controller
+       - mediatek,mt6893-power-controller
+diff --git a/Documentation/devicetree/bindings/soc/mediatek/mediatek,mt6878-mfg-rpc.yaml b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mt6878-mfg-rpc.yaml
+new file mode 100644
+index 0000000..cddbea7
+--- /dev/null
++++ b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mt6878-mfg-rpc.yaml
+@@ -0,0 +1,37 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/soc/mediatek/mediatek,mt6878-mfg-rpc.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: MediaTek MT6878 GPU MFG RPC
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description: |
++  The MFG RPC block controls the nested power domains used by the MT6878 GPU.
++  Its power-domain provider is kept disabled until regulator, clock and
++  firmware ownership have been validated on hardware.
++
++properties:
++  compatible:
++    items:
++      - const: mediatek,mt6878-mfg-rpc
++      - const: syscon
++      - const: simple-mfd
++
++  reg:
++    maxItems: 1
++
++  power-controller:
++    $ref: /schemas/power/mediatek,power-controller.yaml#
++
++required:
++  - compatible
++  - reg
++  - power-controller
++
++additionalProperties: false
++
++...
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+index d29ca04..e9e9b2b 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -9,7 +9,8 @@
+ #include <dt-bindings/interrupt-controller/arm-gic.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/phy/phy.h>
++#include <dt-bindings/power/mediatek,mt6878-mfg-power.h>
+ #include <dt-bindings/power/mediatek,mt6878-power.h>
+ #include <dt-bindings/reset/ti-syscon.h>
+ #include <dt-bindings/thermal/mediatek,lvts-thermal.h>
+ #include "mt6878-pinfunc.h"
+@@ -896,6 +897,58 @@
+ 			};
+ 		};
+ 
++		mfg_rpc: syscon@13f90000 {
++			compatible = "mediatek,mt6878-mfg-rpc", "syscon", "simple-mfd";
++			reg = <0x13f90000 0x10000>;
++			status = "disabled";
++
++			mfg_power: power-controller {
++				compatible = "mediatek,mt6878-mfg-power-controller";
++				#address-cells = <1>;
++				#size-cells = <0>;
++				#power-domain-cells = <1>;
++				status = "disabled";
++
++				power-domain@MT6878_MFG_PD_MFG1 {
++					reg = <MT6878_MFG_PD_MFG1>;
++					#address-cells = <1>;
++					#size-cells = <0>;
++					#power-domain-cells = <1>;
++
++					power-domain@MT6878_MFG_PD_MFG2 {
++						reg = <MT6878_MFG_PD_MFG2>;
++						#address-cells = <1>;
++						#size-cells = <0>;
++						#power-domain-cells = <1>;
++
++						power-domain@MT6878_MFG_PD_MFG3 {
++							reg = <MT6878_MFG_PD_MFG3>;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							#power-domain-cells = <1>;
++
++							power-domain@MT6878_MFG_PD_MFG9 {
++								reg = <MT6878_MFG_PD_MFG9>;
++								#power-domain-cells = <0>;
++							};
++						};
++
++						power-domain@MT6878_MFG_PD_MFG5 {
++							reg = <MT6878_MFG_PD_MFG5>;
++							#address-cells = <1>;
++							#size-cells = <0>;
++							#power-domain-cells = <1>;
++
++							power-domain@MT6878_MFG_PD_MFG10 {
++								reg = <MT6878_MFG_PD_MFG10>;
++								#power-domain-cells = <0>;
++							};
++						};
++					};
++				};
++			};
++		};
++
+ 		mfgpll: clock-controller@13fa0000 {
+ 			compatible = "mediatek,mt6878-mfgpll-pll-ctrl",
+ 				     "syscon";
+diff --git a/drivers/pmdomain/mediatek/mt6878-pm-domains.h b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
+index 6f3a71e..84a447f 100644
+--- a/drivers/pmdomain/mediatek/mt6878-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
+@@ -2,6 +2,7 @@
+ #ifndef __PMDOMAIN_MEDIATEK_MT6878_PM_DOMAINS_H
+ #define __PMDOMAIN_MEDIATEK_MT6878_PM_DOMAINS_H
+ 
++#include <dt-bindings/power/mediatek,mt6878-mfg-power.h>
+ #include <dt-bindings/power/mediatek,mt6878-power.h>
+ 
+ #include "mtk-pm-domains.h"
+@@ -71,4 +72,34 @@ static const struct scpsys_soc_data mt6878_scpsys_data = {
+ 	.num_bus_prot_blocks = ARRAY_SIZE(scpsys_bus_prot_blocks_mt6878),
+ };
+ 
++#define MT6878_MFG_DOMAIN(_name, _offset) { \
++	.name = _name, \
++	.sta_mask = GENMASK(31, 30), \
++	.ctl_offs = _offset, \
++	.pwr_sta_offs = 0x1200, \
++	.pwr_sta2nd_offs = 0x1204, \
++	.caps = MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_STATUS_IN_CTL, \
++}
++
++static const struct scpsys_domain_data
++scpsys_domain_data_mt6878_mfg[MT6878_MFG_PD_NR] = {
++	[MT6878_MFG_PD_MFG1] =
++		MT6878_MFG_DOMAIN("mfg1", 0x1070),
++	[MT6878_MFG_PD_MFG2] =
++		MT6878_MFG_DOMAIN("mfg2", 0x10a0),
++	[MT6878_MFG_PD_MFG3] =
++		MT6878_MFG_DOMAIN("mfg3", 0x10a4),
++	[MT6878_MFG_PD_MFG5] =
++		MT6878_MFG_DOMAIN("mfg5", 0x10ac),
++	[MT6878_MFG_PD_MFG9] =
++		MT6878_MFG_DOMAIN("mfg9", 0x10bc),
++	[MT6878_MFG_PD_MFG10] =
++		MT6878_MFG_DOMAIN("mfg10", 0x10c0),
++};
++
++static const struct scpsys_soc_data mt6878_mfg_scpsys_data = {
++	.domains_data = scpsys_domain_data_mt6878_mfg,
++	.num_domains = ARRAY_SIZE(scpsys_domain_data_mt6878_mfg),
++};
++
+ #endif /* __PMDOMAIN_MEDIATEK_MT6878_PM_DOMAINS_H */
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+index 0ea312c..fcc2f59 100644
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -912,6 +912,10 @@ static const struct of_device_id scpsys_of_match[] = {
+ 		.compatible = "mediatek,mt6878-power-controller",
+ 		.data = &mt6878_scpsys_data,
+ 	},
++	{
++		.compatible = "mediatek,mt6878-mfg-power-controller",
++		.data = &mt6878_mfg_scpsys_data,
++	},
+ 	{
+ 		.compatible = "mediatek,mt6893-power-controller",
+ 		.data = &mt6893_scpsys_data,
+diff --git a/include/dt-bindings/power/mediatek,mt6878-mfg-power.h b/include/dt-bindings/power/mediatek,mt6878-mfg-power.h
+new file mode 100644
+index 0000000..fb71c2b
+--- /dev/null
++++ b/include/dt-bindings/power/mediatek,mt6878-mfg-power.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
++#ifndef _DT_BINDINGS_POWER_MEDIATEK_MT6878_MFG_POWER_H
++#define _DT_BINDINGS_POWER_MEDIATEK_MT6878_MFG_POWER_H
++
++#define MT6878_MFG_PD_MFG1	1
++#define MT6878_MFG_PD_MFG2	2
++#define MT6878_MFG_PD_MFG3	3
++#define MT6878_MFG_PD_MFG5	5
++#define MT6878_MFG_PD_MFG9	9
++#define MT6878_MFG_PD_MFG10	10
++
++#define MT6878_MFG_PD_NR		11
++
++#endif /* _DT_BINDINGS_POWER_MEDIATEK_MT6878_MFG_POWER_H */

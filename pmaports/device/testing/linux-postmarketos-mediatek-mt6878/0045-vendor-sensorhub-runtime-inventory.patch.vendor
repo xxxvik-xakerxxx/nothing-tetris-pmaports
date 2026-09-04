@@ -9,19 +9,23 @@ though no control or notification IPI was registered.
 Propagate the IPI setup failure so the composite sensorhub module unwinds.
 Also expose read-only module parameters.  They become true/non-zero only
 after the SCP firmware ready handshake, shared-memory sensor-list transfer
-and HF manager registration all succeed.  Log the firmware-provided sensor
-name, vendor and gain then, providing a bounded runtime inventory without
-probing any physical bus from Linux.
+and HF manager registration all succeed.  A physical_sensor_mask records the
+presence of accelerometer, magnetometer, gyroscope, light and proximity
+classes while the log retains the firmware-provided model, vendor and gain.
+This provides a bounded runtime inventory without probing any physical bus
+from Linux.
 
-The parameters remain false and zero when the SCP handoff is absent or its
-firmware list is invalid.  This patch does not autoload the transport,
-reset the shared SCP, enable DT nodes or control sensor power.
+The parameters are cleared before every readiness transition and remain false
+and zero when the SCP handoff is absent, its firmware list is invalid, or the
+legacy restart path only restores an existing manager without a fresh list.
+This patch does not autoload the transport, reset the shared SCP, enable DT
+nodes or control sensor power.
 
 Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 ---
  .../sensor/2.0/sensorhub/sensor_comm.c        |  6 +++++-
- .../sensor/2.0/sensorhub/transceiver.c        | 31 ++++++++++++++++++++++++++++---
- 2 files changed, 33 insertions(+), 4 deletions(-)
+ .../sensor/2.0/sensorhub/transceiver.c        | 61 +++++++++++++++++++++++++++-
+ 2 files changed, 65 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_comm.c
 index 4f89ab4749fb..60f819979a01 100644
@@ -45,12 +49,13 @@ diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c b/drivers/
 index 887b3bae5008..bc9677f2a344 100755
 --- a/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
 +++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/transceiver.c
-@@ -64,6 +64,16 @@ struct transceiver_device {
+@@ -64,6 +64,28 @@ struct transceiver_device {
  };
  
  static struct transceiver_device transceiver_dev;
 +static bool firmware_ready;
 +static unsigned int sensor_count;
++static unsigned int physical_sensor_mask;
 +
 +module_param_named(firmware_ready, firmware_ready, bool, 0444);
 +MODULE_PARM_DESC(firmware_ready,
@@ -58,18 +63,30 @@ index 887b3bae5008..bc9677f2a344 100755
 +module_param_named(sensor_count, sensor_count, uint, 0444);
 +MODULE_PARM_DESC(sensor_count,
 +		 "Number of sensors reported by the SCP firmware inventory");
++module_param_named(physical_sensor_mask, physical_sensor_mask, uint, 0444);
++MODULE_PARM_DESC(physical_sensor_mask,
++		 "SCP inventory classes: bit0 accel, bit1 magnetic, bit2 gyro, "
++		 "bit3 light, bit4 proximity");
++
++static void transceiver_clear_inventory(void)
++{
++	WRITE_ONCE(firmware_ready, false);
++	WRITE_ONCE(sensor_count, 0);
++	WRITE_ONCE(physical_sensor_mask, 0);
++}
 +
  static DEFINE_RATELIMIT_STATE(ratelimit, 5 * HZ, 10);
  DEFINE_SPINLOCK(transceiver_fifo_lock);
  DECLARE_COMPLETION(transceiver_done);
-@@ -822,5 +832,6 @@ static int transceiver_create_manager(struct transceiver_device *dev)
+@@ -822,5 +843,7 @@ static int transceiver_create_manager(struct transceiver_device *dev)
  {
  	int ret = 0;
 +	unsigned int i;
++	unsigned int mask = 0;
  	struct hf_device *hf_dev = &dev->hf_dev;
  
  	memset(dev->support_list, 0, sizeof(dev->support_list));
-@@ -834,7 +845,18 @@ static int transceiver_create_manager(struct transceiver_device *dev)
+@@ -834,7 +856,39 @@ static int transceiver_create_manager(struct transceiver_device *dev)
  	/* refill support_list and support_size then create manager */
  	dev->hf_dev.support_list = dev->support_list;
  	dev->hf_dev.support_size = dev->support_size;
@@ -78,27 +95,45 @@ index 887b3bae5008..bc9677f2a344 100755
 +	if (ret)
 +		return ret;
 +
-+	WRITE_ONCE(sensor_count, dev->support_size);
-+	WRITE_ONCE(firmware_ready, true);
-+	for (i = 0; i < dev->support_size; i++)
++	for (i = 0; i < dev->support_size; i++) {
++		switch (dev->support_list[i].sensor_type) {
++		case SENSOR_TYPE_ACCELEROMETER:
++			mask |= 1U << 0;
++			break;
++		case SENSOR_TYPE_MAGNETIC_FIELD:
++			mask |= 1U << 1;
++			break;
++		case SENSOR_TYPE_GYROSCOPE:
++			mask |= 1U << 2;
++			break;
++		case SENSOR_TYPE_LIGHT:
++			mask |= 1U << 3;
++			break;
++		case SENSOR_TYPE_PROXIMITY:
++			mask |= 1U << 4;
++			break;
++		default:
++			break;
++		}
 +		pr_info("firmware sensor %u: %s (%s), gain %u\n",
 +			dev->support_list[i].sensor_type, dev->support_list[i].name,
 +			dev->support_list[i].vendor, dev->support_list[i].gain);
++	}
++	WRITE_ONCE(physical_sensor_mask, mask);
++	WRITE_ONCE(sensor_count, dev->support_size);
++	WRITE_ONCE(firmware_ready, true);
 +
 +	return 0;
  }
  
  static void transceiver_destroy_manager(struct transceiver_device *dev)
-@@ -867,7 +889,10 @@ static int transceiver_ready_notifier_call(struct notifier_block *this,
+@@ -867,7 +923,9 @@ static int transceiver_ready_notifier_call(struct notifier_block *this,
  {
--	if (event)
-+	if (event) {
++	transceiver_clear_inventory();
++
+ 	if (event)
  		transceiver_sensor_bootup(&transceiver_dev);
--
-+	} else {
-+		WRITE_ONCE(firmware_ready, false);
-+		WRITE_ONCE(sensor_count, 0);
-+	}
+ 
  	return NOTIFY_DONE;
  }
  

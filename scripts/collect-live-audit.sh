@@ -48,6 +48,36 @@ ip addr
 iw dev 2>/dev/null
 nmcli -t -f DEVICE,TYPE,STATE,CONNECTION dev 2>/dev/null
 
+echo "== usb gadget =="
+for udc in /sys/kernel/config/usb_gadget/*/UDC; do
+	[ -f "$udc" ] || continue
+	printf "%s=" "$udc"
+	cat "$udc"
+	find "${udc%/UDC}/configs" -maxdepth 2 -type l -print 2>/dev/null
+done
+
+echo "== power/typec =="
+for supply in /sys/class/power_supply/*; do
+	[ -d "$supply" ] || continue
+	echo "[$supply]"
+	for property in type status online present usb_type current_now current_max \
+		input_current_limit constant_charge_current voltage_now voltage_max \
+		capacity temp; do
+		[ -r "$supply/$property" ] || continue
+		printf "%s=" "$property"
+		cat "$supply/$property"
+	done
+done
+for property in /sys/class/typec/port*/data_role \
+	/sys/class/typec/port*/power_role \
+	/sys/class/typec/port*/power_operation_mode \
+	/sys/class/typec/port*/preferred_role \
+	/sys/class/typec/port*/orientation; do
+	[ -r "$property" ] || continue
+	printf "%s=" "$property"
+	cat "$property"
+done
+
 echo "== bluetooth =="
 bluetoothctl show 2>/dev/null
 
@@ -73,7 +103,7 @@ echo "== modules interesting =="
 lsmod | grep -Ei "conn|wlan|bt|gps|gnss|snd|mt6369|mt6685|aw882|rt6010|lvts|thermal|panthor|mali|ccci|dpmaif|sensor|scp|imgsensor|cam|v4l2|lm3644"
 
 echo "== dmesg interesting =="
-dmesg -T | grep -Ei "error|fail|warn|wlan0|hci0|Bluetooth|conninfra|wmt|gps|gnss|sound|audio|mt6369|aw882|rt6010|thermal|lvts|panthor|mali|ccci|dpmaif|sensor|scp|camera|imgsensor|v4l2|lm3644|usb0|ncm|gadget" | tail -n 700
+dmesg -T | grep -Ei "error|fail|warn|wlan0|hci0|Bluetooth|conninfra|wmt|gps|gnss|sound|audio|mt6369|aw882|rt6010|thermal|lvts|panthor|mali|ccci|dpmaif|sensor|scp|camera|imgsensor|v4l2|lm3644|usb0|ncm|gadget|typec|tcpm|charger|battery" | tail -n 700
 ' > "$outdir/full.txt" 2> "$outdir/ssh.err"
 
 printf '%s\n' "$outdir"

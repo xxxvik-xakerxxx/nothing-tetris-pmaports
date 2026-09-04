@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=128
+pkgrel=129
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -69,10 +69,12 @@ source="
 	0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 	0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 	0035-pmdomain-mediatek-mt6878-mfg0-data.patch
+	0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch
 	0046-dt-bindings-media-i2c-pd9302a.patch
 	0047-media-i2c-pd9302a-vcm.patch
 	0049-media-i2c-imx882-identity.patch
 	0050-drm-panel-samsung-s6e8fc3x02.patch
+	0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 	0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
 	0045-vendor-sensorhub-runtime-inventory.patch.vendor
@@ -81,6 +83,7 @@ source="
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
+	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -132,6 +135,10 @@ prepare() {
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0048-vendor-eccci-core-linux-6.18-api.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 }
 
 _vendor_kcflags() {
@@ -436,6 +443,38 @@ _build_ccci_core_compile_only() {
 	fi
 }
 
+_build_ccci_ccif_compile_only() {
+	_moddir="$_devmods_dir"/drivers/misc/mediatek/eccci
+	_hifdir="$_moddir"/hif
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	test -s "$builddir"/Module.symvers || \
+		die "CCCI CCIF validation requires the fully built kernel Module.symvers"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_ECCCI_DRIVER=m \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n \
+		CONFIG_MTK_AEE_IPANIC=n \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types \
+			-Werror=int-conversion \
+			$(_vendor_kcflags)" \
+		hif/ccci_ringbuf.o hif/ccci_hif_ccif.o
+
+	test -s "$_hifdir"/ccci_ringbuf.o || \
+		die "CCCI ring-buffer compile-only object is missing"
+	test -s "$_hifdir"/ccci_hif_ccif.o || \
+		die "CCCI CCIF compile-only object is missing"
+	if find "$_moddir" -name 'ccci*.ko' -print -quit | grep -q .; then
+		die "CCCI CCIF compile-only validation emitted a loadable module"
+	fi
+}
+
 _build_pd9302a_compile_only() {
 	_object="$builddir/drivers/media/i2c/pd9302a.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -479,6 +518,51 @@ _build_imx882_identity_compile_only() {
 		die "IMX882 identity validation must not produce a module"
 }
 
+_build_tetris_camera_audit_compile_only() {
+	_moddir="$_connmods_dir"/mtkcam/tetris-audit
+	_object="$_moddir"/tetris-camera-audit.o
+	_camera="$_connmods_dir"/mtkcam
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		tetris-camera-audit.o
+
+	test -s "$_object" || die "Tetris camera audit object is missing"
+	test ! -e "$_moddir"/tetris-camera-audit.ko || \
+		die "Tetris camera audit must not produce a module"
+
+	for _variant in \
+		imx882_mipi_raw imx882txd_mipi_raw \
+		gc16b3c_mipi_raw gc16b3ctxd_mipi_raw \
+		sc202cs_mipi_raw sc202cssj_mipi_raw; do
+		test -s "$_camera/imgsensor/src-v4l2/common/$_variant/Makefile" || \
+			die "missing Tetris sensor variant: $_variant"
+	done
+	for _layout in \
+		imx882_mtk_eeprom imx882txd_mtk_eeprom \
+		gc16b3c_mtk_eeprom gc16b3ctxd_mtk_eeprom; do
+		_layout_file="$_camera/cam_cal/src_v4l2/custom/layout/$_layout.c"
+		test -s "$_layout_file" || \
+			die "missing Tetris cam_cal layout: $_layout"
+		grep -Fq '.i2c_write_id = 0xA0' "$_layout_file"
+		grep -Fq '.max_size = 0x4000' "$_layout_file"
+		grep -Fq '.preload_size = 0x1500' "$_layout_file"
+	done
+
+	test ! -e "$_camera/cam_cal/src_v4l2/custom/layout/sc202cs_mtk_eeprom.c" || \
+		die "unexpected SC202CS cam_cal layout needs source review"
+	test ! -e "$_camera/cam_cal/src_v4l2/custom/layout/sc202cssj_mtk_eeprom.c" || \
+		die "unexpected SC202CSSJ cam_cal layout needs source review"
+	grep -Fq '#ifdef CAMSYS_ISP7SP_MT6878' \
+		"$_camera/camsys/isp7sp/cam/mtk_cam.c"
+	grep -Fq 'struct camsys_platform_data mt6878_data' \
+		"$_camera/camsys/isp7sp/cam/mtk_cam-plat-mt6878.c"
+}
+
 _build_s6e8fc3x02_compile_only() {
 	_object="$builddir/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -512,10 +596,12 @@ build() {
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
 	_build_s6e8fc3x02_compile_only
+	_build_tetris_camera_audit_compile_only
 	_build_imx882_identity_compile_only
 	_build_pd9302a_compile_only
 	_build_ccci_util_compile_only
 	_build_ccci_core_compile_only
+	_build_ccci_ccif_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
@@ -625,18 +711,21 @@ a6c28a29be81449b927b1bf8f0ccbc5f2e7bd038487ed34601b844fe49ab395caef73524aa2f2bf7
 6c4064ec0f6c6287b5dcc1cd76baf1d25dbbc6adac6b3e841b5e2ebe1660b947ceab90bb291224f796dd0872addfed21eab16fde9c331306d476884d98327866  0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch
 9991e7ba81d46059c6a6afff0480c3cc7173b1f39c2bfcda2b12e527317b0a37e6e65077740bddbd5b86583c0f8f52ffd981de937836e298d8efedd6b30592ec  0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch
 910bf1a0f85491ee3931c005f458e8314205b650ef20232f155e98b795b0a7f7dfdfdcb2e339019f05eb952eae3cc54c3723568df85486eeeca19da1065aed69  0035-pmdomain-mediatek-mt6878-mfg0-data.patch
+b23be015a0dd8335b37189656edf32d350a808bfdcbc249698e29d5656394d72d3cf78a158a79b845ce5704fcf52db68abeb324f4196b4f531f062135376039b  0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch
 45a6c19c379011df1ee3fc65eddcdb8db5e8966a5f960aa783d625be5fcadda3051f6da79323a962bd1c3a55c186eb5eaa4d10bad3725e9e06533875cfdd7bc6  0046-dt-bindings-media-i2c-pd9302a.patch
 8fb270dfe47c9a9a8f94fec5a518951dd07bef7cf7f78d03509ab9454078c208109d6df105ba64393a24abc141b14cffd1bfa7bc9e18771a21a42d2122500538  0047-media-i2c-pd9302a-vcm.patch
 f10207ccadc5f3f731fb75930c3f411cbfd1d02aab46da0a401be566a5dc62e1c851e6e2a688148e18f7311372f7589187fb190ca4225f9eb07d38bd8fdd46e7  0049-media-i2c-imx882-identity.patch
+b522b6bab293f8dc9f944bc02235f9405d0ad3fe479c743a4d4f7154bfbcc6bd2166c9eaa61a459c27996ee6384e16de79792bf67fe36ebe649803bff24dd981  0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 748244c2b455b8457f69ae572ef24e43675cff6626bbfa35159fb5f135fbbc564ae4af72ba5e2473f8c249562448f7b70d0fcb95feca8a703ce87f598d1e9d3b  0050-drm-panel-samsung-s6e8fc3x02.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
 bf43a29d59135c5e3e5dd975245405ddc8894792cc8e377b785aea78842592118aa76dabc2d7288d5313b32ac42251a0fe20761e9473a3b03b0e1b5ca66a377f  0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor
-81d50a030158a21e8b3e3673eb63f5375c4ff70a4e5370a6704304216d1e060049dea309b273d9a73f0c06a02e97688e30e179d7239c1a18ca58c3b49fc5ccd8  0045-vendor-sensorhub-runtime-inventory.patch.vendor
+aad94b1a8afcc80d2c449f14c76f4b0d5a50dd9b2fd9ff1006fdfa671c71ecfe239a593a93f0f3568a4113dbbf1c4e74d3972e94c12822d71af175a04156f2e5  0045-vendor-sensorhub-runtime-inventory.patch.vendor
 1fd6fa4f2c7afb9cc741c181194ceb2fcac7754a19e7ea0b5207ab546d108c53caf2560e4be8d415cb7681b94dd99ef52fdd14ea43a26ca80c8d35e1594a28d3  0036-vendor-scp-linux-6.18-api.patch.vendor
 affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85f554633b8cc2e112e5a16726818cd0d191148065d19a9b55  0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
+4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

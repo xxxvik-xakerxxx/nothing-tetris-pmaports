@@ -13,6 +13,12 @@ descriptor and enables the existing MT6319-compatible regulator provider
 config. There is still no VSRAM/VGPU DT child or GPU consumer, so the candidate
 does not register or switch a GPU rail at runtime.
 
+Patch `0052` inventories the separate MFG RPC register block and nested domain
+IDs 1, 2, 3, 5, 9 and 10. Both the outer `mfg_rpc` syscon and inner provider
+remain disabled, and every domain carries `KEEP_DEFAULT_OFF`; the shipped DT
+therefore creates no platform device and reads or writes no MFG RPC register.
+This is static topology evidence only, not a usable GPU power provider.
+
 Live logs only prove that the inherited device tree reserves the following
 memory and that the generic IOMMU core starts in translated, strict mode:
 
@@ -69,9 +75,25 @@ patch `0018`:
   `ARCH=arm64 LLVM=1` in an amd64 Alpine container.
 
 The register offsets, SRAM bits, status bits, and both bus-protection masks
-match the Nothing OS 4.1 source. Keep `0035` out of the stable package queue
-until the reboot-mode change has passed CI and live validation; it has no
-functional benefit on its own.
+match the Nothing OS 4.1 source. `0035` is already in the active package but
+adds no DT child, so it has no runtime effect or functional benefit on its own.
+
+## Patch 0052 assessment
+
+`0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch` applies with zero fuzz
+after all 39 active mainline-kernel patches on exact source `d84b264a`. Direct
+preprocessing and DT compilation pass; the remaining unit-address and
+reserved-memory warnings predate this patch. The new binding also passes local
+YAML lint. Full `dt_binding_check` remains a CI gate because local `dtschema`
+is unavailable.
+
+Sparse domain IDs are deliberate. The generic scpsys driver rejects an
+undefined ID because its `sta_mask` is zero, and onecell lookup returns
+`-ENOENT` for an unregistered hole. Nested domain traversal does not honor a
+child domain's `status`, so the safety boundary depends on both provider levels
+remaining disabled. Enabling the provider would immediately read each control
+offset and would permit later consumers to write it; that is forbidden until
+clock, reset, SRAM and firmware ownership are complete.
 
 ## Blocking dependencies
 
@@ -83,9 +105,9 @@ functional benefit on its own.
    VSRAM_CPUM without a DT consumer. VGPU voltage/mode handling, enable state,
    provider USID and cold-boot ownership must be validated before adding a
    disabled DT child, and the first probe must not change either rail.
-3. **MFG RPC and clocks.** Patch `0009` provides PLLs and top muxes only. It
-   does not model the MFG RPC subdomains, gate/reset ordering, stack clock, or
-   vendor SCMI/GPUEB frequency ownership.
+3. **MFG RPC and clocks.** Patch `0052` inventories the disabled RPC subdomains,
+   while patch `0009` provides PLLs and top muxes. Neither proves gate/reset/SRAM
+   ordering, stack clock, or vendor SCMI/GPUEB frequency ownership.
 4. **Firmware.** Panthor derives
    `arm/mali/arch<major>.<minor>/mali_csffw.bin` from the live GPU ID. No CSF
    firmware is packaged in this port. The exact GPU ID, redistributable
@@ -104,10 +126,11 @@ functional benefit on its own.
 1. Keep the proven reboot-to-fastboot rollback while GPU remains absent.
 2. Complete the MT6319 USID 6 VGPU provider description with no enabled
    consumer; verify binding, voltage/mode tables and cold-state ownership.
-3. Add MFG0 keep-default-off policy and a disabled DT domain node. On a clean
-   image, prove provider registration does not alter the MFG0 register or
-   USB/Wi-Fi behavior.
-4. Model MFG RPC clocks/domains and validate register ownership against B4.1.
+3. Validate the disabled MFG RPC inventory in CI and confirm no platform device
+   or register access appears on a clean image.
+4. Complete MFG0/MFG RPC clock, reset, SRAM and firmware ownership, then use a
+   separate diagnostic DT to prove provider registration does not alter power
+   state or USB/Wi-Fi behavior.
 5. Identify and package the exact Panthor CSF firmware by GPU architecture.
 6. Add a disabled standards-compliant MT6878/`arm,mali-valhall-csf` node. Validate
    binding and DT first; enable it only in a recovery image with a persistent

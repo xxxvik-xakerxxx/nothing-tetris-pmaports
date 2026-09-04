@@ -2,6 +2,74 @@
 
 Status: `Broken`; runtime remains disabled.
 
+## Tetris sensor hardware inventory
+
+The saved stock `dumpsys sensorservice` observation identifies these SCP
+endpoints.  The endpoint strings prove the stock firmware-facing identity;
+they do not prove that Linux owns the underlying bus or that a similarly named
+mainline driver is register-compatible.
+
+| Function | Stock endpoint | Confidence | Linux ownership |
+| --- | --- | --- | --- |
+| Accelerometer | `icm4n607_acc` | Observed on Tetris | SCP firmware |
+| Gyroscope | `icm4n607_gyro` | Observed on Tetris | SCP firmware |
+| Ambient light | `ltr569_als` | Observed on Tetris | SCP firmware |
+| Proximity | `ltr569_ps` | Observed on Tetris | SCP firmware |
+| Magnetometer | Model not preserved in the available dump | Class advertised by stock product configuration only | SCP inventory must identify it |
+| SAR | `SAR-hx9031as` | Observed on Tetris; outside the requested five basic classes | SCP firmware |
+
+The exact Nothing OS 4.1 device-module source at
+`ee2be53cb75670b548948636a0db1d1ff112bf12` contains no Tetris I2C/SPI child
+nodes for these physical sensors.  Its AP-side sensor code is the generic
+MediaTek 2.0 transport.  The stock DTBO likewise exposes no matching physical
+motion, light, proximity or magnetic node.  Therefore adding guessed I2C
+addresses for ICM-426xx or LTR-559-family drivers would create a second bus
+owner beside SCP and is rejected.
+
+## Exact AP-side chain
+
+The source and package dependency chain is:
+
+1. LK/preloader selects and authenticates the active `scp1`/`scp2` image and
+   supplies TCM region-info plus loader/shared-memory handoff.
+2. `mtk-mbox.ko` provides the vendor mailbox controller.
+3. `mtk_rpmsg_mbox.ko` and `mtk_tinysys_ipi.ko` provide the vendor IPI path.
+4. `scp.ko` consumes the firmware/handoff and exports `scp_ipidev`, ready
+   notifiers and reserve-memory lookup helpers.
+5. `sensorhub.ko` registers control/notify IPIs, configures SCP shared memory,
+   requests the firmware sensor list and registers one HF device.
+6. `hf_manager.ko` exposes `/dev/hf_manager`; a future native userspace bridge
+   must translate that ABI to standard Linux sensor consumers.
+
+All six modules are built and installed under
+`extra/mediatek-sensors/` by the kernel package.  None is in `modules-initfs`,
+a modules-load file, a device preset or an automatic service.  The normal
+kernel also builds `inv-icm42600-i2c.ko` and `ltr501.ko`, but they have no
+matching DT devices and are only historical candidates, not the active Tetris
+chain.  No model-specific magnetometer driver has been selected.
+
+The manual-only inventory patch exports `firmware_ready`, `sensor_count` and
+`physical_sensor_mask`.  Mask bits 0..4 represent accelerometer,
+magnetometer, gyroscope, light and proximity respectively.  The mask and the
+firmware-provided model/vendor log become valid only after the SCP handshake,
+shared-memory list transfer and HF manager registration all succeed.
+
+## Compile and runtime boundaries
+
+There is no known compile blocker in the currently packaged AP bridge: the
+mailbox, RPMsg, IPI, SCP, HF manager and sensorhub modules were built together
+in the prior CI artifact.  The inventory-mask revision still requires a fresh
+targeted build before it can enter an image.
+
+The first runtime blocker remains earlier than sensor enumeration:
+`scp.ko` waits for the separate `mediatek,scp-dvfs` driver and returns
+`-ETIMEDOUT` after three seconds because the target DT has no valid, proven
+DVFS provider chain.  The clean installed image reproduced this boundary;
+`sensorhub.ko` consequently cannot bind and no firmware inventory is
+available.  The same boot also failed to reserve the LK-derived SCP loader
+range, so enabling a guessed DVFS node would merely move execution into an
+unvalidated firmware/TCM/shared-memory handoff.
+
 ## First causal blocker
 
 The Nothing OS 4.1 SCP initialization registers a separate

@@ -283,23 +283,32 @@ jobs:
             echo "legacy wmt_drv module must not be packaged"
             exit 1
           fi
-          if find "$rootfs/lib/modules" -name ccci_util_lib.ko -print -quit | grep -q .; then
-            echo "compile-only ccci_util_lib module must not be packaged"
+          if find "$rootfs/lib/modules" -name 'ccci*.ko*' \
+              -print -quit | grep -q .; then
+            echo "compile-only CCCI modules must not be packaged"
             exit 1
           fi
-          if find "$rootfs/lib/modules" -name pd9302a.ko -print -quit | grep -q .; then
+          if find "$rootfs/lib/modules" -name 'pd9302a.ko*' \
+              -print -quit | grep -q .; then
             echo "compile-only pd9302a module must not be packaged"
             exit 1
           fi
-          if find "$rootfs/lib/modules" -name panel-samsung-s6e8fc3x02.ko \
+          if find "$rootfs/lib/modules" -name 'tetris-camera-audit.*' \
+              -print -quit | grep -q .; then
+            echo "compile-only Tetris camera audit must not be packaged"
+            exit 1
+          fi
+          if find "$rootfs/lib/modules" -name 'panel-samsung-s6e8fc3x02.ko*' \
               -print -quit | grep -q .; then
             echo "compile-only S6E8FC3X02 module must not be packaged"
             exit 1
           fi
-          if find "$rootfs/lib/modules" \
-              \( -name ccci_md_all.ko -o -name ccci_all.ko \) \
-              -print -quit | grep -q .; then
-            echo "compile-only CCCI core must not be packaged"
+          if grep -RIlE \
+              '(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci[_-])' \
+              "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
+              "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
+              "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then
+            echo "compile-only hardware code has a runtime loader"
             exit 1
           fi
           bt_module=$(find "$rootfs/lib/modules" -name bt_drv_6878.ko -print -quit)
@@ -344,8 +353,11 @@ jobs:
           check_contains "direct two-channel DL6 transport" \
             'PlaybackPCM "hw:${CardId},6"' \
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
-          check_contains "mono speaker remap" \
-            'sink_name=tetris_mono_speaker' \
+          check_contains "mono speaker sink identity" \
+            'mono_sink=tetris_mono_speaker' \
+            "$rootfs/usr/libexec/nothing-tetris-audio-policy"
+          check_contains "deferred mono speaker remap" \
+            'pactl load-module module-remap-sink' \
             "$rootfs/usr/libexec/nothing-tetris-audio-policy"
           check_not_contains "eager mono speaker remap" \
             'module-remap-sink' \
@@ -358,6 +370,10 @@ jobs:
             "$rootfs/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset"
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
             /gnss@18c00000 status)" = okay
+          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+            /soc@0/syscon@13f90000 status)" = disabled
+          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+            /soc@0/syscon@13f90000/power-controller status)" = disabled
           for radio_module in wlan_drv_gen4m_6878 bt_drv_6878; do
             if rootfs_modinfo -F depends "$radio_module" | tr ',' '\n' | \
                 grep -Fxq wmt_drv; then

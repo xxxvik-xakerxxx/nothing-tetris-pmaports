@@ -1,0 +1,110 @@
+diff --git a/mtkcam/tetris-audit/Makefile b/mtkcam/tetris-audit/Makefile
+new file mode 100644
+index 0000000..1ca53c3
+--- /dev/null
++++ b/mtkcam/tetris-audit/Makefile
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: GPL-2.0-only
++
++obj-m += tetris-camera-audit.o
++
++ccflags-y += \
++	-I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/imgsensor/inc
+diff --git a/mtkcam/tetris-audit/tetris-camera-audit.c b/mtkcam/tetris-audit/tetris-camera-audit.c
+new file mode 100644
+index 0000000..3757213
+--- /dev/null
++++ b/mtkcam/tetris-audit/tetris-camera-audit.c
+@@ -0,0 +1,91 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Compile-only Nothing Tetris camera inventory audit.
++ *
++ * This object deliberately has no module metadata, init routine, device
++ * registration or hardware access. It keeps the B4.1 board inventory tied to
++ * the sensor IDs exported by the matching MediaTek device-module source.
++ */
++
++#include <linux/build_bug.h>
++#include <linux/compiler_attributes.h>
++#include <linux/kernel.h>
++#include <linux/types.h>
++
++#include "kd_imgsensor.h"
++
++#define TETRIS_EEPROM_ADDR	0x50
++#define TETRIS_EEPROM_MAX_SIZE	0x4000
++#define TETRIS_EEPROM_PRELOAD	0x1500
++
++enum tetris_camera_role {
++	TETRIS_CAMERA_MAIN,
++	TETRIS_CAMERA_FRONT,
++	TETRIS_CAMERA_AUX,
++};
++
++struct tetris_sensor_variant {
++	enum tetris_camera_role role;
++	const char *driver;
++	u16 sensor_id;
++	u8 i2c_bus;
++	u8 i2c_addr;
++	u8 csi_port;
++	bool has_external_eeprom;
++};
++
++struct tetris_cam_cal_layout {
++	const char *layout;
++	u16 sensor_id;
++	u8 i2c_addr;
++	u16 max_size;
++	u16 preload_size;
++};
++
++static_assert(IMX882_SENSOR_ID == 0x8202);
++static_assert(IMX882TXD_SENSOR_ID == 0x8203);
++static_assert(GC16B3C_SENSOR_ID == 0x16b3);
++static_assert(GC16B3CTXD_SENSOR_ID == 0x16b4);
++static_assert(SC202CS_SENSOR_ID == 0xeb52);
++static_assert(SC202CSSJ_SENSOR_ID == 0xeb53);
++
++/* Bus/address/CSI wiring was manually reviewed from the pinned Tetris DTS. */
++/* csi_port 0x2a encodes the vendor DTS CSI2A selector. */
++static const struct tetris_sensor_variant tetris_sensor_variants[] __used = {
++	{ TETRIS_CAMERA_MAIN, "imx882_mipi_raw", IMX882_SENSOR_ID,
++	  8, 0x1a, 1, true },
++	{ TETRIS_CAMERA_MAIN, "imx882txd_mipi_raw", IMX882TXD_SENSOR_ID,
++	  8, 0x1a, 1, true },
++	{ TETRIS_CAMERA_FRONT, "gc16b3c_mipi_raw", GC16B3C_SENSOR_ID,
++	  4, 0x10, 0, true },
++	{ TETRIS_CAMERA_FRONT, "gc16b3ctxd_mipi_raw", GC16B3CTXD_SENSOR_ID,
++	  4, 0x10, 0, true },
++	{ TETRIS_CAMERA_AUX, "sc202cs_mipi_raw", SC202CS_SENSOR_ID,
++	  7, 0x36, 0x2a, false },
++	{ TETRIS_CAMERA_AUX, "sc202cssj_mipi_raw", SC202CSSJ_SENSOR_ID,
++	  7, 0x36, 0x2a, false },
++};
++
++static const struct tetris_cam_cal_layout tetris_cam_cal_layouts[] __used = {
++	{ "imx882_mtk_eeprom", IMX882_SENSOR_ID, TETRIS_EEPROM_ADDR,
++	  TETRIS_EEPROM_MAX_SIZE, TETRIS_EEPROM_PRELOAD },
++	{ "imx882txd_mtk_eeprom", IMX882TXD_SENSOR_ID, TETRIS_EEPROM_ADDR,
++	  TETRIS_EEPROM_MAX_SIZE, TETRIS_EEPROM_PRELOAD },
++	{ "gc16b3c_mtk_eeprom", GC16B3C_SENSOR_ID, TETRIS_EEPROM_ADDR,
++	  TETRIS_EEPROM_MAX_SIZE, TETRIS_EEPROM_PRELOAD },
++	{ "gc16b3ctxd_mtk_eeprom", GC16B3CTXD_SENSOR_ID,
++	  TETRIS_EEPROM_ADDR, TETRIS_EEPROM_MAX_SIZE,
++	  TETRIS_EEPROM_PRELOAD },
++};
++
++static_assert(ARRAY_SIZE(tetris_sensor_variants) == 6);
++static_assert(ARRAY_SIZE(tetris_cam_cal_layouts) == 4);
++
++/*
++ * SC202CS variants are intentionally absent from tetris_cam_cal_layouts:
++ * B4.1 has no auxiliary EEPROM node or matching cam_cal layout. Their vendor
++ * subdrivers perform module-ID handling and must be audited separately.
++ *
++ * SENINF is likewise not linked here. The Tetris path is MT6878 ISP7SP, but
++ * compiling or loading it would pull in camera power, DMA/IOMMU and CCU
++ * ownership that is outside this fail-closed audit.
++ */

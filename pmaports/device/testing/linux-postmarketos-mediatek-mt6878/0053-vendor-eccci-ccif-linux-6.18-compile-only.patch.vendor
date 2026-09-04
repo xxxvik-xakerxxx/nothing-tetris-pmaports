@@ -1,0 +1,52 @@
+From 0c7ce5e29eb4a457366eeb6db0f2321b373eb6bc Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Fri, 4 Sep 2026 11:34:21 +0300
+Subject: [PATCH] eccci: adapt CCIF compile-only objects to Linux 6.18
+
+Carry only the API adaptations needed to compile the Tetris B4.1 CCIF
+ring-buffer and host-interface objects against Linux 6.18. The exact CCCI SiP
+service ID is guarded compile evidence; this change does not prove or enable
+its runtime ABI.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+index 583f865..88de802 100644
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+@@ -35,6 +35,11 @@
+ #include "ccci_hif_ccif.h"
+ #include "modem_secure_base.h"
+ 
++/* Exact Nothing OS 4.1 MT6878 CCCI service ID; runtime support is gated. */
++#ifndef MTK_SIP_KERNEL_CCCI_CONTROL
++#define MTK_SIP_KERNEL_CCCI_CONTROL MTK_SIP_SMC_CMD(0x505)
++#endif
++
+ #if IS_ENABLED(CONFIG_OF)
+ #include <linux/of.h>
+ #include <linux/of_fdt.h>
+@@ -436,7 +441,8 @@ static void md_ccif_traffic_work_func(struct work_struct *work)
+ 
+ static void md_ccif_traffic_monitor_func(struct timer_list *t)
+ {
+-	struct md_ccif_ctrl *ccif_ctrl = from_timer(ccif_ctrl, t, traffic_monitor);
++	struct md_ccif_ctrl *ccif_ctrl =
++		timer_container_of(ccif_ctrl, t, traffic_monitor);
+ 
+ 	schedule_work(&ccif_ctrl->traffic_info.traffic_work_struct);
+ }
+@@ -956,7 +962,7 @@ static void md_ccif_reset_queue(unsigned char hif_id, unsigned char for_start)
+ 		mod_timer(&ccif_ctrl->traffic_monitor,
+ 			jiffies + CCIF_TRAFFIC_MONITOR_INTERVAL * HZ);
+ 	else
+-		del_timer(&ccif_ctrl->traffic_monitor);
++		timer_delete(&ccif_ctrl->traffic_monitor);
+ }
+ 
+ static int md_ccif_send_data(unsigned char hif_id, int channel_id)
+-- 
+2.50.1 (Apple Git-155)
