@@ -54,18 +54,19 @@ The measured charging path, source-classification blocker and idle-drain test
 contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
-The installed `pkgrel=127` image is pmaports commit
-`fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed and
-published images whose manifest pins U-Boot `b76e47e`. That exact U-Boot is
-installed in both boot partitions and the CI image is installed as kernel
-`6.18.0 #128`; clean boot, warm reboot and exact 32 MiB USB SSH transfers pass.
-The installed device package remains `device-nothing-tetris-8-r3`. Audio CI
-candidate `384f155` uses `8-r4` and moves the PulseAudio speaker policy from
-every user manager to the real graphical session while excluding the `greetd`
-account; it is not installed or hardware-validated yet.
-The following isolated GNSS source candidate uses kernel `pkgrel=128` and
-device package `8-r5` to package only Tetris profile `gps_drv_dl_v051`; it is
-manual-only and has not been installed.
+The installed image is pmaports commit
+`3571519b667936352a423200a52b7ada6975084a`. CI run `33867526529` passed every
+build, image and rootfs gate and pins U-Boot `b76e47e`, which remains installed
+in both boot partitions. A clean flash of `super` and `userdata` boots kernel
+package `6.18-r129` (`6.18.0 #130`) with device package
+`device-nothing-tetris-8-r5`; automatic root expansion, USB SSH, an exact
+32 MiB transfer and USB recovery after a normal reboot pass. The audio session
+ownership fix is installed but still needs physical lifecycle regression.
+GNSS v051 is installed manual-only. After correcting the installed U-Boot from
+`8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
+transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
+USB/Wi-Fi/Bluetooth intact. No position fix is claimed. Camera, GPU and CCCI
+additions remain compile/static-only.
 
 Per-device data remains outside the image. The live phone exposes separate
 `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
@@ -77,17 +78,17 @@ its exact calibration records without committing whole dumps or unique IDs.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in `boot_a` and `boot_b`; normal boot and Linux `reboot bootloader` both pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
-| Boot | Kernel boot | Works | CI image `fdeeda0` boots mainline `6.18.0 #128` to userspace on clean and warm boots. |
+| Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in the 16 MiB `lk_a` and `lk_b` partitions; fastboot reports that exact version. Normal boot and Linux `reboot bootloader` pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
+| Boot | Kernel boot | Works | CI image `3571519` boots mainline `6.18.0 #130` to userspace after a clean flash and normal warm reboot. |
 | Display | Simple framebuffer | Partial | Inherited U-Boot framebuffer provides basic scanout through `simpledrm`, but has no native brightness, vblank/page-flip or validated suspend/resume path and desktop rendering is CPU-bound. |
 | Display | Native DSI/panel | Broken | `pkgrel=127` stages a bounded S6E8FC3X02 driver and binding for a compile-only object. The shipped config remains off and no module or DT client is packaged. MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY, lane-rate validation and an opt-in DT graph remain. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
-| Power | Battery/USB telemetry | Partial | MT6375 telemetry and source-current policy work. Kernel #128 used the 500 mA fallback when TCPM reported no limit, then independently consumed a real PD contract from a power bank at 5 V / 2 A and set AICR/ICHG to 2 A. The battery was already at 100%, so charge rate, taper and thermals remain unproven; native BC1.2 SDP/CDP/DCP classification is still absent. |
+| Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
 | Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. Existing captures kept USB connected and the controller runtime-active, so they cannot identify the unplugged cause. The next valid test is local, physically unplugged and screen-off, comparing separate Wi-Fi-on/off boots with coulomb, wake and IRQ deltas. |
 | Power | Thermal management | Partial | The installed baseline exposes all 24 MT6878 LVTS zones with plausible polling-mode values. Hardware trips/IRQ routing and sustained-load lifecycle tests remain disabled. |
-| USB | Device mode / NCM | Partial | Kernel #128 automatically exposes `usb0`; exact 32 MiB SSH transfers passed after its clean boot and warm reboot. Repeated physical reconnect and suspend/resume remain. |
+| USB | Device mode / NCM | Partial | Kernel #130 automatically exposes `usb0`; USB SSH and an exact 32 MiB transfer pass after clean install, and USB returns automatically after a normal reboot. Repeated physical reconnect and suspend/resume remain. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPM reports orientation, sink power and device data role. A 5 V / 2 A PD contract was observed without changing the installed image; PPS, alternate voltages, detach/reconnect and suspend remain unvalidated. Peripheral/NCM stays the safe data role and host VBUS ownership remains disabled. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | A bounded `feedbackd` effect works physically on clean kernel #128 and stops without affecting USB. Suspend/resume and three cold boots remain. |
@@ -102,7 +103,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean kernel #128 registers `wlan0`; association, DHCP, default routing, DNS and HTTPS pass while USB and Bluetooth remain active. A later `VH-HOME` association completed an exact 64 MiB SSH stream while 5 V / 2 A charging remained selected. Cold reconnect, suspend/resume and sustained bidirectional stress remain. |
 | Connectivity | Bluetooth | Partial | Native BlueZ `hci0` performs discovery and found more than 40 nearby devices while USB/Wi-Fi survived. One bounded scan left `Discovering` stuck until only `bluetooth.service` was restarted, so pair/reconnect, profile and teardown lifecycle work remains. |
-| Connectivity | GPS/GNSS | Partial | Installed v050 creates both `gpsdl` nodes and a bounded link0 open/close preserves USB, Wi-Fi and Bluetooth, but boot-info ioctl 23 returns `EFAULT` because v050 links a non-ATF stub. Stock-derived Tetris property and module trees select v051; source now packages v051 as a manual-only clean-boot candidate. |
+| Connectivity | GPS/GNSS | Partial | Installed #130 manual v051 receives the validated GPS EMI handoff, creates both `gpsdl` nodes and completes bounded link0 open, ATF boot-info ioctl 23 and close. No owner remains and USB/Wi-Fi/Bluetooth survive. MNL integration, satellite acquisition and a timed position fix remain. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. Object-only LLVM 21 gates now compile the CCCI core plus CCIF ring-buffer/host-interface boundary with the guarded stock B4.1 service ID `0x505`; CI forbids a CCIF `.ko`. Trusted-firmware semantics, handoff memory, DT, link/modpost and runtime remain unproven. |
 | Sensors | Rotation/accelerometer | Broken | Stock identifies SCP-owned ICM4N607 accel/gyro, LTR569 light/proximity and HX9031AS SAR endpoints. The vendor SCP probe still stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A manual-only inventory mask remains false until the full SCP handshake succeeds; no publication, DVFS or sensorhub is enabled. |

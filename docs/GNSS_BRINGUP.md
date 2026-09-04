@@ -2,11 +2,10 @@
 
 ## Current boundary
 
-The installed kernel package uses the Nothing OS 4.1 MT6878 v050 data-link
-module from commit `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. The next source
-candidate builds only stock-derived Tetris profile v051 from the same commit.
-Patch `0020`
-publishes its DT platform device. The firmware package installs the exact
+The installed kernel package `6.18-r129` uses only the stock-derived Tetris
+v051 data-link module from Nothing OS 4.1 commit
+`e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. Patch `0020` publishes its DT
+platform device. The firmware package installs the exact
 MT6878/MT6631 GNSS payload as
 `connsys_gnss_mt6878_mt6631.bin`.
 
@@ -16,15 +15,18 @@ it is not a standard NMEA stream and cannot be passed directly to `gpsd`.
 Opening a device starts the associated GNSS link, so transport staging and
 position testing must remain separate experiments.
 
-The installed pmaports image includes the exact Tetris LNA pinctrl states and
-installed U-Boot `b76e47e` writes the 64-bit GPS EMI address only after the
-existing reserved-memory layout and secure EMI mappings validate. Their joint
-transport and link-power behavior is now tested on the phone. No position fix
-is claimed.
+The installed pmaports image includes the exact Tetris LNA pinctrl states.
+Fastboot proved the executable loader was initially old `8aa048f`, despite
+earlier documentation claiming `b76e47e` in the wrong `boot_a/b` partitions.
+After the hash-verified LK image was installed in the actual `lk_a/b`
+partitions, fastboot reported `gb76e47e77430` and live DT exposed the exact
+eight-byte `emi-addr = 0x86a00000` plus `emi-size = 0x100000`. v051 consumes
+that handoff and initializes its reserved DMA buffers. No position fix is
+claimed.
 
 `nothing-tetris-gnss-transport.service` remains intentionally static and
-manual. The next package requires the proven connectivity service, checks the
-packaged firmware, loads `gps_drv_dl_v051`, and verifies both character
+manual. It requires the proven connectivity service, checks the packaged
+firmware, loads `gps_drv_dl_v051`, and verifies both character
 devices. It never opens either device, never loads modem modules, and does not
 unload the shared connectivity stack on stop.
 
@@ -98,14 +100,25 @@ currently active shared radio stack.
 
 ## Next gate
 
-The v051 compile/package candidate is now staged in source. Its next gate is
-patch/package CI. Run `33532308762` reached the v051 ATF objects and proved
-that mainline's SiP header lacks `MTK_SIP_KERNEL_GPS_CONTROL`; the exact B4.1
-header defines it as `MTK_SIP_SMC_CMD(0x537)`. The compatibility patch now
-carries that identifier behind `#ifndef`, which is compile evidence rather
-than proof that installed trusted firmware implements every operation. After
-CI, use a clean boot that loads only that profile and
-repeats transport plus read-only boot-info tests. Then a maintainable MediaTek
+On 2026-09-04, the first clean #130 probe under old executable U-Boot `8aa048f`
+created both devices but logged a zero GPS EMI handoff, so neither link was
+opened. After installing `b76e47e` in `lk_a/b`, boot
+`845c9536-699f-4b87-8c27-23a3605314a1` repeated transport with the exact
+reserved-memory values and no fallback errors. A separate clean boot
+`9c99400e-9678-4e58-92b7-7948a5998cc8` opened only link0, issued read-only
+ioctl 23 with its exact 20-byte result structure, and returned successfully.
+The fd close drove `OPENED -> CLOSING -> CLOSED`; no process owner or modem
+module remained. Wi-Fi stayed associated at `192.168.22.64`, Bluetooth stayed
+powered/non-discovering, and the exact 32 MiB USB transfer retained SHA-256
+`83ee4724...` after both gates.
+
+The v051 compile/package candidate is now installed. Run `33532308762` reached
+the v051 ATF objects and proved that mainline's SiP header lacks
+`MTK_SIP_KERNEL_GPS_CONTROL`; the exact B4.1 header defines it as
+`MTK_SIP_SMC_CMD(0x537)`. The compatibility patch carries that identifier
+behind `#ifndef`, which is compile evidence rather than proof that installed
+trusted firmware implements every operation. The installed handoff and
+boot-info call now prove this boundary on the phone. A maintainable MediaTek
 MNL bridge or Linux GNSS subsystem driver
 can implement MVCD and expose standard position data. Do not interpret raw
 reads from `gpsdl0` as NMEA, load v051 over the current v050 session, or graft
