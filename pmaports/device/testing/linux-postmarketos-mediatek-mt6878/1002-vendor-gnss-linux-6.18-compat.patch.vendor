@@ -14,13 +14,14 @@ v051 also uses the ATF MVCD backend required by the MT6878 boot-info path.
 diff --git a/connectivity/gps/data_link/plat/v051/Kbuild b/connectivity/gps/data_link/plat/v051/Kbuild
 --- a/connectivity/gps/data_link/plat/v051/Kbuild
 +++ b/connectivity/gps/data_link/plat/v051/Kbuild
-@@ -75,13 +75,14 @@ obj-m += $(MODULE_NAME).o
+@@ -75,13 +75,15 @@ obj-m += $(MODULE_NAME).o
  GPS_DRV_CONTROL_LNA := n
  GPS_DL_HAS_MOCK := n
 -GPS_SRC_FOLDER := $(srctree)/$(src)/../..
 +GPS_SRC_FOLDER := $(abspath $(src)/../..)
 +GPS_PLAT_FOLDER := $(abspath $(src))
  ccflags-y += -DMTK_GENERIC_HAL
++ccflags-y += -include linux/mod_devicetable.h
  
 -ccflags-y += -I$(srctree)/$(src)
 -ccflags-y += -I$(srctree)/$(src)/inc
