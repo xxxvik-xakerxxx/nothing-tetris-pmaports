@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=129
+pkgrel=130
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -84,6 +84,7 @@ source="
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+	0054-power-supply-mt6375-bc12-compile-only.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -475,6 +476,25 @@ _build_ccci_ccif_compile_only() {
 	fi
 }
 
+_build_mt6375_bc12_compile_only() {
+	_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	rm -f "$_object" "$builddir/drivers/power/supply/mt6375-bc12-decode.ko"
+	make -j"$_jobs" -C "$builddir" \
+		ARCH="$_carch" LLVM=1 \
+		drivers/power/supply/mt6375-bc12-decode.o
+
+	test -s "$_object" || die "MT6375 BC1.2 compile-only object is missing"
+	test ! -e "$builddir/drivers/power/supply/mt6375-bc12-decode.ko" || \
+		die "MT6375 BC1.2 validation must not produce a module"
+	llvm-nm --defined-only "$_object" | \
+		grep -Eq '[[:space:]]mt6375_bc12_decode_port_stat$' || \
+		die "MT6375 BC1.2 decoder symbol is missing"
+	test -z "$(llvm-nm --undefined-only "$_object")" || \
+		die "MT6375 BC1.2 decoder must not acquire runtime dependencies"
+}
+
 _build_pd9302a_compile_only() {
 	_object="$builddir/drivers/media/i2c/pd9302a.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -602,6 +622,7 @@ build() {
 	_build_ccci_util_compile_only
 	_build_ccci_core_compile_only
 	_build_ccci_ccif_compile_only
+	_build_mt6375_bc12_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
 	_build_audio_modules
@@ -726,6 +747,7 @@ f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85
 45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+8489f86cfde39631f593c166ec40dd6c42a5b8aced4fb924fd654c0595f0e612eb7befe9250af08ebb3859b395e9aa5837c3e5728f4747b5bb99a01d12da6f47  0054-power-supply-mt6375-bc12-compile-only.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

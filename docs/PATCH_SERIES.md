@@ -61,6 +61,7 @@ normal Alpine/postmarketOS practice.
 | `0003-mfd-mt6363-keys-mt6375-telemetry.patch` | MT6363 PMIC core, hardware-tested power/volume-up press and release IRQ handling, and MT6375 telemetry foundation. |
 | `0007-power-supply-mt6375-monitor.patch` | Read-only battery/USB power monitor and platform registration. |
 | `0027-power-supply-nothing-tetris-charging-policy.patch` | Conservative board charging policy: 500 mA USB-debug limit, Nothing OS 4.1 battery CV, temperature cutoffs with hysteresis, fail-closed sensor handling and suspend inhibition. |
+| `0054-power-supply-mt6375-bc12-compile-only.patch` | Compile-only MT6375 BC1.2 status decoder with fail-closed USB type/current mapping. It has no Kconfig, Makefile, hardware access, module or runtime path. |
 | `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
 | `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
 | `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the stale argument from the packaged DTB. The verified U-Boot revision currently injects it again at `bootm`, so this patch alone does not change runtime clock policy. A one-shot boot without the argument failed and reset; keep unused-clock cleanup gated until the missing clock ownership is identified. |

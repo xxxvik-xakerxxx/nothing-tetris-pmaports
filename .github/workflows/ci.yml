@@ -303,8 +303,13 @@ jobs:
             echo "compile-only S6E8FC3X02 module must not be packaged"
             exit 1
           fi
+          if find "$rootfs" -name 'mt6375-bc12-decode.*' \
+              -print -quit | grep -q .; then
+            echo "compile-only MT6375 BC1.2 object must not be packaged"
+            exit 1
+          fi
           if grep -RIlE \
-              '(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci[_-])' \
+              '(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci[_-]|mt6375-bc12-decode)' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
               "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
               "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then

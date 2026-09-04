@@ -602,7 +602,8 @@ validate_compile_only_boundaries() {
 		0051-vendor-camera-tetris-compile-only-audit.patch.vendor \
 		0050-drm-panel-samsung-s6e8fc3x02.patch \
 		0048-vendor-eccci-core-linux-6.18-api.patch.vendor \
-		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor; do
+		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor \
+		0054-power-supply-mt6375-bc12-compile-only.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
 	[ "$(grep -Fc 'status = "disabled";' "$mfg_rpc_patch")" -ge 2 ]
@@ -629,6 +630,10 @@ validate_compile_only_boundaries() {
 	grep -Fq 'ccci_core.o ccci_bm.o' "$kernel_apkbuild"
 	grep -Fq '_build_ccci_ccif_compile_only' "$kernel_apkbuild"
 	grep -Fq 'hif/ccci_ringbuf.o hif/ccci_hif_ccif.o' "$kernel_apkbuild"
+	grep -Fq '_build_mt6375_bc12_compile_only' "$kernel_apkbuild"
+	grep -Fq 'drivers/power/supply/mt6375-bc12-decode.o' "$kernel_apkbuild"
+	grep -Fq 'MT6375 BC1.2 decoder must not acquire runtime dependencies' \
+		"$kernel_apkbuild"
 	grep -Fq '_build_s6e8fc3x02_compile_only' "$kernel_apkbuild"
 	grep -Fq 'drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o' "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
@@ -641,8 +646,9 @@ validate_compile_only_boundaries() {
 	grep -Fq 'compile-only hardware code has a runtime loader' \
 		"$workflow"
 	grep -Fq 'compile-only S6E8FC3X02 module must not be packaged' "$workflow"
+	grep -Fq 'compile-only MT6375 BC1.2 object must not be packaged' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|mt6375-bc12-decode)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1
