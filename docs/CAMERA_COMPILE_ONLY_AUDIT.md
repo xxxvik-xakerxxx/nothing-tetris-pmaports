@@ -1,6 +1,6 @@
 # Nothing Tetris camera compile-only audit
 
-Status: static/package gate only. Nothing in this change can probe a camera,
+Status: static/package gate only. Nothing in this work can probe a camera,
 enable a rail or clock, register a media device, start SENINF, or boot CCU.
 
 ## Source boundary
@@ -46,13 +46,22 @@ implementation and provide `mt6878_data`. SENINF is not compiled or linked by
 this gate because its clock, power-domain, SMI, DMA/IOMMU and CCU ownership is
 not yet validated for mainline Linux.
 
+Patch `0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch` records only
+the reviewed main-camera physical contract: I2C8 address `0x1a`, CAMTG2 on
+CMMCLK1/GPIO93, reset GPIO25, and separate AFVDD 2.8 V, AVDD 2.8 V, DVDD
+1.2 V and DOVDD 1.8 V switches. The sensor node and all four fixed-regulator
+providers are `disabled`. The patch does not change shared I2C8 status or
+frequency and omits EEPROM, actuator, SENINF and the media graph.
+
 ## Packaging boundary
 
 The audit object is built after the main kernel, inspected, and discarded. It
 is absent from `modules_install`, initramfs, rootfs module directories,
-`modules-load.d`, udev rules, and service presets. The shipped kernel config and
-DT remain unchanged, so a clean install has the same camera runtime behavior as
-the preceding image.
+`modules-load.d`, udev rules, and service presets. The shipped kernel config
+remains unchanged. The packaged DT gains only the disabled physical fixture,
+so a clean install has the same camera runtime behavior as the preceding image.
+CI reads the final DTB and rejects the image unless the sensor and all four
+supplies remain disabled.
 
 This boundary is integrated into the active candidate. Its package revision is
 raised only after the preceding `r128` CI result is known, so two concurrent

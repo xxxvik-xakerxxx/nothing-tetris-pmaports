@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Fri, 4 Sep 2026 17:20:00 +0300
+Subject: [PATCH] arm64: dts: mediatek: stage disabled Tetris IMX882 fixture
+
+Record the stock-derived main-camera power, clock, reset and I2C topology
+without creating a live I2C client or claiming any GPIO. Every new provider
+and the IMX882 identity-only consumer stay disabled.
+
+This fixture deliberately excludes the EEPROM, actuator, media graph,
+SENINF, CAMSYS and the other camera positions. It is a static DT contract for
+the already compile-only identity driver, not a runtime camera change.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../dts/mediatek/mt6878-nothing-tetris.dts   | 76 +++++++++++++++++++
+ 1 file changed, 76 insertions(+)
+
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -90,6 +90,46 @@
+ 		battery-supply = <&mt6375_gauge>;
+ 		charger-supply = <&mt6375_charger>;
+ 		source-supply = <&mt6375_typec>;
++	};
++
++	camera_main_afvdd: regulator-camera-main-afvdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-main-afvdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		gpio = <&pio 1 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_main_avdd: regulator-camera-main-avdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-main-avdd";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		gpio = <&pio 22 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_main_dvdd: regulator-camera-main-dvdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-main-dvdd";
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++		gpio = <&pio 21 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
++	};
++
++	camera_main_dovdd: regulator-camera-main-dovdd {
++		compatible = "regulator-fixed";
++		regulator-name = "camera-main-dovdd";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		gpio = <&pio 23 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		status = "disabled";
+ 	};
+ };
+ 
+@@ -224,6 +264,27 @@
+ 	};
+ };
+ 
++&i2c8 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++
++	camera@1a {
++		compatible = "nothing,tetris-imx882-identity";
++		reg = <0x1a>;
++		clocks = <&topckgen CLK_TOP_CAMTG2>;
++		clock-names = "xclk";
++		afvdd-supply = <&camera_main_afvdd>;
++		avdd-supply = <&camera_main_avdd>;
++		dvdd-supply = <&camera_main_dvdd>;
++		dovdd-supply = <&camera_main_dovdd>;
++		reset-gpios = <&pio 25 GPIO_ACTIVE_LOW>;
++		pinctrl-names = "mclk-off", "mclk-4ma";
++		pinctrl-0 = <&camera_main_mclk_off>;
++		pinctrl-1 = <&camera_main_mclk_4ma>;
++		status = "disabled";
++	};
++};
++
+ &i2c5 {
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+@@ -531,6 +592,21 @@
+ };
+ 
+ &pio {
++	camera_main_mclk_off: camera-main-mclk-off {
++		pins {
++			pinmux = <PINMUX_GPIO93__FUNC_GPIO93>;
++			drive-strength = <4>;
++			output-low;
++		};
++	};
++
++	camera_main_mclk_4ma: camera-main-mclk-4ma {
++		pins {
++			pinmux = <PINMUX_GPIO93__FUNC_CMMCLK1>;
++			drive-strength = <4>;
++		};
++	};
++
+ 	gps_pins_default: gps-default {
+ 	};
+ 
+-- 
+2.51.0

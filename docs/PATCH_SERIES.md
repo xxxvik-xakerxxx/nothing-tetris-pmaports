@@ -89,6 +89,7 @@ normal Alpine/postmarketOS practice.
 | `0047-media-i2c-pd9302a-vcm.patch` | Stages the PD9302A VCM driver with the corrected revision-specific initialization and a bounded suspend park path. It remains compile-only and is not autoloaded. |
 | `0049-media-i2c-imx882-identity.patch` | Adds a compile-only IMX882 physical-ID probe using the exact B4.1 `0x0016/0x0017` ID registers and bounded board power sequence. The shipped config remains off, the build produces no module, and no camera DT client is added. `pkgrel=127` also removes stale DTS text that patch tooling previously ignored outside any valid hunk. |
 | `0050-drm-panel-samsung-s6e8fc3x02.patch` | Adds the native S6E8FC3X02 binding and panel source behind a disabled Kconfig symbol. The package builds only its object for compatibility evidence and rejects any shipped module; no DSI graph, autoload or framebuffer change is included. |
+| `0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch` | Records the reviewed stock main-camera I2C8 address, CAMTG2/CMMCLK1, reset and four switched rails. The sensor and every new regulator are disabled; shared I2C8 status/frequency, EEPROM, actuator, media graph and runtime behavior remain unchanged. |
 
 ### NothingOSS module adaptations
 

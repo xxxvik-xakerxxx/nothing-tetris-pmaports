@@ -190,6 +190,11 @@ new module autoloading:
 
 The first device experiment is observation-only.
 
+The `pkgrel=131` source candidate adds only a disabled main-IMX882 fixture.
+Its I2C client and all four power providers must remain disabled in the final
+DTB, and it must not modify the already-present I2C8 controller status or bus
+frequency. This is topology validation, not an identity probe.
+
 - Record the exact CI artifact, bootloader, kernel, DTB, modules, boot slot,
   board/SKU identity, baseline `usb0`, SSH, I2C adapters, media devices, and
   first camera-related kernel errors.
