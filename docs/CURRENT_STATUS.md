@@ -6,18 +6,19 @@ Updated: 2026-09-05.
 
 | Role | Revision | Device state |
 | --- | --- | --- |
-| Installed pmaports image | `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | Kernel package `6.18-r132`; device package `8-r6`; CI run `33954042399`; hash-verified `super` and `userdata` images clean-flashed. Linux reaches userspace and exposes valid CDC-NCM plus `fts_ts`, but physical Phoc output still contains artifacts. This display candidate is rejected. |
+| Installed pmaports image | `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | Kernel package `6.18-r132`; device package `8-r6`; CI run `33954042399`; hash-verified `super` and `userdata` images clean-flashed. With U-Boot `b76e47e` physical Phoc output had persistent artifacts. After changing only U-Boot to `60bcf22`, the same image produced clean Phoc output on the initial and warm boots. This is provisional handoff evidence, not a native-display promotion. |
 | Previous rollback image | `f607513` | Kernel `6.18.0 #123`; preserved stable artifacts and prior clean/warm regression evidence. |
 | Stable pmaports source | `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266` | Rollback source of truth. |
 | Previous pmaports CI candidate | `codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`; CI run `33495661863` applied the patch series and completed the main kernel build, then failed before the IMX882 object check because a disabled Kconfig symbol was absent rather than serialized as `# ... is not set`. No image was produced or installed. |
-| Active pmaports source | `codex/next-hardware` at `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | CI `33954042399` passed all build/image gates and the verified image is installed. Runtime confirms exact packages, valid NCM, fbcon and touch enumeration; physical Phoc output still shows artifacts, so r132 cannot be promoted. |
-| Staged source candidate | None | Do not continue tuning simpledrm throughput. Prepare stable per-device USB identity independently, and reconstruct native MT6878 DDP/DSC/DSI as an opt-in display experiment with simplefb recovery retained. |
-| Installed U-Boot | `b76e47e774304ab550a6354f3286860b7caffb3a` | Hash-verified CI LK image flashed to both 16 MiB `lk_a` and `lk_b`; fastboot reports exact `gb76e47e77430`. Clean boot, Linux-to-fastboot reboot and GPS EMI handoff pass. |
-| Previous U-Boot rollback | `8aa048f93bb7569e4107ef85aa994c630f85de48` | Preserved rollback artifact. |
+| Active pmaports source | `codex/next-hardware` at `448ba67` | Installed runtime remains image commit `c2b19a9`; later commits are documentation-only. Exact packages, valid NCM, fbcon and touch enumeration are confirmed. Two clean Phoc boots with U-Boot `60bcf22` recover usability, but the U-Boot causality and native lifecycle are not yet promotion evidence. |
+| Staged source candidate | Native display sidecars under `local/agent-results/native-display-*` | Panel, OVL IRQ, bounded MMSYS/mutex routing and MT6878 DSC integration apply to pinned Linux and pass targeted LLVM 21 object builds. Clock/power, complete crossbar routing, DSI/PHY and board DT/FIT remain before an opt-in CI image. Stable per-device USB identity is a separate unfinished change. |
+| Installed U-Boot | `60bcf22fdc0a94526424db59fc7640298ea8f0dd` | Hash-verified CI `33954506650` LK image is flashed to both 16 MiB `lk_a` and `lk_b`; live Linux reports exact `2026.07-rc1-g60bcf22fdc0a`. The unchanged r132 image reached clean Phoc output on two consecutive boots and USB NCM/SSH returned. The expected `atag,devinfo` node is absent, so it cannot yet seed stable USB identity. |
+| Previous U-Boot rollback | `b76e47e774304ab550a6354f3286860b7caffb3a` | Preserved rollback artifact; it passes boot, Linux-to-fastboot reboot and GPS EMI handoff but produced persistent physical artifacts with r132. Older `8aa048f` is also retained. |
 
 The installed CI `33954042399` candidate matches GitHub commit `c2b19a9`,
-pinned pmaports `7ea600a`, pmbootstrap `ea17c14` and the installed required
-U-Boot `b76e47e`. SHA-256 verification passed for `boot_image.itb`
+pinned pmaports `7ea600a`, pmbootstrap `ea17c14` and its manifest-pinned
+U-Boot `b76e47e`. Runtime currently uses the separately verified `60bcf22`
+bootloader from CI `33954506650`. SHA-256 verification passed for `boot_image.itb`
 (`8b1bb8f30cf7db919f22583cc4a8f951fb4c28c45436106adb234cfd3277d1f2`),
 the 512 MiB boot image
 (`3f0a46a5a3cd312cf2fa869717bea836ab07bec70a181403eb2b367fa2e0ba3b`)
@@ -68,7 +69,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub sources compile and fail closed; no accelerometer, gyro, proximity or light sensor is exposed. A host-only parser against U-Boot `b76e47e` now validates unique 64-bit shared/loader carveouts, DRAM containment, size and non-overlap without changing the FDT. It does not validate SCP firmware or TCM. | Establish authoritative active `scp1`/`scp2` authentication/selection and TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Panthor is configured, but no Mali platform device or render node exists. A disabled MFG RPC provider/domain topology is prepared as source inventory only. | Validate the RPC schema/DT and register map with all nodes disabled. MFG runtime sequencing, DT consumer, CSF firmware and protected memory are still required. |
 | Rear/front cameras | Broken | No camera media pipeline or preview/capture. Torch channels work independently. | The source candidate records the main IMX882 I2C8/CAMTG2/reset/four-rail topology with the sensor and every provider disabled. Compile-only gates still ship no camera module or live client. Final-DTB CI, observation-only clean boots, sensor identity, SENINF/ISP, CCU and the media graph remain. |
-| Display | Broken | Clean `980c566` shows a stable fbcon, but Phoc produces physical noise or black while `/dev/fb0` contains a clean logical frame. Clean r132 reproduced physical artifacts after damage-limited MMIO copies; stopping `greetd`, switching from VT7 to VT2, forcing an fbcon redraw and blank/unblank did not recover physical scanout. That hypothesis is rejected. Legacy KMS also booted black. Historical native r40 bound the MT6878 pipeline and created fb0; OVL frame-start IRQ bit 14 removed the recorded vblank timeouts, but the complete native patch set is not yet in the active package. | Reconstruct a separate opt-in native DDP/DSC/DSI/panel DTB, preserving simplefb recovery and USB SSH; do not promote until physical pixels, touch and lifecycle pass. |
+| Display | Partial | With U-Boot `b76e47e`, clean r132 reproduced persistent physical artifacts although `/dev/fb0` remained logically coherent; stopping `greetd`, VT redraw and blank/unblank did not recover scanout. After changing only U-Boot to `60bcf22`, the unchanged r132 image produced clean Phoc output on two consecutive boots. Live graphics is still `fe0d0000.simplefb`/simpledrm, so brightness, panel lifecycle and suspend are absent and the bootloader-handoff causal link remains provisional. Historical native r40 bound the MT6878 pipeline and OVL frame-start IRQ bit 14 removed its recorded vblank timeouts. | Complete and CI-build a separate opt-in native DDP/DSC/DSI/panel DTB while retaining the now-usable simplefb configuration as rollback; promote only after physical pixels, brightness, touch, blank/unblank, suspend/resume and USB SSH pass. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
@@ -82,6 +83,7 @@ hardware works. Current gate state:
 4. Wi-Fi interface autostarted after reboot; association/routing and Bluetooth/audio/touch/haptics still need regression checks on #130.
 5. Camera, GPU and CCCI additions are absent from the runtime module/device set as required.
 6. Manual GNSS v051 transport, GPS EMI handoff, bounded link0 open, ATF boot-info ioctl 23 and close passed without connectivity regression. No position fix is claimed.
+7. With U-Boot `60bcf22` installed in both slots, the unchanged r132 image produced clean Phoc output on the initial and warm boots; native brightness and suspend remain unavailable.
 
 Modem, GPU, sensorhub, camera pipeline and native display stay disabled in this
 boot. The next GNSS gate is userspace protocol integration and a real position

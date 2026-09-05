@@ -56,13 +56,15 @@ contract are documented in
 
 The installed image is pmaports commit
 `c2b19a92d44229c4335170ec8ae33d8a499aac3b`. CI run `33954042399` passed every
-build, image and rootfs gate and pins U-Boot `b76e47e`, which remains installed
-in both `lk_a` and `lk_b`. A clean flash of `super` and `userdata` boots kernel
+build, image and rootfs gate and pins U-Boot `b76e47e`. Runtime now uses the
+separately verified U-Boot `60bcf22` in both `lk_a` and `lk_b`. A clean flash of
+`super` and `userdata` boots kernel
 package `6.18-r132` with device package `device-nothing-tetris-8-r6`. The image
-is rejected for `main`: limiting inherited-simpledrm copies to compositor damage
-did not remove the physical noise. The logical framebuffer remains coherent and
-`fts_ts` still exposes `event0`, but stopping `greetd`, switching to VT2 and a
-blank/unblank cycle did not clear the already corrupted physical scanout.
+is not ready for `main`: with U-Boot `b76e47e`, limiting inherited-simpledrm
+copies to compositor damage did not remove the physical noise. After changing
+only U-Boot to `60bcf22`, the same image produced clean Phoc output on two
+consecutive boots. The logical framebuffer remains coherent and `fts_ts` still
+exposes `event0`; native brightness and panel suspend remain absent.
 Further simpledrm throughput tuning is no longer the active display direction;
 the next display experiment must reconstruct the native DDP/DSC/DSI path while
 retaining simplefb and USB recovery.
@@ -82,10 +84,10 @@ its exact calibration records without committing whole dumps or unique IDs.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in the 16 MiB `lk_a` and `lk_b` partitions; fastboot reports that exact version. Normal boot and Linux `reboot bootloader` pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
-| Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; the valid CDC-NCM gadget recovered after the macOS session was unlocked and reset. The image is nevertheless rejected as a display candidate. |
-| Display | Simple framebuffer | Broken | Clean `980c566` renders fbcon correctly, but Phoc updates produce physical noise or a black panel while a direct logical framebuffer capture remains clean. Legacy KMS was rejected after a clean boot also produced black. Clean r132 (`c2b19a9`, CI `33954042399`) retained the MMIO-safe path and `0x1100` stride while removing forced full-frame copies; physical testing still showed artifacts, and stopping Phoc plus VT redraw and blank/unblank did not recover scanout, so the experiment is rejected. |
-| Display | Native DSI/panel | Broken | The bounded S6E8FC3X02 driver is compile-only in the current package. Historical r40 native experiments bound OVL/COLOR/CCORR/AAL/GAMMA/DSI, created `card0`/fb0 and, after selecting OVL frame-start IRQ bit 14, stopped reporting vblank timeouts. The complete opt-in patch set is being reconstructed before another device boot. |
+| Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
+| Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
+| Display | Simple framebuffer | Partial | With U-Boot `b76e47e`, clean r132 produced persistent physical artifacts while its logical framebuffer remained clean. After changing only U-Boot to `60bcf22`, the unchanged image produced clean Phoc output on two consecutive boots. This is strong but provisional handoff evidence; live graphics remains `fe0d0000.simplefb`/simpledrm without native brightness or panel suspend. |
+| Display | Native DSI/panel | Broken | Historical r40 bound OVL/COLOR/CCORR/AAL/GAMMA/DSI and created `card0`/fb0; OVL frame-start IRQ bit 14 removed its recorded vblank timeouts. Reconstructed panel, OVL, bounded MMSYS/mutex routing and MT6878 DSC patches now apply and pass targeted LLVM 21 builds. Clock/power, complete crossbar routing, DSI/PHY and opt-in board DT/FIT are still required before the next device boot. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
