@@ -6,23 +6,23 @@ Updated: 2026-09-05.
 
 | Role | Revision | Device state |
 | --- | --- | --- |
-| Installed pmaports image | `980c5665144071eb6afbb3dc817f25530d80ed9f` | Kernel package `6.18-r131`; device package `8-r6`; CI run `33887356683`; clean install, root expansion, USB recovery and warm reboot completed. Graphical display regression rejects it for `main`. |
+| Installed pmaports image | `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | Kernel package candidate `6.18-r132`; device package `8-r6`; CI run `33954042399`; hash-verified `super` and `userdata` images clean-flashed. Linux enumerates a stable, valid CDC-NCM gadget, but locked macOS ignored its newly randomized host MAC, so userspace/package and physical-display checks remain pending. |
 | Previous rollback image | `f607513` | Kernel `6.18.0 #123`; preserved stable artifacts and prior clean/warm regression evidence. |
 | Stable pmaports source | `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266` | Rollback source of truth. |
 | Previous pmaports CI candidate | `codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`; CI run `33495661863` applied the patch series and completed the main kernel build, then failed before the IMX882 object check because a disabled Kconfig symbol was absent rather than serialized as `# ... is not set`. No image was produced or installed. |
-| Active pmaports source | `codex/next-hardware` image head `980c5665144071eb6afbb3dc817f25530d80ed9f` | CI `33887356683` passed all build/image gates and its hash-verified `super` and `userdata` images are installed. USB survives, but graphical simpledrm scanout is physically corrupt or black, so this image cannot be promoted. |
-| Staged source candidate | `codex/next-hardware`, kernel `pkgrel=132`, device `8-r6` | Keeps the proven write-combined I/O mapping and removes only forced full-frame copies so normal DRM damage rectangles are used. Native display reconstruction continues separately; no native DT node is enabled in this fallback experiment. CI and hardware evidence are pending. |
+| Active pmaports source | `codex/next-hardware` at `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | CI `33954042399` passed all build/image gates. Its verified `super` and `userdata` images are installed and Linux USB enumeration proves the kernel booted. The r132 damage-limited simpledrm change still needs physical display evidence and exact userspace verification before promotion. |
+| Staged source candidate | None | Keep the installed r132 display experiment isolated until its physical result is known. A separate stable USB identity patch is being prepared from a one-way hash of bootloader-provided per-device devinfo; it will not hard-code or expose calibration data. |
 | Installed U-Boot | `b76e47e774304ab550a6354f3286860b7caffb3a` | Hash-verified CI LK image flashed to both 16 MiB `lk_a` and `lk_b`; fastboot reports exact `gb76e47e77430`. Clean boot, Linux-to-fastboot reboot and GPS EMI handoff pass. |
 | Previous U-Boot rollback | `8aa048f93bb7569e4107ef85aa994c630f85de48` | Preserved rollback artifact. |
 
-The downloaded CI `33867526529` candidate matches GitHub commit `3571519`,
+The installed CI `33954042399` candidate matches GitHub commit `c2b19a9`,
 pinned pmaports `7ea600a`, pmbootstrap `ea17c14` and the installed required
 U-Boot `b76e47e`. SHA-256 verification passed for `boot_image.itb`
-(`896095da459e2347bc7011c8ea7a51c6a261a40f498f6fd1f5d8849966932fe7`),
+(`8b1bb8f30cf7db919f22583cc4a8f951fb4c28c45436106adb234cfd3277d1f2`),
 the 512 MiB boot image
-(`fc7f78412aa60cac41d6df44e559e405bc3c125a05946b8d5863ac0154eb1f17`)
+(`3f0a46a5a3cd312cf2fa869717bea836ab07bec70a181403eb2b367fa2e0ba3b`)
 and the Android sparse root image
-(`4bc3213056aaed594d6714e6a9698d85f0061005f4022045ca3812ca4b8605ec`).
+(`eecee1976a12e0a75a427fc78b627aca79a6fcfe6fe004a121ccc979f5626dda`).
 The package contract maps the boot image to `super` and the sparse root image
 to `userdata`; `boot_image.itb` is evidence, not a third fastboot partition.
 
@@ -54,7 +54,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Subsystem | Current status | Confirmed evidence | Candidate / next gate |
 | --- | --- | --- | --- |
 | Boot and root filesystem | Works | Clean flash boots pmOS; root is writable and expanded. | Recheck after every candidate installation. |
-| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and an exact 32 MiB transfer passed after the clean #130 install. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. | Physical reconnect, repeated reboot and suspend/resume. |
+| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and an exact 32 MiB transfer passed after the clean #130 install. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. Clean r132 presents a valid CDC-NCM control/data pair and the Apple NCM driver starts, but locked macOS refuses to name a newly randomized MAC, preventing a route and SSH without indicating a phone-side descriptor failure. | Package a stable per-device hashed gadget identity, then repeat clean install, locked-host reconnect, reboot, 32 MiB transfer and suspend/resume. |
 | Wi-Fi | Partial | Clean #130 automatically reassociates with DHCP/default route/DNS/HTTPS and completed an exact 64 MiB SSH stream at `192.168.22.64` while USB and Bluetooth remained active. | Cold reconnect, suspend/resume, sustained bidirectional transfer and second-unit checks. |
 | Bluetooth | Partial | Clean #130 registers powered BlueZ `hci0`; `bluetoothctl --timeout 8 scan on` found 23 devices and exited with `Discovering: no` while USB and Wi-Fi remained active. The earlier stuck-discovery result came from an unbounded client invocation rather than the bounded lifecycle. | Pair/reconnect and test audio/data profiles across suspend. |
 | Touch and keys | Works | Clean `980c566` binds `fts_ts` at I2C `2-0038` and exposes `/dev/input/event0`; there are no FTS probe/runtime errors. The current fbcon intentionally has no touch interaction. Balanced power/volume events passed previously. | Recheck sustained touch after the graphical display path is restored. |

@@ -179,19 +179,23 @@ not a confirmed external RT1711H controller.
 
 ## Next clean patch targets
 
-1. Observe MT6375 source classification with a USB 2.0 host, a known Type-C Rp
+1. Replace configfs-random NCM host/device addresses with a stable per-device
+   identity derived through a one-way hash of the bootloader-provided devinfo.
+   Clean r132 proved the descriptor and Apple NCM driver are valid, but locked
+   macOS ignored the newly randomized host MAC and withheld the BSD interface.
+2. Observe MT6375 source classification with a USB 2.0 host, a known Type-C Rp
    1.5 A source and a known 5 V BC1.2 DCP. The bounded 500 mA path works, but
    TCPM reported `CURRENT_MAX=0` and native BC1.2 SDP/CDP/DCP publication is
    missing. Preserve USB NCM while validating DP/DM ownership; leave PD/OTG off.
-2. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
+3. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
    native Bluetooth discovery and factory Bluetooth address provisioning.
-3. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
+4. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
    stack; both torch channels already pass bounded live tests.
-4. Validate the GNSS EMI handoff and LNA states, then obtain a position fix
+5. Validate the GNSS EMI handoff and LNA states, then obtain a position fix
    while Wi-Fi, Bluetooth and USB remain stable.
-5. Validate the packaged audio stack from a clean CI image, then repeat both
+6. Validate the packaged audio stack from a clean CI image, then repeat both
    speaker/microphone paths and suspend/resume lifecycle tests.
-6. Sensorhub/IIO for rotation, proximity and ambient light.
-7. Continue compile-only modem/CCIF/DPMAIF and camera sensor boundaries in
+7. Sensorhub/IIO for rotation, proximity and ambient light.
+8. Continue compile-only modem/CCIF/DPMAIF and camera sensor boundaries in
    parallel; activate each only after its power, memory and firmware contract
    is complete.

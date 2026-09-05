@@ -8,10 +8,10 @@ postmarketOS port into a stable daily-phone build.
 | Track | Branch / path | State |
 | --- | --- | --- |
 | Stable source baseline | `xxxvik-xakerxxx/nothing-tetris-pmaports:main` | Current SHA `ee994e4236d69c9f3eb18e81614dd0dff9e60266`. Keep as the published rollback until the active candidate completes all promotion gates. |
-| Installed device candidate | CI image from `980c566` | Kernel package `6.18-r131` and device `8-r6` pass clean flash/root expansion, USB NCM/SSH and warm reboot. The image is rejected for promotion because Phoc corrupts or blacks the inherited physical scanout; fbcon and the touchscreen driver remain healthy. |
+| Installed device candidate | CI image from `c2b19a9` | Kernel package candidate `6.18-r132` and device `8-r6` were clean-flashed from CI `33954042399`. Linux exposes valid NCM descriptors, but a locked macOS host ignored the new random gadget MAC; physical display and exact userspace checks are therefore pending. The previous `980c566` result remains rejected because Phoc corrupts or blacks inherited scanout. |
 | Previous rollback image | CI image from `f607513` | Kernel `6.18.0 #123` retains the prior full physical regression evidence and preserved rollback artifacts. |
 | Previous CI candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`. CI run `33495661863` applied the series and completed the main kernel build, then failed on a brittle disabled-Kconfig text check before the IMX882 object gate. It produced no install image. |
-| Installed image source | `xxxvik-xakerxxx/nothing-tetris-pmaports` at `980c5665144071eb6afbb3dc817f25530d80ed9f` | Kernel `pkgrel=131` and device package `8-r6`; CI run `33887356683` produced the installed and hash-verified artifacts. It is a debug baseline, not a stable `main` candidate. |
+| Installed image source | `xxxvik-xakerxxx/nothing-tetris-pmaports` at `c2b19a92d44229c4335170ec8ae33d8a499aac3b` | Kernel `pkgrel=132` and device package `8-r6`; CI run `33954042399` produced the installed and hash-verified artifacts. It is an isolated display experiment, not a stable `main` candidate. |
 | Audio CI candidate | `xxxvik-xakerxxx/nothing-tetris-pmaports:codex/next-hardware` at `384f155f88dfc601e5597d43b34471e1cae6a71e` | Device package `8-r4` binds the speaker policy to `graphical-session.target`, excludes `greetd`, and defers mono-remap creation until the ALSA master exists. CI `33522638794` built kernel and device packages; image verification failed only because its assertion still searched the old static config. The following candidate corrects that assertion. |
 | Installed GNSS candidate | Current `codex/next-hardware` image | Device `8-r5` packages only stock-derived Tetris GNSS v051 as a manual service. GPS EMI handoff, transport, bounded link0 open, ATF boot-info and close pass without USB/Wi-Fi/BT regression; no position fix exists yet. |
 | Flashed bootloader | `xxxvik-xakerxxx/u-boot:master` | Commit `b76e47e774304ab550a6354f3286860b7caffb3a` is installed in `lk_a` and `lk_b`; fastboot reports the exact revision. It passed CI `33492618726`, normal boot, Linux-to-fastboot reboot and GPS EMI handoff. It starts no subsystem itself. |
@@ -50,11 +50,14 @@ stable baseline:
 1. Cold boot reaches userspace without manual module surgery.
 2. USB debug/NCM SSH comes up reliably at `172.16.42.1`.
 3. USB debug/NCM survives at least a 32 MiB SSH transfer.
-4. Wi-Fi, Bluetooth, audio playback/capture, touch, haptics and root I/O still
+4. The gadget host/device MAC pair is stable across clean boot and reboot,
+   derived per device without exposing or packaging the source identity, and a
+   previously trusted locked host assigns the interface without user action.
+5. Wi-Fi, Bluetooth, audio playback/capture, touch, haptics and root I/O still
    work after the change.
-5. No unload/reload testing of `conninfra` or radio modules; reboot between
+6. No unload/reload testing of `conninfra` or radio modules; reboot between
    unsafe radio attempts.
-6. Any new default module must be packaged, dependency-checked, and covered by
+7. Any new default module must be packaged, dependency-checked, and covered by
    `scripts/validate-pmaports-overlay.sh`.
 
 ## Bring-up order
