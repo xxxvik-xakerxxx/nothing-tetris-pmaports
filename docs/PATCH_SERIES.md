@@ -52,7 +52,7 @@ normal Alpine/postmarketOS practice.
 
 | Patch | Purpose |
 | --- | --- |
-| `0005-drm-sysfb-tetris-framebuffer.patch` | Inherited U-Boot framebuffer fallback for Tetris. The r132 candidate retains the write-combined MMIO-safe copy path but no longer expands compositor damage to a 10 MiB full-frame write. Clean graphical hardware validation is pending. |
+| `0005-drm-sysfb-tetris-framebuffer.patch` | Inherited U-Boot framebuffer fallback for Tetris. The r132 candidate retained the write-combined MMIO-safe copy path but stopped expanding compositor damage to a 10 MiB full-frame write. Physical Phoc output still showed artifacts, so damage-limited copying is rejected as a desktop fix; fbcon remains the recovery path while native display is reconstructed. |
 
 ### PMIC, keys and power telemetry
 

@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed `pkgrel=129`; source candidate `pkgrel=131`) |
+| Kernel version | `6.18` (installed `pkgrel=132`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris` |
 
@@ -55,15 +55,17 @@ contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
 The installed image is pmaports commit
-`980c5665144071eb6afbb3dc817f25530d80ed9f`. CI run `33887356683` passed every
+`c2b19a92d44229c4335170ec8ae33d8a499aac3b`. CI run `33954042399` passed every
 build, image and rootfs gate and pins U-Boot `b76e47e`, which remains installed
 in both `lk_a` and `lk_b`. A clean flash of `super` and `userdata` boots kernel
-package `6.18-r131` with device package `device-nothing-tetris-8-r6`; automatic
-root expansion, USB SSH and USB recovery after a normal reboot pass. The image
-is rejected for `main`: starting Phoc on the inherited simpledrm framebuffer
-produces physical noise or a black panel even though the logical DRM buffer is
-clean. Stopping `greetd` restores a readable fbcon. The next `pkgrel=132`
-candidate keeps MMIO-safe copies but restores damage-limited updates.
+package `6.18-r132` with device package `device-nothing-tetris-8-r6`. The image
+is rejected for `main`: limiting inherited-simpledrm copies to compositor damage
+did not remove the physical noise. The logical framebuffer remains coherent and
+`fts_ts` still exposes `event0`, but stopping `greetd`, switching to VT2 and a
+blank/unblank cycle did not clear the already corrupted physical scanout.
+Further simpledrm throughput tuning is no longer the active display direction;
+the next display experiment must reconstruct the native DDP/DSC/DSI path while
+retaining simplefb and USB recovery.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
 transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
@@ -81,8 +83,8 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
 | Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in the 16 MiB `lk_a` and `lk_b` partitions; fastboot reports that exact version. Normal boot and Linux `reboot bootloader` pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
-| Boot | Kernel boot | Works | CI image `c2b19a9` boots far enough after a clean `super`/`userdata` flash to enumerate the Linux USB gadget. Exact userspace/package verification is pending because the locked macOS host did not assign a BSD interface to the new NCM MAC. The previous `980c566` image reached userspace and passed a normal warm reboot. |
-| Display | Simple framebuffer | Broken | Clean `980c566` renders fbcon correctly, but Phoc updates produce physical noise or a black panel while a direct logical framebuffer capture remains clean. Legacy KMS was rejected after a clean boot also produced black. Clean r132 (`c2b19a9`, CI `33954042399`) removes only forced full-frame copies while retaining the MMIO-safe path and `0x1100` stride; it is installed, but physical pixels are untested while the user is away from the device. |
+| Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; the valid CDC-NCM gadget recovered after the macOS session was unlocked and reset. The image is nevertheless rejected as a display candidate. |
+| Display | Simple framebuffer | Broken | Clean `980c566` renders fbcon correctly, but Phoc updates produce physical noise or a black panel while a direct logical framebuffer capture remains clean. Legacy KMS was rejected after a clean boot also produced black. Clean r132 (`c2b19a9`, CI `33954042399`) retained the MMIO-safe path and `0x1100` stride while removing forced full-frame copies; physical testing still showed artifacts, and stopping Phoc plus VT redraw and blank/unblank did not recover scanout, so the experiment is rejected. |
 | Display | Native DSI/panel | Broken | The bounded S6E8FC3X02 driver is compile-only in the current package. Historical r40 native experiments bound OVL/COLOR/CCORR/AAL/GAMMA/DSI, created `card0`/fb0 and, after selecting OVL frame-start IRQ bit 14, stopped reporting vblank timeouts. The complete opt-in patch set is being reconstructed before another device boot. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
@@ -90,7 +92,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
 | Power | Idle battery drain | Broken | An uncontrolled overnight observation lost roughly half the battery. Existing captures kept USB connected and the controller runtime-active, so they cannot identify the unplugged cause. The next valid test is local, physically unplugged and screen-off, comparing separate Wi-Fi-on/off boots with coulomb, wake and IRQ deltas. |
 | Power | Thermal management | Partial | The installed baseline exposes all 24 MT6878 LVTS zones with plausible polling-mode values. Hardware trips/IRQ routing and sustained-load lifecycle tests remain disabled. |
-| USB | Device mode / NCM | Partial | Kernel #130 automatically exposes `usb0`; USB SSH and an exact 32 MiB transfer pass after clean install, and USB returns automatically after a normal reboot. On clean r132 the gadget enumerates stably with a valid two-interface CDC-NCM descriptor, but macOS records `Console locked, ... unknown MAC ignored` because configfs generated a new random host MAC, so no BSD interface or SSH route was created. A per-device stable address derived from hashed bootloader devinfo is the next packaging fix; repeated physical reconnect and suspend/resume remain. |
+| USB | Device mode / NCM | Partial | Kernel #130 automatically exposes `usb0`; USB SSH and an exact 32 MiB transfer pass after clean install, and USB returns automatically after a normal reboot. On clean r132 the gadget exposes a valid two-interface CDC-NCM descriptor. A locked macOS session initially ignored its newly randomized host MAC; after unlock and a host-side USB reset, `en4`, DHCP and SSH recovered without rebooting the phone. A per-device stable address derived from hashed bootloader devinfo remains the next packaging fix; repeated physical reconnect and suspend/resume remain. |
 | USB-C | Type-C attach/orientation | Partial | MT6375 TCPM reports orientation, sink power and device data role. A 5 V / 2 A PD contract was observed without changing the installed image; PPS, alternate voltages, detach/reconnect and suspend remain unvalidated. Peripheral/NCM stays the safe data role and host VBUS ownership remains disabled. |
 | USB-C | Analog audio switch | Untested | HL5280 is described through the MT6375 Type-C connector, but physical accessory detection and audio routing are not validated. |
 | Haptics | RT6010 rumble | Partial | A bounded `feedbackd` effect works physically on clean kernel #128 and stops without affecting USB. Suspend/resume and three cold boots remain. |
