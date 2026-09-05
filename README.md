@@ -55,14 +55,15 @@ contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
 The installed image is pmaports commit
-`3571519b667936352a423200a52b7ada6975084a`. CI run `33867526529` passed every
+`980c5665144071eb6afbb3dc817f25530d80ed9f`. CI run `33887356683` passed every
 build, image and rootfs gate and pins U-Boot `b76e47e`, which remains installed
 in both `lk_a` and `lk_b`. A clean flash of `super` and `userdata` boots kernel
-package `6.18-r129` (`6.18.0 #130`) with device package
-`device-nothing-tetris-8-r5`; automatic root expansion, USB SSH, an exact
-32 MiB transfer and USB recovery after a normal reboot pass. The audio session
-ownership fix in device r5 is incomplete; source candidate r6 suppresses only
-the greeter PulseAudio owner and still needs clean-session lifecycle regression.
+package `6.18-r131` with device package `device-nothing-tetris-8-r6`; automatic
+root expansion, USB SSH and USB recovery after a normal reboot pass. The image
+is rejected for `main`: starting Phoc on the inherited simpledrm framebuffer
+produces physical noise or a black panel even though the logical DRM buffer is
+clean. Stopping `greetd` restores a readable fbcon. The next `pkgrel=132`
+candidate keeps MMIO-safe copies but restores damage-limited updates.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
 transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
@@ -80,10 +81,10 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
 | Boot | U-Boot boot flow | Works | U-Boot `b76e47e` is installed in the 16 MiB `lk_a` and `lk_b` partitions; fastboot reports that exact version. Normal boot and Linux `reboot bootloader` pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
-| Boot | Kernel boot | Works | CI image `3571519` boots mainline `6.18.0 #130` to userspace after a clean flash and normal warm reboot. |
-| Display | Simple framebuffer | Partial | Inherited U-Boot framebuffer provides basic scanout through `simpledrm`, but has no native brightness, vblank/page-flip or validated suspend/resume path and desktop rendering is CPU-bound. |
-| Display | Native DSI/panel | Broken | `pkgrel=127` stages a bounded S6E8FC3X02 driver and binding for a compile-only object. The shipped config remains off and no module or DT client is packaged. MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY, lane-rate validation and an opt-in DT graph remain. |
-| Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
+| Boot | Kernel boot | Works | CI image `980c566` boots mainline `6.18.0` to userspace after a clean flash and normal warm reboot. |
+| Display | Simple framebuffer | Broken | Clean `980c566` renders fbcon correctly, but Phoc updates produce physical noise or a black panel while a direct logical framebuffer capture remains clean. Legacy KMS was rejected after a clean boot also produced black. The r132 candidate removes only forced full-frame copies while retaining the MMIO-safe path and `0x1100` stride. |
+| Display | Native DSI/panel | Broken | The bounded S6E8FC3X02 driver is compile-only in the current package. Historical r40 native experiments bound OVL/COLOR/CCORR/AAL/GAMMA/DSI, created `card0`/fb0 and, after selecting OVL frame-start IRQ bit 14, stopped reporting vblank timeouts. The complete opt-in patch set is being reconstructed before another device boot. |
+| Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
