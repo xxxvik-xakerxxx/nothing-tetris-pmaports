@@ -55,6 +55,7 @@ normal Alpine/postmarketOS practice.
 | `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped native DTB deletes its node and the FIT does not select the legacy DTB. |
 | `0056`-`0073` native display series | Adds MT6878 MMSYS clocks/routing, DISP/MM power, OVL frame-start handling, DSC, DSI host, MIPI PHY, bounded larb0/IOMMU DMA, the native Tetris DTB and the vendor-confirmed 1140 Mbps DSI lane rate. |
 | `0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch` | Continues the bounded MM_INFRA hardware vote when this firmware rejects only the optional HWCCF hint with `-EPERM`, matching the MT6878 vendor contract. Other firmware errors remain fatal. |
+| `0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch` | Points larb0 and native display consumers at the DISP index of the registered SPM onecell provider. Live function-graph tracing proved the old nested-node phandle failed in `dev_pm_domain_attach()` before the SMI driver ran. |
 
 ### PMIC, keys and power telemetry
 
