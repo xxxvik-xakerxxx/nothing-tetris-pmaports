@@ -659,6 +659,10 @@ validate_compile_only_boundaries() {
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
 	grep -Fq 'CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=y' \
 		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	grep -Fq '# CONFIG_DRM_SIMPLEDRM is not set' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	grep -Fq '# CONFIG_DRM_SYSFB_HELPER is not set' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
