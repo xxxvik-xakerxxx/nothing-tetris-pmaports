@@ -1,6 +1,6 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-05.
+Updated: 2026-09-06.
 
 ## Exact software state
 
@@ -11,8 +11,8 @@ Updated: 2026-09-05.
 | Stable pmaports source | `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266` | Rollback source of truth. |
 | Previous pmaports CI candidate | `codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`; CI run `33495661863` applied the patch series and completed the main kernel build, then failed before the IMX882 object check because a disabled Kconfig symbol was absent rather than serialized as `# ... is not set`. No image was produced or installed. |
 | Active pmaports source | `codex/next-hardware` at `448ba67` | Installed runtime remains image commit `c2b19a9`; later commits are documentation-only. Exact packages, valid NCM, fbcon and touch enumeration are confirmed. Two clean Phoc boots with U-Boot `60bcf22` recover usability, but the U-Boot causality and native lifecycle are not yet promotion evidence. |
-| Installed native-display candidate | CI `34031653916`, pmaports `6a288c8`, kernel `6.18.0 #136` | SHA-verified `super`/`userdata` were flashed twice; the second boot restored USB NCM/SSH. Touch remains `fts_ts event0`, no legacy framebuffer is present, deferred devices are empty, and OVL, DSI, the DRM aggregate and panel backlight progress to bind. Aggregate bind Oopses in `drm_mode_object_add()` because `mtk_dsi_bind()` sees NULL drvdata during synchronous panel attach. |
-| Staged source candidate | Kernel package `6.18-r136` in the working tree | Patch `0076` publishes DSI drvdata and bridge metadata before `mipi_dsi_host_register()`. Exact disassembly of the installed CI kernel shows the faulting store uses object pointer `0x40`, matching `&((struct mtk_dsi *)NULL)->encoder.base`. The next gate is CI, clean flash, zero Oops and native DRM registration. |
+| Installed native-display candidate | CI `34043370799`, pmaports `7152e98`, kernel `6.18.0 #137` | SHA-verified `super`/`userdata` clean-flashed. USB NCM/SSH and `fts_ts event0` returned automatically with no legacy framebuffer. Patch `0076` fixed the DSI NULL-derived encoder fault: OVL and DSI bind, then aggregate initialization reaches CRTC creation and Oopses in `mtk_mutex_get()` because the mutex platform device exists while its deferred driver probe has not set drvdata. |
+| Staged source candidate | Kernel package `6.18-r137` in the working tree | Patch `0077` makes aggregate bind return `-EPROBE_DEFER` until the display-mutex driver publishes drvdata. Manual binding of `14001000.mutex` succeeds on the installed image, proving the MT6878 match data, register range and clock are valid. The next gate is CI, clean flash, zero Oops and native DRM registration. |
 | Installed U-Boot | `60bcf22fdc0a94526424db59fc7640298ea8f0dd` | Hash-verified CI `33954506650` LK image is flashed to both 16 MiB `lk_a` and `lk_b`; live Linux reports exact `2026.07-rc1-g60bcf22fdc0a`. The unchanged r132 image reached clean Phoc output on two consecutive boots and USB NCM/SSH returned. The expected `atag,devinfo` node is absent, so it cannot yet seed stable USB identity. |
 | Previous U-Boot rollback | `b76e47e774304ab550a6354f3286860b7caffb3a` | Preserved rollback artifact; it passes boot, Linux-to-fastboot reboot and GPS EMI handoff but produced persistent physical artifacts with r132. Older `8aa048f` is also retained. |
 
@@ -70,7 +70,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub sources compile and fail closed; no accelerometer, gyro, proximity or light sensor is exposed. A host-only parser against U-Boot `b76e47e` now validates unique 64-bit shared/loader carveouts, DRAM containment, size and non-overlap without changing the FDT. It does not validate SCP firmware or TCM. | Establish authoritative active `scp1`/`scp2` authentication/selection and TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Panthor is configured, but no Mali platform device or render node exists. A disabled MFG RPC provider/domain topology is prepared as source inventory only. | Validate the RPC schema/DT and register map with all nodes disabled. MFG runtime sequencing, DT consumer, CSF firmware and protected memory are still required. |
 | Rear/front cameras | Broken | No camera media pipeline or preview/capture. Torch channels work independently. | The source candidate records the main IMX882 I2C8/CAMTG2/reset/four-rail topology with the sensor and every provider disabled. Compile-only gates still ship no camera module or live client. Final-DTB CI, observation-only clean boots, sensor identity, SENINF/ISP, CCU and the media graph remain. |
-| Display | Broken | Native-only CI `34031653916` boots without framebuffer fallback and retains USB SSH/touch. Correct SPM DISP references let OVL, DSI, the DRM aggregate and panel backlight bind, but synchronous child-panel attach reaches DSI component bind before `platform_set_drvdata()`, causing a NULL-derived encoder pointer and Oops. | Build patch `0076`, clean-flash, require zero Oops and a DRM card, then validate pixels, brightness, blank/unblank, stability and suspend/resume. |
+| Display | Broken | Native-only CI `34043370799` boots without framebuffer fallback and retains USB SSH/touch. Patch `0076` fixes synchronous DSI state publication, so OVL and DSI bind. The next Oops is later in CRTC creation: `mtk_mutex_get()` receives a device whose deferred mutex probe has not set drvdata. Manual mutex bind succeeds. | Build patch `0077`, clean-flash, require zero Oops and a DRM card, then validate pixels, brightness, blank/unblank, stability and suspend/resume. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
@@ -88,8 +88,8 @@ hardware works. Current gate state:
 
 Modem, GPU, sensorhub and camera pipeline stay disabled in the installed boot.
 Native display is installed without any framebuffer fallback. The HWCCF and
-SPM DISP-domain blockers are fixed; r135 reaches OVL/DSI/aggregate/panel bind
-but Oopses on DSI probe ordering. The r136 source candidate corrects that one
-initialization race. The next GNSS gate is
+SPM DISP-domain and DSI publication blockers are fixed; installed r136 reaches
+OVL/DSI bind but Oopses when CRTC creation races the deferred display-mutex
+probe. The r137 source candidate adds that readiness gate. The next GNSS gate is
 userspace protocol integration and a real position fix, followed by cold-start
 and lifecycle validation.

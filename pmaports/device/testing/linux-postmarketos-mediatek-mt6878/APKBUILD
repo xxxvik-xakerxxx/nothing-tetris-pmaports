@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=136
+pkgrel=137
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -107,6 +107,7 @@ source="
 	0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch
 	0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch
 	0076-drm-mediatek-publish-DSI-state-before-host-register.patch
+	0077-drm-mediatek-wait-for-display-mutex-probe.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -769,6 +770,7 @@ e9f5910e336b1dae2a91e6c78bce4e1add62a8c095515ffb676ad6837c5c4ffa1e9fa47471a256f4
 5fe8197515612490511accc35877f57a706eca573b88c0ab0f19e9e6f8519c863be5e85f381d043b33c6c3df94613b45df03a1603e618c88d1ce0d458cc4fc6a  0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch
 c2ea45b2a0c273cdfc4640d6b9457c97e5cadbd9b78c92536e2d4380058af7082b10f2969344548aa91bf32c55166d85530361db493c88870a2956dde821cfd1  0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch
 274c4945505a57d058ff9c6e4069e3e156361893c587e8fab890574d4de18082e94b99a32b78c866f8c16f6783abbf3158f7c5fa0ea990bff48b2d128cbc4ba8  0076-drm-mediatek-publish-DSI-state-before-host-register.patch
+118bb03519e1538a67bed572cd98e8a69f8a7a299ac61cbc07a0c3d480c31e1a9a2ac0f67de53b7e55bb3aee9c614fcaef7bf8224707c2b32742a088c95d559f  0077-drm-mediatek-wait-for-display-mutex-probe.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

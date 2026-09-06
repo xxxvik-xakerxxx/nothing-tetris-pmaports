@@ -37,9 +37,9 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed `pkgrel=132`) |
+| Kernel version | `6.18` (installed native-display `pkgrel=136`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
-| Device DTB | `mt6878-nothing-tetris` |
+| Device DTB | `mt6878-nothing-tetris-native` |
 
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
 Driver packaging and vendor-to-native migration are documented in
@@ -68,11 +68,12 @@ exposes `event0`; native brightness and panel suspend remain absent.
 Native-only CI `34017277889` replaced simpledrm with the DDP/OVL/DSC/DSI
 pipeline and clean-booted with USB SSH and touch intact. Runtime diagnostics
 found the first blocker: firmware returns `-EPERM` for the optional HWCCF hint.
-The installed r135 candidate now uses the registered SPM DISP domain. OVL, DSI,
-the DRM aggregate and the panel backlight progress to bind while USB SSH and
-touch remain available. The first aggregate bind then Oopses because synchronous
-panel probing reaches `mtk_dsi_bind()` before the DSI probe publishes drvdata.
-The r136 candidate corrects that initialization order.
+The installed r136 candidate uses the registered SPM DISP domain and fixes the
+synchronous DSI probe-ordering fault. OVL and DSI now bind with USB SSH and touch
+intact. The aggregate advances to CRTC creation, where it Oopses because the
+display-mutex platform device exists before its deferred driver probe has
+published drvdata. The r137 candidate makes aggregate bind defer until the mutex
+driver is ready.
 Clean r132 artifacts remain the fastboot rollback.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded

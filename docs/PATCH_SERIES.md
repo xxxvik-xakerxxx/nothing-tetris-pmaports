@@ -57,6 +57,7 @@ normal Alpine/postmarketOS practice.
 | `0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch` | Continues the bounded MM_INFRA hardware vote when this firmware rejects only the optional HWCCF hint with `-EPERM`, matching the MT6878 vendor contract. Other firmware errors remain fatal. |
 | `0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch` | Points larb0 and native display consumers at the DISP index of the registered SPM onecell provider. Live function-graph tracing proved the old nested-node phandle failed in `dev_pm_domain_attach()` before the SMI driver ran. |
 | `0076-drm-mediatek-publish-DSI-state-before-host-register.patch` | Publishes DSI drvdata and bridge metadata before host registration. The child panel probes synchronously and can trigger aggregate bind inside `mipi_dsi_host_register()`; installed r135 otherwise passed a NULL-derived encoder address `0x40` to DRM and Oopsed while holding the component mutex. |
+| `0077-drm-mediatek-wait-for-display-mutex-probe.patch` | Defers DRM aggregate bind until the display-mutex platform driver has published drvdata. Installed r136 proves the DSI ordering fix and then reaches this later race; manual binding proves the MT6878 mutex resources themselves are valid. |
 
 ### PMIC, keys and power telemetry
 
