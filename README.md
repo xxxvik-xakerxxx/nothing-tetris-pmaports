@@ -68,10 +68,11 @@ exposes `event0`; native brightness and panel suspend remain absent.
 Native-only CI `34017277889` replaced simpledrm with the DDP/OVL/DSC/DSI
 pipeline and clean-booted with USB SSH and touch intact. Runtime diagnostics
 found the first blocker: firmware returns `-EPERM` for the optional HWCCF hint.
-The installed r134 candidate now tolerates only that optional response and binds
-the power controller. Function-graph tracing then found the next blocker: native
-display consumers reference the nested DISP node instead of the registered SPM
-onecell provider. The r135 candidate corrects those domain references.
+The installed r135 candidate now uses the registered SPM DISP domain. OVL, DSI,
+the DRM aggregate and the panel backlight progress to bind while USB SSH and
+touch remain available. The first aggregate bind then Oopses because synchronous
+panel probing reaches `mtk_dsi_bind()` before the DSI probe publishes drvdata.
+The r136 candidate corrects that initialization order.
 Clean r132 artifacts remain the fastboot rollback.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
@@ -92,7 +93,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DSI/panel | Broken | Native-only CI `34022276175` clean-boots with USB SSH and touch and no framebuffer fallback. The power controller now binds after the optional HWCCF denial. Live tracing proved SMI is blocked in `dev_pm_domain_attach()` by an invalid nested DISP-provider reference; r135 corrects all five consumers. Native bind and pixels remain unverified. |
+| Display | Native DSI/panel | Broken | Native-only CI `34031653916` boots with USB SSH and touch and no framebuffer fallback. The corrected SPM DISP references let OVL, DSI, the DRM aggregate and panel backlight bind. Exact CI-kernel disassembly proves the remaining Oops passes `&dsi->encoder.base == 0x40` because synchronous panel attach runs before DSI drvdata is published; r136 moves drvdata and bridge metadata before host registration. Native DRM registration and pixels remain unverified. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
