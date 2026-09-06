@@ -654,10 +654,11 @@ validate_compile_only_boundaries() {
 	grep -Fq 'drivers/power/supply/mt6375-bc12-decode.o' "$kernel_apkbuild"
 	grep -Fq 'MT6375 BC1.2 decoder must not acquire runtime dependencies' \
 		"$kernel_apkbuild"
-	grep -Fq '_build_s6e8fc3x02_compile_only' "$kernel_apkbuild"
-	grep -Fq 'drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o' "$kernel_apkbuild"
+	grep -Fq 'mediatek/mt6878-nothing-tetris-native.dtb' "$kernel_apkbuild"
+	grep -Fq 'mt6878-nothing-tetris-native.dtb"' "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
-	grep -Fq "grep -Eq '^CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=(y|m)$'" "$kernel_apkbuild"
+	grep -Fq 'CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=y' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
@@ -665,7 +666,8 @@ validate_compile_only_boundaries() {
 	grep -Fq -- "-name 'tetris-camera-audit.*'" "$workflow"
 	grep -Fq 'compile-only hardware code has a runtime loader' \
 		"$workflow"
-	grep -Fq 'compile-only S6E8FC3X02 module must not be packaged' "$workflow"
+	grep -Fq 'built-in S6E8FC3X02 driver must not be packaged as a module' "$workflow"
+	grep -Fq 'native display DTB still contains simplefb' "$workflow"
 	grep -Fq 'compile-only MT6375 BC1.2 object must not be packaged' "$workflow"
 	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
 	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"

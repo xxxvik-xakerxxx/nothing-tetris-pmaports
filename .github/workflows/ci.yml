@@ -310,7 +310,7 @@ jobs:
           fi
           if find "$rootfs/lib/modules" -name 'panel-samsung-s6e8fc3x02.ko*' \
               -print -quit | grep -q .; then
-            echo "compile-only S6E8FC3X02 module must not be packaged"
+            echo "built-in S6E8FC3X02 driver must not be packaged as a module"
             exit 1
           fi
           if find "$rootfs" -name 'mt6375-bc12-decode.*' \
@@ -319,7 +319,7 @@ jobs:
             exit 1
           fi
           if grep -RIlE \
-              '(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci[_-]|mt6375-bc12-decode)' \
+              '(pd9302a|tetris-camera-audit|ccci[_-]|mt6375-bc12-decode)' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
               "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
               "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then
@@ -389,20 +389,26 @@ jobs:
           check_contains "greeter PulseAudio client autospawn disabled" \
             'autospawn = no' \
             "$rootfs/var/lib/greetd/.config/pulse/client.conf"
-          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+          native_dtb="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
+          test -e "$native_dtb"
+          if fdtget -l "$native_dtb" /chosen | grep -Fxq simplefb@fe0d0000; then
+            echo "native display DTB still contains simplefb"
+            exit 1
+          fi
+          test "$(fdtget "$native_dtb" \
             /gnss@18c00000 status)" = okay
-          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+          test "$(fdtget "$native_dtb" \
             /soc@0/syscon@13f90000 status)" = disabled
-          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+          test "$(fdtget "$native_dtb" \
             /soc@0/syscon@13f90000/power-controller status)" = disabled
-          test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+          test "$(fdtget "$native_dtb" \
             /soc@0/i2c@11e03000/camera@1a status)" = disabled
           for camera_supply in afvdd avdd dvdd dovdd; do
             test "$(fdtget \
-              "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+              "$native_dtb" \
               "/regulator-camera-main-$camera_supply" status)" = disabled
           done
-          if fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+          if fdtget "$native_dtb" \
               /soc@0/i2c@11e03000 clock-frequency >/dev/null 2>&1; then
             echo "disabled camera fixture changed shared I2C8 frequency"
             exit 1
@@ -414,9 +420,8 @@ jobs:
               exit 1
             fi
           done
-          test -e "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
           if bootargs=$(fdtget \
-              "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb" \
+              "$native_dtb" \
               /chosen bootargs 2>/dev/null) && \
               printf '%s\n' "$bootargs" | tr ' ' '\n' | \
                 grep -Fxq clk_ignore_unused; then

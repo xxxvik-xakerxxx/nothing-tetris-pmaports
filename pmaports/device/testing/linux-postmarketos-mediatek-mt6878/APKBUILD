@@ -601,28 +601,6 @@ _build_tetris_camera_audit_compile_only() {
 		"$_camera/camsys/isp7sp/cam/mtk_cam-plat-mt6878.c"
 }
 
-_build_s6e8fc3x02_compile_only() {
-	_object="$builddir/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o"
-	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
-
-	if grep -Eq '^CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=(y|m)$' .config; then
-		die "S6E8FC3X02 panel must stay disabled in the shipped kernel"
-	fi
-	make -j"$_jobs" -C "$builddir" \
-		ARCH="$_carch" LLVM=1 \
-		CONFIG_DRM=y \
-		CONFIG_OF=y \
-		CONFIG_DRM_MIPI_DSI=y \
-		CONFIG_BACKLIGHT_CLASS_DEVICE=y \
-		CONFIG_DRM_DISPLAY_DSC_HELPER=y \
-		CONFIG_DRM_PANEL_SAMSUNG_S6E8FC3X02=m \
-		drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.o
-
-	test -s "$_object" || die "S6E8FC3X02 compile-only object is missing"
-	test ! -e "$builddir/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko" || \
-		die "S6E8FC3X02 validation must not produce a module"
-}
-
 build() {
 	unset LDFLAGS
 	export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -630,10 +608,9 @@ build() {
 	make -j"$_jobs" ARCH="$_carch" LLVM=1 \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
-		mediatek/mt6878-nothing-tetris.dtb
+		mediatek/mt6878-nothing-tetris-native.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
-	_build_s6e8fc3x02_compile_only
 	_build_tetris_camera_audit_compile_only
 	_build_imx882_identity_compile_only
 	_build_pd9302a_compile_only
@@ -661,8 +638,8 @@ package() {
 		INSTALL_MOD_PATH="$pkgdir" \
 		INSTALL_MOD_STRIP=1 \
 		LLVM=1
-	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris.dtb" \
-		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \
+		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
 	_release="$(cat "$builddir"/include/config/kernel.release)"
