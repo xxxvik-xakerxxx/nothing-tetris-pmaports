@@ -29,6 +29,7 @@ docker run --rm --privileged \
 			git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git \
 				/work/upstream/pmaports
 		fi
+		/work/scripts/apply-pmaports-patches.sh /work/upstream/pmaports
 		rm -rf \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris \
 			/work/upstream/pmaports/device/testing/firmware-nothing-tetris \
@@ -45,7 +46,9 @@ docker run --rm --privileged \
 
 		cd /work/upstream/pmbootstrap
 		./pmbootstrap.py --as-root --work /work/local/pmbootstrap-work -c /work/ci/pmbootstrap-aarch64.cfg checksum \
-			device-nothing-tetris firmware-nothing-tetris linux-postmarketos-mediatek-mt6878
+			postmarketos-initramfs device-nothing-tetris firmware-nothing-tetris linux-postmarketos-mediatek-mt6878
+		./pmbootstrap.py --as-root --work /work/local/pmbootstrap-work -c /work/ci/pmbootstrap-aarch64.cfg build \
+			postmarketos-initramfs
 		./pmbootstrap.py --as-root --work /work/local/pmbootstrap-work -c /work/ci/pmbootstrap-aarch64.cfg build \
 			device-nothing-tetris
 		./pmbootstrap.py --as-root --work /work/local/pmbootstrap-work -c /work/ci/pmbootstrap-aarch64.cfg build \

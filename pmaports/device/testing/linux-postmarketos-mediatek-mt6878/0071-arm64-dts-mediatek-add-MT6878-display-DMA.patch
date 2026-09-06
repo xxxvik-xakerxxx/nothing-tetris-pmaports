@@ -1,0 +1,67 @@
+From 04a0c04c687b02c6ce40ee8d41e5a00bce472255 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 07:37:00 +0300
+Subject: [PATCH 3/3] arm64: dts: mediatek: add opt-in MT6878 display DMA
+
+Add an include-only fixture for the MT6878 display SMI common, larb0 and
+the first display IOMMU bank. Keep every node disabled until a separate
+native-display board DT opts in.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../mediatek/mt6878-native-display-dma.dtsi   | 44 +++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/mediatek/mt6878-native-display-dma.dtsi
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-native-display-dma.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-native-display-dma.dtsi
+new file mode 100644
+index 000000000..46b30b928
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-native-display-dma.dtsi
+@@ -0,0 +1,44 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Opt-in DMA foundation for the MT6878 primary native-display path. */
++
++#include <dt-bindings/memory/mediatek,mt6878-memory-port.h>
++
++&soc {
++	smi_disp_common: smi@1e801000 {
++		compatible = "mediatek,mt6878-smi-common";
++		reg = <0x1e801000 0x1000>;
++		clocks = <&topckgen CLK_TOP_MMINFRA_SEL>,
++			 <&topckgen CLK_TOP_MMINFRA_SEL>;
++		clock-names = "apb", "smi";
++		power-domains = <&spm MT6878_POWER_DOMAIN_MM_INFRA>;
++		status = "disabled";
++	};
++
++	smi_larb0: smi@1401e000 {
++		compatible = "mediatek,mt6878-smi-larb";
++		reg = <0x1401e000 0x1000>;
++		mediatek,larb-id = <0>;
++		mediatek,smi = <&smi_disp_common>;
++		clocks = <&mmsys CLK_MM_SMI_COMMON>,
++			 <&mmsys CLK_MM_SMI_COMMON>;
++		clock-names = "apb", "smi";
++		power-domains = <&disp>;
++		status = "disabled";
++	};
++
++	disp_iommu: iommu@1e802000 {
++		compatible = "mediatek,mt6878-disp-iommu";
++		reg = <0x1e802000 0x1000>;
++		interrupts = <GIC_SPI 278 IRQ_TYPE_LEVEL_HIGH 0>;
++		mediatek,larbs = <&smi_larb0>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_MM_INFRA>;
++		#iommu-cells = <1>;
++		status = "disabled";
++	};
++};
++
++/* The only consumers in the initial boundary are OVL0_2L ports 1 and 2. */
++&disp_ovl0_2l {
++	iommus = <&disp_iommu M4U_L0_P2_DISP_OVL0_2L_RDMA0>,
++		 <&disp_iommu M4U_L0_P1_DISP_OVL0_2L_HDR>;
++};
+-- 
+2.50.1 (Apple Git-155)

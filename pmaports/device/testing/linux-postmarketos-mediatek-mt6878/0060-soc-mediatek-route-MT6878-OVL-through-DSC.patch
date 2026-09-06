@@ -1,0 +1,69 @@
+From c20aa5851d798e9fdd39bdd77dd7bb1492ed6564 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 21:14:01 +0300
+Subject: [PATCH] soc: mediatek: route MT6878 OVL through DSC bypass
+
+Represent the vendor DRM_BYPASS_PQ crossbar sequence as one mainline
+OVL_2L0-to-DSC0 route. This keeps the exact MT6878 selector values while
+avoiding virtual DRM components that have no hardware register block.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/soc/mediatek/mt6878-mmsys.h | 35 +++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+index 933f011..fd1dba7 100644
+--- a/drivers/soc/mediatek/mt6878-mmsys.h
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -16,13 +16,48 @@
+ #define MT6878_DISP_POSTMASK0_SOUT_SEL		0xe24
+ 
+ #define MT6878_PQ_OUT_CROSSBAR0_MOUT_EN		0xd20
++#define MT6878_PQ_OUT_CROSSBAR4_MOUT_EN		0xd30
+ #define MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN	0xd54
+ #define MT6878_COMP_OUT_CROSSBAR0_MOUT_EN	0xd74
+ 
++#define MT6878_DISPSYS_BYPASS_MUX_SHADOW	0xc00
++#define MT6878_MMSYS_OVL_CON			0xc08
++#define MT6878_MMSYS_CROSSBAR_CON		0xc0c
++#define MT6878_OVL_BLEND_CROSSBAR0_MOUT_EN	0xc34
++#define MT6878_PQ_IN_CROSSBAR0_MOUT_EN		0xd00
++
+ #define MT6878_AAL0_SOUT_SEL_TO_GAMMA0		3
+ #define MT6878_GAMMA0_SEL_IN_FROM_AAL0		2
+ 
+ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
++	/*
++	 * Nothing OS uses this exact DRM_BYPASS_PQ route for the primary pipe:
++	 * OVL0_2L -> blend CB0 -> PQ input CB0 -> PQ output CB4 -> split CB2.
++	 * Associate every selector with OVL_2L0 -> DSC0 so mainline can model the
++	 * vendor virtual crossbar components without exposing fake DRM blocks.
++	 */
++	{
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_DISPSYS_BYPASS_MUX_SHADOW, BIT(0), BIT(0),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_MMSYS_CROSSBAR_CON, GENMASK(23, 16), GENMASK(23, 16),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_MMSYS_OVL_CON, BIT(2), BIT(2),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_OVL_BLEND_CROSSBAR0_MOUT_EN, BIT(0), BIT(0),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_PQ_IN_CROSSBAR0_MOUT_EN, BIT(2), BIT(2),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_PQ_OUT_CROSSBAR4_MOUT_EN, BIT(1), BIT(1),
++	}, {
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
++	},
+ 	/* COLOR0 -> CCORR0 selects zero in both one-bit selectors. */
+ 	{
+ 		DDP_COMPONENT_COLOR0, DDP_COMPONENT_CCORR,
+-- 
+2.50.1 (Apple Git-155)

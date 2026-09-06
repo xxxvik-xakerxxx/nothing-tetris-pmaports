@@ -1,0 +1,282 @@
+diff --git a/deviceinfo_schema.toml b/deviceinfo_schema.toml
+index 10edf579c..42ca0d07f 100644
+--- a/deviceinfo_schema.toml
++++ b/deviceinfo_schema.toml
+@@ -460,6 +460,9 @@ description = "Name of the USB Device Controller (UDC) to use, typically found i
+ [variable.usb.usb_network_host_addr]
+ description = "Sets the host-side Ethernet address of the ethernet-over-usb link"
+ 
++[variable.usb.usb_network_mac_seed_path]
++description = "Absolute path to a trusted binary device-tree property used to derive stable, locally administered USB network MAC addresses"
++
+ # cgpt/Depthcharge
+ 
+ [variable.cros.cgpt_kpart]
+diff --git a/main/postmarketos-initramfs/APKBUILD b/main/postmarketos-initramfs/APKBUILD
+index 985d39c81..43a751bdb 100644
+--- a/main/postmarketos-initramfs/APKBUILD
++++ b/main/postmarketos-initramfs/APKBUILD
+@@ -2,7 +2,7 @@
+ maintainer="Casey Connolly <kcxt@postmarketos.org>"
+ pkgname=postmarketos-initramfs
+ pkgver=3.12.3
+-pkgrel=1
++pkgrel=2
+ pkgdesc="Base files for the postmarketOS initramfs / initramfs-extra"
+ url="https://postmarketos.org"
+ provides="postmarketos-ramdisk=$pkgver-r$pkgrel"
+@@ -52,6 +52,9 @@ source="
+ 	mdev.conf
+ 	tests/01-parse-cmdline-testlib.sh
+ 	tests/02-find-partition-testlib.sh
++	tests/03-usb-stable-mac.sh
++	tests/fixtures/seed-a.bin
++	tests/fixtures/seed-b.bin
+ 	"
+ arch="noarch"
+ license="GPL-2.0-or-later"
+@@ -118,10 +121,13 @@ ace852ba267b3408998970df6042603c8bec1d033066d1c30ed65f1be955fee8644b57882898f102
+ 69852928464f01757e2f473bd2c2e7ecb4132ecf3e26bdec95932e928dfe9042f59316e0a509fd38bcda88e24dd94bf33e8a88118b5adbec7023d1c13da12f59  00-initramfs-base.files
+ 669240c0c6b84ff68ea7696b3ffd39c209c7c6d52233f67a2515ac423e16c3daa7841d8451946b14dc95e1d18ff31cc35c4a22efb8a36caceb48aada5d4ee5ea  00-initramfs-extra-base.files
+ bd72e8b6345a46ec13516c64d78d4fa1a9a18a8db9ab04aac605f9708629453dc65b6fbccd96b58eeb1ea68102ddbcae9dc6b369255c6c6c1fb18ce0bd43ec79  init.sh
+-9765cad4f6c420a77dc975532e28c20fd89f9c6645b1c42e2fee98e3616729d30785e93affd7fef012a0118dd92d4e8b90718488bbd7782aa14424acd37d3e99  init_functions.sh
++572f79b4e3bfc49b571057da2f46eec1243d100c64eaadc26fdccb0ce5b32a1548d3cde6b75afa19e544e8682c6a04dc8a19e452b8eed7364f2b026db79d0576  init_functions.sh
+ 7aa82d5e2907470d667612643d98371dff27b2650051f8c568ab43d1b97677362c3e6fbd442474086d681ea7c0cfbcaf269d3eef2d2dc3ff4ebf17c786b82148  init_2nd.sh
+ 59f1e8954483dfe49182ddbaf0c1a4741f147161b92b5bb836e5bd405b419438f5757915546b46b846193c5a4b44c4b1a523f0ad0dcb87a1dfcaed9360e03146  init_functions_2nd.sh
+ 675e7d5bee39b2df7d322117f8dcaccc274d61beaf4d50ead19bbf2109446d64b1c0aa0c5b4f9846eb6c1c403418f28f6364eff4537ba41120fbfcbc484b7da7  mdev.conf
+ 776ac842df70a5ac7b20b942abf2afecfed83b59bd5bf775b77c1e8e071e1d9b9120c502410cd2643551589e9523221be0ca7a2734b2c5302fca7d631aa91916  01-parse-cmdline-testlib.sh
+ a60b8affe7431d477f7480ca094721930f65a31f920c7eb937384ad708f98a4a4ab2ad68688bf92ff741d3083ce4f14c238ee2e1beae5cefc30b5fd9bfd6aa66  02-find-partition-testlib.sh
++74075cae312bd4a67db3387311cb3dd5757d06f77d0fb5783b6c7fe601842cbac59cfab13145989d5ac0a06ff791276d661e4375cf0316b3089a43783b0719b0  03-usb-stable-mac.sh
++7b2518e92ffbc19797d44c28c1b630bb408e79b9a391c11e4cf116f0abb1c6b04eb13fb4fd346afac060ca2a54afa9a216f96df057d98c58fd2e9d946a344ff8  seed-a.bin
++3bc92938b059c0343d0712006e7e71135d1f9c20384c9f7e728fe8ac127e0068c8eed90b81732a00f5dbb5940371b37896901704077cfb57f308f762798845d5  seed-b.bin
+ "
+diff --git a/main/postmarketos-initramfs/init_functions.sh b/main/postmarketos-initramfs/init_functions.sh
+index 936af83ce..deea0580e 100644
+--- a/main/postmarketos-initramfs/init_functions.sh
++++ b/main/postmarketos-initramfs/init_functions.sh
+@@ -21,6 +21,9 @@ deviceinfo_create_initfs_extra="${deviceinfo_create_initfs_extra:-}"
+ deviceinfo_no_framebuffer="${deviceinfo_no_framebuffer:-}"
+ deviceinfo_rootfs_image_sector_size="${deviceinfo_rootfs_image_sector_size:-}"
+ 
++# Tests may override this root; deviceinfo may only select a property below it.
++USB_MAC_SEED_ROOT="${USB_MAC_SEED_ROOT:-/sys/firmware/devicetree/base}"
++
+ # Default to no splash unless set on the kernel cmdline. Plymouth will not
+ # display a splash if this param is missing from the cmdline
+ nosplash="${nosplash:-y}"
+@@ -827,6 +830,74 @@ setup_usb_configfs_udc() {
+ 	echo "$_udc_dev" > "$CONFIGFS"/g1/UDC || echo "  Couldn't write new UDC"
+ }
+ 
++# Print a stable, locally administered unicast MAC pair derived from a trusted
++# binary device-tree property. The raw seed and digest never leave this helper.
++derive_usb_network_mac_pair() {
++	local digest device_first device_mac host_first host_mac seed_path seed_size
++
++	seed_path="$1"
++	case "$seed_path" in
++		"$USB_MAC_SEED_ROOT"/*)
++			;;
++		*)
++			return 1
++			;;
++	esac
++	case "$seed_path" in
++		*//*|*/./*|*/../*|*/.|*/..)
++			return 1
++			;;
++	esac
++	[ -f "$seed_path" ] && [ ! -L "$seed_path" ] && [ -r "$seed_path" ] || return 1
++
++	seed_size="$(wc -c < "$seed_path" 2>/dev/null)" || return 1
++	case "$seed_size" in
++		''|*[!0-9]*)
++			return 1
++			;;
++	esac
++	[ "$seed_size" -ge 8 ] && [ "$seed_size" -le 4096 ] || return 1
++
++	digest="$(sha256sum "$seed_path" 2>/dev/null)" || return 1
++	digest="${digest%% *}"
++	[ "${#digest}" -eq 64 ] || return 1
++	case "$digest" in
++		*[!0-9a-fA-F]*)
++			return 1
++			;;
++	esac
++
++	# Bit 1 marks both addresses locally administered and bit 0 remains clear.
++	# Bit 2 is role-separated, guaranteeing host and device addresses differ.
++	host_first=$(( (0x$(printf '%s' "$digest" | cut -c 1-2) & 0xf8) | 0x02 ))
++	device_first=$(( (0x$(printf '%s' "$digest" | cut -c 13-14) & 0xf8) | 0x06 ))
++	host_mac="$(printf '%02x' "$host_first"):$(printf '%s' "$digest" | cut -c 3-4):$(printf '%s' "$digest" | cut -c 5-6):$(printf '%s' "$digest" | cut -c 7-8):$(printf '%s' "$digest" | cut -c 9-10):$(printf '%s' "$digest" | cut -c 11-12)"
++	device_mac="$(printf '%02x' "$device_first"):$(printf '%s' "$digest" | cut -c 15-16):$(printf '%s' "$digest" | cut -c 17-18):$(printf '%s' "$digest" | cut -c 19-20):$(printf '%s' "$digest" | cut -c 21-22):$(printf '%s' "$digest" | cut -c 23-24)"
++
++	printf '%s %s\n' "$host_mac" "$device_mac"
++}
++
++# Apply both generated addresses as one operation. Restore configfs defaults if
++# either write fails so a bad seed or unsupported function never blocks USB.
++set_usb_network_mac_pair() {
++	local device_addr function_path host_addr old_device_addr old_host_addr
++
++	function_path="$1"
++	host_addr="$2"
++	device_addr="$3"
++	old_host_addr="$(cat "$function_path/host_addr" 2>/dev/null)" || return 1
++	old_device_addr="$(cat "$function_path/dev_addr" 2>/dev/null)" || return 1
++
++	if printf '%s\n' "$host_addr" > "$function_path/host_addr" &&
++		printf '%s\n' "$device_addr" > "$function_path/dev_addr"; then
++		return 0
++	fi
++
++	printf '%s\n' "$old_host_addr" > "$function_path/host_addr" 2>/dev/null || true
++	printf '%s\n' "$old_device_addr" > "$function_path/dev_addr" 2>/dev/null || true
++	return 1
++}
++
+ # $1: if set, skip writing to the UDC
+ setup_usb_network_configfs() {
+ 	# See: https://www.kernel.org/doc/Documentation/usb/gadget_configfs.txt
+@@ -849,6 +920,7 @@ setup_usb_network_configfs() {
+ 	usb_network_function="${deviceinfo_usb_network_function:-ncm.usb0}"
+ 	usb_network_function_fallback="rndis.usb0"
+ 	usb_network_host_addr="${deviceinfo_usb_network_host_addr:-}"
++	usb_network_mac_seed_path="${deviceinfo_usb_network_mac_seed_path:-}"
+ 
+ 	echo "  Setting up USB gadget through configfs"
+ 	# Create an usb gadet configuration
+@@ -883,6 +955,19 @@ setup_usb_network_configfs() {
+ 	if [ -n "$usb_network_host_addr" ]; then
+ 		echo "$usb_network_host_addr" > $CONFIGFS/g1/functions/"$usb_network_function"/host_addr \
+ 			|| echo "  Couldn't write host addr"
++	elif [ -n "$usb_network_mac_seed_path" ]; then
++		stable_mac_pair="$(derive_usb_network_mac_pair "$usb_network_mac_seed_path")" ||
++			stable_mac_pair=""
++		if [ -n "$stable_mac_pair" ]; then
++			stable_host_addr="${stable_mac_pair%% *}"
++			stable_device_addr="${stable_mac_pair#* }"
++			set_usb_network_mac_pair \
++				"$CONFIGFS/g1/functions/$usb_network_function" \
++				"$stable_host_addr" "$stable_device_addr" ||
++				echo "  Stable USB network identity unavailable; using function defaults"
++		else
++			echo "  Stable USB network identity unavailable; using function defaults"
++		fi
+ 	fi
+ 
+ 
+diff --git a/main/postmarketos-initramfs/tests/03-usb-stable-mac.sh b/main/postmarketos-initramfs/tests/03-usb-stable-mac.sh
+new file mode 100755
+index 000000000..8be389bd2
+--- /dev/null
++++ b/main/postmarketos-initramfs/tests/03-usb-stable-mac.sh
+@@ -0,0 +1,93 @@
++#!/bin/sh
++set -eu
++
++srcdir="${1:-$(dirname "$(realpath "$0")")/..}"
++fixture_root="${2:-$(dirname "$(realpath "$0")")/fixtures}"
++testdir="$(mktemp -d)"
++trap 'rm -rf "$testdir"' EXIT
++trusted_root="$testdir/trusted"
++mkdir -p "$trusted_root"
++cp "$fixture_root/seed-a.bin" "$fixture_root/seed-b.bin" "$trusted_root/"
++
++USB_MAC_SEED_ROOT="$trusted_root"
++. "$srcdir/init_functions.sh"
++
++fail() {
++	printf 'FAIL: %s\n' "$*" >&2
++	exit 1
++}
++
++assert_valid_local_unicast() {
++	mac="$1"
++	case "$mac" in
++		[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f])
++			;;
++		*)
++			fail "invalid MAC format"
++			;;
++	esac
++	first="${mac%%:*}"
++	[ $((0x$first & 0x03)) -eq 2 ] || fail "MAC is not local unicast"
++}
++
++pair_a="$(derive_usb_network_mac_pair "$trusted_root/seed-a.bin")"
++pair_a_repeat="$(derive_usb_network_mac_pair "$trusted_root/seed-a.bin")"
++pair_b="$(derive_usb_network_mac_pair "$trusted_root/seed-b.bin")"
++[ "$pair_a" = "$pair_a_repeat" ] || fail "same seed was not deterministic"
++[ "$pair_a" != "$pair_b" ] || fail "different fixtures produced the same pair"
++
++host_a="${pair_a%% *}"
++device_a="${pair_a#* }"
++[ "$host_a" != "$device_a" ] || fail "host and device MACs are equal"
++assert_valid_local_unicast "$host_a"
++assert_valid_local_unicast "$device_a"
++
++[ "$pair_a" = "5a:4b:f2:e1:f9:5b 46:53:3b:ab:01:ec" ] ||
++	fail "fixture A output changed"
++[ "$pair_b" = "ba:a2:cf:df:9b:8b be:30:c8:a5:10:56" ] ||
++	fail "fixture B output changed"
++
++if derive_usb_network_mac_pair "$trusted_root/missing.bin" >/dev/null 2>&1; then
++	fail "missing seed accepted"
++fi
++if derive_usb_network_mac_pair /etc/passwd >/dev/null 2>&1; then
++	fail "seed outside trusted root accepted"
++fi
++
++ln -s seed-a.bin "$trusted_root/seed-link.bin"
++if derive_usb_network_mac_pair "$trusted_root/seed-link.bin" >/dev/null 2>&1; then
++	fail "symlink seed accepted"
++fi
++
++dd if=/dev/zero of="$trusted_root/too-large.bin" bs=4097 count=1 2>/dev/null
++if derive_usb_network_mac_pair "$trusted_root/too-large.bin" >/dev/null 2>&1; then
++	fail "oversized seed accepted"
++fi
++
++(
++	sha256sum() { return 1; }
++	if derive_usb_network_mac_pair "$trusted_root/seed-a.bin" >/dev/null 2>&1; then
++		exit 1
++	fi
++) || fail "hash failure did not fall back"
++
++function_root="$testdir/ncm.usb0"
++mkdir -p "$function_root"
++printf '%s\n' '6e:11:22:33:44:55' > "$function_root/host_addr"
++printf '%s\n' '2a:66:77:88:99:aa' > "$function_root/dev_addr"
++set_usb_network_mac_pair "$function_root" "$host_a" "$device_a" ||
++	fail "valid pair was not written"
++[ "$(cat "$function_root/host_addr")" = "$host_a" ] || fail "host write mismatch"
++[ "$(cat "$function_root/dev_addr")" = "$device_a" ] || fail "device write mismatch"
++
++# A failed preflight must leave the function defaults untouched.
++printf '%s\n' '6e:11:22:33:44:55' > "$function_root/host_addr"
++rm "$function_root/dev_addr"
++mkdir "$function_root/dev_addr"
++if set_usb_network_mac_pair "$function_root" "$host_a" "$device_a" 2>/dev/null; then
++	fail "invalid configfs attributes accepted"
++fi
++[ "$(cat "$function_root/host_addr")" = '6e:11:22:33:44:55' ] ||
++	fail "failed preflight changed the random host default"
++
++printf 'usb stable identity tests passed\n'
+diff --git a/main/postmarketos-initramfs/tests/fixtures/seed-a.bin b/main/postmarketos-initramfs/tests/fixtures/seed-a.bin
+new file mode 100644
+index 000000000..bf2673486
+--- /dev/null
++++ b/main/postmarketos-initramfs/tests/fixtures/seed-a.bin
+@@ -0,0 +1 @@
++public USB stable identity fixture A
+diff --git a/main/postmarketos-initramfs/tests/fixtures/seed-b.bin b/main/postmarketos-initramfs/tests/fixtures/seed-b.bin
+new file mode 100644
+index 000000000..4bc43c497
+--- /dev/null
++++ b/main/postmarketos-initramfs/tests/fixtures/seed-b.bin
+@@ -0,0 +1 @@
++public USB stable identity fixture B with different bytes

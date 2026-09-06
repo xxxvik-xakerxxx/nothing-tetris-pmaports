@@ -43,6 +43,7 @@ docker run --rm --privileged \
 			git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git \
 				/work/upstream/pmaports
 		fi
+		/work/scripts/apply-pmaports-patches.sh /work/upstream/pmaports
 		rm -rf \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris \
 			/work/upstream/pmaports/device/testing/firmware-nothing-tetris \

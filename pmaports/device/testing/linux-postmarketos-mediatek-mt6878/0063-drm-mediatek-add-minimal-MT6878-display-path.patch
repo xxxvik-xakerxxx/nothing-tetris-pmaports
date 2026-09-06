@@ -1,0 +1,83 @@
+From cd87ee14484f4021424c2d3f37be373e5fa66dd9 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 22:34:45 +0300
+Subject: [PATCH 1/2] drm: mediatek: add minimal MT6878 display path
+
+Describe the first native MT6878 pipeline as OVL0_2L to DSC0 to DSI0. The companion MMSYS patch expands that logical edge into the exact Nothing OS DRM_BYPASS_PQ crossbar sequence.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_drm_drv.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index 9549aba..d9944b9 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -176,6 +176,12 @@ static const unsigned int mt8186_mtk_ddp_ext[] = {
+ 	DDP_COMPONENT_DPI0,
+ };
+ 
++static const unsigned int mt6878_mtk_ddp_main[] = {
++	DDP_COMPONENT_OVL_2L0,
++	DDP_COMPONENT_DSC0,
++	DDP_COMPONENT_DSI0,
++};
++
+ static const unsigned int mt8188_mtk_ddp_main[] = {
+ 	DDP_COMPONENT_OVL0,
+ 	DDP_COMPONENT_RDMA0,
+@@ -288,6 +294,15 @@ static const struct mtk_mmsys_driver_data mt8186_mmsys_driver_data = {
+ 	.mmsys_dev_num = 1,
+ };
+ 
++static const struct mtk_mmsys_driver_data mt6878_mmsys_driver_data = {
++	.main_path = mt6878_mtk_ddp_main,
++	.main_len = ARRAY_SIZE(mt6878_mtk_ddp_main),
++	.mmsys_dev_num = 1,
++	.max_width = 8191,
++	.min_width = 1,
++	.min_height = 1,
++};
++
+ static const struct mtk_mmsys_driver_data mt8188_vdosys0_driver_data = {
+ 	.main_path = mt8188_mtk_ddp_main,
+ 	.main_len = ARRAY_SIZE(mt8188_mtk_ddp_main),
+@@ -337,6 +352,8 @@ static const struct of_device_id mtk_drm_of_ids[] = {
+ 	  .data = &mt7623_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt2712-mmsys",
+ 	  .data = &mt2712_mmsys_driver_data},
++	{ .compatible = "mediatek,mt6878-mmsys0",
++	  .data = &mt6878_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt8167-mmsys",
+ 	  .data = &mt8167_mmsys_driver_data},
+ 	{ .compatible = "mediatek,mt8173-mmsys",
+@@ -768,6 +785,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt8195-disp-mutex",
+ 	  .data = (void *)MTK_DISP_MUTEX },
++	{ .compatible = "mediatek,mt6878-disp-mutex",
++	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt8365-disp-mutex",
+ 	  .data = (void *)MTK_DISP_MUTEX },
+ 	{ .compatible = "mediatek,mt8173-disp-od",
+@@ -786,6 +805,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DISP_OVL },
+ 	{ .compatible = "mediatek,mt8183-disp-ovl-2l",
+ 	  .data = (void *)MTK_DISP_OVL_2L },
++	{ .compatible = "mediatek,mt6878-disp-ovl-2l",
++	  .data = (void *)MTK_DISP_OVL_2L },
+ 	{ .compatible = "mediatek,mt8192-disp-ovl-2l",
+ 	  .data = (void *)MTK_DISP_OVL_2L },
+ 	{ .compatible = "mediatek,mt8192-disp-postmask",
+@@ -838,6 +859,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DSI },
+ 	{ .compatible = "mediatek,mt8188-dsi",
+ 	  .data = (void *)MTK_DSI },
++	{ .compatible = "mediatek,mt6878-dsi",
++	  .data = (void *)MTK_DSI },
+ 	{ }
+ };
+ 
+-- 
+2.50.1 (Apple Git-155)

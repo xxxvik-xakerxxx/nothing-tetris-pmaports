@@ -331,7 +331,7 @@ index 0000000000000000000000000000000000000000..5911d8ecf6c9e81195c38e8047f75346
 +		goto err_display_off;
 +
 +	ctx->prepared = true;
-+	ctx->enabled = true;
++	ctx->enabled = false;
 +	return 0;
 +
 +err_display_off:
@@ -507,7 +507,7 @@ index 0000000000000000000000000000000000000000..5911d8ecf6c9e81195c38e8047f75346
 +	struct backlight_properties props = {
 +		.type = BACKLIGHT_RAW,
 +		.max_brightness = S6E8FC3X02_MAX_BRIGHTNESS,
-+		.brightness = 0,
++		.brightness = 1024,
 +	};
 +	struct device *dev = &dsi->dev;
 +	struct s6e8fc3x02 *ctx;

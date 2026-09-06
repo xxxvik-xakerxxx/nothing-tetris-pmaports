@@ -1,0 +1,61 @@
+From 8f8d87d74d9b9bc43caaf196f1e53fda6de19f8d Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 07:22:00 +0300
+Subject: [PATCH 2/2] dt-bindings: display: mediatek: add MT6878 components
+
+Document the mutex, two-layer overlay and DSC compatibles used by the
+bounded MT6878 native display path.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../bindings/display/mediatek/mediatek,dsc.yaml       | 1 +
+ .../bindings/display/mediatek/mediatek,ovl-2l.yaml    | 1 +
+ .../bindings/soc/mediatek/mediatek,mutex.yaml         | 2 ++
+ 3 files changed, 4 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/display/mediatek/mediatek,dsc.yaml b/Documentation/devicetree/bindings/display/mediatek/mediatek,dsc.yaml
+index 2187ad5c2..39cf53730 100644
+--- a/Documentation/devicetree/bindings/display/mediatek/mediatek,dsc.yaml
++++ b/Documentation/devicetree/bindings/display/mediatek/mediatek,dsc.yaml
+@@ -21,6 +21,7 @@ properties:
+   compatible:
+     oneOf:
+       - enum:
++          - mediatek,mt6878-disp-dsc
+           - mediatek,mt8195-disp-dsc
+       - items:
+           - const: mediatek,mt8188-disp-dsc
+diff --git a/Documentation/devicetree/bindings/display/mediatek/mediatek,ovl-2l.yaml b/Documentation/devicetree/bindings/display/mediatek/mediatek,ovl-2l.yaml
+index 36a7e01d2..cc6efeb6a 100644
+--- a/Documentation/devicetree/bindings/display/mediatek/mediatek,ovl-2l.yaml
++++ b/Documentation/devicetree/bindings/display/mediatek/mediatek,ovl-2l.yaml
+@@ -22,6 +22,7 @@ properties:
+   compatible:
+     oneOf:
+       - enum:
++          - mediatek,mt6878-disp-ovl-2l
+           - mediatek,mt8183-disp-ovl-2l
+           - mediatek,mt8192-disp-ovl-2l
+       - items:
+diff --git a/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
+index 6b6019ef6..ebcc3dbd0 100644
+--- a/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
++++ b/Documentation/devicetree/bindings/soc/mediatek/mediatek,mutex.yaml
+@@ -27,6 +27,7 @@ properties:
+       - mediatek,mt2701-disp-mutex
+       - mediatek,mt2712-disp-mutex
+       - mediatek,mt6795-disp-mutex
++      - mediatek,mt6878-disp-mutex
+       - mediatek,mt8167-disp-mutex
+       - mediatek,mt8173-disp-mutex
+       - mediatek,mt8183-disp-mutex
+@@ -82,6 +83,7 @@ allOf:
+               - mediatek,mt2701-disp-mutex
+               - mediatek,mt2712-disp-mutex
+               - mediatek,mt6795-disp-mutex
++              - mediatek,mt6878-disp-mutex
+               - mediatek,mt8173-disp-mutex
+               - mediatek,mt8186-disp-mutex
+               - mediatek,mt8186-mdp3-mutex
+-- 
+2.50.1 (Apple Git-155)

@@ -8,8 +8,8 @@ tracked in `docs/NOTHINGOSS_SOURCES.md`.
 
 The current baseline is intentionally conservative:
 
-- display uses the inherited framebuffer through `simpledrm`;
-- native MediaTek DSI/DSC/panel support is not part of the active baseline;
+- installed r132 uses the inherited framebuffer through `simpledrm`;
+- the r133 candidate selects only the native MediaTek DSI/DSC/panel DTB;
 - charger and PMIC telemetry uses a conservative 500 mA USB-debug policy until
   the source current is classified through BC1.2, Type-C Rp or PD;
 - risky Android vendor stacks stay disabled until they are split into small,
@@ -52,7 +52,8 @@ normal Alpine/postmarketOS practice.
 
 | Patch | Purpose |
 | --- | --- |
-| `0005-drm-sysfb-tetris-framebuffer.patch` | Inherited U-Boot framebuffer fallback for Tetris. With U-Boot `b76e47e`, r132 retained a coherent logical framebuffer but persistent physical Phoc artifacts, proving damage-limited copying was not the fix. After only U-Boot changed to `60bcf22`, the same image produced clean Phoc output on two boots. Keep this usable simplefb path as recovery while native display is reconstructed; it still lacks brightness and panel suspend. |
+| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped r133 native DTB disables it and the FIT does not select the legacy DTB. |
+| `0056`-`0072` native display series | Adds MT6878 MMSYS clocks/routing, DISP/MM power, OVL frame-start handling, DSC, DSI host, MIPI PHY, bounded larb0/IOMMU DMA and the native Tetris DTB. |
 
 ### PMIC, keys and power telemetry
 
@@ -174,8 +175,8 @@ not a confirmed external RT1711H controller.
   should use normal commit-style patches with subject, rationale and sign-off.
 - Patch numbering is contiguous and grouped by hardware/function. Keep future
   additions in that style: one patch file per maintained hardware block.
-- The native panel source is compile-only. Native MT6878 DSI/DSC/PHY and an
-  active display graph are intentionally not in this series.
+- Native display is packaged but not runtime-proven. Do not mark it `Works`
+  until the CI artifact passes display lifecycle and USB gates.
 
 ## Next clean patch targets
 

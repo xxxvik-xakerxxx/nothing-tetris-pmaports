@@ -43,6 +43,7 @@ docker run --rm --privileged \
 			git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git \
 				/work/upstream/pmaports
 		fi
+		/work/scripts/apply-pmaports-patches.sh /work/upstream/pmaports
 		rm -rf \
 			/work/upstream/pmaports/device/testing/device-nothing-tetris \
 			/work/upstream/pmaports/device/testing/firmware-nothing-tetris \
@@ -55,6 +56,14 @@ docker run --rm --privileged \
 			/work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
 
 		cd /work/upstream/pmbootstrap
+		./pmbootstrap.py --as-root \
+			--work "$pmbootstrap_work" \
+			-c /work/ci/pmbootstrap-aarch64.cfg \
+			checksum postmarketos-initramfs
+		./pmbootstrap.py --as-root \
+			--work "$pmbootstrap_work" \
+			-c /work/ci/pmbootstrap-aarch64.cfg \
+			build --lax --force postmarketos-initramfs --arch aarch64
 		./pmbootstrap.py --as-root \
 			--work "$pmbootstrap_work" \
 			-c /work/ci/pmbootstrap-aarch64.cfg \

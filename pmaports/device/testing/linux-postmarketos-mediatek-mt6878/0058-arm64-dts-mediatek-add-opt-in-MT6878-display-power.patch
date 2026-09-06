@@ -1,0 +1,57 @@
+From 6eb828b47330af8a1879798c4b8570b94e1ec595 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 21:00:23 +0300
+Subject: [PATCH 3/3] arm64: dts: mediatek: add opt-in MT6878 display power
+ fixture
+
+Add an include-only fixture that instantiates MMSYS clocks and the exact
+MM_INFRA -> DISP hierarchy. No shipping DTS includes this file. This keeps
+simplefb, USB and touch unchanged until a native-display DT opts in.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../mediatek/mt6878-native-display-power.dtsi | 33 +++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/mediatek/mt6878-native-display-power.dtsi
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-native-display-power.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-native-display-power.dtsi
+new file mode 100644
+index 000000000..0655f8ed8
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-native-display-power.dtsi
+@@ -0,0 +1,33 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/*
++ * Explicit opt-in fixture for MT6878 native-display development.
++ * No shipping DTB includes this file.
++ */
++
++&soc {
++	mmsys: syscon@14000000 {
++		compatible = "mediatek,mt6878-mmsys0", "syscon";
++		reg = <0x14000000 0x1000>;
++		#clock-cells = <1>;
++	};
++};
++
++&spm {
++	mm_infra: power-domain@MT6878_POWER_DOMAIN_MM_INFRA {
++		reg = <MT6878_POWER_DOMAIN_MM_INFRA>;
++		clocks = <&topckgen CLK_TOP_MMINFRA_SEL>;
++		clock-names = "mm_infra";
++		mediatek,hardware-voter = <&hwv>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		#power-domain-cells = <1>;
++
++		disp: power-domain@MT6878_POWER_DOMAIN_DISP {
++			reg = <MT6878_POWER_DOMAIN_DISP>;
++			clocks = <&topckgen CLK_TOP_DISP0_SEL>,
++				 <&mmsys CLK_MM_SMI_COMMON>;
++			clock-names = "disp", "disp0-0";
++			#power-domain-cells = <0>;
++		};
++	};
++};
+-- 
+2.50.1 (Apple Git-155)

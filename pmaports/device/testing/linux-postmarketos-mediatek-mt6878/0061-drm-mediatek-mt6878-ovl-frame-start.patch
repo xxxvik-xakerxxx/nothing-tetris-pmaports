@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 31 Aug 2026 13:20:00 +0300
+Subject: [PATCH] drm/mediatek: add MT6878 OVL 2L data and frame-start vblank
+
+The MT6878 display description already identifies its two-layer OVL with
+the SoC-specific compatible, but the OVL platform driver has no matching
+entry. Add explicit MT6878 data using the register layout shared with the
+newer two-layer OVL blocks.
+
+The Tetris native-display experiment also showed that frame-completion bit
+1 never arrives. Nothing OS 4.1 and the previously validated r40
+experiment use frame-start bit 14 for this OVL generation. Store the
+vblank interrupt mask in driver data so every other MediaTek OVL keeps its
+existing frame-completion behavior.
+
+This patch only makes the dormant driver path buildable. The MT6878 DRM
+config and every native display DT node remain disabled.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_disp_ovl.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -22,6 +22,7 @@
+ 
+ #define DISP_REG_OVL_INTEN			0x0004
+ #define OVL_FME_CPL_INT					BIT(1)
++#define OVL_FME_START_INT				BIT(14)
+ #define DISP_REG_OVL_INTSTA			0x0008
+ #define DISP_REG_OVL_EN				0x000c
+ #define DISP_REG_OVL_RST			0x0014
+@@ -140,6 +141,7 @@ struct mtk_disp_ovl_data {
+ 	const u32 *formats;
+ 	size_t num_formats;
+ 	bool supports_clrfmt_ext;
++	u32 vblank_irq_mask;
+ };
+ 
+ /*
+@@ -207,7 +209,8 @@ void mtk_ovl_enable_vblank(struct device *dev)
+ 	struct mtk_disp_ovl *ovl = dev_get_drvdata(dev);
+ 
+ 	writel(0x0, ovl->regs + DISP_REG_OVL_INTSTA);
+-	writel_relaxed(OVL_FME_CPL_INT, ovl->regs + DISP_REG_OVL_INTEN);
++	writel_relaxed(ovl->data->vblank_irq_mask ?: OVL_FME_CPL_INT,
++		       ovl->regs + DISP_REG_OVL_INTEN);
+ }
+ 
+ void mtk_ovl_disable_vblank(struct device *dev)
+@@ -671,6 +674,20 @@ static const struct mtk_disp_ovl_data mt8192_ovl_2l_driver_data = {
+ 	.num_formats = ARRAY_SIZE(mt8173_formats),
+ };
+ 
++static const struct mtk_disp_ovl_data mt6878_ovl_2l_driver_data = {
++	.addr = DISP_REG_OVL_ADDR_MT8173,
++	.gmc_bits = 10,
++	.layer_nr = 2,
++	.fmt_rgb565_is_0 = true,
++	.smi_id_en = true,
++	.blend_modes = BIT(DRM_MODE_BLEND_PREMULTI) |
++		       BIT(DRM_MODE_BLEND_COVERAGE) |
++		       BIT(DRM_MODE_BLEND_PIXEL_NONE),
++	.formats = mt8173_formats,
++	.num_formats = ARRAY_SIZE(mt8173_formats),
++	.vblank_irq_mask = OVL_FME_START_INT,
++};
++
+ static const struct mtk_disp_ovl_data mt8195_ovl_driver_data = {
+ 	.addr = DISP_REG_OVL_ADDR_MT8173,
+ 	.gmc_bits = 10,
+@@ -696,6 +713,8 @@ static const struct of_device_id mtk_disp_ovl_driver_dt_match[] = {
+ 	  .data = &mt8183_ovl_driver_data},
+ 	{ .compatible = "mediatek,mt8183-disp-ovl-2l",
+ 	  .data = &mt8183_ovl_2l_driver_data},
++	{ .compatible = "mediatek,mt6878-disp-ovl-2l",
++	  .data = &mt6878_ovl_2l_driver_data},
+ 	{ .compatible = "mediatek,mt8192-disp-ovl",
+ 	  .data = &mt8192_ovl_driver_data},
+ 	{ .compatible = "mediatek,mt8192-disp-ovl-2l",
+-- 
+2.51.0

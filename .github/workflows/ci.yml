@@ -87,6 +87,7 @@ jobs:
           test "$(git -C upstream/pmaports rev-parse HEAD)" = "$PMAPORTS_COMMIT"
           git -C upstream/pmaports update-ref \
             refs/remotes/origin/main "$PMAPORTS_COMMIT"
+          ./scripts/apply-pmaports-patches.sh upstream/pmaports
           rm -rf \
             upstream/pmaports/device/testing/device-nothing-tetris \
             upstream/pmaports/device/testing/firmware-nothing-tetris \
@@ -115,9 +116,9 @@ jobs:
             /pmwork/work/cache_distfiles
             /pmwork/work/cache_ccache_x86_64
             /pmwork/work/cache_sccache
-          key: pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-${{ github.run_id }}
+          key: pmb-${{ runner.os }}-${{ hashFiles('pmaports-patches/**', 'pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-${{ github.run_id }}
           restore-keys: |
-            pmb-${{ runner.os }}-${{ hashFiles('pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-
+            pmb-${{ runner.os }}-${{ hashFiles('pmaports-patches/**', 'pmaports/device/testing/device-nothing-tetris/**', 'pmaports/device/testing/firmware-nothing-tetris/**', 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/**', 'ci/pmbootstrap-aarch64.cfg') }}-
             pmb-${{ runner.os }}-
       - name: Build kernel package
         run: |
@@ -134,6 +135,15 @@ jobs:
       - name: Build device package
         run: |
           cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            checksum postmarketos-initramfs
+          ./pmbootstrap.py --as-root \
+            --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force --lax postmarketos-initramfs --arch aarch64 ||
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
           ./pmbootstrap.py --as-root \
             --work /pmwork/work \
             -c /work/ci/pmbootstrap-aarch64.cfg \
