@@ -65,9 +65,12 @@ copies to compositor damage did not remove the physical noise. After changing
 only U-Boot to `60bcf22`, the same image produced clean Phoc output on two
 consecutive boots. The logical framebuffer remains coherent and `fts_ts` still
 exposes `event0`; native brightness and panel suspend remain absent.
-The r133 source candidate replaces the simpledrm runtime with the native
-DDP/OVL/DSC/DSI pipeline and a native-only board DTB. The clean r132 CI
-artifacts remain the external fastboot rollback for the first device test.
+Native-only CI `34017277889` replaced simpledrm with the DDP/OVL/DSC/DSI
+pipeline and clean-booted with USB SSH and touch intact. Runtime diagnostics
+found the first blocker: firmware returns `-EPERM` for the optional HWCCF hint,
+so `MM_INFRA` never registered and no DRM card was created. The r134 candidate
+tolerates only that vendor-confirmed response and continues with the bounded
+hardware-voter handshake. Clean r132 artifacts remain the fastboot rollback.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
 transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
@@ -86,8 +89,8 @@ its exact calibration records without committing whole dumps or unique IDs.
 | --- | --- | --- | --- |
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
-| Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. The r133 candidate no longer selects the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DSI/panel | Untested | Packaged r133 includes MMSYS clocks/routing, DISP/MM power, OVL, DSC, DSI host at the vendor-confirmed 1140 Mbps lane rate, MIPI PHY, bounded larb0/IOMMU DMA and the Samsung panel. Its only FIT DTB removes simplefb, and the kernel excludes simpledrm/sysfb. All 18 patches strict-apply and the native DTB passes host DTC; CI and device evidence are still required. |
+| Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
+| Display | Native DSI/panel | Broken | Native-only CI `34017277889` clean-boots with USB SSH and touch but creates no DRM card. Live reprobe identified `MM_INFRA` failing because firmware returns `-EPERM` for the optional HWCCF hint. The r134 candidate mirrors the vendor behavior for only this response; native bind and pixels remain unverified. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |

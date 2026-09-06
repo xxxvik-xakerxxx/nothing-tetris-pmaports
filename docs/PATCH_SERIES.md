@@ -9,7 +9,7 @@ tracked in `docs/NOTHINGOSS_SOURCES.md`.
 The current baseline is intentionally conservative:
 
 - installed r132 uses the inherited framebuffer through `simpledrm`;
-- the r133 candidate selects only the native MediaTek DSI/DSC/panel DTB;
+- native builds select only the MediaTek DSI/DSC/panel DTB;
 - charger and PMIC telemetry uses a conservative 500 mA USB-debug policy until
   the source current is classified through BC1.2, Type-C Rp or PD;
 - risky Android vendor stacks stay disabled until they are split into small,
@@ -48,12 +48,13 @@ normal Alpine/postmarketOS practice.
 | `0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch` | Board peripheral inventory plus the hardware-tested MT6631 conninfra reserved-memory/PMIC contract. Wi-Fi and Bluetooth are enabled; unvalidated clients remain disabled. |
 | `0006-pinctrl-mediatek-mt6878-eint.patch` | EINT table fix needed by board interrupts. |
 
-### Stable framebuffer display path
+### Display paths
 
 | Patch | Purpose |
 | --- | --- |
-| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped r133 native DTB deletes its node and the FIT does not select the legacy DTB. |
+| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped native DTB deletes its node and the FIT does not select the legacy DTB. |
 | `0056`-`0073` native display series | Adds MT6878 MMSYS clocks/routing, DISP/MM power, OVL frame-start handling, DSC, DSI host, MIPI PHY, bounded larb0/IOMMU DMA, the native Tetris DTB and the vendor-confirmed 1140 Mbps DSI lane rate. |
+| `0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch` | Continues the bounded MM_INFRA hardware vote when this firmware rejects only the optional HWCCF hint with `-EPERM`, matching the MT6878 vendor contract. Other firmware errors remain fatal. |
 
 ### PMIC, keys and power telemetry
 
@@ -175,7 +176,7 @@ not a confirmed external RT1711H controller.
   should use normal commit-style patches with subject, rationale and sign-off.
 - Patch numbering is contiguous and grouped by hardware/function. Keep future
   additions in that style: one patch file per maintained hardware block.
-- Native display is packaged but not runtime-proven. Do not mark it `Works`
+- Native display clean-boots but does not bind yet. Do not mark it `Works`
   until the CI artifact passes display lifecycle and USB gates.
 
 ## Next clean patch targets
