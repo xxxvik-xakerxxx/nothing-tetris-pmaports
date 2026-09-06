@@ -663,6 +663,10 @@ validate_compile_only_boundaries() {
 		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 	grep -Fq '# CONFIG_DRM_SYSFB_HELPER is not set' \
 		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	grep -Fq '0073-drm-mediatek-use-MT6878-panel-data-rate.patch' \
+		"$kernel_apkbuild"
+	grep -Fq '.fixed_data_rate = 1140000000,' \
+		"$kernel_pkg/0073-drm-mediatek-use-MT6878-panel-data-rate.patch"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"

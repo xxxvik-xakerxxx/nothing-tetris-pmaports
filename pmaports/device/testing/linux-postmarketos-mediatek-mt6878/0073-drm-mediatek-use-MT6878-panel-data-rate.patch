@@ -1,0 +1,66 @@
+From 2efffdd5d86420653146752780c69794aef44597 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 09:55:00 +0300
+Subject: [PATCH] drm: mediatek: use the MT6878 panel data rate
+
+The generic DSI host derives the lane rate from the uncompressed RGB888
+pixel format. For the DSC-only Tetris panel that produces 2.264 GHz and
+causes mode_valid() to reject the mode against its 1.5 GHz limit.
+
+Nothing OS 4.1 configures this panel at a fixed 1140 Mbps for both 60 Hz
+and 120 Hz. Carry that hardware value in the MT6878 host data and use it
+consistently for mode validation and PHY clock programming.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_dsi.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index 151597c..91f16e4 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -189,6 +189,7 @@ struct mtk_dsi_driver_data {
+ 	const u32 reg_cmdq_off;
+ 	const u32 reg_vm_cmd_off;
+ 	const u32 reg_shadow_dbg_off;
++	const u32 fixed_data_rate;
+ 	bool has_shadow_ctl;
+ 	bool has_size_ctl;
+ 	bool cmdq_long_packet_ctl;
+@@ -689,8 +690,11 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
+ 	}
+ 	bit_per_pixel = ret;
+ 
+-	dsi->data_rate = DIV_ROUND_UP_ULL(dsi->vm.pixelclock * bit_per_pixel,
+-					  dsi->lanes);
++	if (dsi->driver_data->fixed_data_rate)
++		dsi->data_rate = dsi->driver_data->fixed_data_rate;
++	else
++		dsi->data_rate = DIV_ROUND_UP_ULL(dsi->vm.pixelclock * bit_per_pixel,
++						  dsi->lanes);
+ 
+ 	ret = clk_set_rate(dsi->hs_clk, dsi->data_rate);
+ 	if (ret < 0) {
+@@ -876,6 +880,11 @@ mtk_dsi_bridge_mode_valid(struct drm_bridge *bridge,
+ 	bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
+ 	if (bpp < 0)
+ 		return MODE_ERROR;
++
++	if (dsi->driver_data->fixed_data_rate > 1500000000)
++		return MODE_CLOCK_HIGH;
++	if (dsi->driver_data->fixed_data_rate)
++		return MODE_OK;
+ 
+ 	if (mode->clock * bpp / dsi->lanes > 1500000)
+ 		return MODE_CLOCK_HIGH;
+@@ -1292,6 +1301,7 @@ static const struct mtk_dsi_driver_data mt6878_dsi_driver_data = {
+ 	.reg_cmdq_off = 0xd00,
+ 	.reg_vm_cmd_off = 0x200,
+ 	.reg_shadow_dbg_off = 0xc00,
++	.fixed_data_rate = 1140000000,
+ 	.has_shadow_ctl = true,
+ 	.has_size_ctl = true,
+ };
+-- 
+2.50.1 (Apple Git-155)
