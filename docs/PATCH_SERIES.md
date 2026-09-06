@@ -52,7 +52,7 @@ normal Alpine/postmarketOS practice.
 
 | Patch | Purpose |
 | --- | --- |
-| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped r133 native DTB disables it and the FIT does not select the legacy DTB. |
+| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped r133 native DTB deletes its node and the FIT does not select the legacy DTB. |
 | `0056`-`0072` native display series | Adds MT6878 MMSYS clocks/routing, DISP/MM power, OVL frame-start handling, DSC, DSI host, MIPI PHY, bounded larb0/IOMMU DMA and the native Tetris DTB. |
 
 ### PMIC, keys and power telemetry

@@ -4,7 +4,7 @@ Date: Sun, 6 Sep 2026 08:02:00 +0300
 Subject: [PATCH] arm64: dts: mediatek: add Nothing Tetris native display DTB
 
 Add the native-display DTB with OVL0_2L, DSC0, DSI0, panel, display
-power, clocks and bounded larb0/IOMMU DMA enabled. Disable simplefb so
+power, clocks and bounded larb0/IOMMU DMA enabled. Remove simplefb so
 the shipped device configuration uses the native DRM pipeline.
 
 Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
@@ -51,8 +51,8 @@ index 0000000..1207ba6
 +	};
 +};
 +
-+&{/chosen/simplefb@fe0d0000} {
-+	status = "disabled";
++&{/chosen} {
++	/delete-node/ simplefb@fe0d0000;
 +};
 +
 +&pio {
