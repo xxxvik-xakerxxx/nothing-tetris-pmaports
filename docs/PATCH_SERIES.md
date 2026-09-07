@@ -61,6 +61,7 @@ normal Alpine/postmarketOS practice.
 | `0078-drm-mediatek-reset-MT6878-DSI-to-command-mode.patch` | Resets MT6878 DSI to command mode during power-on before panel prepare. Installed r137 registers native DRM without Oops but inherits U-Boot video mode and waits forever for VM_DONE before the new pipeline has emitted a frame. Atomic enable still selects and starts the requested video mode afterward. |
 | `0079-drm-panel-set-maximum-return-packet-size.patch` | Requests a three-byte MIPI DSI return packet before reading the S6E8FC3X02 display ID. Installed r138 proves command-mode IRQ completion but receives only the panel's default one-byte response; the official Nothing OS 4.1 MT6878 host sends the equivalent size command before every read. |
 | `0080-drm-panel-accept-S6E8FC3X02-revisions.patch` | Removes the unsupported `40 21 01` single-revision allowlist from the early compile-only port while retaining the complete three-byte transfer check. Installed r139 reads `40 41 02`; the official Nothing OS 4.1 driver treats ID as revision information and selects this panel through the board DT compatible. |
+| `0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch` | Programs the DSI host for compressed DSC output: stream type 5, word count from two 540-byte chunks and MT6878 DSI buffer width 360. Installed r140 proves panel lifecycle but shows stripes with the previous uncompressed RGB888 framing. |
 
 ### PMIC, keys and power telemetry
 
