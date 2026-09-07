@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 11:20:00 +0300
+Subject: [PATCH] drm/panel: accept S6E8FC3X02 panel revisions
+
+The initial compile-only port admitted only display ID 40 21 01, but that
+value has no counterpart in the Nothing OS 4.1 driver.  A clean native boot
+on a Tetris A015 reads the valid three-byte ID 40 41 02 and is rejected
+after all initialization commands have completed.
+
+The official driver uses the DT compatible to select S6E8FC3X02 and exposes
+the three ID bytes as revision information without an allowlist.  Follow
+that model: retain the full-length transfer check and log the detected ID,
+but do not reject an otherwise valid panel revision.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c b/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
+index 3ba6df1..657a1e8 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
+@@ -276,8 +276,7 @@ static void s6e8fc3x02_panel_init(struct s6e8fc3x02 *ctx,
+ 
+ static int s6e8fc3x02_check_id(struct s6e8fc3x02 *ctx)
+ {
+-	static const u8 expected_id[] = { 0x40, 0x21, 0x01 };
+-	u8 id[ARRAY_SIZE(expected_id)];
++	u8 id[3];
+ 	int ret;
+ 
+ 	ret = mipi_dsi_set_maximum_return_packet_size(ctx->dsi, sizeof(id));
+@@ -297,10 +296,6 @@ static int s6e8fc3x02_check_id(struct s6e8fc3x02 *ctx)
+ 		return dev_err_probe(&ctx->dsi->dev, -EIO,
+ 				     "short panel ID read: %d\n", ret);
+-	if (memcmp(id, expected_id, sizeof(id)))
+-		return dev_err_probe(&ctx->dsi->dev, -ENODEV,
+-				     "unexpected panel ID %*ph\n", (int)sizeof(id), id);
+-
+-	dev_info(&ctx->dsi->dev, "panel ID %*ph verified\n",
++	dev_info(&ctx->dsi->dev, "panel ID %*ph detected\n",
+ 		 (int)sizeof(id), id);
+ 	return 0;
+ }
+-- 
+2.50.1 (Apple Git-155)

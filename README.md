@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed native-display `pkgrel=138`) |
+| Kernel version | `6.18` (installed native-display `pkgrel=139`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
@@ -74,8 +74,11 @@ mode. OVL, mutex and DSI bind with USB SSH and touch intact; native DRM
 registers `card0`, a connected 1080x2400 DSI connector and `mediatekdrmfb`
 without an Oops. DSI command IRQs now complete, but the panel returns its
 default one-byte response to the three-byte display-ID read, so preparation
-stops before enable and backlight registration. The r139 source candidate sends
-the standard maximum-return-packet-size command before that read.
+stops before enable and backlight registration. Installed r139 fixes the packet
+size and reads `40 41 02`; the remaining stop is an unsupported single-revision
+allowlist inherited from the early compile-only port. r140 retains the full
+transfer check but accepts revisions selected by the board DT compatible, as
+the official Nothing driver does.
 Clean r132 artifacts remain the fastboot rollback.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
@@ -96,7 +99,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DSI/panel | Partial | Native-only CI `34084388144` clean-boots kernel `#139` with USB SSH and touch and no framebuffer fallback or kernel fault. Native DRM registers `card0`, `mediatekdrmfb` and connected mode `1080x2400`; DSI IRQs advance, proving the stale-video-mode fix. Panel preparation stops on a one-byte response to the three-byte ID read, leaving the connector disabled and no backlight. r139 sets the return packet size before reading. |
+| Display | Native DSI/panel | Partial | Native-only CI `34091038734` clean-boots kernel `#140` with USB SSH and touch and no framebuffer fallback or kernel fault. Native DRM registers `card0`, `mediatekdrmfb` and connected mode `1080x2400`; r139 obtains the complete panel ID `40 41 02`. Preparation is now blocked only by the early port's unsupported `40 21 01` revision allowlist; r140 removes that allowlist while retaining the full-transfer check. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |

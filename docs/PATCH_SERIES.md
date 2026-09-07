@@ -60,6 +60,7 @@ normal Alpine/postmarketOS practice.
 | `0077-drm-mediatek-wait-for-display-mutex-probe.patch` | Defers DRM aggregate bind until the display-mutex platform driver has published drvdata. Installed r136 proves the DSI ordering fix and then reaches this later race; manual binding proves the MT6878 mutex resources themselves are valid. |
 | `0078-drm-mediatek-reset-MT6878-DSI-to-command-mode.patch` | Resets MT6878 DSI to command mode during power-on before panel prepare. Installed r137 registers native DRM without Oops but inherits U-Boot video mode and waits forever for VM_DONE before the new pipeline has emitted a frame. Atomic enable still selects and starts the requested video mode afterward. |
 | `0079-drm-panel-set-maximum-return-packet-size.patch` | Requests a three-byte MIPI DSI return packet before reading the S6E8FC3X02 display ID. Installed r138 proves command-mode IRQ completion but receives only the panel's default one-byte response; the official Nothing OS 4.1 MT6878 host sends the equivalent size command before every read. |
+| `0080-drm-panel-accept-S6E8FC3X02-revisions.patch` | Removes the unsupported `40 21 01` single-revision allowlist from the early compile-only port while retaining the complete three-byte transfer check. Installed r139 reads `40 41 02`; the official Nothing OS 4.1 driver treats ID as revision information and selects this panel through the board DT compatible. |
 
 ### PMIC, keys and power telemetry
 
