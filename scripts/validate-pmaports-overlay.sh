@@ -671,6 +671,8 @@ validate_compile_only_boundaries() {
 		"$kernel_apkbuild"
 	grep -Fq '#define COMPRESSED_PS_24BIT_RGB888' \
 		"$kernel_pkg/0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch"
+	grep -Fq '#include <drm/display/drm_dsc.h>' \
+		"$kernel_pkg/0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch"
 	grep -Fq 'dsi->dsc->slice_chunk_size * dsi->dsc->slice_count' \
 		"$kernel_pkg/0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch"
 	grep -Fq 'DIV_ROUND_UP(ps_wc, dsi_buf_bpp)' \
