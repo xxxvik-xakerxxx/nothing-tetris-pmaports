@@ -68,12 +68,13 @@ exposes `event0`; native brightness and panel suspend remain absent.
 Native-only CI `34017277889` replaced simpledrm with the DDP/OVL/DSC/DSI
 pipeline and clean-booted with USB SSH and touch intact. Runtime diagnostics
 found the first blocker: firmware returns `-EPERM` for the optional HWCCF hint.
-The installed r136 candidate uses the registered SPM DISP domain and fixes the
-synchronous DSI probe-ordering fault. OVL and DSI now bind with USB SSH and touch
-intact. The aggregate advances to CRTC creation, where it Oopses because the
-display-mutex platform device exists before its deferred driver probe has
-published drvdata. The r137 candidate makes aggregate bind defer until the mutex
-driver is ready.
+The installed r137 candidate fixes the synchronous DSI and deferred display
+mutex ordering faults. OVL, mutex and DSI bind with USB SSH and touch intact;
+native DRM registers `card0`, an enabled 1080x2400 DSI connector and
+`mediatekdrmfb` without an Oops. Panel initialization then stops before its first
+DCS write because mainline mistakes U-Boot's stale video-mode register for an
+active stream and waits for a VM_DONE interrupt. The r138 candidate resets
+MT6878 DSI to command mode before panel prepare.
 Clean r132 artifacts remain the fastboot rollback.
 GNSS v051 is installed manual-only. After correcting the installed U-Boot from
 `8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded

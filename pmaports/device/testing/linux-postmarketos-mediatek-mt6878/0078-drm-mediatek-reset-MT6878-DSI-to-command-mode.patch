@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 00:55:00 +0300
+Subject: [PATCH] drm/mediatek: reset MT6878 DSI to command mode
+
+U-Boot can hand the MT6878 DSI controller to Linux with video mode still
+selected.  The mainline host then mistakes that stale mode for an active
+video stream while the panel bridge sends its first initialization command.
+It waits for VM_DONE from a pipeline that has not produced a frame and
+times out before sending any DCS data.
+
+Reset MT6878 to command mode during host power-on.  Panel initialization
+can then use the normal CMD_DONE transfer path, while atomic enable selects
+and starts the requested video mode afterward.
+
+Keep the behavior opt-in because only the MT6878 bootloader handoff has
+been validated.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_dsi.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index b61c179..85bd2db 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -193,6 +193,7 @@ struct mtk_dsi_driver_data {
+ 	bool has_size_ctl;
+ 	bool cmdq_long_packet_ctl;
+ 	bool support_per_frame_lp;
++	bool force_cmd_mode_on_poweron;
+ };
+ 
+ struct mtk_dsi {
+@@ -718,6 +719,9 @@ static int mtk_dsi_poweron(struct mtk_dsi *dsi)
+ 		       dsi->regs + dsi->driver_data->reg_shadow_dbg_off);
+ 
+ 	mtk_dsi_reset_engine(dsi);
++	if (dsi->driver_data->force_cmd_mode_on_poweron)
++		mtk_dsi_set_cmd_mode(dsi);
++
+ 	mtk_dsi_phy_timconfig(dsi);
+ 
+ 	mtk_dsi_ps_control(dsi, true);
+@@ -1284,6 +1288,7 @@ static const struct mtk_dsi_driver_data mt6878_dsi_driver_data = {
+ 	.reg_shadow_dbg_off = 0xc00,
+ 	.has_shadow_ctl = true,
+ 	.has_size_ctl = true,
++	.force_cmd_mode_on_poweron = true,
+ };
+ 
+ static const struct mtk_dsi_driver_data mt8183_dsi_driver_data = {
+-- 
+2.50.1 (Apple Git-155)
