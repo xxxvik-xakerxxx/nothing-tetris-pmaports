@@ -1,0 +1,186 @@
+From d282407da0cc4f2f613ee5b5b0c8e5f4b6143b42 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 19:51:37 +0300
+Subject: [PATCH] drm: mediatek: use full MT6878 OVL chain
+
+NothingOSS routes the primary MT6878 pipeline through OVL0_2L, OVL1_2L and OVL2_2L before entering the PQ bypass crossbars. The previous minimal route skipped the latter two hardware blocks while the inherited boot route still selected them, leaving DSC with abnormal EOF and no valid frame.
+
+Describe and clock all three OVL components, add their exact vendor mutex bits, replace the fabricated direct selectors with the measured NothingOSS chain, and enable the background input on every downstream OVL as the vendor config-begin path does.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../mediatek/mt6878-nothing-tetris-native.dts | 20 +++++++++
+ drivers/gpu/drm/mediatek/mtk_crtc.c           |  4 +-
+ drivers/gpu/drm/mediatek/mtk_drm_drv.c        |  2 +
+ drivers/soc/mediatek/mt6878-mmsys.h           | 42 +++++++++++--------
+ drivers/soc/mediatek/mtk-mutex.c              |  4 ++
+ 5 files changed, 52 insertions(+), 20 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+index 316310c..a3f863f 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+@@ -12,6 +12,8 @@
+ 
+ 	aliases {
+ 		ovl-2l0 = &disp_ovl0_2l;
++		ovl-2l1 = &disp_ovl1_2l;
++		ovl-2l2 = &disp_ovl2_2l;
+ 		dsc0 = &disp_dsc0;
+ 		dsi0 = &dsi0;
+ 	};
+@@ -56,6 +58,24 @@
+ 		status = "okay";
+ 	};
+ 
++	disp_ovl1_2l: ovl@14003000 {
++		compatible = "mediatek,mt6878-disp-ovl-2l";
++		reg = <0x14003000 0x1000>;
++		interrupts = <GIC_SPI 304 IRQ_TYPE_LEVEL_HIGH 0>;
++		clocks = <&mmsys CLK_MM_DISP_OVL1_2L>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_DISP>;
++		status = "okay";
++	};
++
++	disp_ovl2_2l: ovl@14004000 {
++		compatible = "mediatek,mt6878-disp-ovl-2l";
++		reg = <0x14004000 0x1000>;
++		interrupts = <GIC_SPI 305 IRQ_TYPE_LEVEL_HIGH 0>;
++		clocks = <&mmsys CLK_MM_DISP_OVL2_2L>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_DISP>;
++		status = "okay";
++	};
++
+ 	disp_dsc0: dsc@14019000 {
+ 		compatible = "mediatek,mt6878-disp-dsc";
+ 		reg = <0x14019000 0x1000>;
+diff --git a/drivers/gpu/drm/mediatek/mtk_crtc.c b/drivers/gpu/drm/mediatek/mtk_crtc.c
+index cb203fd..34ca1c1 100644
+--- a/drivers/gpu/drm/mediatek/mtk_crtc.c
++++ b/drivers/gpu/drm/mediatek/mtk_crtc.c
+@@ -412,7 +412,7 @@ static int mtk_crtc_ddp_hw_init(struct mtk_crtc *mtk_crtc)
+ 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
+ 		struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[i];
+ 
+-		if (i == 1)
++		if (i > 0)
+ 			mtk_ddp_comp_bgclr_in_on(comp);
+ 
+ 		mtk_ddp_comp_dsc_config(comp, dsc, NULL);
+@@ -453,7 +453,7 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_crtc *mtk_crtc)
+ 
+ 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
+ 		mtk_ddp_comp_stop(mtk_crtc->ddp_comp[i]);
+-		if (i == 1)
++		if (i > 0)
+ 			mtk_ddp_comp_bgclr_in_off(mtk_crtc->ddp_comp[i]);
+ 	}
+ 
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index 301f417..639114e 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -178,6 +178,8 @@ static const unsigned int mt8186_mtk_ddp_ext[] = {
+ 
+ static const unsigned int mt6878_mtk_ddp_main[] = {
+ 	DDP_COMPONENT_OVL_2L0,
++	DDP_COMPONENT_OVL_2L1,
++	DDP_COMPONENT_OVL_2L2,
+ 	DDP_COMPONENT_DSC0,
+ 	DDP_COMPONENT_DSI0,
+ };
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+index fd1dba7..8c7084b 100644
+--- a/drivers/soc/mediatek/mt6878-mmsys.h
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -20,10 +20,10 @@
+ #define MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN	0xd54
+ #define MT6878_COMP_OUT_CROSSBAR0_MOUT_EN	0xd74
+ 
+-#define MT6878_DISPSYS_BYPASS_MUX_SHADOW	0xc00
+ #define MT6878_MMSYS_OVL_CON			0xc08
+-#define MT6878_MMSYS_CROSSBAR_CON		0xc0c
+-#define MT6878_OVL_BLEND_CROSSBAR0_MOUT_EN	0xc34
++#define MT6878_OVL_BG_CROSSBAR0_MOUT_EN		0xc10
++#define MT6878_OVL_BG_CROSSBAR1_MOUT_EN		0xc14
++#define MT6878_OVL_BLEND_CROSSBAR2_MOUT_EN	0xc3c
+ #define MT6878_PQ_IN_CROSSBAR0_MOUT_EN		0xd00
+ 
+ #define MT6878_AAL0_SOUT_SEL_TO_GAMMA0		3
+@@ -31,31 +31,37 @@
+ 
+ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
+ 	/*
+-	 * Nothing OS uses this exact DRM_BYPASS_PQ route for the primary pipe:
+-	 * OVL0_2L -> blend CB0 -> PQ input CB0 -> PQ output CB4 -> split CB2.
+-	 * Associate every selector with OVL_2L0 -> DSC0 so mainline can model the
+-	 * vendor virtual crossbar components without exposing fake DRM blocks.
++	 * Nothing OS chains all three primary 2-layer OVL blocks before the
++	 * DRM_BYPASS_PQ crossbars. OVL1 and OVL2 contribute no DMA layers in the
++	 * minimal pipeline, but they must pass the background stream and share
++	 * the display mutex with OVL0.
+ 	 */
+ 	{
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
+-		MT6878_DISPSYS_BYPASS_MUX_SHADOW, BIT(0), BIT(0),
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_OVL_2L1,
++		MT6878_MMSYS_OVL_CON, BIT(3), BIT(3),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
+-		MT6878_MMSYS_CROSSBAR_CON, GENMASK(23, 16), GENMASK(23, 16),
++		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_OVL_2L1,
++		MT6878_OVL_BG_CROSSBAR0_MOUT_EN, BIT(1), BIT(1),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
+-		MT6878_MMSYS_OVL_CON, BIT(2), BIT(2),
++		DDP_COMPONENT_OVL_2L1, DDP_COMPONENT_OVL_2L2,
++		MT6878_MMSYS_OVL_CON, BIT(5), BIT(5),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
+-		MT6878_OVL_BLEND_CROSSBAR0_MOUT_EN, BIT(0), BIT(0),
++		DDP_COMPONENT_OVL_2L1, DDP_COMPONENT_OVL_2L2,
++		MT6878_OVL_BG_CROSSBAR1_MOUT_EN, BIT(2), BIT(2),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		MT6878_MMSYS_OVL_CON, BIT(6), BIT(6),
++	}, {
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		MT6878_OVL_BLEND_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
++	}, {
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+ 		MT6878_PQ_IN_CROSSBAR0_MOUT_EN, BIT(2), BIT(2),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+ 		MT6878_PQ_OUT_CROSSBAR4_MOUT_EN, BIT(1), BIT(1),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
+ 	},
+ 	/* COLOR0 -> CCORR0 selects zero in both one-bit selectors. */
+diff --git a/drivers/soc/mediatek/mtk-mutex.c b/drivers/soc/mediatek/mtk-mutex.c
+index d9cae5f..1179bd9 100644
+--- a/drivers/soc/mediatek/mtk-mutex.c
++++ b/drivers/soc/mediatek/mtk-mutex.c
+@@ -58,6 +58,8 @@
+  * Keep these as bit indices: mtk_mutex_add_comp() applies BIT() itself.
+  */
+ #define MT6878_MUTEX_MOD_DISP_OVL0_2L		0
++#define MT6878_MUTEX_MOD_DISP_OVL1_2L		1
++#define MT6878_MUTEX_MOD_DISP_OVL2_2L		2
+ #define MT6878_MUTEX_MOD_DISP_COLOR0		9
+ #define MT6878_MUTEX_MOD_DISP_CCORR0		10
+ #define MT6878_MUTEX_MOD_DISP_AAL0		12
+@@ -591,6 +593,8 @@ static const u8 mt8192_mutex_mod[DDP_COMPONENT_ID_MAX] = {
+ 
+ static const u8 mt6878_mutex_mod[DDP_COMPONENT_ID_MAX] = {
+ 	[DDP_COMPONENT_OVL_2L0] = MT6878_MUTEX_MOD_DISP_OVL0_2L,
++	[DDP_COMPONENT_OVL_2L1] = MT6878_MUTEX_MOD_DISP_OVL1_2L,
++	[DDP_COMPONENT_OVL_2L2] = MT6878_MUTEX_MOD_DISP_OVL2_2L,
+ 	[DDP_COMPONENT_COLOR0] = MT6878_MUTEX_MOD_DISP_COLOR0,
+ 	[DDP_COMPONENT_CCORR] = MT6878_MUTEX_MOD_DISP_CCORR0,
+ 	[DDP_COMPONENT_AAL0] = MT6878_MUTEX_MOD_DISP_AAL0,
+-- 
+2.50.1 (Apple Git-155)

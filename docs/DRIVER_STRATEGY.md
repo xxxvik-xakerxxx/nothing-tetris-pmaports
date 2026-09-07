@@ -34,7 +34,8 @@ another release must never be reused.
 - Keep every vendor group independently packageable under `extra/mediatek-*`.
 - Package modules before enabling their DT consumers.
 - Do not autoload experimental display, GPU, camera, modem or sensorhub stacks.
-- Preserve the inherited framebuffer until native KMS is proven on hardware.
+- Keep the inherited-framebuffer source only as an external rollback reference;
+  shipped native builds must not select or expose it.
 - Keep the GNSS transport service manual until position data, repeated power
   cycles and suspend/resume pass while Wi-Fi, Bluetooth and USB remain healthy.
   The vendor `gpsdl0`/`gpsdl1` ABI is not an NMEA stream for `gpsd`.
@@ -80,12 +81,13 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | SoC thermal | MT6878 LVTS, 24 sensors in MCU/AP/GPU domains, four efuse cells | Port the official B4.1 calibration/controller data to Linux thermal; start with read-only zones and conservative critical trips. |
 | Charging | MT6375 charger plus MT6375 TCPM and USB2 PHY BC1.2 routing | Keep the measured 500 mA fallback. Observe known host/Rp/DCP sources, then add only native BC1.2 detection/publication after DP/DM ownership is proven; leave PD/PPS and OTG disabled for this gate. |
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
-| Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
+| Display | Samsung S6E8FC3X02 through MT6878 OVL0/1/2, DSC and DSI | Ship only the native DTB. Promote after clean pixels, repeated boots and suspend/resume while USB/touch remain stable. |
 
-The standalone S6E8FC3X02 panel source and binding now pass exact patch
-application and a targeted arm64 compile against the pinned Linux baseline.
-That is a source-compatibility result only: the panel remains disabled until
-the MT6878 DDP/mutex/CMDQ/DSC/DSI/PHY pipeline and lane rate are proven.
+The native S6E8FC3X02 pipeline now binds and runs on hardware. Installed r142
+reads panel ID `40 41 02`, starts Phoc and preserves USB/touch, but its physical
+frame is still invalid and DSC reports abnormal EOF. The r143 candidate replaces
+the incomplete direct route with the exact NothingOSS OVL0/OVL1/OVL2 and
+PQ-bypass chain. Compilation is proven; runtime pixel and lifecycle gates remain.
 
 The live hardware audits confirmed a 108 GiB root partition and all eight CPUs.
 `lscpu` correctly decodes four Cortex-A55 and four Cortex-A78 cores. The blank

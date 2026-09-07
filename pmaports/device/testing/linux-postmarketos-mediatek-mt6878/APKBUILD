@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=142
+pkgrel=143
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -113,6 +113,7 @@ source="
 	0080-drm-panel-accept-S6E8FC3X02-revisions.patch
 	0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch
 	0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch
+	0083-drm-mediatek-use-full-MT6878-OVL-chain.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -781,6 +782,7 @@ c8b87a0ebff1b8a34d6837dc8d48e3642abf6b0617013a39574d16cd7946b1ae473b7e6bb3bdf1f2
 17edb41c07b7eaceeecb6a582c761f570fa7e529c841f93fba663bd396a07e9cf81dd32667761eca02cbe656d614b1e26218615464f3e2e1fbc54c8b979c21ed  0080-drm-panel-accept-S6E8FC3X02-revisions.patch
 e76faeaf820e36a3b76857429eb0d908046346812e0e6d8cd331e18dfd584f1554c182871be2a0d5920284426a46ef3fd98894923a4a6501394c78e650d80788  0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch
 b44fb646e66b23f36f2b89e42d5f1152d216b5a8473f99b29e332f19d244ed462059bf379e6c8e08fd5f83c29e2a0fb327fed6753e0b098ab62cc58901d2f840  0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch
+90cb348917c58293d0031cc12d7ea27c990e5b8fe0cf4d5e3ba329e06bd0b419b16dd6478f167120c15ee1423eb0e05d9b2080a47b524f35778df5a78da92778  0083-drm-mediatek-use-full-MT6878-OVL-chain.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

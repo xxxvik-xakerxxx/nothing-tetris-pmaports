@@ -63,6 +63,7 @@ normal Alpine/postmarketOS practice.
 | `0080-drm-panel-accept-S6E8FC3X02-revisions.patch` | Removes the unsupported `40 21 01` single-revision allowlist from the early compile-only port while retaining the complete three-byte transfer check. Installed r139 reads `40 41 02`; the official Nothing OS 4.1 driver treats ID as revision information and selects this panel through the board DT compatible. |
 | `0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch` | Programs the DSI host for compressed DSC output: stream type 5, word count from two 540-byte chunks and MT6878 DSI buffer width 360. Installed r140 proves panel lifecycle but shows stripes with the previous uncompressed RGB888 framing. |
 | `0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch` | Writes DRM's already scaled RC threshold bytes directly into MT6878 PPS8-PPS11. Installed r141 proves correct DSI framing removes moving noise, but the prior second `>> 6` leaves a pale frame with one blue vertical line. |
+| `0083-drm-mediatek-use-full-MT6878-OVL-chain.patch` | Adds OVL1_2L and OVL2_2L to the native path and mutex, and programs the exact NothingOSS `OVL0 -> OVL1 -> OVL2 -> PQ bypass -> DSC0 -> DSI0` crossbars. Installed r142 disproves RC thresholds and retains DSC abnormal EOF; read-only live registers match the official inherited route while the previous mainline path skipped both intermediate OVL blocks. The 83-patch stack, changed objects and DTB compile; live validation is pending. |
 
 ### PMIC, keys and power telemetry
 
@@ -184,8 +185,9 @@ not a confirmed external RT1711H controller.
   should use normal commit-style patches with subject, rationale and sign-off.
 - Patch numbering is contiguous and grouped by hardware/function. Keep future
   additions in that style: one patch file per maintained hardware block.
-- Native display clean-boots but does not bind yet. Do not mark it `Works`
-  until the CI artifact passes display lifecycle and USB gates.
+- Native display binds, starts Phoc and preserves USB/touch, but physical pixels
+  remain incorrect. Do not mark it `Works` until clean pixels and display
+  lifecycle pass on a CI artifact while USB stays available.
 
 ## Next clean patch targets
 
