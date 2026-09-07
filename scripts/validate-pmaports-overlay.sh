@@ -677,6 +677,15 @@ validate_compile_only_boundaries() {
 		"$kernel_pkg/0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch"
 	grep -Fq 'DIV_ROUND_UP(ps_wc, dsi_buf_bpp)' \
 		"$kernel_pkg/0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch"
+	grep -Fq '0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch' \
+		"$kernel_apkbuild"
+	grep -Fq 'reg_val |= dsc->rc_buf_thresh[i + j] << (j * 8);' \
+		"$kernel_pkg/0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch"
+	if grep -Eq '^\+.*rc_buf_thresh.*>> 6' \
+		"$kernel_pkg/0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch"; then
+		echo "MT6878 DSC RC threshold fix still applies a second scale shift" >&2
+		return 1
+	fi
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"

@@ -62,6 +62,7 @@ normal Alpine/postmarketOS practice.
 | `0079-drm-panel-set-maximum-return-packet-size.patch` | Requests a three-byte MIPI DSI return packet before reading the S6E8FC3X02 display ID. Installed r138 proves command-mode IRQ completion but receives only the panel's default one-byte response; the official Nothing OS 4.1 MT6878 host sends the equivalent size command before every read. |
 | `0080-drm-panel-accept-S6E8FC3X02-revisions.patch` | Removes the unsupported `40 21 01` single-revision allowlist from the early compile-only port while retaining the complete three-byte transfer check. Installed r139 reads `40 41 02`; the official Nothing OS 4.1 driver treats ID as revision information and selects this panel through the board DT compatible. |
 | `0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch` | Programs the DSI host for compressed DSC output: stream type 5, word count from two 540-byte chunks and MT6878 DSI buffer width 360. Installed r140 proves panel lifecycle but shows stripes with the previous uncompressed RGB888 framing. |
+| `0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch` | Writes DRM's already scaled RC threshold bytes directly into MT6878 PPS8-PPS11. Installed r141 proves correct DSI framing removes moving noise, but the prior second `>> 6` leaves a pale frame with one blue vertical line. |
 
 ### PMIC, keys and power telemetry
 

@@ -1,0 +1,37 @@
+From 8a1b7dc24ce02a6cab4b0834bb925bcc92725661 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 14:20:00 +0300
+Subject: [PATCH] drm: mediatek: fix MT6878 DSC RC thresholds
+
+drm_dsc_set_rc_buf_thresh() stores the VESA RC buffer thresholds in the
+hardware PPS representation after shifting the specification values by six.
+
+The MT6878 encoder programming shifted those bytes a second time.  That
+reduced the expected 0x0e, 0x1c, ... table to mostly zeroes and produced an
+invalid compressed stream even though the DSI packet framing was correct.
+
+Write the DRM DSC threshold bytes directly.  This matches the single shift
+performed by the vendor driver when its input table still contains the
+unscaled specification values.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_ddp_comp.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+index e14edc2..f5f5cec 100644
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -317,7 +317,7 @@ static void mtk_dsc_encoder_config(struct device *dev,
+ 
+ 		reg_val = 0;
+ 		for (j = 0; j < 4 && i + j < DSC_NUM_BUF_RANGES - 1; j++)
+-			reg_val |= (dsc->rc_buf_thresh[i + j] >> 6) << (j * 8);
++			reg_val |= dsc->rc_buf_thresh[i + j] << (j * 8);
+ 		mtk_ddp_write(cmdq_pkt, reg_val, &priv->cmdq_reg, priv->regs,
+ 			      DISP_REG_DSC_PPS0 + 0x20 + i);
+ 	}
+-- 
+2.51.0
+
