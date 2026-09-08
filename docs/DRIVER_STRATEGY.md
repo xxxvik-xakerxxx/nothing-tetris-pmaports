@@ -83,11 +83,13 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
 | Display | Samsung S6E8FC3X02 through MT6878 OVL0/1/2, DSC and DSI | Ship only the native DTB. Promote after clean pixels, repeated boots and suspend/resume while USB/touch remain stable. |
 
-The native S6E8FC3X02 pipeline now binds and runs on hardware. Installed r142
-reads panel ID `40 41 02`, starts Phoc and preserves USB/touch, but its physical
-frame is still invalid and DSC reports abnormal EOF. The r143 candidate replaces
-the incomplete direct route with the exact NothingOSS OVL0/OVL1/OVL2 and
-PQ-bypass chain. Compilation is proven; runtime pixel and lifecycle gates remain.
+The native S6E8FC3X02 pipeline binds on hardware. Installed r143 reads panel ID
+`40 41 02`, starts Phoc and preserves USB/touch, but its first atomic frame
+times out before OVL0/1/2 can feed DSC. Live probes ruled out the inherited
+mutex mask and omitted DSC selectors as independent fixes. NothingOSS marks
+MT6878 OVL as requiring shadow bypass, while r143 starts each OVL with that bit
+clear. Candidate r144 adds the missing start behavior; runtime pixel and
+lifecycle gates remain.
 
 The live hardware audits confirmed a 108 GiB root partition and all eight CPUs.
 `lscpu` correctly decodes four Cortex-A55 and four Cortex-A78 cores. The blank

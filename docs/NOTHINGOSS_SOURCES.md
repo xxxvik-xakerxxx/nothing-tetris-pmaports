@@ -83,13 +83,13 @@ driver. The Tetris device tree uses `compatible = "samsung,s6e8fc3x02"`, and
 Nothing builds `drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko`. That panel
 depends on MediaTek DRM v2 helpers such as `mtk_panel_ext`, DDP/DSI, MML and
 display notifier modules. The shipped native DTB no longer exposes the inherited
-framebuffer. Installed r142 proves panel ID, backlight, touch, Phoc, OVL/DSI
-activity and USB survival, but still shows an invalid pale frame and DSC
-abnormal EOF. Read-only live crossbar values match NothingOSS and reveal that
-the earlier minimal mainline path incorrectly skipped OVL1_2L and OVL2_2L.
-Candidate r143 adds both blocks, their mutex bits and every selector in the
-official bypass route; clean pixels and lifecycle are still required before
-promotion.
+framebuffer. Installed r143 proves panel ID, backlight, touch, Phoc and USB
+survival, but its first native frame stalls with all three OVL blocks waiting
+downstream and DSC input stuck at `1x1`. Read-only and reversible tests ruled
+out the inherited mutex mask and omitted DSC selectors as standalone causes.
+The official MT6878 OVL data sets `need_bypass_shadow=true`; live r143 starts
+OVL0/1/2 with bit 22 clear. Candidate r144 adds that missing start behavior;
+clean pixels and lifecycle are still required before promotion.
 
 ## Maintenance rule
 

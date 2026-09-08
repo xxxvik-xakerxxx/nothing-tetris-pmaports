@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed native-display `pkgrel=142`; next candidate `pkgrel=143`) |
+| Kernel version | `6.18` (installed native-display `pkgrel=143`; next candidate `pkgrel=144`) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
@@ -99,7 +99,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DSI/panel | Partial | Native-only r142 is installed with automatic USB SSH/touch and no framebuffer fallback. DRM, Phoc, panel ID `40 41 02`, native backlight and advancing OVL/DSI IRQs work, but the panel remains a stable pale frame with one blue vertical line. r142 disproved the RC-threshold hypothesis. Runtime register evidence and NothingOSS identify the missing OVL1/OVL2 vendor route; r143 implements that exact route and is build-validated but not live-tested. Clean pixels and lifecycle remain promotion gates. |
+| Display | Native DSI/panel | Broken | Native-only r143 is installed with automatic USB SSH/touch and no framebuffer fallback. DRM, Phoc, panel ID `40 41 02` and native backlight initialize, but the first atomic frame stalls: OVL0/1/2 remain downstream-blocked, DSC receives `1x1`, and DRM reports repeatable `flip_done`, commit and vblank timeouts. Live tests disproved RC thresholds, DSC reset/chunk size, the inherited mutex mask and the omitted DSC selectors as standalone causes. NothingOSS requires OVL shadow bypass while r143 starts every OVL with literal `1`; r144 adds that missing lifecycle behavior and awaits CI/device validation. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |

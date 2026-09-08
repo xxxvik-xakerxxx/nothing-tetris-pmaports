@@ -1,6 +1,6 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-07.
+Updated: 2026-09-08.
 
 ## Exact software state
 
@@ -10,7 +10,8 @@ Updated: 2026-09-07.
 | Previous rollback image | `f607513` | Kernel `6.18.0 #123`; preserved stable artifacts and prior clean/warm regression evidence. |
 | Stable pmaports source | `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266` | Rollback source of truth. |
 | Previous pmaports CI candidate | `codex/next-hardware` at `0600a13ceba889d294f6bc1be289e273a75eca00` | `pkgrel=126`; CI run `33495661863` applied the patch series and completed the main kernel build, then failed before the IMX882 object check because a disabled Kconfig symbol was absent rather than serialized as `# ... is not set`. No image was produced or installed. |
-| Active pmaports source | `codex/next-hardware`, current working tree | Kernel package `6.18-r143` replaces the incomplete OVL0-to-DSC route with the exact NothingOSS OVL0/OVL1/OVL2/PQ-bypass/DSC/DSI chain. The full 83-patch stack, changed DRM/mutex/MMSYS objects and native DTB compile. It remains off `main` until live pixels and display lifecycle pass without USB/touch regression. |
+| Active pmaports source | `codex/next-hardware`, current working tree | Kernel package `6.18-r144` keeps the live-tested r143 full OVL chain and adds the NothingOSS-required MT6878 OVL shadow-bypass bit at every OVL start. It remains off `main` pending CI and live pixels without USB/touch regression. |
+| Installed full-OVL candidate | CI `34152637999`, pmaports `705da68`, kernel package `6.18-r143`, kernel `6.18.0 #144` | USB NCM/SSH, touch, panel ID `40 41 02`, Phoc and backlight return automatically. The first native frame does not complete: OVL0/1/2 report downstream-blocked flow, DSC input remains `1x1`, and DRM repeatedly reports `flip_done`, commit and vblank timeouts. The display is not usable. Read-only and reversible live probes preserved USB while disproving DSC reset/chunk, route selectors and inherited mutex membership as independent fixes. |
 | Installed native-display candidate | CI `34091038734`, pmaports `d8fa8ac`, kernel package `6.18-r139`, kernel `6.18.0 #140` | SHA-verified `super`/`userdata` clean-flashed. USB NCM/SSH and `fts_ts event0` returned automatically with no legacy framebuffer, Oops or failed units. Patch `0079` works: DSI reads the complete ID `40 41 02` and IRQ 360 advances. The early compile-only driver's unsupported `40 21 01` allowlist then rejects this valid revision, leaving the connector disabled and no backlight. |
 | Installed native-display candidate | CI `34099691006`, pmaports `e641138`, kernel package `6.18-r140`, kernel `6.18.0 #141` | SHA-verified `super`/`userdata` clean-flashed. USB NCM/SSH, touch, native backlight, Phoc and connected 1080x2400 DRM returned automatically with no Oops or failed units. The complete panel ID is `40 41 02`. Brightness and blank/unblank lifecycle work, but the physical image is stripes/artifacts: the DSI host still frames the DSC payload as uncompressed RGB888. |
 | Installed DSC-framing candidate | CI `34112462413`, pmaports `63c6039`, kernel package `6.18-r141`, kernel `6.18.0 #142` | SHA-verified `super` and all 17 `userdata` sparse chunks flashed successfully. USB NCM/SSH returned automatically. Native DRM is enabled at 1080x2400, Phoc runs, panel ID is `40 41 02`, OVL/DSI IRQs advance, touch remains `fts_ts event0`, and failed units are zero. The physical output changed from moving stripes to a stable pale frame with one blue vertical line, proving the DSI framing change took effect but not correct pixels. |
@@ -72,7 +73,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub sources compile and fail closed; no accelerometer, gyro, proximity or light sensor is exposed. A host-only parser against U-Boot `b76e47e` now validates unique 64-bit shared/loader carveouts, DRAM containment, size and non-overlap without changing the FDT. It does not validate SCP firmware or TCM. | Establish authoritative active `scp1`/`scp2` authentication/selection and TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Panthor is configured, but no Mali platform device or render node exists. A disabled MFG RPC provider/domain topology is prepared as source inventory only. | Validate the RPC schema/DT and register map with all nodes disabled. MFG runtime sequencing, DT consumer, CSF firmware and protected memory are still required. |
 | Rear/front cameras | Broken | No camera media pipeline or preview/capture. Torch channels work independently. | The source candidate records the main IMX882 I2C8/CAMTG2/reset/four-rail topology with the sensor and every provider disabled. Compile-only gates still ship no camera module or live client. Final-DTB CI, observation-only clean boots, sensor identity, SENINF/ISP, CCU and the media graph remain. |
-| Display | Partial | Installed r142 boots without framebuffer fallback and retains automatic USB SSH/touch. Native DRM, Phoc, panel ID `40 41 02`, backlight and touch are enabled, but output remains a stable pale frame with a blue vertical line and DSC reports abnormal EOF. r142 proved corrected RC thresholds do not alter the fault. NothingOSS and live crossbar registers agree on `OVL0_2L -> OVL1_2L -> OVL2_2L -> PQ bypass -> DSC0 -> DSI0`; the old mainline candidate skipped OVL1/OVL2 and programmed incompatible direct selectors. | Build and clean-flash r143. Before physical judgement, require active OVL0/1/2 ready/valid flow, mutex bits `0,1,2,23,25`, advancing DSI input counters, DSC completion without abnormal EOF, and stable USB SSH. Then test clean pixels, brightness, blank/unblank, warm reboot and suspend/resume. |
+| Display | Broken | Installed r143 boots without framebuffer fallback and retains automatic USB SSH/touch, panel ID and backlight, but no native frame completes. OVL0/1/2 remain blocked, DSC input is `1x1`, and every fresh Phoc/fbdev commit times out. Applying the exact vendor DSC selectors before the first frame and reducing mutex membership to bits `0,1,2,23,25` did not change this. NothingOSS marks MT6878 OVL as `need_bypass_shadow=true`; live reads prove r143 starts all three OVL blocks without bit 22. | Build and clean-flash r144 with OVL shadow bypass applied by `mtk_ovl_start()`. Require OVL frame counters, DSC `FRAME_DONE`, advancing DSI input, clean pixels and stable USB before any promotion. Then test brightness, blank/unblank, warm reboot and suspend/resume. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
@@ -91,13 +92,14 @@ hardware works. Current gate state:
 Modem, GPU, sensorhub and camera pipeline stay disabled in the installed boot.
 Native display is installed without any framebuffer fallback. The HWCCF and
 SPM DISP-domain, DSI publication and mutex readiness blockers are fixed.
-Installed r142 registers and enables native DRM without Oops, reads panel ID
-`40 41 02`, starts Phoc and preserves automatic USB/touch. OVL and DSI IRQs
-advance with the official MT6878 DSC packet word count, stream type and buffer
-width. The physical frame is stable but pale with one blue vertical line. Patch
-`0082` corrected RC threshold encoding but produced no physical change. Live
-registers and the official MT6878 graph instead identify an incomplete display
-route: r143 adds OVL1/OVL2, their mutex membership and the exact PQ-bypass
-crossbars before DSC. Physical pixel quality remains the next display gate. The next GNSS gate is
+Installed r143 registers native DRM without Oops, reads panel ID `40 41 02`,
+starts Phoc and preserves automatic USB/touch, but its first atomic frame never
+completes. All three OVL blocks remain downstream-blocked, DSC input stays at
+`1x1`, and DRM reports repeatable flip, commit and vblank timeouts. Live tests
+ruled out DSC reset/chunk size, route selectors and inherited mutex membership
+as standalone causes. NothingOSS marks MT6878 OVL as requiring shadow bypass,
+while r143 starts all three blocks with that bit clear. Candidate r144 applies
+the missing behavior in `mtk_ovl_start()` and must pass CI plus counter-based
+live validation before physical pixel judgement. The next GNSS gate is
 userspace protocol integration and a real position fix, followed by cold-start
 and lifecycle validation.
