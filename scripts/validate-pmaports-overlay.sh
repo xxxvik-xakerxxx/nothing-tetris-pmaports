@@ -694,6 +694,20 @@ validate_compile_only_boundaries() {
 		"$kernel_pkg/0085-drm-mediatek-program-MT6878-DSC-version.patch"
 	grep -Fq 'DSC_VERSION_MASK);' \
 		"$kernel_pkg/0085-drm-mediatek-program-MT6878-DSC-version.patch"
+	grep -Fq '0086-drm-mediatek-match-MT6878-native-display-state.patch' \
+		"$kernel_apkbuild"
+	grep -Fq 'mipi_dsi_generic_write_multi(dsi_ctx, data, len);' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq '0x0c140a0c,' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq 'mtk_dsi_mask(dsi, DSI_PSCTRL, DSI_PS_WC | DSI_PS_SEL,' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq 'writel(0x000278d0, dsi->regs + DSI_TX_BUF_RW_TIMES);' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq '.reset_on_start = true,' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq 'DISP_REG_DSC_SPR);' \
+		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
