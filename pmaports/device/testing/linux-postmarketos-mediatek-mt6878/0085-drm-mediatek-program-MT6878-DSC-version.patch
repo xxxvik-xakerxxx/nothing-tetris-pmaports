@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Wed, 9 Sep 2026 16:15:00 +0300
+Subject: [PATCH] drm: mediatek: program MT6878 DSC version
+
+The MT6878 DSC encoder has a separate version field in register 0x200.
+NothingOS programs bits 6:5 to 1 for the Tetris panel's DSC 1.1 stream,
+independently of the shadow-control register at 0x228.
+
+The mainline-based MT6878 port configures the complete PPS but leaves this
+field at its inherited value.  Program DSC 1.1 together with the rest of the
+MT6878 encoder state.  Other MediaTek DSC implementations are unchanged.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_ddp_comp.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+index e14edc200000..e14edc200001 100644
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -62,6 +62,9 @@
+ #define DISP_REG_DSC_PPS0			0x0080
+ #define DISP_REG_DSC_SHADOW_MT6878		0x0228
+ #define DSC_FORCE_COMMIT			BIT(0)
++#define DISP_REG_DSC_VERSION_MT6878		0x0200
++#define DSC_VERSION_MASK			GENMASK(6, 5)
++#define DSC_VERSION_1_1			BIT(5)
+ #define DSC_BYPASS_SHADOW			BIT(1)
+ 
+ #define DISP_REG_OD_EN				0x0000
+@@ -288,6 +291,10 @@ static void mtk_dsc_encoder_config(struct device *dev,
+ 	mtk_ddp_write_mask(cmdq_pkt, DSC_CKSM_CAL_EN, &priv->cmdq_reg,
+ 			   priv->regs, DISP_REG_DSC_DBG_CON, DSC_CKSM_CAL_EN);
+ 
++	mtk_ddp_write_mask(cmdq_pkt, DSC_VERSION_1_1, &priv->cmdq_reg,
++			   priv->regs, DISP_REG_DSC_VERSION_MT6878,
++			   DSC_VERSION_MASK);
++
+ 	reg_val = (dsc->line_buf_depth & 0xf) |
+ 		  (dsc->bits_per_component << 4) |
+ 		  (dsc->bits_per_pixel << 8) |
+-- 
+2.50.1 (Apple Git-155)
