@@ -686,6 +686,12 @@ validate_compile_only_boundaries() {
 		echo "MT6878 DSC RC threshold fix still applies a second scale shift" >&2
 		return 1
 	fi
+	grep -Fq '0085-drm-mediatek-start-MT6878-pipeline-before-mutex.patch' \
+		"$kernel_apkbuild"
+	grep -Fq 'of_device_is_compatible(mtk_crtc->mmsys_dev->of_node,' \
+		"$kernel_pkg/0085-drm-mediatek-start-MT6878-pipeline-before-mutex.patch"
+	grep -Fq 'mtk_mutex_enable(mtk_crtc->mutex);' \
+		"$kernel_pkg/0085-drm-mediatek-start-MT6878-pipeline-before-mutex.patch"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
