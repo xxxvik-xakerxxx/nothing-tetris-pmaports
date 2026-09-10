@@ -1,0 +1,101 @@
+From c7425ad9ef78288dc90957da682cbeefca230859 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 19:20:00 +0300
+Subject: [PATCH] drm: mediatek: normalize MT6878 display crossbars
+
+Nothing OS enables the MT6878 MMSYS mux and crossbar shadow bypass before it
+constructs the display graph. It also clears the OVL PQ loop selector after
+reset. Mainline currently inherits both states from the bootloader, which is
+not a repeatable native handoff and leaves PQ_LOOP_CON enabled on Tetris.
+
+Add generic optional MMSYS initialization fields, use them only for MT6878,
+and clear the MT6878 OVL PQ loop before enabling relay output. These writes
+match the Nothing OS 4.1 connect and OVL start sequences.
+---
+ drivers/gpu/drm/mediatek/mtk_disp_ovl.c |  2 ++
+ drivers/soc/mediatek/mt6878-mmsys.h     |  3 +++
+ drivers/soc/mediatek/mtk-mmsys.c        | 14 ++++++++++++++
+ drivers/soc/mediatek/mtk-mmsys.h        |  6 ++++++
+ 4 files changed, 25 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+index ae886fc..66d6cb9 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -31,2 +31,3 @@
+ #define DISP_REG_OVL_DATAPATH_CON		0x0024
++#define DISP_REG_OVL_PQ_LOOP_CON		0x024c
+ #define OVL_LAYER_SMI_ID_EN				BIT(0)
+@@ -285,6 +286,7 @@ void mtk_ovl_start(struct device *dev)
+ 	if (ovl->data->force_relay) {
+ 		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_SRC_CON);
+ 
++		writel_relaxed(0, ovl->regs + DISP_REG_OVL_PQ_LOOP_CON);
+ 		writel_relaxed(reg | BIT(8), ovl->regs + DISP_REG_OVL_SRC_CON);
+ 	}
+ 
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+index c563eaa..25ce6d2 100644
+--- a/drivers/soc/mediatek/mt6878-mmsys.h
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -15,6 +15,9 @@
+ #define MT6878_DISP_GAMMA0_SEL_IN		0xe1c
+ #define MT6878_DISP_POSTMASK0_SOUT_SEL		0xe24
+ 
++#define MT6878_DISPSYS_BYPASS_MUX_SHADOW	0xc00
++#define MT6878_MMSYS_CROSSBAR_CON		0xc0c
++
+ #define MT6878_PQ_OUT_CROSSBAR0_MOUT_EN		0xd20
+ #define MT6878_PQ_OUT_CROSSBAR4_MOUT_EN		0xd30
+ #define MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN	0xd54
+diff --git a/drivers/soc/mediatek/mtk-mmsys.c b/drivers/soc/mediatek/mtk-mmsys.c
+index 4c8b73c..e44a2dd 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -58,6 +58,12 @@ static const struct mtk_mmsys_driver_data mt6878_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6878-mmsys",
+ 	.routes = mt6878_mmsys_routing_table,
+ 	.num_routes = ARRAY_SIZE(mt6878_mmsys_routing_table),
++	.mux_shadow_offset = MT6878_DISPSYS_BYPASS_MUX_SHADOW,
++	.mux_shadow_mask = BIT(0),
++	.mux_shadow_val = BIT(0),
++	.crossbar_offset = MT6878_MMSYS_CROSSBAR_CON,
++	.crossbar_mask = GENMASK(23, 16),
++	.crossbar_val = GENMASK(23, 16),
+ };
+ 
+ static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {
+@@ -405,6 +411,14 @@ static int mtk_mmsys_probe(struct platform_device *pdev)
+ 
+ 	mmsys->data = of_device_get_match_data(&pdev->dev);
+ 
++	if (mmsys->data->mux_shadow_mask)
++		mtk_mmsys_update_bits(mmsys, mmsys->data->mux_shadow_offset,
++				      mmsys->data->mux_shadow_mask,
++				      mmsys->data->mux_shadow_val, NULL);
++	if (mmsys->data->crossbar_mask)
++		mtk_mmsys_update_bits(mmsys, mmsys->data->crossbar_offset,
++				      mmsys->data->crossbar_mask,
++				      mmsys->data->crossbar_val, NULL);
+ 	if (mmsys->data->num_resets > 0) {
+ 		spin_lock_init(&mmsys->lock);
+ 
+diff --git a/drivers/soc/mediatek/mtk-mmsys.h b/drivers/soc/mediatek/mtk-mmsys.h
+index e4a9854..fd9398b 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.h
++++ b/drivers/soc/mediatek/mtk-mmsys.h
+@@ -140,6 +140,12 @@ struct mtk_mmsys_driver_data {
+ 	const u32 num_resets;
+ 	const bool is_vppsys;
+ 	const u8 vsync_len;
++	const u32 mux_shadow_offset;
++	const u32 mux_shadow_mask;
++	const u32 mux_shadow_val;
++	const u32 crossbar_offset;
++	const u32 crossbar_mask;
++	const u32 crossbar_val;
+ };
+ 
+ /*
+-- 
+2.50.1 (Apple Git-155)

@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed native-display `pkgrel=145`, kernel `6.18.0 #146`; integrated r147 candidate prepared) |
+| Kernel version | `6.18` (installed native-display `pkgrel=147`, kernel `6.18.0 #148`; r148 DSC-handoff candidate prepared) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
@@ -99,7 +99,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DSI/panel | Broken | Clean paired r145 is installed with automatic USB SSH/touch and no framebuffer fallback, but physical pixels remain corrupt. The integrated r147 candidate programs DSC 1.1 and the remaining measured NothingOS/LK parity: panel packet types, N4 D-PHY and horizontal timings, TXRX/PSCTRL/HSTX behavior, DSI FIFO thresholds, DSC SPR state and OVL cold-start reset. No fix is claimed until CI, clean flash and physical pixels pass. |
+| Display | Native DSI/panel | Broken | Installed r147/#148 boots native-only with USB SSH, touch, Phoc and backlight, but the first frame remains corrupt. Live flow tracing proves framebuffer DMA reaches OVL0 and backpressure begins after OVL2; DSC receives `1x1` and reports `ABN_EOF`. Prepared r148 moves the remaining vendor DSC selectors and OVL relay into the DRM cold-boot/DPMS lifecycle. No fix is claimed until CI, clean flash and physical pixels pass. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work and survive a #130 warm reboot. The current computer attachment reports 5 V with no current limit, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
