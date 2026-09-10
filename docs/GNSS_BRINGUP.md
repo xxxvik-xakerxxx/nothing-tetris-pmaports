@@ -124,3 +124,11 @@ can implement MVCD and expose standard position data. Do not interpret raw
 reads from `gpsdl0` as NMEA, load v051 over the current v050 session, or graft
 its ATF objects into v050. Promotion requires a timed and accurate fix, three
 cold starts, restart, coexistence and suspend/resume tests.
+
+The `pkgrel=150` compile candidate adds ABI-only patch `1003` for commands 13,
+23 and 28. Device package `8-r8` adds the unconfigured
+`/usr/libexec/nothing-tetris-gnss-readonly` diagnostic. It is not a bridge or
+daemon: explicit `--probe-link0` is required, it has an eight-second deadline,
+performs no device read/write, and redacts the returned cipher-key field. See
+`GNSS_USERSPACE_BRIDGE_AUDIT.md` for source evidence, the live gate and the
+remaining protocol blockers.

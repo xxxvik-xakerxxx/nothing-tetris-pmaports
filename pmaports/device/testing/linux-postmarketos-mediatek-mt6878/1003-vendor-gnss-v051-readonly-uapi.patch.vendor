@@ -1,0 +1,298 @@
+diff --git a/connectivity/gps/data_link/hw/gps_dl_hw_atf_mvcd.c b/connectivity/gps/data_link/hw/gps_dl_hw_atf_mvcd.c
+index ae0aba4..c757f06 100644
+--- a/connectivity/gps/data_link/hw/gps_dl_hw_atf_mvcd.c
++++ b/connectivity/gps/data_link/hw/gps_dl_hw_atf_mvcd.c
+@@ -10,7 +10,7 @@
+ #define GNSS_IMAGE_MAX_FRAGEMENT_NUM 256
+ 
+ bool gps_dl_hw_gps_get_bootup_info(enum gps_dl_link_id_enum link_id, bool is_cw_dsp,
+-		struct gps_dl_hw_mvcd_gps_bootup_info *bootup_info)
++		struct gpsdl_v051_bootup_info *bootup_info)
+ {
+ 	struct arm_smccc_res res;
+ 	enum gps_dl_hw_mvcd_dsp_type dsp_type;
+diff --git a/connectivity/gps/data_link/hw/gps_dl_hw_gps.c b/connectivity/gps/data_link/hw/gps_dl_hw_gps.c
+index bd1c965..09766d4 100644
+--- a/connectivity/gps/data_link/hw/gps_dl_hw_gps.c
++++ b/connectivity/gps/data_link/hw/gps_dl_hw_gps.c
+@@ -422,7 +422,7 @@ struct gps_dl_hw_pair_time_struct *gps_dl_hw_get_dsp_ms_counter(
+ }
+ 
+ bool gps_dl_hw_gps_get_bootup_info(enum gps_dl_link_id_enum link_id,
+-				bool is_cw_dsp, struct gps_dl_hw_mvcd_gps_bootup_info *bootup_info)
++				bool is_cw_dsp, struct gpsdl_v051_bootup_info *bootup_info)
+ {
+ 	GDL_LOGXE(link_id, "NOT SUPPORT ATF %d 0x%lx", is_cw_dsp, (unsigned long)bootup_info);
+ 	return false;
+diff --git a/connectivity/gps/data_link/hw/inc/gps_dl_hw_api.h b/connectivity/gps/data_link/hw/inc/gps_dl_hw_api.h
+index 9c07f82..0c90594 100644
+--- a/connectivity/gps/data_link/hw/inc/gps_dl_hw_api.h
++++ b/connectivity/gps/data_link/hw/inc/gps_dl_hw_api.h
+@@ -12,6 +12,7 @@
+ #include "gps_dl_hal_type.h"
+ #include "gps_dsp_fsm.h"
+ #include "gps_dl_hw_dep_api.h"
++#include "uapi/gpsdl_v051.h"
+ 
+ enum GDL_HW_RET {
+ 	HW_OKAY,        /* hw CRs access okay */
+@@ -109,14 +110,6 @@ struct gps_dl_hw_link_status_struct {
+ 	bool tx_dma_done;
+ };
+ 
+-struct gps_dl_hw_mvcd_gps_bootup_info {
+-	unsigned int code_size;
+-	unsigned int start_addr;
+-	unsigned int exec_addr;
+-	unsigned int cipher_key;
+-	unsigned int frag_num;
+-};
+-
+ void gps_dl_hw_get_link_status(
+ 	enum gps_dl_link_id_enum link_id, struct gps_dl_hw_link_status_struct *p);
+ 
+@@ -168,8 +161,7 @@ void gps_dl_hw_set_pta_blanking_parameter(bool use_direct_path);
+ 
+ unsigned int gps_dl_hw_get_mcub_a2d1_cfg(enum gps_dl_link_id_enum link_id, bool is_1byte_mode);
+ bool gps_dl_hw_gps_get_bootup_info(enum gps_dl_link_id_enum link_id,
+-	bool is_cw_dsp, struct gps_dl_hw_mvcd_gps_bootup_info *bootup_info);
++	bool is_cw_dsp, struct gpsdl_v051_bootup_info *bootup_info);
+ bool gps_dl_hw_gps_send_dsp_fragement_num(enum gps_dl_link_id_enum link_id, bool is_cw_dsp, unsigned int fragement_num);
+ 
+ #endif /* _GPS_DL_HW_API_H */
+-
+diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
+index 125fa28..80c7569 100644
+--- a/connectivity/gps/data_link/linux/gps_each_device.c
++++ b/connectivity/gps/data_link/linux/gps_each_device.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2019 - 2021 MediaTek Inc.
+  */
+ #include <asm/arch_timer.h>
++#include <linux/build_bug.h>
+ #include "gps_each_device.h"
+ #include "gps_each_link.h"
+ #include "gps_dsp_fsm.h"
+@@ -20,6 +21,9 @@
+ #include "gps_dl_linux_clock_mng.h"
+ #endif
+ 
++static_assert(sizeof(struct gpsdl_v051_boot_time) == 16);
++static_assert(sizeof(struct gpsdl_v051_bootup_info) == 20);
++
+ static ssize_t gps_each_device_read(struct file *filp,
+ 	char __user *buf, size_t count, loff_t *f_pos)
+ {
+@@ -225,7 +229,7 @@ static int gps_each_device_hw_suspend(enum gps_dl_link_id_enum link_id, bool nee
+ #define GPSDL_IOC_RTC_FLAG             10
+ #define GPSDL_IOC_CO_CLOCK_FLAG        11
+ #define GPSDL_IOC_TRIGGER_ASSERT       12
+-#define GPSDL_IOC_QUERY_STATUS         13
++#define GPSDL_IOC_QUERY_STATUS         GPSDL_V051_IOC_QUERY_STATUS
+ #define GPSDL_IOC_TAKE_GPS_WAKELOCK    14
+ #define GPSDL_IOC_GIVE_GPS_WAKELOCK    15
+ #define GPSDL_IOC_GET_GPS_LNA_PIN      16
+@@ -234,12 +238,12 @@ static int gps_each_device_hw_suspend(enum gps_dl_link_id_enum link_id, bool nee
+ #define GPSDL_IOC_GPS_HW_RESUME        19
+ #define GPSDL_IOC_GPS_LISTEN_RST_EVT   20
+ #define GPSDL_IOC_GPS_GET_MD_STATUS    21
+-#define GPSDL_IOC_GPS_GET_DSP_BOOTUP_INFO     23
++#define GPSDL_IOC_GPS_GET_DSP_BOOTUP_INFO     GPSDL_V051_IOC_GET_DSP_BOOTUP_INFO
+ #define GPSDL_IOC_GPS_GET_CWDSP_BOOTUP_INFO   24
+ #define GPSDL_IOC_GPS_DSP_MVCD_FRAGEMENT_NO   25
+ #define GPSDL_IOC_GPS_CWDSP_MVCD_FRAGEMENT_NO 26
+ #define GPSDL_IOC_GPS_CTRL_L5_LNA      27
+-#define GPSDL_IOC_GPS_GET_BOOT_TIME    28
++#define GPSDL_IOC_GPS_GET_BOOT_TIME    GPSDL_V051_IOC_GET_BOOT_TIME
+ #if 0
+ #define GPSDL_IOC_GPS_EAP_SAP_TIMESYNC 29
+ #endif
+@@ -248,7 +252,7 @@ static int gps_each_device_hw_suspend(enum gps_dl_link_id_enum link_id, bool nee
+ static int gps_each_device_ioctl_inner(struct file *filp, unsigned int cmd, unsigned long arg, bool is_compat)
+ {
+ 	struct gps_each_device *dev; /* device information */
+-	struct boot_time_info gps_boot_time;
++	struct gpsdl_v051_boot_time gps_boot_time;
+ 	unsigned long flags;
+ 	int retval;
+ 	unsigned int md2gps_status = 0;
+@@ -438,7 +442,7 @@ static int gps_each_device_ioctl_inner(struct file *filp, unsigned int cmd, unsi
+ 		gps_boot_time.arch_counter = arch_counter_get_cntvct();
+ 		#endif
+ 		local_irq_restore(flags);
+-		if (copy_to_user((char __user *)arg, &gps_boot_time, sizeof(struct boot_time_info))) {
++		if (copy_to_user((char __user *)arg, &gps_boot_time, sizeof(gps_boot_time))) {
+ 			GDL_LOGXI_ONF(dev->index,
+ 			"GPSDL_IOC_GPS_GET_BOOT_TIME: copy_to_user error");
+ 			retval = -EFAULT;
+@@ -449,7 +453,7 @@ static int gps_each_device_ioctl_inner(struct file *filp, unsigned int cmd, unsi
+ 		break;
+ 	case GPSDL_IOC_GPS_GET_DSP_BOOTUP_INFO:
+ 	{
+-		struct gps_dl_hw_mvcd_gps_bootup_info bootup_info;
++		struct gpsdl_v051_bootup_info bootup_info;
+ 
+ 		if (!dev->is_open) {
+ 			retval = -EFAULT;
+@@ -469,7 +473,7 @@ static int gps_each_device_ioctl_inner(struct file *filp, unsigned int cmd, unsi
+ 	}
+ 	case GPSDL_IOC_GPS_GET_CWDSP_BOOTUP_INFO:
+ 	{
+-		struct gps_dl_hw_mvcd_gps_bootup_info bootup_info;
++		struct gpsdl_v051_bootup_info bootup_info;
+ 
+ 		if (!dev->is_open) {
+ 			retval = -EFAULT;
+@@ -598,4 +602,3 @@ void gps_dl_cdev_cleanup(struct gps_each_device *dev, int index)
+ 
+ 	cdev_del(&dev->cdev);
+ }
+-
+diff --git a/connectivity/gps/data_link/linux/inc/gps_each_device.h b/connectivity/gps/data_link/linux/inc/gps_each_device.h
+index 3dc7c24..a5feacc 100644
+--- a/connectivity/gps/data_link/linux/inc/gps_each_device.h
++++ b/connectivity/gps/data_link/linux/inc/gps_each_device.h
+@@ -27,6 +27,8 @@
+ #endif
+ #include <linux/wait.h>
+ 
++#include "uapi/gpsdl_v051.h"
++
+ #include "gps_each_link.h"
+ #include "gps_dl_dma_buf.h"
+ 
+@@ -35,11 +37,6 @@
+ /* Todo: should not use this const, currently it's a work-around */
+ #define GPS_LIBMNL_READ_MAX		512
+ 
+-struct boot_time_info {
+-	int64_t now_time;
+-	int64_t arch_counter;
+-};
+-
+ struct gps_each_device_cfg {
+ 	char *dev_name;
+ 	int index;
+@@ -71,4 +68,3 @@ void gps_dl_device_context_init(void);
+ void gps_dl_device_context_deinit(void);
+ 
+ #endif /* _GPS_EACH_DEVICE_H */
+-
+diff --git a/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051.h b/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051.h
+new file mode 100644
+index 0000000..1919e0c
+--- /dev/null
++++ b/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051.h
+@@ -0,0 +1,31 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++/*
++ * Read-only userspace ABI for the MediaTek GPS data-link v051 driver.
++ *
++ * The driver intentionally uses plain integer ioctl command values rather
++ * than _IO*()-encoded commands. Keep these values and layouts stable.
++ */
++
++#ifndef _UAPI_GPSDL_V051_H
++#define _UAPI_GPSDL_V051_H
++
++#include <linux/types.h>
++
++#define GPSDL_V051_IOC_QUERY_STATUS		13U
++#define GPSDL_V051_IOC_GET_DSP_BOOTUP_INFO	23U
++#define GPSDL_V051_IOC_GET_BOOT_TIME		28U
++
++struct gpsdl_v051_boot_time {
++	__s64 now_time;
++	__s64 arch_counter;
++};
++
++struct gpsdl_v051_bootup_info {
++	__u32 code_size;
++	__u32 start_addr;
++	__u32 exec_addr;
++	__u32 cipher_key;
++	__u32 frag_num;
++};
++
++#endif /* _UAPI_GPSDL_V051_H */
+diff --git a/connectivity/gps/data_link/tests/gpsdl_v051_abi_test.c b/connectivity/gps/data_link/tests/gpsdl_v051_abi_test.c
+new file mode 100644
+index 0000000..f14e9bf
+--- /dev/null
++++ b/connectivity/gps/data_link/tests/gpsdl_v051_abi_test.c
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <stddef.h>
++
++#include "../linux/inc/uapi/gpsdl_v051.h"
++
++_Static_assert(GPSDL_V051_IOC_QUERY_STATUS == 13U,
++	"query-status command changed");
++_Static_assert(GPSDL_V051_IOC_GET_DSP_BOOTUP_INFO == 23U,
++	"boot-info command changed");
++_Static_assert(GPSDL_V051_IOC_GET_BOOT_TIME == 28U,
++	"boot-time command changed");
++
++_Static_assert(sizeof(struct gpsdl_v051_boot_time) == 16,
++	"boot-time size changed");
++_Static_assert(offsetof(struct gpsdl_v051_boot_time, now_time) == 0,
++	"boot-time now_time offset changed");
++_Static_assert(offsetof(struct gpsdl_v051_boot_time, arch_counter) == 8,
++	"boot-time arch_counter offset changed");
++
++_Static_assert(sizeof(struct gpsdl_v051_bootup_info) == 20,
++	"boot-info size changed");
++_Static_assert(offsetof(struct gpsdl_v051_bootup_info, code_size) == 0,
++	"boot-info code_size offset changed");
++_Static_assert(offsetof(struct gpsdl_v051_bootup_info, start_addr) == 4,
++	"boot-info start_addr offset changed");
++_Static_assert(offsetof(struct gpsdl_v051_bootup_info, exec_addr) == 8,
++	"boot-info exec_addr offset changed");
++_Static_assert(offsetof(struct gpsdl_v051_bootup_info, cipher_key) == 12,
++	"boot-info cipher_key offset changed");
++_Static_assert(offsetof(struct gpsdl_v051_bootup_info, frag_num) == 16,
++	"boot-info frag_num offset changed");
++
++int main(void)
++{
++	return 0;
++}
+diff --git a/connectivity/gps/data_link/tests/run_gpsdl_v051_abi_test.sh b/connectivity/gps/data_link/tests/run_gpsdl_v051_abi_test.sh
+new file mode 100755
+index 0000000..ae61e5f
+--- /dev/null
++++ b/connectivity/gps/data_link/tests/run_gpsdl_v051_abi_test.sh
+@@ -0,0 +1,31 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0
++
++set -eu
++
++test_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
++uapi_header="$test_dir/../linux/inc/uapi/gpsdl_v051.h"
++tmp_dir=$(mktemp -d)
++trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
++
++mkdir -p "$tmp_dir/include/linux"
++cat >"$tmp_dir/include/linux/types.h" <<'EOF'
++#ifndef _HOST_TEST_LINUX_TYPES_H
++#define _HOST_TEST_LINUX_TYPES_H
++typedef signed long long __s64;
++typedef unsigned int __u32;
++#endif
++EOF
++
++"${CC:-cc}" -std=c11 -Wall -Wextra -Werror -pedantic \
++	-I"$tmp_dir/include" \
++	"$test_dir/gpsdl_v051_abi_test.c" \
++	-o "$tmp_dir/gpsdl_v051_abi_test"
++"$tmp_dir/gpsdl_v051_abi_test"
++
++test "$(grep -c '^#define GPSDL_V051_IOC_' "$uapi_header")" -eq 3
++if grep -Eq 'TRIGGER_ASSERT|HW_SUSPEND|HW_RESUME|FRAGEMENT|FWCTL|RESET|RAW|LINK_ID1' \
++	"$uapi_header"; then
++	echo "unsafe or unvalidated API leaked into gpsdl_v051.h" >&2
++	exit 1
++fi
+

@@ -121,7 +121,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean #130 automatically associates with DHCP/default route/DNS/HTTPS and completes an exact 64 MiB Wi-Fi SSH stream while USB and Bluetooth remain active. Cold reconnect, suspend/resume and sustained bidirectional stress remain. |
 | Connectivity | Bluetooth | Partial | Native BlueZ `hci0` completed a bounded eight-second discovery with 23 devices and returned to `Discovering: no` while USB/Wi-Fi survived. Pair/reconnect, audio/data profiles and suspend lifecycle remain. |
-| Connectivity | GPS/GNSS | Partial | Installed #130 manual v051 receives the validated GPS EMI handoff, creates both `gpsdl` nodes and completes bounded link0 open, ATF boot-info ioctl 23 and close. No owner remains and USB/Wi-Fi/Bluetooth survive. MNL integration, satellite acquisition and a timed position fix remain. |
+| Connectivity | GPS/GNSS | Partial | Installed #130 manual v051 receives the validated GPS EMI handoff, creates both `gpsdl` nodes and completes bounded link0 open, ATF boot-info ioctl 23 and close. No owner remains and USB/Wi-Fi/Bluetooth survive. The next candidate adds only an explicit, deadline-bounded read-only ioctl diagnostic and remains default-off. MNL/MVCD protocol evidence, satellite acquisition and a timed position fix remain absent. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. Object-only LLVM 21 gates cover CCCI core, CCIF and the bounded `ccci_modem.o`/`ccci_hif.o`/`ap_md_mem.o` common boundary; CI forbids ECCCI `.ko` artifacts. Trusted-firmware semantics, handoff memory, DT, link/modpost and runtime remain unproven. |
 | Sensors | Rotation/accelerometer | Broken | Stock identifies SCP-owned ICM4N607 accel/gyro, LTR569 light/proximity and HX9031AS SAR endpoints. The vendor SCP probe still stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A manual-only inventory mask remains false until the full SCP handshake succeeds; no publication, DVFS or sensorhub is enabled. |
@@ -159,7 +159,7 @@ On the clean CI image from pmaports commit `fdeeda0` with kernel
 - NCM USB networking is active as `usb0`/`en4` and transferred exact 32 MiB
   zero streams with matching SHA after clean boot, warm reboot and the manual
   GNSS transport test.
-- The installed manual GNSS v050 transport creates `/dev/gpsdl0` and `/dev/gpsdl1`; a
+- The installed manual GNSS v051 transport creates `/dev/gpsdl0` and `/dev/gpsdl1`; a
   bounded link0 open/close passes without a consumer leak or radio/USB loss.
   This is not a satellite position fix.
 - All 24 MT6878 LVTS thermal zones report plausible polling-mode values.

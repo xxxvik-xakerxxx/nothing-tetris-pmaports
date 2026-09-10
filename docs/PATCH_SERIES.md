@@ -121,6 +121,7 @@ normal Alpine/postmarketOS practice.
 | `1000-vendor-connectivity-adapter-linux-6.18.patch.vendor` | Adapts the official MediaTek connectivity adapter from Nothing OS 4.1 to the Linux 6.18 kernel ABI used by this package. |
 | `1001-vendor-connectivity-linux-6.18-compat.patch.vendor` | Adapts the official MT6878/MT6631 conninfra, Wi-Fi and Bluetooth modules to Linux 6.18 and exposes Bluetooth through native Linux HCI. |
 | `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v051 external module selected by stock-derived Tetris product configuration to Linux 6.18. |
+| `1003-vendor-gnss-v051-readonly-uapi.patch.vendor` | Extracts only the source-audited v051 status, DSP boot-info and boot-time userspace ABI, with compile-time layouts and a host test. It adds no raw protocol, service or autoload behavior. |
 | `1101-vendor-audio-optional-calibration.patch.vendor` | Keeps optional PMIC calibration failures explicit while allowing the MT6369 codec to probe when a provider is unavailable. |
 | `1102-vendor-audio-linux-6.18-api.patch.vendor` | Adapts the official MT6878/MT6369 ASoC stack to Linux 6.18 APIs and the Tetris composite I2S4 pinctrl state. |
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |

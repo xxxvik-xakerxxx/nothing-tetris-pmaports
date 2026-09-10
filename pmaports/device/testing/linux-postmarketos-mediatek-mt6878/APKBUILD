@@ -123,6 +123,7 @@ source="
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
+	1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
 	1103-vendor-audio-mt6685-clock.patch.vendor
@@ -147,6 +148,8 @@ prepare() {
 		< "$srcdir"/1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/1002-vendor-gnss-linux-6.18-compat.patch.vendor
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -262,6 +265,8 @@ _build_connectivity_modules() {
 	_connectivity_make "$_conn"/gps/data_link/plat/v051 \
 		CONFIG_MTK_GPS_SUPPORT=y \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
+	CC="${HOSTCC:-cc}" \
+		sh "$_conn"/gps/data_link/tests/run_gpsdl_v051_abi_test.sh
 }
 
 _pmic_make() {
@@ -867,6 +872,7 @@ fa01b5106883144835c826948dbef4bdca05894b3c3c6221b5f7bff9bf561be5a93a071d19435bbb
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor
+c661d2d2dfb21535d7c8f63ad0fbcb3be7eb363e0aad76596376a194d21440744d7d9ec8780373f4c3d48c14abbc6d24dc21abb7dfb3843c25b4fa0deafe80af  1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 1faca4663bb2ab0dd79ffe255e050223bab8ec6c79b985507fca5248b9d232cf66222fae8864c6364a528bee4384b03d103bf149a2c7ef6f2abed92f9c28b691  1101-vendor-audio-optional-calibration.patch.vendor
 2656201fec02b789f1affb7371622134de53507c49d50f1173281d6fc3b78bcedc5e65ce90347215c65966a93841208ee19300f801c0deca282853b5a8b0e128  1102-vendor-audio-linux-6.18-api.patch.vendor
 e390543280ac810da413bbc629744ba9e418ab8a433ad523acce8679d9f334d273e01a6d54a0083e081d24773674e844ee425e979a68a81b01e560701cc7fbca  1103-vendor-audio-mt6685-clock.patch.vendor

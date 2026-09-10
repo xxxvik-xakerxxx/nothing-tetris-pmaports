@@ -826,6 +826,9 @@ validate_connectivity_firmware() {
 validate_connectivity_build() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 	gnss_patch="$kernel_pkg/1002-vendor-gnss-linux-6.18-compat.patch.vendor"
+	gnss_uapi_patch="$kernel_pkg/1003-vendor-gnss-v051-readonly-uapi.patch.vendor"
+	gnss_header="$device_pkg/gpsdl_v051.h"
+	gnss_probe="$device_pkg/nothing-tetris-gnss-readonly.c"
 
 	grep -Eq '^  PMBOOTSTRAP_COMMIT: [0-9a-f]{40}$' "$workflow"
 	grep -Eq '^  PMAPORTS_COMMIT: [0-9a-f]{40}$' "$workflow"
@@ -844,6 +847,33 @@ validate_connectivity_build() {
 	grep -Fq 'gps_drv_dl_v051.ko' "$kernel_apkbuild"
 	grep -Fq '#define MTK_SIP_KERNEL_GPS_CONTROL MTK_SIP_SMC_CMD(0x537)' \
 		"$gnss_patch"
+	grep -Fq '1003-vendor-gnss-v051-readonly-uapi.patch.vendor' \
+		"$kernel_apkbuild"
+	grep -Fq 'run_gpsdl_v051_abi_test.sh' "$kernel_apkbuild"
+	grep -Fq 'GPSDL_V051_IOC_GET_DSP_BOOTUP_INFO' "$gnss_uapi_patch"
+	test "$(grep -c '^#define GPSDL_V051_IOC_' "$gnss_header")" -eq 3
+	if grep -Eq 'TRIGGER_ASSERT|HW_SUSPEND|HW_RESUME|FRAGEMENT|FWCTL|RESET|RAW|LINK_ID1' \
+		"$gnss_header"; then
+		echo "GNSS UAPI exposes an unsafe or unvalidated operation" >&2
+		return 1
+	fi
+	grep -Fq '#define GPSDL_DEVICE "/dev/gpsdl0"' "$gnss_probe"
+	grep -Fq '#define GPSDL_DEADLINE_SECONDS 8U' "$gnss_probe"
+	grep -Fq 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW' "$gnss_probe"
+	test "$(grep -c 'ioctl(fd, GPSDL_V051_IOC_' "$gnss_probe")" -eq 3
+	if grep -Eq '(^|[^[:alnum:]_])(read|write)[[:space:]]*\(|gpsdl1|O_RDWR|O_WRONLY' \
+		"$gnss_probe"; then
+		echo "GNSS diagnostic exceeds the audited read-only link0 boundary" >&2
+		return 1
+	fi
+	grep -Fq '/usr/libexec/nothing-tetris-gnss-readonly' \
+		"$device_pkg/APKBUILD"
+	if grep -Fl 'nothing-tetris-gnss-readonly' \
+		"$device_pkg"/*.service "$device_pkg"/*.preset \
+		"$device_pkg"/*.conf 2>/dev/null | grep -q .; then
+		echo "GNSS diagnostic must remain manual-only" >&2
+		return 1
+	fi
 	if grep -Eq 'gps/data_link/plat/v0(50|60|61)|gps_drv_dl_v0(50|60|61)' \
 			"$kernel_apkbuild" "$gnss_patch"; then
 		echo "Tetris must use its stock-derived MT6878 GNSS v051 profile" >&2
