@@ -1,0 +1,151 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 13:00:00 +0300
+Subject: [PATCH] soc: mediatek: scp: validate TCM region-info before recovery
+
+The Nothing OS 4.1 SCP provider copies an LK/SCP-owned region-info
+structure from TCM, then trusts its physical addresses and sizes for
+loader recovery, firmware bookkeeping and DRAM backup mappings.  A
+missing or incompatible handoff can therefore reach ioremap() and later
+reset paths with zero, truncated or wrapping values.
+
+Fail module initialization before recovery setup unless the mapped TCM can
+contain the known structure, the firmware reports at least the full known
+layout, loader and firmware ranges are non-empty and do not wrap, and the
+loader fits in the declared SCP TCM.  When DT requests SCP DRAM
+management, require that range to be valid as well.  Also reject a DT TCM
+size larger than the mapped resource and propagate the validation error
+through scp_init().
+
+This is only a structural safety boundary.  It does not authenticate or
+select scp_a/scp_b, prove that the region-info ABI matches the active
+firmware, prove reserved-memory ownership, add an SCP or DVFS DT node, or
+load any module automatically.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/scp/rv/scp_helper.c | 75 +++++++++++++++++++++--
+ 1 file changed, 72 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -29,6 +29,7 @@
+ #include <linux/ioport.h>
+ #include <linux/io.h>
+ #include <linux/err.h>
++#include <linux/overflow.h>
+ #include <linux/debugfs.h>
+ //#include <mt-plat/sync_write.h>
+ //#include <mt-plat/aee.h>
+@@ -2149,16 +2150,66 @@ int scp_check_resource(void)
+ }
+ 
+ #if SCP_RECOVERY_SUPPORT
+-void scp_region_info_init(void)
++static bool scp_region_range_valid(u32 start, u32 size)
+ {
++	u32 end;
++
++	return start && size && !check_add_overflow(start, size, &end);
++}
++
++static int scp_region_info_validate(void)
++{
++	if (scp_region_info_copy.struct_size < sizeof(scp_region_info_copy)) {
++		pr_err("[SCP] region-info too small: %u < %zu\n",
++		       scp_region_info_copy.struct_size,
++		       sizeof(scp_region_info_copy));
++		return -EPROTO;
++	}
++
++	if (!scp_region_range_valid(scp_region_info_copy.ap_loader_start,
++				    scp_region_info_copy.ap_loader_size) ||
++	    scp_region_info_copy.ap_loader_size > SCP_A_TCM_SIZE) {
++		pr_err("[SCP] invalid loader region-info\n");
++		return -EINVAL;
++	}
++
++	if (!scp_region_range_valid(scp_region_info_copy.ap_firmware_start,
++				    scp_region_info_copy.ap_firmware_size)) {
++		pr_err("[SCP] invalid firmware region-info\n");
++		return -EINVAL;
++	}
++
++	if (scpreg.scp_dram_region == 1 &&
++	    !scp_region_range_valid(scp_region_info_copy.ap_dram_start,
++				    scp_region_info_copy.ap_dram_size)) {
++		pr_err("[SCP] invalid DRAM region-info\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static int scp_region_info_init(void)
++{
++	if (SCP_REGION_INFO_OFFSET + sizeof(scp_region_info_copy) >
++	    SCP_TCM_SIZE) {
++		pr_err("[SCP] region-info lies outside TCM\n");
++		return -EINVAL;
++	}
++
+ 	/*get scp loader/firmware info from scp sram*/
+ 	scp_region_info = (SCP_TCM + SCP_REGION_INFO_OFFSET);
+ 	pr_debug("[SCP] scp_region_info = %px\n", scp_region_info);
+ 	memcpy_from_scp(&scp_region_info_copy,
+ 		scp_region_info, sizeof(scp_region_info_copy));
++
++	return scp_region_info_validate();
+ }
+ #else
+-void scp_region_info_init(void) {}
++static int scp_region_info_init(void)
++{
++	return -EOPNOTSUPP;
++}
+ #endif
+ 
+ void scp_recovery_init(void)
+@@ -2728,6 +2779,11 @@ static int scp_device_probe(struct platform_device *pdev)
+ 	if (!scpreg.scp_tcmsize) {
+ 		pr_notice("[SCP] total_tcmsize not found\n");
+ 		return -ENODEV;
++	}
++	if (scpreg.scp_tcmsize > scpreg.total_tcmsize) {
++		pr_err("[SCP] invalid TCM size: 0x%x > 0x%x\n",
++		       scpreg.scp_tcmsize, scpreg.total_tcmsize);
++		return -EINVAL;
+ 	}
+ 	pr_debug("[SCP] scpreg.scp_tcmsize = %d\n", scpreg.scp_tcmsize);
+ 
+@@ -3126,7 +3182,11 @@ static int __init scp_init(void)
+ #endif
+ 	sap_init();
+ 	/* scp platform initialise */
+-	scp_region_info_init();
++	ret = scp_region_info_init();
++	if (ret) {
++		pr_err("[SCP] invalid TCM region-info: %d\n", ret);
++		goto err_region_info;
++	}
+ 	pr_debug("[SCP] platform init\n");
+ 	scp_awake_init();
+ 	scp_workqueue = create_singlethread_workqueue("SCP_WQ");
+@@ -3219,6 +3279,15 @@ static int __init scp_init(void)
+ 		scp_sys_res_mbrain_plat_init();
+ 
+ 	return ret;
++err_region_info:
++	platform_driver_unregister(&mtk_scpsys_device);
++	platform_driver_unregister(&mtk_scp_device);
++	if (scp_dvfs_feature_enable()) {
++		scp_resource_req(SCP_REQ_RELEASE);
++		scp_pll_ctrl_set(PLL_DISABLE, CLK_26M);
++	}
++	scp_dvfs_exit();
++	return ret;
+ err:
+ 	platform_driver_unregister(&mtk_scp_device);
+ err_without_unregister:
+-- 
+2.51.0
