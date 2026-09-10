@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=149
+pkgrel=150
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -119,6 +119,8 @@ source="
 	0085-drm-mediatek-program-MT6878-DSC-version.patch
 	0086-drm-mediatek-match-MT6878-native-display-state.patch
 	0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
+	0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
+	0092-clk-mediatek-mt6878-camera-main.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -132,10 +134,38 @@ _connmods_dir="$srcdir/android_kernel_modules_nothing_mt6878-$_connmods_commit"
 _devmods_dir="$srcdir/android_kernel_device_modules_6.1_nothing_mt6878-$_devmods_commit"
 _android_top="$srcdir/android-top"
 
+_build_camera_clk_compile_only() (
+	_out=$(mktemp -d "$srcdir/mt6878-camera-clk.XXXXXX")
+	trap 'rm -rf "$_out"' EXIT
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	_config_file="$srcdir/config-$_flavor.$arch"
+
+	grep -Fxq '# CONFIG_COMMON_CLK_MT6878_CAM is not set' "$_config_file"
+	if grep -Eq '^CONFIG_COMMON_CLK_MT6878_CAM=[ym]$' "$_config_file"; then
+		die "MT6878 camera clock provider must stay disabled in the package"
+	fi
+
+	cp "$_config_file" "$_out/.config"
+	"$builddir/scripts/config" --file "$_out/.config" \
+		-e COMMON_CLK_MT6878 \
+		-m COMMON_CLK_MT6878_CAM
+	make -j"$_jobs" -C "$builddir" O="$_out" \
+		ARCH="$_carch" LLVM=1 olddefconfig
+	make -j"$_jobs" -C "$builddir" O="$_out" \
+		ARCH="$_carch" LLVM=1 \
+		drivers/clk/mediatek/clk-mt6878-cam.o
+
+	test -s "$_out/drivers/clk/mediatek/clk-mt6878-cam.o" || \
+		die "MT6878 camera clock compile-only object is missing"
+	test ! -e "$_out/drivers/clk/mediatek/clk-mt6878-cam.ko" || \
+		die "MT6878 camera clock gate must not produce a module"
+)
+
 prepare() {
 	default_prepare
-	cp "$srcdir/config-$_flavor.$arch" .config
 	export PATH="/usr/lib/llvm21/bin:$PATH"
+	_build_camera_clk_compile_only
+	cp "$srcdir/config-$_flavor.$arch" .config
 	make ARCH="$_carch" LLVM=1 olddefconfig
 
 	mkdir -p "$_android_top"/vendor/mediatek/kernel_modules
@@ -702,6 +732,10 @@ package() {
 		INSTALL_MOD_PATH="$pkgdir" \
 		INSTALL_MOD_STRIP=1 \
 		LLVM=1
+	if find "$pkgdir/lib/modules" -name 'clk-mt6878-cam.ko*' \
+		-print -quit | grep -q .; then
+		die "compile-only MT6878 camera clock module must not be packaged"
+	fi
 	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \
 		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
@@ -756,7 +790,7 @@ sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
 ac703d53b671d8dc4a798670e2b0f1b6f1d4b7c64be16e5ed331c4d8e01371279efa613cb45f87e8fed482a08cb9eb642bbce5d57d5b545313ba6e101b675dae  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
 829db7a368cf7a9b02e0f0e0a8406aa60f391018138809359373c3779ebadf26fc9fb3ab8aed94b2af4c2c0e21a6c661b9bfc5dfe74fe69ad95768cda7ee11dc  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
-a08807d1eb6e206d22c35541f772abbca83ae451fd9cf4137fbe973bd7e65ad6e26d4c2956b388cedac6d0e1918fbf0098f3b04ea1e9bdc11ba1471a63d9c21d  config-postmarketos-mediatek-mt6878.aarch64
+bdd652c20714d5c1cd958fc6fea35f0d42f1433738d1a857c9f61b8e69feb47c32a91c1beffc2375a2806bcd11a45bc720b8b7e31f7120ccf0a4ac44bad8b54f  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
 3323036613300168eda28857698364a3662324b290d9b9887c8b813b8166104222a5b2d0a4469a32de6bbefdd396ffa7bb129efbc859867bc169e34c4a393349  0002-mfd-mt6369-spmi-pmic.patch
 e589d0aed09a2d0cd9705f16eaec49c97f45e161429e244fe857b382503aafb8522fb8d4a6972820d67c97dcd4d3b096e21a05b38b283a9a2cd355f040c56bb2  0003-mfd-mt6363-keys-mt6375-telemetry.patch
@@ -841,6 +875,8 @@ b44fb646e66b23f36f2b89e42d5f1152d216b5a8473f99b29e332f19d244ed462059bf379e6c8e08
 8a3b50188f05cc106f403c090c7a9110e4397249ab50d3dcf12d507d18ca2af1867ea7600114ebe6ffe14ba2f7d35bb68f25dbe38c993e5f64b6b6a09d798aaf  0085-drm-mediatek-program-MT6878-DSC-version.patch
 fa01b5106883144835c826948dbef4bdca05894b3c3c6221b5f7bff9bf561be5a93a071d19435bbbf8ea9af2faba0057329d8859be39ce1372e4ee31ba051604  0086-drm-mediatek-match-MT6878-native-display-state.patch
 2b94416b89b79dd5c8b4f54c20d767f4a2bf154ce051064f2fbd84cd15fd0ef66a6d2de56487b2fde784b5ff62357d5d9780917b70f4c489f79304f7e37bfe35  0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
+43061095a049629a014d63b60f1649e747fffdbc2c6ee8ce68032c880df21a8eb92081b12164fc6f0ac4428928e8bb4dcd142a88996f056a2d9facee1d9809ba  0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
+fdf0fc19670be99eef4940648ae521ae51462811d0c49400b44d03e09558bc85b296921842a9e11ccf45c2525e65c075451d44ee5ca3fb54a559c05165195bee  0092-clk-mediatek-mt6878-camera-main.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

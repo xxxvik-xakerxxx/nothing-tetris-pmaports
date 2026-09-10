@@ -615,9 +615,27 @@ validate_compile_only_boundaries() {
 		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor \
 		0089-vendor-eccci-modem-common-compile-only.patch.vendor \
 		0054-power-supply-mt6375-bc12-compile-only.patch \
-		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch; do
+		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch \
+		0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch \
+		0092-clk-mediatek-mt6878-camera-main.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
+	camera_clk_binding="$kernel_pkg/0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch"
+	camera_clk_driver="$kernel_pkg/0092-clk-mediatek-mt6878-camera-main.patch"
+	grep -Fq 'const: mediatek,mt6878-camsys' "$camera_clk_binding"
+	grep -Fq 'CONFIG_COMMON_CLK_MT6878_CAM' "$camera_clk_driver"
+	grep -Fq '# CONFIG_COMMON_CLK_MT6878_CAM is not set' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	if grep -Eq '^CONFIG_COMMON_CLK_MT6878_CAM=[ym]$' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"; then
+		echo "MT6878 camera clock provider must stay disabled" >&2
+		return 1
+	fi
+	if grep -Eq '^diff --git a/arch/|status = "okay"|sensor@|regulator' \
+		"$camera_clk_binding" "$camera_clk_driver"; then
+		echo "MT6878 camera clock prerequisite acquired runtime DT scope" >&2
+		return 1
+	fi
 	camera_fixture="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch"
 	[ "$(grep -Fc 'status = "disabled";' "$camera_fixture")" -eq 5 ]
 	grep -Fq 'compatible = "nothing,tetris-imx882-identity";' "$camera_fixture"
@@ -671,6 +689,11 @@ validate_compile_only_boundaries() {
 	grep -Fq '_build_mt6375_bc12_compile_only' "$kernel_apkbuild"
 	grep -Fq 'drivers/power/supply/mt6375-bc12-decode.o' "$kernel_apkbuild"
 	grep -Fq 'MT6375 BC1.2 decoder must not acquire runtime dependencies' \
+		"$kernel_apkbuild"
+	grep -Fq '_build_camera_clk_compile_only' "$kernel_apkbuild"
+	grep -Fq 'O="$_out"' "$kernel_apkbuild"
+	grep -Fq 'drivers/clk/mediatek/clk-mt6878-cam.o' "$kernel_apkbuild"
+	grep -Fq 'compile-only MT6878 camera clock module must not be packaged' \
 		"$kernel_apkbuild"
 	grep -Fq 'mediatek/mt6878-nothing-tetris-native.dtb' "$kernel_apkbuild"
 	grep -Fq 'mt6878-nothing-tetris-native.dtb"' "$kernel_apkbuild"
@@ -727,6 +750,9 @@ validate_compile_only_boundaries() {
 	grep -Fq 'DISP_REG_DSC_SPR);' \
 		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
+	grep -Fq 'compile-only MT6878 camera clock module must not be packaged' \
+		"$workflow"
+	grep -Fq -- "-name 'clk-mt6878-cam.ko*'" "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
 	grep -Fq -- "-name 'ccci*.ko*'" "$workflow"
@@ -739,7 +765,7 @@ validate_compile_only_boundaries() {
 	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
 	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-decode)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|clk-mt6878-cam|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-decode)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1

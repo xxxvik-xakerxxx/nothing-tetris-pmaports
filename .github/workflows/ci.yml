@@ -303,6 +303,11 @@ jobs:
             echo "compile-only pd9302a module must not be packaged"
             exit 1
           fi
+          if find "$rootfs/lib/modules" -name 'clk-mt6878-cam.ko*' \
+              -print -quit | grep -q .; then
+            echo "compile-only MT6878 camera clock module must not be packaged"
+            exit 1
+          fi
           if find "$rootfs/lib/modules" -name 'tetris-camera-audit.*' \
               -print -quit | grep -q .; then
             echo "compile-only Tetris camera audit must not be packaged"
@@ -319,7 +324,7 @@ jobs:
             exit 1
           fi
           if grep -RIlE \
-              '(pd9302a|tetris-camera-audit|ccci[_-]|mt6375-bc12-decode)' \
+              '(pd9302a|clk-mt6878-cam|tetris-camera-audit|ccci[_-]|mt6375-bc12-decode)' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
               "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
               "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then
