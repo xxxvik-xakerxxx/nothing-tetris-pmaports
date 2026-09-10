@@ -4,6 +4,17 @@ Updated: 2026-09-10.
 
 ## Latest display result
 
+Update after the route-only test: changing OVL0 INTEN from frame-start bit 14
+to frame-completion bit 1 eliminated redraw flicker according to the user.
+The bounded trace retained the correct route and mask 2 throughout, with
+DSC frame completions and no new abnormal EOF. A DRM sequence event completed
+and USB/SSH stayed available. Prepared r153 patch `0097` makes this source
+selection persistent in MT6878 driver data. The fully patched OVL translation
+unit compiled with clang 21.1.8 against the prepared diagnostic kernel tree.
+This is still a live result, not installed CI/lifecycle proof. Perceived slow
+rendering remains; the session uses software rendering, but its precise
+performance bottleneck has not been measured. The route-only history follows.
+
 Installed software remains CI `34470405429`, kernel package `6.18-r151`.
 A reversible live change to MMSYS 0xd00/0xd30/0xd60 produces a user-confirmed
 native interface. With that route stable, acknowledged DSC samples are one

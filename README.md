@@ -37,7 +37,7 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed `pkgrel=151`, kernel `6.18.0 #152`; prepared `pkgrel=152` retains the live-verified display route, pending CI/install) |
+| Kernel version | `6.18` (installed `pkgrel=151`, kernel `6.18.0 #152`; prepared `pkgrel=153` retains the verified route and changes OVL updates to frame end, pending CI/install) |
 | Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
@@ -83,7 +83,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DDP/DSC/DSI | Partial (live probe only) | On r151, an exclusive LK-derived route produces a user-confirmed interface and fresh DSC frame completions without abnormal EOF while the route remains selected. Movement still flickers; modesets restore the broken route. Prepared r152 patch `0096` moves the verified selection into driver connect; CI/install, cold repeat, native PQ ownership and stable lifecycle remain unproven. See `docs/DISPLAY_FIRST_FRAME_AUDIT.md`. |
+| Display | Native DDP/DSC/DSI | Partial (live probe only) | On r151, the verified route plus OVL frame-end IRQ produces a user-confirmed interface without redraw flicker. Hardware frames continue at approximately 60 Hz; software rendering still feels slow. Prepared r153 patches `0096`/`0097` put both settings in the driver. CI/install, cold repeat, native PQ ownership and stable lifecycle remain unproven. See `docs/DISPLAY_FIRST_FRAME_AUDIT.md`. |
 | Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work. The r151 source-aware power gate passed on a PD-capable computer attachment that reports 5 V with `CURRENT_MAX=0`, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |

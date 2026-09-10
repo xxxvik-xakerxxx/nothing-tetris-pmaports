@@ -19,6 +19,13 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
+Prepared r153 additionally includes
+`0097-drm-mediatek-update-MT6878-planes-at-frame-end.patch`. The live change
+from frame-start to frame-completion vblank removes user-visible redraw
+flicker in the bounded test. The complete OVL patch chain applies with the
+packaging patch tool and its translation unit compiles; CI installation and
+hardware lifecycle gates remain open. r152 below is the route-only candidate.
+
 Latest: installed native CI `34470405429` uses `6.18-r151`. Prepared `6.18-r152`
 adds `0096-soc-mediatek-retain-verified-MT6878-display-route.patch`, the exact
 three-register route verified by a live native-image test. It is a partial

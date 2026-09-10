@@ -280,3 +280,44 @@ The source-order route header applies and compiles in the host model test,
 including repeated disconnect/reconnect and unrelated clock-register
 preservation. This does not prove hardware lifecycle, full kernel build or
 clean-install behavior. CI and installation are next.
+
+## Frame-end update eliminates user-observed redraw flicker
+
+The user authorized GitHub push explicitly; r152 commit `3a490d3` was pushed
+and CI `34490904598` started, with overlay validation passing. While it built,
+the user requested continued live debugging. The active session had changed
+from greetd to user Phosh (runtime UID 10000), explaining the missing old bus.
+After waking the correct session and restoring the route, a bounded DSC meter
+captured 30 fresh DONE events in 523854 us, with approximately 16-18 ms sampled
+intervals. Abnormal EOF appeared only at samples 0 and 2 during the route
+transition. The route was constant. This rules out the earlier idle IRQ delta
+as evidence of a 25 Hz scanout. Capture:
+`local/display-native-r151-frame-meter-route.txt` in the sibling worktree.
+
+The user localized artifacts to redraw. Source inspection found CPU plane
+updates in mtk_crtc_ddp_irq(), OVL shadow bypass and MT6878 frame-start vblank.
+The old claim that completion never arrives was based on a blocked route.
+A read-only OVL trace on the working route observed completion bit 1. The
+kernel has no KPROBES; no code hooks or instruction patches were attempted.
+
+For one controlled source-selection test, a five-minute gnome-session idle
+inhibitor prevented automatic blanking without saving power settings. A
+DRM_IOCTL_CRTC_QUEUE_SEQUENCE event 3600 frames ahead held vblank enabled;
+its helper had a 75-second timeout. A separate small diagnostic module
+required active OVL with INTEN exactly BIT(14), then changed only INTEN to
+BIT(1), with conditional restoration on unload. It did not reset any engine.
+All 256 samples showed INTEN=2 and the intended route, with fresh DSC DONE and
+no abnormal EOF. No flip/vblank timeout, BUG or Oops was found; USB was UP.
+The future DRM event arrived with 32 bytes and the helper exited normally.
+Raw capture: `local/display-native-r151-frame-end-irq.txt`.
+
+The user confirmed no flicker after the change, while noting slow response.
+That supports the update-phase hypothesis; it does not prove accelerated
+rendering, cold repeat, long stress or physical output on other units.
+Prepared r153 patch 0097 changes the MT6878 vblank_irq_mask to frame completion.
+The earlier patch 0086 has context accepted by the packaging patch tool but
+rejected by git apply. Reconstructed the OVL source with the packaging-style
+patch tool in APKBUILD order, including 0097, then compiled the resulting
+translation unit successfully with clang21. No production build was run
+locally. The diagnostic source selection remains temporary until CI install;
+driver re-enabling vblank or modesetting can still restore the old setting.

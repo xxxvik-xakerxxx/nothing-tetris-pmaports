@@ -1,0 +1,33 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] drm: mediatek: update MT6878 planes at frame end
+
+MT6878 bypasses OVL shadow registers and uses the CPU update path. Updating
+plane registers and completing page flips at OVL frame start can therefore
+change the buffer while scanout is reading it. The initial frame-start IRQ
+was selected while the downstream route was stalled, when completion never
+arrived. With the corrected route, OVL completion is available.
+
+A bounded live test changed only OVL0 INTEN from bit 14 to bit 1 while a DRM
+sequence event held the vblank reference. The route stayed unchanged, DSC
+frames completed without new abnormal EOF, and the user confirmed that
+redraw flicker and artifacts disappeared. The event was delivered and USB
+SSH remained available. This does not claim accelerated compositor rendering.
+
+Use the ordinary frame-completion vblank source for MT6878 as well. Keep the
+setting in SoC data so it survives vblank enable/disable and modesets.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -768,7 +768,8 @@ static const struct mtk_disp_ovl_data mt6878_ovl_2l_driver_data = {
+ 	.formats = mt8173_formats,
+ 	.num_formats = ARRAY_SIZE(mt8173_formats),
+-	.vblank_irq_mask = OVL_FME_START_INT,
++	/* CPU plane updates must not race the frame being fetched. */
++	.vblank_irq_mask = OVL_FME_CPL_INT,
+ 	.bypass_shadow = true,
+ 	.reset_on_start = true,
+ 	.force_relay = true,
+ };
