@@ -19,6 +19,14 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
+Latest: installed native CI `34470405429` uses `6.18-r151`. Prepared `6.18-r152`
+adds `0096-soc-mediatek-retain-verified-MT6878-display-route.patch`, the exact
+three-register route verified by a live native-image test. It is a partial
+bring-up candidate, not completed display support: flicker and inherited PQ
+ownership remain unresolved. The route model test reconstructs the packaged
+header in source order and exercises connect/disconnect; hardware lifecycle
+and CI installation remain separate gates. Earlier image history follows.
+
 The installed CI image uses `pkgver=6.18` and `pkgrel=127` at pmaports commit
 `fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed overlay
 validation, the full kernel and device packages, install-image construction and

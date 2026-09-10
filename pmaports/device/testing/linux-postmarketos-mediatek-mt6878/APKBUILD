@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=151
+pkgrel=152
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -123,6 +123,7 @@ source="
 	0086-drm-mediatek-match-MT6878-native-display-state.patch
 	0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
 	0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch
+	0096-soc-mediatek-retain-verified-MT6878-display-route.patch
 	0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
 	0092-clk-mediatek-mt6878-camera-main.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
@@ -973,6 +974,7 @@ b44fb646e66b23f36f2b89e42d5f1152d216b5a8473f99b29e332f19d244ed462059bf379e6c8e08
 fa01b5106883144835c826948dbef4bdca05894b3c3c6221b5f7bff9bf561be5a93a071d19435bbbf8ea9af2faba0057329d8859be39ce1372e4ee31ba051604  0086-drm-mediatek-match-MT6878-native-display-state.patch
 2b94416b89b79dd5c8b4f54c20d767f4a2bf154ce051064f2fbd84cd15fd0ef66a6d2de56487b2fde784b5ff62357d5d9780917b70f4c489f79304f7e37bfe35  0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
 593c89d48ba71f22354239f71cdabd6acf7f4dbffa3991a6fa6d565378b57678033d30f97a460e7261366ece13fe2d70f66a8a84cfad60ab94670012a955f330  0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch
+2b308205d6bce881820155eb30dfa4ac6ffb8190d64686c23c81de93b3d8fbb7260681b754480e0f49ab9702ee9eafd68fb4b66d7f3a6d290678e2b1f2de7b6b  0096-soc-mediatek-retain-verified-MT6878-display-route.patch
 43061095a049629a014d63b60f1649e747fffdbc2c6ee8ce68032c880df21a8eb92081b12164fc6f0ac4428928e8bb4dcd142a88996f056a2d9facee1d9809ba  0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
 fdf0fc19670be99eef4940648ae521ae51462811d0c49400b44d03e09558bc85b296921842a9e11ccf45c2525e65c075451d44ee5ca3fb54a559c05165195bee  0092-clk-mediatek-mt6878-camera-main.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor

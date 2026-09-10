@@ -2,6 +2,24 @@
 
 Updated: 2026-09-10.
 
+## Latest display result
+
+Installed software remains CI `34470405429`, kernel package `6.18-r151`.
+A reversible live change to MMSYS 0xd00/0xd30/0xd60 produces a user-confirmed
+native interface. With that route stable, acknowledged DSC samples are one
+initial stale 9 followed by 31 FRAME_DONE-only samples. USB/SSH remain available.
+The image still flickers on interaction. Subsequent modesets overwrite the
+temporary route even though the probe remains loaded, restoring grey/striped
+output and abnormal EOF. This is **Partial (live probe only)**.
+
+At the user's request, prepared r152 patch `0096` puts those exact selections
+in the driver connect path. It does not add an autoloaded diagnostic module
+or a register-writing background service. Patch application and a host-side
+connect/disconnect model are checked; CI and installation are still pending.
+Inherited LK PQ initialization, flicker, cold repeat and lifecycle validation
+remain open. The older rows below describe baseline images, not this live
+experiment. Full evidence is in `DISPLAY_FIRST_FRAME_AUDIT.md`.
+
 ## Exact software state
 
 | Role | Revision | Device state |
