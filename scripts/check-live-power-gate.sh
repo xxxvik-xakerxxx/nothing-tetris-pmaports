@@ -65,6 +65,54 @@ require_supply_status() {
 	esac
 }
 
+source_usb_type() {
+	awk '
+		/^### tcpm-source-/ { in_source = 1; next }
+		/^### / { in_source = 0; next }
+		in_source && /^usb_type=/ {
+			print substr($0, 10)
+			exit
+		}
+	' "$outdir/power.txt"
+}
+
+source_current_max() {
+	awk '
+		/^### tcpm-source-/ { in_source = 1; next }
+		/^### / { in_source = 0; next }
+		in_source && /^current_max=/ {
+			print substr($0, 13)
+			exit
+		}
+	' "$outdir/power.txt"
+}
+
+require_source_current_policy() {
+	usb_type=$(source_usb_type)
+	current_max=$(source_current_max)
+	input_current_limit=$(supply_property_value mt6375-charger input_current_limit)
+	constant_charge_current=$(supply_property_value mt6375-charger constant_charge_current)
+
+	case "$current_max" in
+		''|*[!0-9]*) current_max=0 ;;
+	esac
+
+	case "$usb_type" in
+		*'PD'*|*'PD_PPS'*)
+			if [ "$current_max" -gt 0 ]; then
+				require_supply_value mt6375-charger input_current_limit "$current_max"
+				require_supply_value mt6375-charger constant_charge_current "$current_max"
+				return
+			fi
+			;;
+	esac
+
+	[ "$input_current_limit" = 500000 ] ||
+		fail "unclassified source must keep 500 mA input limit, got ${input_current_limit:-missing}"
+	[ "$constant_charge_current" = 500000 ] ||
+		fail "unclassified source must keep 500 mA charge current, got ${constant_charge_current:-missing}"
+}
+
 if ! sshpass -p "$password" ssh $ssh_opts "$user@$host" sh -s -- "$password" \
 	> "$outdir/power.txt" 2> "$outdir/ssh.err" <<'EOF'
 password=$1
@@ -232,8 +280,7 @@ if [ "$mode" = charger ]; then
 	charge_behaviour=$(supply_property_value mt6375-charger charge_behaviour)
 	case "$charge_behaviour" in
 		*'[auto]'*)
-			require_supply_value mt6375-charger input_current_limit 500000
-			require_supply_value mt6375-charger constant_charge_current 500000
+			require_source_current_policy
 			require_supply_value mt6375-charger input_voltage_limit 4400000
 			if [ "$battery_temp" -le 100 ]; then
 				require_supply_value mt6375-charger constant_charge_voltage 4480000

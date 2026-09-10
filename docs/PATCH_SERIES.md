@@ -69,7 +69,7 @@ normal Alpine/postmarketOS practice.
 | `0085-drm-mediatek-program-MT6878-DSC-version.patch` | Programs the separate MT6878 DSC-version field at `0x200[6:5]` to DSC 1.1, matching NothingOS B4.1. The earlier start-before-mutex candidate was withdrawn before installation after direct source review showed that video mode enables the mutex before component configuration. Clean r145 left this version field unowned while reporting repeated `ABN_EOF` and DSI input `1x1`; the single-variable r146 CI was cancelled before installation in favor of the integrated r147 candidate. |
 | `0086-drm-mediatek-match-MT6878-native-display-state.patch` | Collects the remaining measured B4.1/LK display parity for the r149 integration candidate: vendor commands use generic packets, N4 PHY and horizontal word counts are exact, video TXRX/PSCTRL/HSTX state is preserved, DSI FIFO thresholds are owned, DSC SPR is disabled, and one atomic OVL start hunk performs reset/INTSTA clear, clears only `PQ_LOOP_CON[0]` at `0x2e0`, enables OVL, then applies force-relay. It intentionally excludes speculative DSC reset-on-DSI-IRQ behavior because vendor performs that operation from CMDQ EOF. |
 | `0087-drm-mediatek-complete-MT6878-DSC-handoff.patch` | Fully writes the five registers from `mtk_ddp_insert_dsc_prim_mt6878()` and `C00/C0C` when the DRM route connects after DISP power/clock enable, clearing stale LK branches. Live tracing on installed r147 proved that late selector or relay writes cannot recover an already stalled graph; r149 tests the authoritative cold-start/DPMS lifecycle. |
-| `0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch` | Clears the forced DSC parameter-load mode used by the port. The authoritative Tetris panel leaves `dsc_param_load_mode=0`, so the vendor path programs `DSC_MODE=0x00000001`; installed r149 instead used `0x00010001`. A live register test confirmed the bit can be cleared while USB remains stable, but only a clean boot can validate first-frame behavior. |
+| `0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch` | Clears the forced DSC parameter-load mode used by the port. The authoritative Tetris panel leaves `dsc_param_load_mode=0`, so the vendor path programs `DSC_MODE=0x00000001`; installed r151 confirms that value while preserving USB, touch, Phoc and backlight. It is necessary vendor parity but not the complete display fix: DSC still reports `ABN_EOF`, `FRAME_DONE=0` and DSI input stuck at `0x00010001`. |
 
 ### Modem compile boundaries
 
@@ -214,16 +214,20 @@ not a confirmed external RT1711H controller.
    Clean r132 proved the descriptor and Apple NCM driver are valid, but locked
    macOS ignored the newly randomized host MAC and withheld the BSD interface.
 2. Observe MT6375 source classification with a USB 2.0 host, a known Type-C Rp
-   1.5 A source and a known 5 V BC1.2 DCP. The bounded 500 mA path works, but
-   TCPM reported `CURRENT_MAX=0` and native BC1.2 SDP/CDP/DCP publication is
-   missing. Preserve USB NCM while validating DP/DM ownership; leave PD/OTG off.
+   1.5 A source and a known 5 V BC1.2 DCP. The r151 source-aware live gate
+   passes for a PD-capable source with `CURRENT_MAX=0` by requiring the 500 mA
+   fallback, but native BC1.2 SDP/CDP/DCP publication is still missing.
+   Preserve USB NCM while validating DP/DM ownership; leave PD/OTG off.
 3. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
-   native Bluetooth discovery and factory Bluetooth address provisioning.
+   native Bluetooth discovery and factory Bluetooth address provisioning. The
+   Wi-Fi gate now rejects mere `wlan0` presence without association, IPv4,
+   default route and traffic.
 4. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
    stack; both torch channels already pass bounded live tests.
 5. Validate the GNSS EMI handoff and LNA states, then obtain a position fix
    while Wi-Fi, Bluetooth and USB remain stable.
-6. Validate the packaged audio stack from a clean CI image, then repeat both
+6. Build and clean-install the device r9 greetd dconf-directory fix, then
+   validate the packaged audio stack from that CI image and repeat both
    speaker/microphone paths and suspend/resume lifecycle tests.
 7. Sensorhub/IIO for rotation, proximity and ambient light.
 8. Continue compile-only modem/CCIF/DPMAIF and camera sensor boundaries in

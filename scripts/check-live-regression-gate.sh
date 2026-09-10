@@ -47,6 +47,14 @@ systemctl is-active sshd NetworkManager bluetooth nothing-tetris-connectivity.se
 echo "== devices =="
 test -d /sys/class/net/usb0 && echo usb0-present || echo usb0-missing
 test -d /sys/class/net/wlan0 && echo wlan0-present || echo wlan0-missing
+if [ -d /sys/class/net/wlan0 ]; then
+	printf "wlan0-operstate="
+	cat /sys/class/net/wlan0/operstate
+	ip -4 -brief addr show wlan0 2>/dev/null
+	iw dev wlan0 link 2>/dev/null
+	ip route show default 2>/dev/null | grep -q 'wlan0' &&
+		echo wlan0-default-route || true
+fi
 test -d /sys/class/bluetooth/hci0 && echo hci0-present || echo hci0-missing
 test -e /dev/input/event0 && echo input-present || echo input-missing
 grep -R . /sys/class/leds/*vibrator* /sys/class/leds/*haptic* 2>/dev/null | head -n 20
@@ -77,6 +85,21 @@ if [ "$mode" = transfer ]; then
 		fail "32 MiB SSH transfer failed"
 	grep -q '^33554432 ' "$outdir/transfer.txt" ||
 		fail "32 MiB SSH transfer byte count mismatch"
+fi
+
+if [ "$mode" = wifi ]; then
+	grep -q '^wlan0-operstate=up$' "$outdir/baseline.txt" ||
+		fail "wlan0 is present but not associated"
+	grep -Eq '^wlan0[[:space:]]+UP[[:space:]]+[0-9]+\.' "$outdir/baseline.txt" ||
+		fail "wlan0 has no IPv4 address"
+	grep -q '^wlan0-default-route$' "$outdir/baseline.txt" ||
+		fail "wlan0 has no default route"
+	ssh_phone 'set -eu
+	gateway=$(ip route show default dev wlan0 | awk '"'"'{ print $3; exit }'"'"')
+	test -n "$gateway"
+	ping -I wlan0 -c 3 -W 2 "$gateway"
+	' > "$outdir/wifi.txt" 2> "$outdir/wifi.err" ||
+		fail "wlan0 gateway traffic failed"
 fi
 
 printf 'PASS: regression gate %s\nlogs: %s\n' "$mode" "$outdir"

@@ -296,6 +296,10 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/pulse/client.conf' \
 		"$device_pkg/APKBUILD"
+	grep -Fq 'var/lib/greetd/.config/dconf' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'install -d -o 113 -g 113 -m 0700' \
+		"$device_pkg/APKBUILD"
 	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
 		"$device_pkg/APKBUILD"
 	grep -Fxq 'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
@@ -506,8 +510,9 @@ validate_charging_policy() {
 	grep -Fq '+static int tetris_policy_suspend(struct device *dev)' "$policy_patch"
 	grep -Fq '+static int tetris_policy_resume(struct device *dev)' "$policy_patch"
 	grep -Fq 'POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT, 0' "$policy_patch"
-	grep -Fq 'require_supply_value mt6375-charger input_current_limit 500000' \
-		"$power_gate"
+	grep -Fq 'require_source_current_policy' "$power_gate"
+	grep -Fq 'source_current_max()' "$power_gate"
+	grep -Fq 'unclassified source must keep 500 mA input limit' "$power_gate"
 	grep -Fq 'require_supply_value mt6375-charger input_voltage_limit 4400000' \
 		"$power_gate"
 	grep -Fq 'require_supply_value mt6375-charger constant_charge_voltage 4480000' \
@@ -992,6 +997,24 @@ validate_connectivity_build() {
 	fi
 }
 
+validate_live_gate_scripts() {
+	regression_gate="$repo_root/scripts/check-live-regression-gate.sh"
+	audio_gate="$repo_root/scripts/check-live-audio-gate.sh"
+
+	test -x "$regression_gate"
+	test -x "$audio_gate"
+	sh -n "$regression_gate"
+	sh -n "$audio_gate"
+	grep -Fq 'wlan0-operstate=' "$regression_gate"
+	grep -Fq 'wlan0-default-route' "$regression_gate"
+	grep -Fq 'ping -I wlan0' "$regression_gate"
+	grep -Fq 'mode" = wifi' "$regression_gate"
+	grep -Fq 'speaker-test -D hw:0,6' "$audio_gate"
+	grep -Fq 'arecord -D hw:0,13' "$audio_gate"
+	grep -Fq 'greetd owns a PulseAudio process' "$audio_gate"
+	grep -Fq '/var/lib/greetd/.config/dconf' "$audio_gate"
+}
+
 validate_sums "$kernel_pkg"
 validate_sums "$device_pkg"
 validate_sums "$firmware_pkg"
@@ -1011,5 +1034,6 @@ validate_ci_rootfs_module_checks
 validate_compile_only_boundaries
 validate_connectivity_firmware
 validate_connectivity_build
+validate_live_gate_scripts
 
 echo "pmaports overlay validation passed"
