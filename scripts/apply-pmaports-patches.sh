@@ -16,7 +16,7 @@ for patch in "$repo_root"/pmaports-patches/*.patch; do
 		0001-initramfs-stable-usb-identity.patch)
 			if grep -q '^derive_usb_network_mac_pair()' "$pmaports_tree/main/postmarketos-initramfs/init_functions.sh" &&
 				grep -q '^\[variable.usb.usb_network_mac_seed_path\]' "$pmaports_tree/deviceinfo_schema.toml" &&
-				test -x "$pmaports_tree/main/postmarketos-initramfs/tests/03-usb-stable-mac.sh"; then
+				test -x "$pmaports_tree/main/postmarketos-initramfs/tests/03-usb-stable-mac-testlib.sh"; then
 				applied=true
 			fi
 			;;

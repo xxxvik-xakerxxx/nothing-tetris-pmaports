@@ -30,4 +30,3 @@ deviceinfo_flash_sparse="true"
 # usb-signaller creates an NCM developer gadget. Keep the matching function in
 # initramfs so USB networking is available without post-install changes.
 deviceinfo_usb_network_function="ncm.usb0"
-deviceinfo_usb_network_mac_seed_path="/sys/firmware/devicetree/base/chosen/atag,devinfo"

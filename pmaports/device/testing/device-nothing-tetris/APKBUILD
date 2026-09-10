@@ -105,6 +105,11 @@ check() {
 	trap 'rm -rf "$testdir"' EXIT
 	mkdir -p "$testdir"/usb-gadget/g1 "$testdir"/udc/11201000.usb0
 	printf '%s\n' 11201000.usb0 > "$testdir"/usb-gadget/g1/UDC
+	mkdir -p "$testdir"/usb-gadget/g1/functions/ncm.usb0
+	printf '%s\n' 6e:11:22:33:44:55 > \
+		"$testdir"/usb-gadget/g1/functions/ncm.usb0/host_addr
+	printf '%s\n' 2a:66:77:88:99:aa > \
+		"$testdir"/usb-gadget/g1/functions/ncm.usb0/dev_addr
 	USB_GADGET_ROOT="$testdir/usb-gadget" \
 	USB_UDC_ROOT="$testdir/udc" \
 	USB_SLEEP_STATE_FILE="$testdir/usb-sleep.state" \
@@ -117,6 +122,10 @@ check() {
 		"$srcdir"/nothing-tetris-usb-sleep post suspend
 	[ "$(cat "$testdir"/usb-gadget/g1/UDC)" = 11201000.usb0 ]
 	[ ! -e "$testdir"/usb-sleep.state ]
+	[ "$(cat "$testdir"/usb-gadget/g1/functions/ncm.usb0/host_addr)" = \
+		6e:11:22:33:44:55 ]
+	[ "$(cat "$testdir"/usb-gadget/g1/functions/ncm.usb0/dev_addr)" = \
+		2a:66:77:88:99:aa ]
 
 	dd if=/dev/zero of="$testdir"/WIFI bs=6146 count=1 2>/dev/null
 	printf '\002\021\042\063\104\125' | \
@@ -282,7 +291,7 @@ f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486
 72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
 813581aefd3554f9c929a4c46344c3d218032acaf70afc143c4fe3ce34d39c77c71bde81300e05f752f5be5695b84bce564f2d02630819f331399fda0ceec7ed  89-nothing-tetris-user.preset
 89efa7852253b57b63c6b52199e0f08700cf5960f25cd27dbe91e864f3cb9b50f4652a6fe5aa0db264db1270f01c5945a349c33f069d8cf3a3ca7d555a1529b2  boot_image.its
-fd162954ff5743624dce2e3527fcaedb8abcdf3e8a18a4d82166e55a1e6682566dd734e2c3707f17376d511a089e8c12dfc7ccce08de4844dfcbe9889386ca66  deviceinfo
+5beb26b028a5e9c7ce1046055c497f837658012b18ffeafbdc14b99cc9241bca6a808732a70f50c0ec039b6a13c11839d3b90d8f654df1225a22f6d84ed38db4  deviceinfo
 7a5fee2f67d34246fcf2a2ca3a69d9fcc93c7206bf434216153952883e591d0e122bb3e2e98384724d06b08a7dd1b9861dfc5a250f950298cf5d7f2c35d33e81  greetd-pulse-client.conf
 de30cc66011addd6443b236855115692c7947717b71745d2a51155e7931dd61e969cbf39ef7e637ee0ccbd56196eb41bccac03b6e6f6261e6068abe5b9d80a5e  greetd-pulseaudio.desktop
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf

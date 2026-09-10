@@ -6,6 +6,17 @@ kernel_pkg="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt687
 device_pkg="$repo_root/pmaports/device/testing/device-nothing-tetris"
 firmware_pkg="$repo_root/pmaports/device/testing/firmware-nothing-tetris"
 kernel_apkbuild="$kernel_pkg/APKBUILD"
+deviceinfo="$device_pkg/deviceinfo"
+
+if grep -q '^deviceinfo_usb_network_mac_seed_path=' "$deviceinfo"; then
+	echo "USB stable identity must remain disabled until seed publication passes its evidence gate" >&2
+	exit 1
+fi
+
+grep -Fq '[variable.usb.usb_network_mac_seed_path]' \
+	"$repo_root/pmaports-patches/0001-initramfs-stable-usb-identity.patch"
+grep -Fq '03-usb-stable-mac-testlib.sh' \
+	"$repo_root/pmaports-patches/0001-initramfs-stable-usb-identity.patch"
 
 # Nothing OS 4.1 (Tetris-B4.1-260415-1709) is the minimum accepted vendor
 # baseline. Keep these immutable pins in sync with docs/NOTHINGOSS_SOURCES.md.
