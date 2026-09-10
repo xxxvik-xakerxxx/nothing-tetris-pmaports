@@ -1,7 +1,8 @@
 # Nothing Tetris camera bring-up
 
-Status: inventory only. No camera rail, clock, reset, SENINF, CAMSYS, CCU,
-sensor, EEPROM, actuator, or flash node is approved for automatic probing.
+Status: inventory plus compile-only prerequisites. No camera rail, clock,
+reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
+for automatic probing.
 
 Candidate patch `0049-media-i2c-imx882-identity.patch` adds the first bounded
 native identification boundary for the main camera. It reads only physical ID
@@ -129,6 +130,32 @@ no matching DT bindings. Copying the vendor nodes would create unowned clocks,
 power domains, DMA and firmware interfaces, so no pipeline node belongs in the
 first camera patch set.
 
+## CAMSYS_MAIN compile-only prerequisite
+
+Patches `0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch` and
+`0092-clk-mediatek-mt6878-camera-main.patch` add the MT6878 camera-main clock
+binding and provider without adding a DT node. The provider retains the 20
+gate IDs already published in `mediatek,mt6878-clock.h` and matches the pinned
+Nothing OS 4.1 register table: M0 uses status/set/clear offsets
+`0x0/0x4/0x8`, while M1 uses `0x4c/0x50/0x54`.
+
+Vendor parents `top_cam_ck`, `top_camtm_ck` and `top_ccusys_ck` map to the
+existing mainline `cam_sel`, `camtm_sel` and `ccusys_sel` clocks. The compatible
+is normalized from vendor `mediatek,mt6878-camsys_main` to the mainline-style
+`mediatek,mt6878-camsys` ABI.
+
+This prerequisite remains dormant in the shipped kernel:
+
+- `CONFIG_COMMON_CLK_MT6878_CAM` is explicitly not set;
+- package preparation enables it only in a disposable `O=` build directory
+  and compiles `drivers/clk/mediatek/clk-mt6878-cam.o`;
+- package and rootfs CI gates reject `clk-mt6878-cam.ko`;
+- no DT node, power domain, consumer, module autoload or runtime service is
+  added.
+
+Passing the object gate proves source compatibility only. It does not approve
+register access or establish camera function.
+
 ## Calibration trace
 
 Main and front have explicit EEPROM clients at 7-bit address `0x50` (vendor
@@ -149,8 +176,9 @@ unredacted logs.
 Do not enable any inventory node until all owners below have a validated
 probe-off and stream-off path:
 
-1. MT6878 CSI_RX, CAM_VCORE, CAM_MAIN, CAM_SUBA/B and CAM_CCU/AO power-domain
-   support, complete camera clocks, runtime PM, SMI/MMQoS and IOMMU ownership.
+1. Complete the still-missing MT6878 CSI_RX, CAM_VCORE, CAM_MAIN, CAM_SUBA/B
+   and CAM_CCU/AO power domains, remaining camera clocks, runtime PM,
+   SMI/MMQoS and IOMMU ownership. CAMSYS_MAIN remains compile-only.
 2. MT6878 SENINF receiver and a complete media graph for CSI ports 0, 1, and
    2A.
 3. Sensor drivers for both supplier variants of each camera, built against the

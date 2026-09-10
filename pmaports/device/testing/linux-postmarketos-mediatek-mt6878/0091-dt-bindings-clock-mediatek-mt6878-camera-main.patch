@@ -1,0 +1,47 @@
+diff --git a/Documentation/devicetree/bindings/clock/mediatek,mt6878-camera-clock.yaml b/Documentation/devicetree/bindings/clock/mediatek,mt6878-camera-clock.yaml
+new file mode 100644
+index 000000000..40b7784e7
+--- /dev/null
++++ b/Documentation/devicetree/bindings/clock/mediatek,mt6878-camera-clock.yaml
+@@ -0,0 +1,41 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/clock/mediatek,mt6878-camera-clock.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: MediaTek MT6878 camera clock controller
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description:
++  The MT6878 camera main clock controller provides gates for the camera
++  interconnect, SENINF and CAMSV blocks. Other camera clock banks are not
++  described by this binding.
++
++properties:
++  compatible:
++    const: mediatek,mt6878-camsys
++
++  reg:
++    maxItems: 1
++
++  '#clock-cells':
++    const: 1
++
++required:
++  - compatible
++  - reg
++  - '#clock-cells'
++
++additionalProperties: false
++
++examples:
++  - |
++    clock-controller@1a000000 {
++        compatible = "mediatek,mt6878-camsys";
++        reg = <0x1a000000 0x1000>;
++        #clock-cells = <1>;
++    };
++...

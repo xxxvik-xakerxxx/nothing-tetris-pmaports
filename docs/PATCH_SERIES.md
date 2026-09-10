@@ -102,6 +102,8 @@ normal Alpine/postmarketOS practice.
 | `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
 | `0014-mmc-mt6878-tetris-sdcard.patch` | Native MT6878 MSDC1 host support and the Tetris microSD slot wiring. |
 | `0015-leds-flash-lm3644-tetris.patch` | Native dual-channel LM3644 Linux LED flash-class driver and Tetris I2C/GPIO wiring. Both torch channels work live; timed strobe and V4L2 integration remain gated. |
+| `0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch` | Binding for the dormant MT6878 CAMSYS_MAIN clock provider. It adds no DT node. |
+| `0092-clk-mediatek-mt6878-camera-main.patch` | Compile-only MT6878 CAMSYS_MAIN provider. The package checks it in a temporary output tree while the shipped config keeps it disabled. |
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 | `0018-pmdomain-mediatek-mt6878-audio.patch` | MT6878 audio power-domain wiring required by the staged ASoC card. |
