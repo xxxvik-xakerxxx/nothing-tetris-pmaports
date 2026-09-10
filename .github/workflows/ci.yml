@@ -215,6 +215,7 @@ jobs:
           }
           for executable in \
             /usr/libexec/nothing-tetris-connectivity-setup \
+            /usr/libexec/nothing-tetris-gnss-readonly \
             /usr/libexec/nothing-tetris-audio-policy \
             /usr/libexec/nothing-tetris-bluetooth-address-extract \
             /usr/libexec/nothing-tetris-bluetooth-address \

@@ -3,9 +3,9 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=7
+pkgrel=8
 url="https://postmarketos.org"
-license="MIT"
+license="MIT AND GPL-2.0-only"
 arch="aarch64"
 options="!archcheck"
 depends="
@@ -20,7 +20,7 @@ depends="
 	pulseaudio-utils
 	u-boot-tools
 "
-makedepends="devicepkg-dev"
+makedepends="devicepkg-dev linux-headers"
 source="
 	20-nothing-tetris-wifi-powersave.conf
 	72-nothing-tetris-feedbackd.rules
@@ -32,6 +32,7 @@ source="
 	greetd-pulse-client.conf
 	greetd-pulseaudio.desktop
 	greetd-tetris-display.conf
+	gpsdl_v051.h
 	HiFi.conf
 	modules-initfs
 	nothing-tetris-audio.pa
@@ -46,6 +47,7 @@ source="
 	nothing-tetris-connectivity-setup
 	nothing-tetris-gnss-transport
 	nothing-tetris-gnss-transport.service
+	nothing-tetris-gnss-readonly.c
 	nothing-tetris-audio.conf
 	nothing-tetris-haptics.conf
 	nothing-tetris-usb-sleep
@@ -68,6 +70,9 @@ build() {
 	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
 		"$srcdir"/nothing-tetris-bluetooth-address.c \
 		$LDFLAGS -o "$srcdir"/nothing-tetris-bluetooth-address
+	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
+		-I"$srcdir" "$srcdir"/nothing-tetris-gnss-readonly.c \
+		$LDFLAGS -o "$srcdir"/nothing-tetris-gnss-readonly
 }
 
 check() {
@@ -75,6 +80,21 @@ check() {
 	sh -n "$srcdir"/nothing-tetris-bluetooth-address-extract
 	sh -n "$srcdir"/nothing-tetris-connectivity-setup
 	sh -n "$srcdir"/nothing-tetris-gnss-transport
+	test "$(grep -c '^#define GPSDL_V051_IOC_' "$srcdir"/gpsdl_v051.h)" -eq 3
+	if grep -Eq 'TRIGGER_ASSERT|HW_SUSPEND|HW_RESUME|FRAGEMENT|FWCTL|RESET|RAW|LINK_ID1' \
+		"$srcdir"/gpsdl_v051.h; then
+		return 1
+	fi
+	if grep -Eq '(^|[^[:alnum:]_])(read|write)[[:space:]]*\(' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c; then
+		return 1
+	fi
+	test "$(grep -c 'ioctl(fd, GPSDL_V051_IOC_' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c)" -eq 3
+	grep -Fq '#define GPSDL_DEVICE "/dev/gpsdl0"' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c
+	grep -Fq '#define GPSDL_DEADLINE_SECONDS 8U' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c
 	sh -n "$srcdir"/nothing-tetris-usb-sleep
 	sh -n "$srcdir"/nothing-tetris-wifi-nvram-extract
 
@@ -202,6 +222,8 @@ package() {
 		"$pkgdir"/usr/libexec/nothing-tetris-gnss-transport
 	install -Dm644 "$srcdir"/nothing-tetris-gnss-transport.service \
 		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-gnss-transport.service
+	install -Dm755 "$srcdir"/nothing-tetris-gnss-readonly \
+		"$pkgdir"/usr/libexec/nothing-tetris-gnss-readonly
 	install -Dm644 "$srcdir"/nothing-tetris-audio.conf \
 		"$pkgdir"/usr/lib/modules-load.d/nothing-tetris-audio.conf
 	install -Dm644 "$srcdir"/mt6878-mt6369.conf \
@@ -246,6 +268,8 @@ package() {
 }
 
 sha512sums="
+3d342711a112d76a86f73b30e069caaf9d2bf00b9858329f4728a0ab4cc68af2010e2919a11c8d15bf8943585f4f2908c612122dc90d40cfca4c716391c7380c  gpsdl_v051.h
+1ea1125ea7fbe1b7992afae09195b48aa992f2a0860eb9127291d4abf9a10599544726bb755cfc37a063701ceb87d776b90269de9bc76ac9979498f017759a40  nothing-tetris-gnss-readonly.c
 55535bfc5e918df3831df3d254a7bafa070db70bfc1bb733c046d0e0eec454eab6548be7bf016525fdab1fa4e030da74559b2914db0dcedd7b75fc5fd4bc8398  20-nothing-tetris-wifi-powersave.conf
 da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
