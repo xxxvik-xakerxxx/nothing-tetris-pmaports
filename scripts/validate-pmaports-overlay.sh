@@ -285,6 +285,12 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/pulse/client.conf' \
 		"$device_pkg/APKBUILD"
+	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fxq 'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
+		"$device_pkg/nothing-tetris-greetd.conf"
+	grep -Fq 'greeter dconf directory' \
+		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'greeter PulseAudio autostart disabled' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'I2SOUT4_CH1 DL6_CH1' "$audio_ucm"

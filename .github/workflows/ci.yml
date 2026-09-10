@@ -402,6 +402,9 @@ jobs:
           check_contains "greeter PulseAudio client autospawn disabled" \
             'autospawn = no' \
             "$rootfs/var/lib/greetd/.config/pulse/client.conf"
+          check_contains "greeter dconf directory" \
+            'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
+            "$rootfs/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf"
           native_dtb="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
           test -e "$native_dtb"
           if fdtget -l "$native_dtb" /chosen | grep -Fxq simplefb@fe0d0000; then
