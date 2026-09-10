@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=149
+pkgrel=150
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -85,6 +85,7 @@ source="
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	0089-vendor-eccci-modem-common-compile-only.patch.vendor
+	0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor
 	0054-power-supply-mt6375-bc12-compile-only.patch
 	0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 	0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
@@ -174,6 +175,8 @@ prepare() {
 		< "$srcdir"/0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0089-vendor-eccci-modem-common-compile-only.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 }
@@ -557,6 +560,65 @@ _build_ccci_modem_common_compile_only() {
 	fi
 }
 
+_build_ccci_fsm_port_dpmaif_compile_only() {
+	_moddir="$_devmods_dir"/drivers/misc/mediatek/eccci
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	test -s "$builddir"/Module.symvers || \
+		die "CCCI FSM/port/DPMAIF validation requires the fully built kernel Module.symvers"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y CONFIG_MTK_ECCCI_DRIVER=m CONFIG_PAGE_POOL=n \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n CONFIG_MTK_AEE_IPANIC=n \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types \
+			-Werror=int-conversion \
+			$(_vendor_kcflags)" \
+		fsm/ccci_fsm.o fsm/ccci_fsm_ioctl.o \
+		fsm/ccci_fsm_monitor.o fsm/ccci_fsm_poller.o \
+		fsm/ccci_fsm_ee.o fsm/ccci_fsm_sys.o \
+		fsm/mdee_dumper_v1.o fsm/mdee_dumper_v2.o \
+		fsm/mdee_dumper_v3.o fsm/mdee_dumper_v5.o \
+		fsm/mdee_dumper_v6.o fsm/modem_sys1.o \
+		fsm/md_sys1_platform.o fsm/ap_md_reg_dump.o \
+		port/port_cfg.o port/port_char.o port/port_ctlmsg.o \
+		port/port_udc.o port/port_ipc.o port/port_net.o \
+		port/port_poller.o port/port_proxy.o port/port_rpc.o \
+		port/port_smem.o port/port_sysmsg.o port/ccci_swtp.o \
+		port/port_kernel_interface.o \
+		hif/net_pool.o hif/md_spd_dvfs_fn.o \
+		hif/md_spd_dvfs_method.o hif/net_speed.o \
+		hif/ccci_dpmaif_com.o hif/ccci_dpmaif_bat.o \
+		hif/ccci_dpmaif_debug.o hif/ccci_dpmaif_resv_mem.o \
+		hif/ccci_dpmaif_drv_com.o hif/ccci_dpmaif_drv_v1.o \
+		hif/ccci_dpmaif_drv_v2.o hif/ccci_dpmaif_drv_v3.o
+
+	test "$(find "$_moddir"/fsm -maxdepth 1 -name '*.o' -type f | wc -l)" -eq 15 || \
+		die "CCCI FSM compile-only object closure is incomplete"
+	test "$(find "$_moddir"/port -maxdepth 1 -name '*.o' -type f | wc -l)" -eq 13 || \
+		die "CCCI port compile-only object closure is incomplete"
+	test "$(find "$_moddir"/hif -maxdepth 1 \
+		\( -name 'ccci_dpmaif*.o' -o -name 'net_pool.o' \
+		-o -name 'net_speed.o' -o -name 'md_spd_dvfs_*.o' \) \
+		-type f | wc -l)" -eq 12 || \
+		die "CCCI DPMAIF compile-only object closure is incomplete"
+	llvm-nm --defined-only "$_moddir"/fsm/ccci_fsm.o | \
+		grep -Eq '[[:space:]]ccci_fsm_init$' || \
+		die "CCCI FSM initialization symbol is missing"
+	llvm-nm --defined-only "$_moddir"/port/port_proxy.o | \
+		grep -Eq '[[:space:]]ccci_port_init$' || \
+		die "CCCI port initialization symbol is missing"
+	llvm-nm --defined-only "$_moddir"/hif/ccci_dpmaif_drv_v3.o | \
+		grep -Eq '[[:space:]]ccci_dpmaif_drv3_init$' || \
+		die "CCCI DPMAIF v3 initialization symbol is missing"
+	if find "$_moddir" -name '*.ko' -print -quit | grep -q .; then
+		die "CCCI FSM/port/DPMAIF compile-only validation emitted a loadable module"
+	fi
+}
+
 _build_mt6375_bc12_compile_only() {
 	_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -681,6 +743,7 @@ build() {
 	_build_ccci_core_compile_only
 	_build_ccci_ccif_compile_only
 	_build_ccci_modem_common_compile_only
+	_build_ccci_fsm_port_dpmaif_compile_only
 	_build_mt6375_bc12_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
@@ -807,6 +870,7 @@ f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 6ed67c1975e76cdf9f11cca3974e5620f94f4bd46d160ad6afbea6513d11dc7f1e7018422616b7a8077ada9e8d8aa868c9c10c26a57c20db2aa4d592d806d8b1  0089-vendor-eccci-modem-common-compile-only.patch.vendor
+e4585a88cd8ade032d02dc6795fd720c886e3714291316078dcb0ea470494537ce0fec6662ffc3a3a98d4610f936b0d0db32b5af57e60a50d075f6bf87000627  0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor
 8489f86cfde39631f593c166ec40dd6c42a5b8aced4fb924fd654c0595f0e612eb7befe9250af08ebb3859b395e9aa5837c3e5728f4747b5bb99a01d12da6f47  0054-power-supply-mt6375-bc12-compile-only.patch
 9a418ebecddd6cae4c15cef271f732c4be0e3be6a08428a38eaa57aa538da6d5a7cfcf52231d58afdf0abe59fd9e27982fa76e77e1c5beaab63b0d1addd09372  0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 58f2e7b7ca1a4255dc57a003cfa998ea4364e743dffd83d07cf2c76a20f8b29dbdc5849a3a2c35015fce4f01fb7e58a74c7ef37af9941f27383e7042d0b769e9  0056-clk-mediatek-add-MT6878-MMSYS-gates.patch

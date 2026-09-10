@@ -1,0 +1,208 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 13:00:00 +0300
+Subject: [PATCH] eccci: adapt FSM, port and DPMAIF objects to Linux 6.18
+
+Expose the device-module headers needed by ECCCI and update direct API
+users for Linux 6.18. Keep the optional page-pool path outside this
+boundary because its internals changed independently.
+
+The package compiles these sources as individual objects only. It does not
+link or install a module, register a driver, enable DT, or execute the
+existing modem, secure-call, IRQ, power or DMA paths.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/eccci/Makefile                |  1 +
+ drivers/misc/mediatek/eccci/fsm/ccci_fsm_ee.c       |  2 +-
+ drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c  |  4 ++--
+ drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c   | 14 +++++---------
+ drivers/misc/mediatek/eccci/hif/ccci_dpmaif_debug.c |  1 +
+ drivers/misc/mediatek/eccci/inc/modem_secure_base.h |  4 ++++
+ drivers/misc/mediatek/eccci/port/ccci_swtp.c        |  5 +++--
+ drivers/misc/mediatek/eccci/port/port_proxy.c       |  1 +
+ drivers/misc/mediatek/eccci/port/port_smem.c        |  6 +++---
+ 9 files changed, 21 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/misc/mediatek/eccci/Makefile b/drivers/misc/mediatek/eccci/Makefile
+index 395ba63..6996f6f 100644
+--- a/drivers/misc/mediatek/eccci/Makefile
++++ b/drivers/misc/mediatek/eccci/Makefile
+@@ -22,6 +22,7 @@ endif
+ ifneq ($(CCCI_OBJ), n)
+ 
+ subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/eccci/inc/
++subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/include/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/ccmni/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/conn_md/include/
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/scp/include/
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_fsm_ee.c b/drivers/misc/mediatek/eccci/fsm/ccci_fsm_ee.c
+index 6a66952..38cfe7b 100644
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_fsm_ee.c
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_fsm_ee.c
+@@ -646,8 +646,8 @@ void fsm_ee_cmd_init(enum CCCI_FSM_COMMAND cmd_id)
+ #if IS_ENABLED(CONFIG_DEVICE_MODULES_MTK_DEVAPC)
+ 		atomic_set(&pw_off_disable_dapc_ke, 0);
+ 		atomic_set(&md_dapc_ke_occurred, 0);
+-#endif
+ 		atomic_set(&en_flight_timeout, 0);
++#endif
+ 		break;
+ 	case CCCI_COMMAND_STOP:
+ #if IS_ENABLED(CONFIG_DEVICE_MODULES_MTK_DEVAPC)
+diff --git a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+index 6ebd158..d41c154 100644
+--- a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
++++ b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+@@ -15,6 +15,7 @@
+ #include <linux/of_platform.h>
+ #include <linux/regmap.h>
+ #include <linux/regulator/consumer.h> /* for MD PMIC */
++#include <linux/sched/clock.h>
+ 
+ #include "ccci_config.h"
+ #include "ccci_common_config.h"
+@@ -1654,9 +1655,8 @@ unsigned int ccci_get_ap_plat(void)
+ 	return ap_plat_info;
+ }
+ 
+-static int ccci_modem_remove(struct platform_device *dev)
++static void ccci_modem_remove(struct platform_device *dev)
+ {
+-	return 0;
+ }
+ 
+ static void ccci_modem_shutdown(struct platform_device *dev)
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+index 5694b5d..fa41425 100644
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+@@ -293,9 +293,7 @@ static inline int dpmaif_skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
+ 
+ 		pinfo->nr_frags = nr_frags + 1 + skbinfo->nr_frags;
+ 
+-		__skb_frag_set_page(frag, page);
+-		skb_frag_off_set(frag, first_offset);
+-		skb_frag_size_set(frag, first_size);
++		skb_frag_fill_page_desc(frag, page, first_offset, first_size);
+ 
+ 		memcpy(frag + 1, skbinfo->frags, sizeof(*frag) * skbinfo->nr_frags);
+ 		/* We dont need to clear skbinfo->nr_frags here */
+@@ -1570,8 +1568,8 @@ static int dpmaif_txq_sw_init(struct dpmaif_tx_queue *txq)
+ 
+ 	init_waitqueue_head(&txq->txq_done_wait);
+ 	atomic_set(&txq->txq_done, 0);
+-	hrtimer_init(&txq->txq_done_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+-	txq->txq_done_timer.function = txq_done_timer_action;
++	hrtimer_setup(&txq->txq_done_timer,
++		      txq_done_timer_action, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 	txq->txq_done_thread = NULL;
+ 
+ 	spin_lock_init(&txq->txq_lock);
+@@ -2625,7 +2623,7 @@ static int dpmaif_stop(unsigned char hif_id)
+ 
+ #if DPMAIF_TRAFFIC_MONITOR_INTERVAL
+ 	/* stop debug mechnism */
+-	del_timer(&dpmaif_ctl->traffic_monitor);
++	timer_delete(&dpmaif_ctl->traffic_monitor);
+ #endif
+ 
+ 	dpmaif_disable_all_irq();
+@@ -3151,9 +3149,7 @@ static int dpmaif_init_com(struct device *dev)
+ 			CCCI_ERROR_LOG(0, TAG, "[%s] warning: devm_kzalloc() fail.\n", __func__);
+ 	}
+ 	if (dev->dma_parms) {
+-		if (dma_set_max_seg_size(dev, UINT_MAX))
+-			CCCI_ERROR_LOG(0, TAG,
+-				"[%s] warning: dma_set_max_seg_size() fail.\n", __func__);
++		dma_set_max_seg_size(dev, UINT_MAX);
+ 	}
+ 
+ 	/* hook up to device */
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_debug.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_debug.c
+index 03a8dcc..50918ca 100644
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_debug.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_debug.c
+@@ -5,6 +5,7 @@
+ 
+ #include <linux/poll.h>
+ #include <linux/proc_fs.h>
++#include <linux/vmalloc.h>
+ 
+ #include "ccci_dpmaif_debug.h"
+ #include "ccci_dpmaif_com.h"
+diff --git a/drivers/misc/mediatek/eccci/inc/modem_secure_base.h b/drivers/misc/mediatek/eccci/inc/modem_secure_base.h
+index b3502c6..deff81d 100644
+--- a/drivers/misc/mediatek/eccci/inc/modem_secure_base.h
++++ b/drivers/misc/mediatek/eccci/inc/modem_secure_base.h
+@@ -9,6 +9,10 @@
+ #include <linux/arm-smccc.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
+ 
++#ifndef MTK_SIP_KERNEL_CCCI_CONTROL
++#define MTK_SIP_KERNEL_CCCI_CONTROL MTK_SIP_SMC_CMD(0x505)
++#endif
++
+ enum CCCI_SECURE_REQ_ID {
+ 	MD_DBGSYS_REG_DUMP = 0,
+ 	MD_BANK0_HW_REMAP,
+diff --git a/drivers/misc/mediatek/eccci/port/ccci_swtp.c b/drivers/misc/mediatek/eccci/port/ccci_swtp.c
+index 8401764..f856043 100644
+--- a/drivers/misc/mediatek/eccci/port/ccci_swtp.c
++++ b/drivers/misc/mediatek/eccci/port/ccci_swtp.c
+@@ -5,6 +5,7 @@
+ #include <linux/kernel.h>
+ #include <linux/delay.h>
+ #include <linux/gpio.h>
++#include <linux/gpio/consumer.h>
+ #include <linux/irq.h>
+ #include <linux/interrupt.h>
+ #include <linux/of.h>
+@@ -234,7 +235,7 @@ static void swtp_init_delayed_work(struct work_struct *work)
+ 			swtp_data.gpiopin[i] =
+ 				of_get_named_gpio(node, "deb-gpios", 0);
+ #endif
+-			gpio_set_debounce(swtp_data.gpiopin[i],
+-				swtp_data.setdebounce[i]);
++			gpiod_set_debounce(gpio_to_desc(swtp_data.gpiopin[i]),
++					   swtp_data.setdebounce[i]);
+ 			swtp_data.eint_type[i] = ints1[1];
+ 			swtp_data.irq[i] = irq_of_parse_and_map(node, 0);
+diff --git a/drivers/misc/mediatek/eccci/port/port_proxy.c b/drivers/misc/mediatek/eccci/port/port_proxy.c
+index 2f704be..83802ab 100644
+--- a/drivers/misc/mediatek/eccci/port/port_proxy.c
++++ b/drivers/misc/mediatek/eccci/port/port_proxy.c
+@@ -12,6 +12,7 @@
+ #include <linux/module.h>
+ #include <linux/poll.h>
+ #include <linux/proc_fs.h>
++#include <linux/sched/clock.h>
+ #include <linux/icmpv6.h>
+ #include <linux/of.h>
+ #include <net/ip.h>
+diff --git a/drivers/misc/mediatek/eccci/port/port_smem.c b/drivers/misc/mediatek/eccci/port/port_smem.c
+index 0c2e82b..ca58cec 100644
+--- a/drivers/misc/mediatek/eccci/port/port_smem.c
++++ b/drivers/misc/mediatek/eccci/port/port_smem.c
+@@ -9,6 +9,7 @@
+ #include <linux/wait.h>
+ #include <linux/module.h>
+ #include <linux/poll.h>
++#include <linux/sched/clock.h>
+ #ifdef CONFIG_COMPAT
+ #include <linux/compat.h>
+ #endif
+@@ -182,9 +183,8 @@ static void collect_ccb_info(struct ccci_smem_port *smem_port)
+ 			smem_port->wakeup = 0;
+ 			smem_port->type = TYPE_CCB;
+ 			init_waitqueue_head(&smem_port->rx_wq);
+-			hrtimer_init(&smem_port->notify_timer,
+-			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+-			smem_port->notify_timer.function = smem_tx_timer_func;
++			hrtimer_setup(&smem_port->notify_timer,
++				      smem_tx_timer_func, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 			break;
+ 		}
+ 	}
+-- 
+2.51.0

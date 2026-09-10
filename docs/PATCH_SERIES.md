@@ -75,6 +75,7 @@ normal Alpine/postmarketOS practice.
 | Patch | Purpose |
 | --- | --- |
 | `0089-vendor-eccci-modem-common-compile-only.patch.vendor` | Adds the explicit Linux 6.18 scheduler-clock include needed by the common HIF translation unit. The package builds only `ccci_modem.o`, `ccci_hif.o` and `ap_md_mem.o`, checks representative symbols and rejects any ECCCI `.ko`. It adds no runtime module, DT, autoload, SMC or DMA behavior. |
+| `0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor` | Adapts the exact B4.1 FSM, port and non-page-pool DPMAIF Makefile groups to Linux 6.18. The package builds 39 individual objects, checks group counts and representative symbols, and rejects every ECCCI/DPMAIF module from build output, packaging and autoload. Existing modem boot, SMC, power, IRQ and DMA paths are never linked or run. |
 
 ### PMIC, keys and power telemetry
 
