@@ -10,17 +10,19 @@ the OVL chain receives no downstream ready signal and DSC reports abnormal
 EOF after a 1x1 input.
 
 Program the remaining selector state when the DRM graph is connected. Also
-apply the OVL force-relay bit after every OVL reset, matching the vendor
-config-begin/start sequence. This makes the complete handoff repeatable on
-cold boot and DPMS resume instead of depending on LK register state.
+normalize the complete five-register DSC handoff and the MMSYS shadow state
+after the display power domain and component clocks are enabled. Also apply
+the OVL force-relay bit after OVL enable, matching the vendor start sequence.
+This makes the handoff repeatable on cold boot and DPMS resume instead of
+depending on LK register state.
 
 The values and order are derived from Nothing OS 4.1 Tetris source commit
 ee2be53cb75670b548948636a0db1d1ff112bf12, mtk_drm_ddp.c
 mtk_ddp_insert_dsc_prim_mt6878() and mtk_disp_ovl.c.
 ---
  drivers/gpu/drm/mediatek/mtk_disp_ovl.c |  8 ++++++++
- drivers/soc/mediatek/mt6878-mmsys.h     | 14 ++++++++++++++
- 2 files changed, 22 insertions(+)
+ drivers/soc/mediatek/mt6878-mmsys.h     | 26 ++++++++++++++++++++++++--
+ 2 files changed, 32 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
 index 5efb79f..ae886fc 100644
@@ -34,19 +36,20 @@ index 5efb79f..ae886fc 100644
  };
  
  /*
-@@ -281,6 +282,12 @@ void mtk_ovl_start(struct device *dev)
+@@ -281,7 +282,13 @@ void mtk_ovl_start(struct device *dev)
  		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
  	}
  
+ 	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
+ 				 OVL_BYPASS_SHADOW : 0),
+ 		       ovl->regs + DISP_REG_OVL_EN);
++
 +	if (ovl->data->force_relay) {
 +		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_SRC_CON);
 +
 +		writel_relaxed(reg | BIT(8), ovl->regs + DISP_REG_OVL_SRC_CON);
 +	}
-+
- 	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
- 				 OVL_BYPASS_SHADOW : 0),
- 		       ovl->regs + DISP_REG_OVL_EN);
+ }
 @@ -757,6 +764,7 @@ static const struct mtk_disp_ovl_data mt6878_ovl_2l_driver_data = {
  	.vblank_irq_mask = OVL_FME_START_INT,
  	.bypass_shadow = true,
@@ -59,9 +62,11 @@ diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-m
 index 8c7084b..c563eaa 100644
 --- a/drivers/soc/mediatek/mt6878-mmsys.h
 +++ b/drivers/soc/mediatek/mt6878-mmsys.h
-@@ -18,7 +18,10 @@
+@@ -18,7 +18,12 @@
  #define MT6878_PQ_OUT_CROSSBAR0_MOUT_EN		0xd20
  #define MT6878_PQ_OUT_CROSSBAR4_MOUT_EN		0xd30
++#define MT6878_DISPSYS_BYPASS_MUX_SHADOW	0xc00
++#define MT6878_MMSYS_CROSSBAR_CON		0xc0c
  #define MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN	0xd54
 +#define MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN	0xd60
 +#define MT6878_SPLIT_OUT_CROSSBAR2_SEL_IN	0xd68
@@ -70,23 +75,39 @@ index 8c7084b..c563eaa 100644
  
  #define MT6878_MMSYS_OVL_CON			0xc08
  #define MT6878_OVL_BG_CROSSBAR0_MOUT_EN		0xc10
-@@ -60,6 +63,17 @@ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
+@@ -60,6 +65,23 @@ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
  		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
- 		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
+-		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
++		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, ~0U, BIT(0),
  	},
-+	/* Complete mtk_ddp_insert_dsc_prim_mt6878() selector state. */
++	/* Normalize the complete vendor DSC and crossbar shadow state. */
 +	{
 +		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
-+		MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN, GENMASK(1, 0), 2,
++		MT6878_DISPSYS_BYPASS_MUX_SHADOW, ~0U, BIT(0),
 +	}, {
 +		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
-+		MT6878_SPLIT_OUT_CROSSBAR2_SEL_IN, GENMASK(1, 0), 0,
++		MT6878_MMSYS_CROSSBAR_CON, ~0U, GENMASK(23, 16),
 +	}, {
 +		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
-+		MT6878_COMP_OUT_CROSSBAR2_MOUT_EN, BIT(0), 0,
++		MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN, ~0U, 2,
++	}, {
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		MT6878_SPLIT_OUT_CROSSBAR2_SEL_IN, ~0U, 0,
++	}, {
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		MT6878_COMP_OUT_CROSSBAR2_MOUT_EN, ~0U, 0,
 +	},
  	/* COLOR0 -> CCORR0 selects zero in both one-bit selectors. */
  	{
  		DDP_COMPONENT_COLOR0, DDP_COMPONENT_CCORR,
+@@ -111,7 +133,7 @@ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
+ 	/* DSC0 -> DSI0 uses compression output crossbar 0, output zero. */
+ 	{
+ 		DDP_COMPONENT_DSC0, DDP_COMPONENT_DSI0,
+-		MT6878_COMP_OUT_CROSSBAR0_MOUT_EN, BIT(0), BIT(0),
++		MT6878_COMP_OUT_CROSSBAR0_MOUT_EN, ~0U, BIT(0),
+ 	},
+ };
+ 
 -- 
 2.50.1 (Apple Git-155)
