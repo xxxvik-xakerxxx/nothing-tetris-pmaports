@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+ucm=${1:?usage: validate-audio-ucm HIFI_CONF}
+speaker_sha256=a166a0cd602ee86328fbed2c422313fb759545eeac91453b6e26455c3fe61192
+earpiece_sha256=ea98656c0c27a5401d437db8f33e08f14d8263b3aa73cb8b0fdd93f4d5d77ff5
+
+extract_section() {
+	awk -v wanted="$1" '
+		$0 == wanted { active = 1 }
+		active {
+			print
+			line = $0
+			opens = gsub(/\{/, "", line)
+			closes = gsub(/\}/, "", line)
+			depth += opens - closes
+			if (depth == 0)
+				exit
+		}
+	' "$ucm"
+}
+
+section_sha256() {
+	extract_section "$1" | sha256sum | awk '{ print $1 }'
+}
+
+if [ "$(section_sha256 'SectionDevice."Speaker" {')" != "$speaker_sha256" ]; then
+	echo "Speaker UCM section changed from the 1f8aef1 baseline" >&2
+	exit 1
+fi
+if [ "$(section_sha256 'SectionDevice."Earpiece" {')" != "$earpiece_sha256" ]; then
+	echo "Earpiece UCM section changed from the 1f8aef1 baseline" >&2
+	exit 1
+fi
+
+awk '
+	/^SectionVerb \{/ { section = "verb" }
+	/^SectionDevice\./ { section = "other" }
+	/^SectionDevice\."Mic" \{/ { section = "mic" }
+	/UL9_CH[12] ADDA_UL_CH[12]|PGA_[LR]_Mux|ADC_[LR]_Mux|PGA[12] Volume/ {
+		mic_controls++
+		if (section != "mic")
+			bad_scope = 1
+	}
+	section == "mic" && /CapturePCM "hw:\$\{CardId\},13"/ { capture_pcm++ }
+	section == "mic" && /^[[:space:]]*CaptureChannels 2$/ { capture_channels++ }
+	section == "mic" && /^[[:space:]]*CaptureRate 48000$/ { capture_rate++ }
+	section == "mic" && /^[[:space:]]*CapturePriority 200$/ { capture_priority++ }
+	END {
+		if (bad_scope || mic_controls != 16) {
+			print "microphone controls must occur only in the Mic device" > "/dev/stderr"
+			exit 1
+		}
+		if (capture_pcm != 1 || capture_channels != 1 ||
+		    capture_rate != 1 || capture_priority != 1) {
+			print "Mic must retain the validated UL9 capture transport" > "/dev/stderr"
+			exit 1
+		}
+	}
+' "$ucm"

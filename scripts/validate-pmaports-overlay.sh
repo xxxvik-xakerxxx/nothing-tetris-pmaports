@@ -181,6 +181,7 @@ validate_power_and_audio_config() {
 	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
+	audio_ucm_validator="$device_pkg/validate-audio-ucm"
 
 	for option in \
 		CONFIG_BT_RFCOMM=m \
@@ -242,6 +243,7 @@ validate_power_and_audio_config() {
 	test "$(grep -c 'PlaybackChannels 2' "$audio_ucm")" -eq 2
 	test "$(grep -c 'PlaybackChannelPos0 FL' "$audio_ucm")" -eq 2
 	test "$(grep -c 'PlaybackChannelPos1 FR' "$audio_ucm")" -eq 2
+	sh "$audio_ucm_validator" "$audio_ucm"
 	grep -Fq "name='PCM Playback Volume' 0" "$audio_ucm"
 	if grep -Eq 'LibraryConfig|type (dshare|route)' "$audio_ucm"; then
 		echo "audio UCM must use the live-validated direct DL6 transport" >&2
