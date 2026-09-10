@@ -20,7 +20,7 @@ postmarketOS port into a stable daily-phone build.
 The verified image archive for run `33502390335` has SHA-256
 `c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`.
 Its three payload hashes match `SHA256SUMS`, and `BUILD-MANIFEST` pins the exact
-pmaports head plus U-Boot `b76e47e`/`86930322...`. It publishes no separately
+pmaports head plus U-Boot `60bcf22`/`2c5d1d86...`. It publishes no separately
 named `super` or `userdata` file, but the package's validated
 `fastboot-bootpart` contract maps the 512 MiB boot image to `super` and the root
 sparse image to `userdata`. The standalone FIT is evidence, not another
