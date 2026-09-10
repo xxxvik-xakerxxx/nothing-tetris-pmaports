@@ -319,8 +319,14 @@ jobs:
             echo "compile-only MT6375 BC1.2 object must not be packaged"
             exit 1
           fi
+          panthor_module=$(find "$rootfs/lib/modules" -name panthor.ko -print -quit)
+          test -n "$panthor_module" || {
+            echo "missing compile-only Panthor module"
+            exit 1
+          }
+          test "$(rootfs_modinfo -F name panthor)" = panthor
           if grep -RIlE \
-              '(pd9302a|tetris-camera-audit|ccci[_-]|mt6375-bc12-(decode|lifecycle))' \
+              '(panthor|pd9302a|tetris-camera-audit|ccci[_-]|mt6375-bc12-(decode|lifecycle))' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
               "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
               "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then
@@ -402,6 +408,11 @@ jobs:
             /soc@0/syscon@13f90000 status)" = disabled
           test "$(fdtget "$native_dtb" \
             /soc@0/syscon@13f90000/power-controller status)" = disabled
+          if fdtget -l "$native_dtb" /soc@0 | \
+              grep -Eq '^(gpu|mali)@13000000$'; then
+            echo "compile-only Panthor boundary gained a runtime GPU node"
+            exit 1
+          fi
           test "$(fdtget "$native_dtb" \
             /soc@0/i2c@11e03000/camera@1a status)" = disabled
           for camera_supply in afvdd avdd dvdd dovdd; do

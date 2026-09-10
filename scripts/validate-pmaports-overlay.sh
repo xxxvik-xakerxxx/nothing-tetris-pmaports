@@ -606,6 +606,8 @@ validate_compile_only_boundaries() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 	mfg_rpc_patch="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch"
 	bc12_lifecycle_patch="$kernel_pkg/0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch"
+	panthor_gate="$repo_root/scripts/check-panthor-compile-only.sh"
+	panthor_doc="$repo_root/docs/PANTHOR_COMPILE_ONLY.md"
 
 	for source in \
 		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
@@ -637,6 +639,18 @@ validate_compile_only_boundaries() {
 	grep -Fq '/soc@0/syscon@13f90000 status)" = disabled' "$workflow"
 	grep -Fq '/soc@0/syscon@13f90000/power-controller status)" = disabled' \
 		"$workflow"
+	grep -Fxq 'CONFIG_DRM_PANTHOR=m' \
+		"$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
+	test -x "$panthor_gate"
+	grep -Fq 'M=drivers/gpu/drm/panthor panthor.o' \
+		"$panthor_gate"
+	grep -Fq 'the shipped patch series must not add an MT6878 GPU DT node' \
+		"$panthor_gate"
+	grep -Fq 'This adds no runtime' "$repo_root/docs/GPU_BRINGUP.md"
+	grep -Fq 'The prerequisite deliberately adds no kernel patch or device-tree node.' \
+		"$panthor_doc"
+	grep -Fq 'missing compile-only Panthor module' "$workflow"
+	grep -Fq 'compile-only Panthor boundary gained a runtime GPU node' "$workflow"
 
 	awk '
 		/patch -p1 -d "\$_connmods_dir"/ { target = "connmods"; next }
@@ -779,7 +793,7 @@ validate_compile_only_boundaries() {
 	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
 	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-(decode|lifecycle))[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(panthor|pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-(decode|lifecycle))[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1

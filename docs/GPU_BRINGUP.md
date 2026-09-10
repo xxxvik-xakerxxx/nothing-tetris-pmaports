@@ -8,6 +8,13 @@ platform device, so Panthor cannot probe and no render node is expected.
 from patch `0009` are present. This is build support, not proof that the GPU
 power, clock, firmware, or memory paths are usable.
 
+The compile-only prerequisite is now enforced by
+`scripts/check-panthor-compile-only.sh` and documented in
+`docs/PANTHOR_COMPILE_ONLY.md`. It links `panthor.o`, traces the pinned
+NothingOSS hardware inventory, and rejects any shipped GPU DT node or autoload
+rule. Full package CI builds and inspects `panthor.ko`. This adds no runtime
+integration.
+
 Candidate `c8f02ca` additionally stages a compile-only MT6363 VSRAM_CPUM
 descriptor and enables the existing MT6319-compatible regulator provider
 config. There is still no VSRAM/VGPU DT child or GPU consumer, so the candidate
