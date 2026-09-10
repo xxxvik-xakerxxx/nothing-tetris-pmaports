@@ -866,12 +866,21 @@ validate_compile_only_boundaries() {
 		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
 	grep -Fq 'DISP_REG_DSC_SPR);' \
 		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
+	grep -Fq '0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch' \
+		"$kernel_apkbuild"
+	grep -Fq 'dsc->slice_count > 1,' \
+		"$kernel_pkg/0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch"
+	if grep -Eq '^\+.*DSC_PARAM_LOAD_MODE[[:space:]]*\|' \
+		"$kernel_pkg/0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch"; then
+		echo "MT6878 DSC patch still enables vendor parameter-load mode" >&2
+		return 1
+	fi
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only MT6878 camera clock module must not be packaged' \
 		"$workflow"
 	grep -Fq -- "-name 'clk-mt6878-cam.ko*'" "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
-	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
+	grep -Fq 'compile-only CCCI/DPMAIF modules must not be packaged' "$workflow"
 	grep -Fq -- "-name 'mt6375-bc12-lifecycle.*'" "$workflow"
 	grep -Fq 'mt6375-bc12-(decode|lifecycle)' "$workflow"
 	grep -Fq -- "-name 'ccci*.ko*'" "$workflow"
