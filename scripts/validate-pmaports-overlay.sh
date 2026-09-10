@@ -605,6 +605,7 @@ validate_ci_rootfs_module_checks() {
 validate_compile_only_boundaries() {
 	workflow="$repo_root/.github/workflows/ci.yml"
 	mfg_rpc_patch="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch"
+	bc12_lifecycle_patch="$kernel_pkg/0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch"
 
 	for source in \
 		0035-pmdomain-mediatek-mt6878-mfg0-data.patch \
@@ -617,6 +618,7 @@ validate_compile_only_boundaries() {
 		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor \
 		0089-vendor-eccci-modem-common-compile-only.patch.vendor \
 		0054-power-supply-mt6375-bc12-compile-only.patch \
+		0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch \
 		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
@@ -674,6 +676,40 @@ validate_compile_only_boundaries() {
 	grep -Fq 'drivers/power/supply/mt6375-bc12-decode.o' "$kernel_apkbuild"
 	grep -Fq 'MT6375 BC1.2 decoder must not acquire runtime dependencies' \
 		"$kernel_apkbuild"
+	grep -Fq 'drivers/power/supply/mt6375-bc12-lifecycle.o' "$kernel_apkbuild"
+	grep -Fq 'MT6375 BC1.2 lifecycle must not acquire runtime dependencies' \
+		"$kernel_apkbuild"
+	grep -Fq 'mt6375-bc12-lifecycle-test.c' "$kernel_apkbuild"
+	grep -Fq 'MT6375 BC1.2 lifecycle host tests failed' "$kernel_apkbuild"
+
+	test "$(grep -c '^diff --git ' "$bc12_lifecycle_patch")" -eq 2
+	grep -Fq 'drivers/power/supply/mt6375-bc12-lifecycle.c' \
+		"$bc12_lifecycle_patch"
+	grep -Fq 'tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c' \
+		"$bc12_lifecycle_patch"
+	grep -Fq '+#define MT6375_BC12_TIMEOUT_MS 1500U' "$bc12_lifecycle_patch"
+	grep -Fq '+MT6375_BC12_USED u32 mt6375_bc12_check_timeout' \
+		"$bc12_lifecycle_patch"
+	grep -Fq '+MT6375_BC12_USED u32 mt6375_bc12_cleanup_result' \
+		"$bc12_lifecycle_patch"
+	grep -Fq '+MT6375_BC12_USED u32 mt6375_bc12_reconcile' \
+		"$bc12_lifecycle_patch"
+	grep -Fq '+MT6375_BC12_USED u32 mt6375_bc12_role_result' \
+		"$bc12_lifecycle_patch"
+	grep -Eq '^\+[[:space:]]*MT6375_BC12_ACTION_RELEASE_DPDM = 1U << 5,$' \
+		"$bc12_lifecycle_patch"
+	if grep -Eq '^diff --git a/(arch/|drivers/phy/|.*Kconfig|.*Makefile)' \
+			"$bc12_lifecycle_patch" || \
+		grep -Eq '^\+.*(platform_get_irq|request_threaded_irq|phy_set_mode|regmap_|module_platform_driver|MODULE_DEVICE_TABLE|mediatek,enable-bc12|interrupt-names|phy-names)' \
+			"$bc12_lifecycle_patch"; then
+		echo "MT6375 BC1.2 lifecycle must remain compile-only without DT, IRQ or PHY wiring" >&2
+		return 1
+	fi
+	if sed -n '/^package()/,/^}/p' "$kernel_apkbuild" | \
+		grep -Eq 'mt6375-bc12-(decode|lifecycle)'; then
+		echo "MT6375 BC1.2 compile-only objects must not be packaged" >&2
+		return 1
+	fi
 	grep -Fq 'mediatek/mt6878-nothing-tetris-native.dtb' "$kernel_apkbuild"
 	grep -Fq 'mt6878-nothing-tetris-native.dtb"' "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"
@@ -731,6 +767,8 @@ validate_compile_only_boundaries() {
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
 	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
+	grep -Fq -- "-name 'mt6375-bc12-lifecycle.*'" "$workflow"
+	grep -Fq 'mt6375-bc12-(decode|lifecycle)' "$workflow"
 	grep -Fq -- "-name 'ccci*.ko*'" "$workflow"
 	grep -Fq -- "-name 'tetris-camera-audit.*'" "$workflow"
 	grep -Fq 'compile-only hardware code has a runtime loader' \
@@ -741,7 +779,7 @@ validate_compile_only_boundaries() {
 	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
 	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-decode)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-(decode|lifecycle))[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1

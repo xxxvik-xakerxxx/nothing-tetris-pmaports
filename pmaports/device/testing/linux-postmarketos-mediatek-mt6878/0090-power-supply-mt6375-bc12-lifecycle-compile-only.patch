@@ -1,0 +1,342 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 13:00:00 +0300
+Subject: [PATCH] power: supply: model safe MT6375 BC1.2 lifecycle
+
+Add a compile-only state machine and host test for the MT6375 BC1.2
+lifecycle. The model requires current attach-state reconciliation and an
+explicit device-role grant before detection, bounds detector ownership with
+a timeout, retains failed cleanup state for retry, and releases DP/DM without
+forcing a USB role.
+
+The files are deliberately absent from Kconfig and Makefile. They contain no
+driver registration, IRQ, DT, PHY, regmap, module or runtime wiring.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/power/supply/mt6375-bc12-lifecycle.c  | 160 ++++++++++++++++++
+ .../mt6375-bc12-lifecycle-test.c              | 146 ++++++++++++++++
+ 2 files changed, 306 insertions(+)
+ create mode 100644 drivers/power/supply/mt6375-bc12-lifecycle.c
+ create mode 100644 tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c
+
+diff --git a/drivers/power/supply/mt6375-bc12-lifecycle.c b/drivers/power/supply/mt6375-bc12-lifecycle.c
+new file mode 100644
+index 0000000..8055ac6
+--- /dev/null
++++ b/drivers/power/supply/mt6375-bc12-lifecycle.c
+@@ -0,0 +1,160 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Compile-only MT6375 BC1.2 lifecycle model.
++ *
++ * This file is intentionally absent from Kconfig and Makefile. It models the
++ * ownership contract that a future driver must satisfy before runtime wiring
++ * is allowed; it does not access hardware or register a driver.
++ */
++
++#ifdef MT6375_BC12_HOST_TEST
++#include <stdbool.h>
++#include <stdint.h>
++typedef uint32_t u32;
++typedef uint64_t u64;
++#define MT6375_BC12_USED
++#else
++#include <linux/compiler_attributes.h>
++#include <linux/types.h>
++#define MT6375_BC12_USED __used
++#endif
++
++#define MT6375_BC12_TIMEOUT_MS 1500U
++
++enum mt6375_bc12_role {
++	MT6375_BC12_ROLE_NONE,
++	MT6375_BC12_ROLE_DEVICE,
++	MT6375_BC12_ROLE_HOST,
++	MT6375_BC12_ROLE_UNKNOWN,
++};
++
++enum mt6375_bc12_action {
++	MT6375_BC12_ACTION_NONE = 0,
++	MT6375_BC12_ACTION_REQUEST_ROLE = 1U << 0,
++	MT6375_BC12_ACTION_CLAIM_DPDM = 1U << 1,
++	MT6375_BC12_ACTION_ENABLE_DETECTOR = 1U << 2,
++	MT6375_BC12_ACTION_ARM_TIMEOUT = 1U << 3,
++	MT6375_BC12_ACTION_DISABLE_DETECTOR = 1U << 4,
++	MT6375_BC12_ACTION_RELEASE_DPDM = 1U << 5,
++	MT6375_BC12_ACTION_CANCEL_TIMEOUT = 1U << 6,
++};
++
++struct mt6375_bc12_lifecycle {
++	bool attached;
++	bool role_granted;
++	bool dpdm_owned;
++	bool detector_enabled;
++	bool timeout_armed;
++	bool cleanup_pending;
++	u64 deadline_ms;
++};
++
++static u32 mt6375_bc12_cleanup_actions(struct mt6375_bc12_lifecycle *state)
++{
++	u32 actions = MT6375_BC12_ACTION_NONE;
++
++	if (state->detector_enabled)
++		actions |= MT6375_BC12_ACTION_DISABLE_DETECTOR;
++	if (state->dpdm_owned)
++		actions |= MT6375_BC12_ACTION_RELEASE_DPDM;
++	if (state->timeout_armed)
++		actions |= MT6375_BC12_ACTION_CANCEL_TIMEOUT;
++
++	state->cleanup_pending = state->detector_enabled || state->dpdm_owned;
++	return actions;
++}
++
++/* Use this for both initial probe reconciliation and every attach IRQ. */
++MT6375_BC12_USED u32 mt6375_bc12_reconcile(struct mt6375_bc12_lifecycle *state,
++				 bool power_ready, enum mt6375_bc12_role role)
++{
++	state->attached = power_ready;
++	if (!power_ready || role != MT6375_BC12_ROLE_DEVICE) {
++		state->role_granted = false;
++		return mt6375_bc12_cleanup_actions(state);
++	}
++
++	if (state->cleanup_pending)
++		return mt6375_bc12_cleanup_actions(state);
++
++	if (state->detector_enabled || state->dpdm_owned)
++		return MT6375_BC12_ACTION_NONE;
++
++	return MT6375_BC12_ACTION_REQUEST_ROLE;
++}
++
++/* A role grant must come from an arbiter that owns the live USB role. */
++MT6375_BC12_USED u32 mt6375_bc12_role_result(struct mt6375_bc12_lifecycle *state,
++				   bool granted, enum mt6375_bc12_role role)
++{
++	if (!state->attached || !granted ||
++	    role != MT6375_BC12_ROLE_DEVICE) {
++		state->role_granted = false;
++		return mt6375_bc12_cleanup_actions(state);
++	}
++
++	if (state->cleanup_pending)
++		return mt6375_bc12_cleanup_actions(state);
++
++	state->role_granted = true;
++	return MT6375_BC12_ACTION_CLAIM_DPDM |
++	       MT6375_BC12_ACTION_ENABLE_DETECTOR |
++	       MT6375_BC12_ACTION_ARM_TIMEOUT;
++}
++
++/* Record actual hardware state, including partially failed starts. */
++MT6375_BC12_USED u32 mt6375_bc12_start_result(struct mt6375_bc12_lifecycle *state,
++				    u64 now_ms, bool dpdm_owned,
++				    bool detector_enabled)
++{
++	state->dpdm_owned = dpdm_owned;
++	state->detector_enabled = detector_enabled;
++
++	if (state->attached && state->role_granted && dpdm_owned &&
++	    detector_enabled) {
++		state->timeout_armed = true;
++		state->cleanup_pending = false;
++		state->deadline_ms = now_ms + MT6375_BC12_TIMEOUT_MS;
++		return MT6375_BC12_ACTION_NONE;
++	}
++
++	state->role_granted = false;
++	return mt6375_bc12_cleanup_actions(state);
++}
++
++MT6375_BC12_USED u32 mt6375_bc12_complete(struct mt6375_bc12_lifecycle *state)
++{
++	state->role_granted = false;
++	return mt6375_bc12_cleanup_actions(state);
++}
++
++MT6375_BC12_USED u32 mt6375_bc12_check_timeout(struct mt6375_bc12_lifecycle *state,
++				     u64 now_ms)
++{
++	if (!state->timeout_armed || now_ms < state->deadline_ms)
++		return MT6375_BC12_ACTION_NONE;
++
++	state->role_granted = false;
++	return mt6375_bc12_cleanup_actions(state);
++}
++
++/* Clear only operations that actually succeeded; failed cleanup is retried. */
++MT6375_BC12_USED u32 mt6375_bc12_cleanup_result(struct mt6375_bc12_lifecycle *state,
++				      bool detector_disabled,
++				      bool dpdm_released)
++{
++	if (detector_disabled)
++		state->detector_enabled = false;
++	if (dpdm_released)
++		state->dpdm_owned = false;
++
++	if (!state->detector_enabled && !state->dpdm_owned) {
++		state->timeout_armed = false;
++		state->cleanup_pending = false;
++		state->deadline_ms = 0;
++		return MT6375_BC12_ACTION_NONE;
++	}
++
++	state->cleanup_pending = true;
++	return mt6375_bc12_cleanup_actions(state);
++}
+diff --git a/tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c b/tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c
+new file mode 100644
+index 0000000..ecd12ba
+--- /dev/null
++++ b/tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c
+@@ -0,0 +1,146 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <assert.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <string.h>
++
++#define MT6375_BC12_HOST_TEST
++#include "../../../../drivers/power/supply/mt6375-bc12-lifecycle.c"
++
++static void mark_started(struct mt6375_bc12_lifecycle *state, u64 now_ms)
++{
++	u32 actions;
++
++	actions = mt6375_bc12_reconcile(state, true,
++					  MT6375_BC12_ROLE_DEVICE);
++	assert(actions == MT6375_BC12_ACTION_REQUEST_ROLE);
++	actions = mt6375_bc12_role_result(state, true,
++					   MT6375_BC12_ROLE_DEVICE);
++	assert(actions == (MT6375_BC12_ACTION_CLAIM_DPDM |
++			   MT6375_BC12_ACTION_ENABLE_DETECTOR |
++			   MT6375_BC12_ACTION_ARM_TIMEOUT));
++	actions = mt6375_bc12_start_result(state, now_ms, true, true);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++}
++
++static void test_timeout_releases_dpdm(void)
++{
++	struct mt6375_bc12_lifecycle state = {};
++	u32 actions;
++
++	mark_started(&state, 1000);
++	assert(mt6375_bc12_check_timeout(&state, 2499) ==
++	       MT6375_BC12_ACTION_NONE);
++	actions = mt6375_bc12_check_timeout(&state, 2500);
++	assert(actions == (MT6375_BC12_ACTION_DISABLE_DETECTOR |
++			   MT6375_BC12_ACTION_RELEASE_DPDM |
++			   MT6375_BC12_ACTION_CANCEL_TIMEOUT));
++	actions = mt6375_bc12_cleanup_result(&state, true, true);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++	assert(!state.dpdm_owned);
++	assert(!state.detector_enabled);
++	assert(!state.timeout_armed);
++}
++
++static void test_cleanup_failures_remain_retryable(void)
++{
++	struct mt6375_bc12_lifecycle state = {
++		.attached = true,
++		.role_granted = true,
++	};
++	u32 actions;
++
++	actions = mt6375_bc12_start_result(&state, 0, true, false);
++	assert(actions == MT6375_BC12_ACTION_RELEASE_DPDM);
++	assert(state.cleanup_pending);
++	actions = mt6375_bc12_cleanup_result(&state, false, false);
++	assert(actions == MT6375_BC12_ACTION_RELEASE_DPDM);
++	assert(state.dpdm_owned);
++	actions = mt6375_bc12_cleanup_result(&state, false, true);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++	assert(!state.cleanup_pending);
++
++	memset(&state, 0, sizeof(state));
++	mark_started(&state, 0);
++	actions = mt6375_bc12_complete(&state);
++	assert(actions & MT6375_BC12_ACTION_DISABLE_DETECTOR);
++	assert(actions & MT6375_BC12_ACTION_RELEASE_DPDM);
++	actions = mt6375_bc12_cleanup_result(&state, false, true);
++	assert(actions == (MT6375_BC12_ACTION_DISABLE_DETECTOR |
++			   MT6375_BC12_ACTION_CANCEL_TIMEOUT));
++	assert(state.detector_enabled);
++	assert(!state.dpdm_owned);
++	actions = mt6375_bc12_cleanup_result(&state, true, false);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++}
++
++static void test_role_swap_uses_role_neutral_release(void)
++{
++	struct mt6375_bc12_lifecycle state = {};
++	u32 actions;
++
++	mark_started(&state, 0);
++	actions = mt6375_bc12_reconcile(&state, true,
++					  MT6375_BC12_ROLE_HOST);
++	assert(actions == (MT6375_BC12_ACTION_DISABLE_DETECTOR |
++			   MT6375_BC12_ACTION_RELEASE_DPDM |
++			   MT6375_BC12_ACTION_CANCEL_TIMEOUT));
++	assert(!state.role_granted);
++	assert(state.cleanup_pending);
++}
++
++static void test_initial_and_current_state_reconciliation(void)
++{
++	struct mt6375_bc12_lifecycle state = {};
++	u32 actions;
++
++	/* A cable present at probe is handled without waiting for an IRQ edge. */
++	actions = mt6375_bc12_reconcile(&state, true,
++					  MT6375_BC12_ROLE_DEVICE);
++	assert(actions == MT6375_BC12_ACTION_REQUEST_ROLE);
++	assert(state.attached);
++
++	/* No detector transition occurs until the current role is granted. */
++	assert(!state.dpdm_owned);
++	assert(!state.detector_enabled);
++	actions = mt6375_bc12_role_result(&state, false,
++					   MT6375_BC12_ROLE_DEVICE);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++	assert(!state.role_granted);
++
++	/* Current power state rejects a stale attach indication. */
++	actions = mt6375_bc12_reconcile(&state, false,
++					  MT6375_BC12_ROLE_DEVICE);
++	assert(actions == MT6375_BC12_ACTION_NONE);
++	assert(!state.attached);
++
++	mark_started(&state, 10);
++	actions = mt6375_bc12_reconcile(&state, false,
++					  MT6375_BC12_ROLE_NONE);
++	assert(actions == (MT6375_BC12_ACTION_DISABLE_DETECTOR |
++			   MT6375_BC12_ACTION_RELEASE_DPDM |
++			   MT6375_BC12_ACTION_CANCEL_TIMEOUT));
++}
++
++static void test_completion_releases_dpdm(void)
++{
++	struct mt6375_bc12_lifecycle state = {};
++	u32 actions;
++
++	mark_started(&state, 50);
++	actions = mt6375_bc12_complete(&state);
++	assert(actions == (MT6375_BC12_ACTION_DISABLE_DETECTOR |
++			   MT6375_BC12_ACTION_RELEASE_DPDM |
++			   MT6375_BC12_ACTION_CANCEL_TIMEOUT));
++}
++
++int main(void)
++{
++	test_timeout_releases_dpdm();
++	test_cleanup_failures_remain_retryable();
++	test_role_swap_uses_role_neutral_release();
++	test_initial_and_current_state_reconciliation();
++	test_completion_releases_dpdm();
++	puts("MT6375 BC1.2 lifecycle tests: PASS");
++	return 0;
++}
+-- 
+2.51.0

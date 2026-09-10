@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=149
+pkgrel=150
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -86,6 +86,7 @@ source="
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	0089-vendor-eccci-modem-common-compile-only.patch.vendor
 	0054-power-supply-mt6375-bc12-compile-only.patch
+	0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch
 	0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 	0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
 	0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch
@@ -558,22 +559,43 @@ _build_ccci_modem_common_compile_only() {
 }
 
 _build_mt6375_bc12_compile_only() {
-	_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
+	_decode_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
+	_lifecycle_object="$builddir/drivers/power/supply/mt6375-bc12-lifecycle.o"
+	_test_source="$builddir/tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test.c"
+	_test_binary="$builddir/tools/testing/selftests/power_supply/mt6375-bc12-lifecycle-test"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
 
-	rm -f "$_object" "$builddir/drivers/power/supply/mt6375-bc12-decode.ko"
+	rm -f "$_decode_object" "$_lifecycle_object" "$_test_binary" \
+		"$builddir/drivers/power/supply/mt6375-bc12-decode.ko" \
+		"$builddir/drivers/power/supply/mt6375-bc12-lifecycle.ko"
 	make -j"$_jobs" -C "$builddir" \
 		ARCH="$_carch" LLVM=1 \
-		drivers/power/supply/mt6375-bc12-decode.o
+		drivers/power/supply/mt6375-bc12-decode.o \
+		drivers/power/supply/mt6375-bc12-lifecycle.o
 
-	test -s "$_object" || die "MT6375 BC1.2 compile-only object is missing"
+	test -s "$_decode_object" || die "MT6375 BC1.2 decoder object is missing"
+	test -s "$_lifecycle_object" || \
+		die "MT6375 BC1.2 lifecycle object is missing"
 	test ! -e "$builddir/drivers/power/supply/mt6375-bc12-decode.ko" || \
 		die "MT6375 BC1.2 validation must not produce a module"
-	llvm-nm --defined-only "$_object" | \
+	test ! -e "$builddir/drivers/power/supply/mt6375-bc12-lifecycle.ko" || \
+		die "MT6375 BC1.2 lifecycle validation must not produce a module"
+	llvm-nm --defined-only "$_decode_object" | \
 		grep -Eq '[[:space:]]mt6375_bc12_decode_port_stat$' || \
 		die "MT6375 BC1.2 decoder symbol is missing"
-	test -z "$(llvm-nm --undefined-only "$_object")" || \
+	llvm-nm --defined-only "$_lifecycle_object" | \
+		grep -Eq '[[:space:]]mt6375_bc12_check_timeout$' || \
+		die "MT6375 BC1.2 bounded-timeout symbol is missing"
+	llvm-nm --defined-only "$_lifecycle_object" | \
+		grep -Eq '[[:space:]]mt6375_bc12_cleanup_result$' || \
+		die "MT6375 BC1.2 retryable-cleanup symbol is missing"
+	test -z "$(llvm-nm --undefined-only "$_decode_object")" || \
 		die "MT6375 BC1.2 decoder must not acquire runtime dependencies"
+	test -z "$(llvm-nm --undefined-only "$_lifecycle_object")" || \
+		die "MT6375 BC1.2 lifecycle must not acquire runtime dependencies"
+
+	clang -std=c11 -Wall -Wextra -Werror "$_test_source" -o "$_test_binary"
+	"$_test_binary" || die "MT6375 BC1.2 lifecycle host tests failed"
 }
 
 _build_pd9302a_compile_only() {
@@ -808,6 +830,7 @@ c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1
 4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 6ed67c1975e76cdf9f11cca3974e5620f94f4bd46d160ad6afbea6513d11dc7f1e7018422616b7a8077ada9e8d8aa868c9c10c26a57c20db2aa4d592d806d8b1  0089-vendor-eccci-modem-common-compile-only.patch.vendor
 8489f86cfde39631f593c166ec40dd6c42a5b8aced4fb924fd654c0595f0e612eb7befe9250af08ebb3859b395e9aa5837c3e5728f4747b5bb99a01d12da6f47  0054-power-supply-mt6375-bc12-compile-only.patch
+c9f8833af178060a3234701d84df8cd917f221b7a03e6014d1581f5c412fe4443aebd550be252f8455741311b196459fb38f626cb6a56b7eff8c98d49768c861  0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch
 9a418ebecddd6cae4c15cef271f732c4be0e3be6a08428a38eaa57aa538da6d5a7cfcf52231d58afdf0abe59fd9e27982fa76e77e1c5beaab63b0d1addd09372  0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 58f2e7b7ca1a4255dc57a003cfa998ea4364e743dffd83d07cf2c76a20f8b29dbdc5849a3a2c35015fce4f01fb7e58a74c7ef37af9941f27383e7042d0b769e9  0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
 a9be96292bb9b747395c9679257d43b89d04106d8596d08dee92144806521907abd4b2bbaadb10546a072014ac87a2e4201c48265858417cc7a72e3758c02c50  0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch
