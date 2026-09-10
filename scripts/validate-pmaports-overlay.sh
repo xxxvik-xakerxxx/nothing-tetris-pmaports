@@ -613,6 +613,7 @@ validate_compile_only_boundaries() {
 		0050-drm-panel-samsung-s6e8fc3x02.patch \
 		0048-vendor-eccci-core-linux-6.18-api.patch.vendor \
 		0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor \
+		0089-vendor-eccci-modem-common-compile-only.patch.vendor \
 		0054-power-supply-mt6375-bc12-compile-only.patch \
 		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
@@ -639,7 +640,8 @@ validate_compile_only_boundaries() {
 		target == "connmods" && /0051-vendor-camera-tetris-compile-only-audit/ { camera = 1 }
 		target == "devmods" && /0048-vendor-eccci-core-linux-6.18-api/ { core = NR }
 		target == "devmods" && /0053-vendor-eccci-ccif-linux-6.18-compile-only/ { ccif = NR }
-		END { exit !(camera && core && ccif && core < ccif) }
+		target == "devmods" && /0089-vendor-eccci-modem-common-compile-only/ { common = NR }
+		END { exit !(camera && core && ccif && common && core < ccif && ccif < common) }
 	' "$kernel_apkbuild"
 
 	grep -Fq '_build_pd9302a_compile_only' "$kernel_apkbuild"
@@ -650,6 +652,22 @@ validate_compile_only_boundaries() {
 	grep -Fq 'ccci_core.o ccci_bm.o' "$kernel_apkbuild"
 	grep -Fq '_build_ccci_ccif_compile_only' "$kernel_apkbuild"
 	grep -Fq 'hif/ccci_ringbuf.o hif/ccci_hif_ccif.o' "$kernel_apkbuild"
+	grep -Fq '_build_ccci_modem_common_compile_only' "$kernel_apkbuild"
+	grep -Fq 'ccci_modem.o hif/ccci_hif.o fsm/ap_md_mem.o' "$kernel_apkbuild"
+	grep -Fq 'CCCI modem common compile-only validation emitted a loadable module' \
+		"$kernel_apkbuild"
+	grep -Fq '#include <linux/sched/clock.h>' \
+		"$kernel_pkg/0089-vendor-eccci-modem-common-compile-only.patch.vendor"
+	if grep -Eq '^\+.*(arm_smccc_smc|dma_|status = "okay"|module_init|MODULE_DEVICE_TABLE)' \
+		"$kernel_pkg/0089-vendor-eccci-modem-common-compile-only.patch.vendor"; then
+		echo "CCCI modem common patch exceeds the compile-only boundary" >&2
+		return 1
+	fi
+	if sed -n '/^package()/,$p' "$kernel_apkbuild" | \
+		grep -Eq 'ccci_modem|ccci_hif|ap_md_mem'; then
+		echo "CCCI modem common objects must not be installed" >&2
+		return 1
+	fi
 	grep -Fq '_build_mt6375_bc12_compile_only' "$kernel_apkbuild"
 	grep -Fq 'drivers/power/supply/mt6375-bc12-decode.o' "$kernel_apkbuild"
 	grep -Fq 'MT6375 BC1.2 decoder must not acquire runtime dependencies' \
@@ -721,7 +739,7 @@ validate_compile_only_boundaries() {
 	grep -Fq '/soc@0/i2c@11e03000/camera@1a status)" = disabled' "$workflow"
 	grep -Fq '"/regulator-camera-main-$camera_supply" status)" = disabled' "$workflow"
 
-	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|mt6375-bc12-decode)[[:space:]]*$' \
+	if grep -El '^[[:space:]]*(pd9302a|tetris-camera-audit|panel-samsung-s6e8fc3x02|ccci_md_all|ccci_all|ccci_ccif|ccci_modem|ap_md_mem|mt6375-bc12-decode)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
 		echo "compile-only camera, display and CCCI core modules must not autoload" >&2
 		return 1

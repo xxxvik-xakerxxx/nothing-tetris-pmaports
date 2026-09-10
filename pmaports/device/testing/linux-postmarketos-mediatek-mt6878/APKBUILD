@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=148
+pkgrel=149
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -84,6 +84,7 @@ source="
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+	0089-vendor-eccci-modem-common-compile-only.patch.vendor
 	0054-power-supply-mt6375-bc12-compile-only.patch
 	0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 	0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
@@ -172,6 +173,8 @@ prepare() {
 		< "$srcdir"/0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0089-vendor-eccci-modem-common-compile-only.patch.vendor
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 }
@@ -510,6 +513,51 @@ _build_ccci_ccif_compile_only() {
 	fi
 }
 
+_build_ccci_modem_common_compile_only() {
+	_moddir="$_devmods_dir"/drivers/misc/mediatek/eccci
+	_hifdir="$_moddir"/hif
+	_fsmdir="$_moddir"/fsm
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+
+	test -s "$builddir"/Module.symvers || \
+		die "CCCI modem common validation requires the fully built kernel Module.symvers"
+	make -j"$_jobs" -C "$builddir" M="$_moddir" \
+		ARCH="$_carch" LLVM=1 \
+		KERNEL_SRC="$builddir" \
+		KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y \
+		CONFIG_MTK_ECCCI_DRIVER=m \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n \
+		CONFIG_MTK_AEE_IPANIC=n \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types \
+			-Werror=int-conversion \
+			$(_vendor_kcflags)" \
+		ccci_modem.o hif/ccci_hif.o fsm/ap_md_mem.o
+
+	for _object in \
+		"$_moddir"/ccci_modem.o \
+		"$_hifdir"/ccci_hif.o \
+		"$_fsmdir"/ap_md_mem.o; do
+		test -s "$_object" || \
+			die "CCCI modem common compile-only object is missing: ${_object##*/}"
+	done
+	llvm-nm --defined-only "$_moddir"/ccci_modem.o | \
+		grep -Eq '[[:space:]]ccci_get_per_md_data$' || \
+		die "CCCI modem registry symbol is missing"
+	llvm-nm --defined-only "$_hifdir"/ccci_hif.o | \
+		grep -Eq '[[:space:]]ccci_hif_register$' || \
+		die "CCCI common HIF registration symbol is missing"
+	llvm-nm --defined-only "$_fsmdir"/ap_md_mem.o | \
+		grep -Eq '[[:space:]]ap_md_mem_init$' || \
+		die "CCCI AP/MD memory initialization symbol is missing"
+	if find "$_moddir" -name '*.ko' -print -quit | grep -q .; then
+		die "CCCI modem common compile-only validation emitted a loadable module"
+	fi
+}
+
 _build_mt6375_bc12_compile_only() {
 	_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -633,6 +681,7 @@ build() {
 	_build_ccci_util_compile_only
 	_build_ccci_core_compile_only
 	_build_ccci_ccif_compile_only
+	_build_ccci_modem_common_compile_only
 	_build_mt6375_bc12_compile_only
 	_build_pmic_modules
 	_build_connectivity_modules
@@ -758,6 +807,7 @@ f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85
 45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
+6ed67c1975e76cdf9f11cca3974e5620f94f4bd46d160ad6afbea6513d11dc7f1e7018422616b7a8077ada9e8d8aa868c9c10c26a57c20db2aa4d592d806d8b1  0089-vendor-eccci-modem-common-compile-only.patch.vendor
 8489f86cfde39631f593c166ec40dd6c42a5b8aced4fb924fd654c0595f0e612eb7befe9250af08ebb3859b395e9aa5837c3e5728f4747b5bb99a01d12da6f47  0054-power-supply-mt6375-bc12-compile-only.patch
 9a418ebecddd6cae4c15cef271f732c4be0e3be6a08428a38eaa57aa538da6d5a7cfcf52231d58afdf0abe59fd9e27982fa76e77e1c5beaab63b0d1addd09372  0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch
 58f2e7b7ca1a4255dc57a003cfa998ea4364e743dffd83d07cf2c76a20f8b29dbdc5849a3a2c35015fce4f01fb7e58a74c7ef37af9941f27383e7042d0b769e9  0056-clk-mediatek-add-MT6878-MMSYS-gates.patch

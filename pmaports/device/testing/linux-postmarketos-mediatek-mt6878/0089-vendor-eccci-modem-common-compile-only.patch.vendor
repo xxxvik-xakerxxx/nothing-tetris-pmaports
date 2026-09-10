@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 15:00:00 +0300
+Subject: [PATCH] eccci: include scheduler clock API explicitly
+
+Linux 6.18 no longer provides local_clock() through the headers pulled in by
+ccci_hif.c. Include its declaring header directly.
+
+This is a compile-only compatibility change and does not enable the modem at
+runtime.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/eccci/hif/ccci_hif.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include <linux/types.h>
++#include <linux/sched/clock.h>
+ #include <linux/ktime.h>
+ 
+ #include "ccci_debug.h"
+-- 
+2.50.1

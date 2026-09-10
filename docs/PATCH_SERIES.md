@@ -71,6 +71,12 @@ normal Alpine/postmarketOS practice.
 | `0087-drm-mediatek-complete-MT6878-DSC-handoff.patch` | Programs the three selector states from `mtk_ddp_insert_dsc_prim_mt6878()` when the DRM graph connects and reapplies OVL force-relay after reset. Live tracing on installed r147 proved the OVL chain is backpressured after OVL2 and that writing the selector or relay alone after the stall is insufficient; r148 tests the authoritative cold-start/DPMS ordering. |
 | `0088-drm-mediatek-normalize-MT6878-display-crossbars.patch` | Makes MMSYS own the vendor `C00/C0C` shadow-bypass initialization before DRM registration and clears inherited `PQ_LOOP_CON[0]` after every MT6878 OVL reset. Installed r147 reads PQ loop enabled despite the B4.1 cold-start sequence requiring it disabled. |
 
+### Modem compile boundaries
+
+| Patch | Purpose |
+| --- | --- |
+| `0089-vendor-eccci-modem-common-compile-only.patch.vendor` | Adds the explicit Linux 6.18 scheduler-clock include needed by the common HIF translation unit. The package builds only `ccci_modem.o`, `ccci_hif.o` and `ap_md_mem.o`, checks representative symbols and rejects any ECCCI `.ko`. It adds no runtime module, DT, autoload, SMC or DMA behavior. |
+
 ### PMIC, keys and power telemetry
 
 | Patch | Purpose |
