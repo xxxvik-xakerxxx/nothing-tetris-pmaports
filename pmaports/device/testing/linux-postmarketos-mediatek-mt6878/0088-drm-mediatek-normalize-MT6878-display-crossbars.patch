@@ -8,12 +8,12 @@ currently inherits this state from the bootloader, leaving the OVL PQ loop
 enabled on Tetris after reset.
 
 Clear only the defined selector bit at the authoritative Nothing OS 4.1
-register offset before enabling relay output. MMSYS crossbar normalization is
-kept in the route-connect lifecycle, after the display domain and clocks are
-enabled.
+register offset before OVL enable, then apply force-relay after OVL enable in
+the same hunk. MMSYS crossbar normalization is kept in the route-connect
+lifecycle, after the display domain and clocks are enabled.
 ---
- drivers/gpu/drm/mediatek/mtk_disp_ovl.c | 7 +++++++
- 1 file changed, 7 insertions(+)
+ drivers/gpu/drm/mediatek/mtk_disp_ovl.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
 
 diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
 index ae886fc..66d6cb9 100644
@@ -23,19 +23,29 @@ index ae886fc..66d6cb9 100644
  #define DISP_REG_OVL_DATAPATH_CON		0x0024
 +#define DISP_REG_OVL_PQ_LOOP_CON		0x02e0
  #define OVL_LAYER_SMI_ID_EN				BIT(0)
-@@ -284,7 +285,13 @@ void mtk_ovl_start(struct device *dev)
- 		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
- 	}
- 
+@@ -279,10 +280,22 @@ void mtk_ovl_start(struct device *dev)
+	if (ovl->data->reset_on_start) {
+		writel(BIT(0), ovl->regs + DISP_REG_OVL_RST);
+		writel(0, ovl->regs + DISP_REG_OVL_RST);
+		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
+	}
+
 +	if (ovl->data->force_relay) {
 +		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_PQ_LOOP_CON);
 +
 +		writel_relaxed(reg & ~BIT(0), ovl->regs + DISP_REG_OVL_PQ_LOOP_CON);
 +	}
 +
- 	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
- 				 OVL_BYPASS_SHADOW : 0),
- 		       ovl->regs + DISP_REG_OVL_EN);
+	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
+				 OVL_BYPASS_SHADOW : 0),
+		       ovl->regs + DISP_REG_OVL_EN);
++
++	if (ovl->data->force_relay) {
++		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_SRC_CON);
++
++		writel_relaxed(reg | BIT(8), ovl->regs + DISP_REG_OVL_SRC_CON);
++	}
+ }
  
 -- 
 2.50.1 (Apple Git-155)

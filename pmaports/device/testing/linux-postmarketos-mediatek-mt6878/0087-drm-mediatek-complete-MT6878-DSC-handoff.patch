@@ -11,8 +11,8 @@ EOF after a 1x1 input.
 
 Program the remaining selector state when the DRM graph is connected. Also
 normalize the complete five-register DSC handoff and the MMSYS shadow state
-after the display power domain and component clocks are enabled. Also apply
-the OVL force-relay bit after OVL enable, matching the vendor start sequence.
+after the display power domain and component clocks are enabled. The following
+patch applies OVL force-relay together with the remaining OVL start state.
 This makes the handoff repeatable on cold boot and DPMS resume instead of
 depending on LK register state.
 
@@ -20,9 +20,9 @@ The values and order are derived from Nothing OS 4.1 Tetris source commit
 ee2be53cb75670b548948636a0db1d1ff112bf12, mtk_drm_ddp.c
 mtk_ddp_insert_dsc_prim_mt6878() and mtk_disp_ovl.c.
 ---
- drivers/gpu/drm/mediatek/mtk_disp_ovl.c |  8 ++++++++
+ drivers/gpu/drm/mediatek/mtk_disp_ovl.c |  2 ++
  drivers/soc/mediatek/mt6878-mmsys.h     | 26 ++++++++++++++++++++++++--
- 2 files changed, 32 insertions(+), 2 deletions(-)
+ 2 files changed, 26 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
 index 5efb79f..ae886fc 100644
@@ -36,20 +36,6 @@ index 5efb79f..ae886fc 100644
  };
  
  /*
-@@ -279,7 +280,13 @@ void mtk_ovl_start(struct device *dev)
- 		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
- 	}
- 
- 	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
- 				 OVL_BYPASS_SHADOW : 0),
- 		       ovl->regs + DISP_REG_OVL_EN);
-+
-+	if (ovl->data->force_relay) {
-+		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_SRC_CON);
-+
-+		writel_relaxed(reg | BIT(8), ovl->regs + DISP_REG_OVL_SRC_CON);
-+	}
- }
 @@ -757,6 +764,7 @@ static const struct mtk_disp_ovl_data mt6878_ovl_2l_driver_data = {
  	.vblank_irq_mask = OVL_FME_START_INT,
  	.bypass_shadow = true,
