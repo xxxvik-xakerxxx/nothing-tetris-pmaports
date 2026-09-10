@@ -533,6 +533,7 @@ validate_sensor_transport() {
 	sensor_patch="$kernel_pkg/0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor"
 	inventory_patch="$kernel_pkg/0045-vendor-sensorhub-runtime-inventory.patch.vendor"
 	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
+	region_patch="$kernel_pkg/0093-vendor-scp-validate-region-info.patch.vendor"
 	workflow="$repo_root/.github/workflows/ci.yml"
 
 	for patch in \
@@ -540,6 +541,8 @@ validate_sensor_transport() {
 		0045-vendor-sensorhub-runtime-inventory.patch.vendor \
 		0036-vendor-scp-linux-6.18-api.patch.vendor \
 		0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor \
+		0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor \
+		0093-vendor-scp-validate-region-info.patch.vendor \
 		1200-vendor-sensor-framework-linux-6.18.patch.vendor; do
 		grep -Fq "$patch" "$kernel_apkbuild"
 	done
@@ -568,6 +571,24 @@ validate_sensor_transport() {
 		"$scp_patch"
 	grep -Fq 'IS_REACHABLE(CONFIG_DEVICE_MODULES_COMMON_CLK_MEDIATEK) &&' \
 		"$scp_patch"
+	grep -Fq 'static int scp_region_info_validate(void)' "$region_patch"
+	grep -Fq 'scp_region_info_copy.struct_size < sizeof(scp_region_info_copy)' \
+		"$region_patch"
+	grep -Fq '!check_add_overflow(start, size, &end)' "$region_patch"
+	grep -Fq 'scp_region_info_copy.ap_loader_size > SCP_A_TCM_SIZE' \
+		"$region_patch"
+	grep -Fq 'scpreg.scp_tcmsize > scpreg.total_tcmsize' "$region_patch"
+	grep -Fq 'ret = scp_region_info_init();' "$region_patch"
+	grep -Fq 'goto err_region_info;' "$region_patch"
+	grep -Fq 'platform_driver_unregister(&mtk_scpsys_device);' "$region_patch"
+	grep -Fq 'platform_driver_unregister(&mtk_scp_device);' "$region_patch"
+	grep -Fq 'return ret;' "$region_patch"
+
+	if grep -E '^[+]([[:space:]]*)compatible = "mediatek,scp(-dvfs)?"' \
+		"$kernel_pkg"/*.patch* >/dev/null 2>&1; then
+		echo "SCP and SCP DVFS DT nodes must remain absent until handoff validation" >&2
+		return 1
+	fi
 
 	grep -Fq 'mtk_ipi_unregister(&scp_ipidev, IPI_IN_SENSOR_CTRL);' \
 		"$sensor_patch"

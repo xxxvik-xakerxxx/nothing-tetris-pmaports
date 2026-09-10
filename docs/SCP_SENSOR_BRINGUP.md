@@ -61,7 +61,7 @@ mailbox, RPMsg, IPI, SCP, HF manager and sensorhub modules were built together
 in the prior CI artifact.  The inventory-mask revision still requires a fresh
 targeted build before it can enter an image.
 
-The first runtime blocker remains earlier than sensor enumeration:
+The first observed runtime blocker remains earlier than sensor enumeration:
 `scp.ko` waits for the separate `mediatek,scp-dvfs` driver and returns
 `-ETIMEDOUT` after three seconds because the target DT has no valid, proven
 DVFS provider chain.  The clean installed image reproduced this boundary;
@@ -83,6 +83,15 @@ Adding only a vendor `scp-dvfs` node is not a valid fix. Its probe immediately
 touches ULPOSC, frequency measurement and clock providers before the port has
 proved the active SCP firmware, TCM region-info, secure reset contract or
 shared-memory ownership.
+
+Patch `0093` adds the next fail-closed kernel boundary without changing that
+runtime state. If a later disabled-DVFS experiment reaches SCP core probe, the
+driver now rejects a TCM resource smaller than the DT declaration and rejects
+region-info whose known layout, loader, firmware or requested DRAM ranges are
+structurally invalid. It returns the error before recovery workqueues,
+loader/DRAM recovery mappings or reset startup. These checks are necessary
+memory-safety conditions; they are not proof that LK authenticated the active
+slot or that the addresses belong to the published carveouts.
 
 ## Required ownership chain
 
@@ -110,16 +119,18 @@ rather than directly from `nvdata`, `nvcfg` or `persist`.
 
 ## Completed host-only boundary
 
-A standalone libfdt test against U-Boot
-`b76e47e774304ab550a6354f3286860b7caffb3a` now validates exactly one shared
-and one loader carveout, two-cell 64-bit encoding, overflow, DRAM containment,
-minimum shared size, non-overlap and byte-for-byte FDT immutability. Its positive
-and malformed fixtures pass on the host. It is not called from the board boot
-path and publishes nothing to Linux.
+The U-Boot candidate `5e450af73a` extends the earlier parser into a disabled
+inventory gate. Its host tests validate exactly one shared and one loader
+carveout, two-cell 64-bit encoding, overflow, DRAM containment, minimum shared
+size, non-overlap, A/B partition matching, bounded image size, nonzero verified
+identity, region-info agreement and byte-for-byte FDT immutability. The board
+call still returns `-EOPNOTSUPP`; no live adapter supplies authoritative
+boot-control, authenticated image or decoded LK region-info observations, and
+nothing is published to Linux.
 
 ## Next patch boundary
 
-The next runtime-facing work belongs in U-Boot and must remain observation-only:
+The next runtime-facing work remains in U-Boot and must be observation-only:
 
 1. Establish an authoritative active-slot metadata ABI.
 2. Validate `scp1`/`scp2` payload identity and TCM region-info against an
@@ -138,8 +149,9 @@ single-variable live test after three clean handoff repeats.
 ## Evidence and limits
 
 The contract was checked against Nothing OS 4.1 Tetris branch head
-`7493a2ab6b2e91ab9f7dd6a171defaafb1855b75` from 2026-08-28 and U-Boot
-`b76e47e774304ab550a6354f3286860b7caffb3a`. Positive source/DT checks,
+`7493a2ab6b2e91ab9f7dd6a171defaafb1855b75`, pinned device modules
+`ee2be53cb75670b548948636a0db1d1ff112bf12`, and U-Boot candidate
+`5e450af73a`. Positive source/DT checks,
 reserved-memory accounting, negative activation tests and undersized-memory
 tests pass offline.
 

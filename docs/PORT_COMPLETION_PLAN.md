@@ -80,7 +80,7 @@ driver is packaged, autoloaded or safe to probe on hardware:
 
 | Block | Draft path | Status |
 | --- | --- | --- |
-| Sensors/SCP | `0032`, `0036`, `0037`, `0041` plus `APKBUILD` and `local/agent-results/scp-uboot-next/` | Exact-source clean compile passes for mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded SCP failure containment. A host-only U-Boot parser validates unique 64-bit shared/loader carveouts, DRAM containment, minimum size, non-overlap and FDT immutability. Active-slot firmware identity, TCM region-info and boot publication remain missing. |
+| Sensors/SCP | `0032`, `0036`, `0037`, `0041`, `0093` plus `APKBUILD` and U-Boot candidate `5e450af73a` | Exact-source builds cover mailbox, RPMSG, IPI, SCP, HF manager and sensorhub. `ba02998` proves bounded DVFS failure containment. Patch `0093` rejects malformed TCM/region-info before recovery; the U-Boot host gate validates slot, identity, carveout and decoded-region agreement but its board call deliberately returns `-EOPNOTSUPP`. Active-slot authentication and the live LK region-info decoder/publication remain missing. |
 | SIM / modem | `0039`, `0048`, `0053`, `0089` and compile-only `APKBUILD` gates | `6bc2096` / CI `33356899792` proves clean `ccci_util_lib.ko` modpost. ECCCI core and CCIF objects compile without a module; the next bounded gate adds only `ccci_modem.o`, `ccci_hif.o` and `ap_md_mem.o`, with representative symbol and no-`.ko` checks. No DT, packaging, autoload, firmware, power/reset, SMC, DMA, DPMAIF or CCMNI. |
 | GPU | `0035`, `0052`, `docs/GPU_BRINGUP.md` and `APKBUILD` | MFG0 data and the B4.1 MFG RPC topology are present with both RPC provider levels disabled. Exact active-series apply and direct DT compilation pass; no GPU consumer, register access or runtime claim. |
 | Camera foundation | `0046`, `0047`, `0049`, `0051`, `0055`, `docs/CAMERA_COMPILE_ONLY_AUDIT.md` and `APKBUILD` | Object-only gates cover PD9302A, IMX882 identity and the six-variant/four-layout Tetris inventory. The stock-derived main-IMX882 fixture keeps its client and all four rails disabled, does not alter shared I2C8, and adds no EEPROM, actuator or graph. CI rejects camera runtime modules; no sensor, SENINF/ISP or CCU is enabled. |
@@ -111,10 +111,11 @@ login/relogin gates remain open.
   returned `-ETIMEDOUT` after 3.09 seconds with one diagnostic, no loaded `scp`
   module, no WARN/Oops and no USB loss. Keep SCP and sensorhub manual-only while
   the real firmware, reserved-memory and boot handoff contract is solved.
-- The SCP host validator proves parser behavior for two portable carveout
-  ranges without modifying the FDT. It does not prove active-slot firmware
-  identity or TCM region-info. Establish those authoritative ABIs before any
-  U-Boot publication or Linux `scp-dvfs` node.
+- U-Boot `5e450af73a` proves the combined inventory validator against positive
+  and malformed host fixtures without modifying the FDT. Its slot, identity
+  and region-info inputs are synthetic observations because the live adapters
+  do not exist. Establish those authoritative ABIs before any U-Boot
+  publication or Linux `scp-dvfs` node.
 - The CCIF timer lifetime conversion and exact-source service ID are complete in
   an isolated object-only patch. The next boundary is link/modpost dependency
   inventory plus installed trusted-firmware command/return semantics. Do not
