@@ -36,7 +36,7 @@ index 5efb79f..ae886fc 100644
  };
  
  /*
-@@ -281,7 +282,13 @@ void mtk_ovl_start(struct device *dev)
+@@ -279,7 +280,13 @@ void mtk_ovl_start(struct device *dev)
  		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
  	}
  

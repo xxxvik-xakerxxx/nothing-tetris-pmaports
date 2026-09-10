@@ -87,7 +87,7 @@ The native S6E8FC3X02 pipeline binds on hardware. Installed r147 reads panel ID
 `40 41 02`, starts Phoc and preserves USB/touch, but its first atomic frame
 stalls after OVL2: DSC sees `1x1`, raises `ABN_EOF` and never completes a frame.
 Late live writes proved that the remaining DSC selector and OVL force-relay are
-not standalone recovery mechanisms once the graph is wedged. Candidate r148
+not standalone recovery mechanisms once the graph is wedged. Candidate r149
 ports both into the authoritative connect/reset/start lifecycle; runtime pixel
 and lifecycle gates remain.
 
