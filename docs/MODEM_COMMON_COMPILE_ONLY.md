@@ -94,6 +94,10 @@ They do not establish a link-complete ECCCI stack. In particular,
 and HIF owners can reach modem power, secure-call, IRQ and DMA paths once
 linked and probed.
 
+Patch `0095` now compile-checks the vendor FSM, port and non-page-pool DPMAIF
+groups separately. It does not resolve this runtime boundary or make the
+earlier common objects loadable.
+
 Before any link, package or runtime step, separately validate the complete
 undefined-symbol closure, bootloader handoff and reserved-memory bounds,
 trusted-firmware CCCI command semantics, power/reset/clock ownership, IRQ and

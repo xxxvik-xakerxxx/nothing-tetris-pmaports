@@ -294,9 +294,10 @@ jobs:
             echo "legacy wmt_drv module must not be packaged"
             exit 1
           fi
-          if find "$rootfs/lib/modules" -name 'ccci*.ko*' \
+          if find "$rootfs/lib/modules" \
+              \( -name 'ccci*.ko*' -o -name '*dpmaif*.ko*' \) \
               -print -quit | grep -q .; then
-            echo "compile-only CCCI modules must not be packaged"
+            echo "compile-only CCCI/DPMAIF modules must not be packaged"
             exit 1
           fi
           if find "$rootfs/lib/modules" -name 'pd9302a.ko*' \
@@ -332,7 +333,7 @@ jobs:
           }
           test "$(rootfs_modinfo -F name panthor)" = panthor
           if grep -RIlE \
-              '(panthor|pd9302a|clk-mt6878-cam|tetris-camera-audit|ccci[_-]|mt6375-bc12-(decode|lifecycle))' \
+              '(panthor|pd9302a|clk-mt6878-cam|tetris-camera-audit|ccci[_-]|dpmaif|mt6375-bc12-(decode|lifecycle))' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \
               "$rootfs/usr/lib/modprobe.d" "$rootfs/usr/lib/udev/rules.d" \
               "$rootfs/usr/lib/systemd/system" 2>/dev/null | grep -q .; then

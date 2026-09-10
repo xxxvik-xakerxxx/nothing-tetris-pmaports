@@ -184,26 +184,19 @@ domain sequence, the required infracfg modem clocks, the bootloader/ATF modem
 handoff, modem reserved memory, firmware provenance, or a standard userspace
 control path.
 
-## Current CCIF compile boundary
+## Current compile boundary
 
-An isolated LLVM 21/aarch64 build against pinned Linux `d84b264a` and Nothing
-OS 4.1 device modules `ee2be53c` now reaches the first CCIF-specific ABI
-boundary without creating a module:
+The active LLVM 21 gates cover CCCI util, core, CCIF, modem common, and the
+complete vendor FSM/port/non-page-pool-DPMAIF object groups from pinned Linux
+`d84b264a` and Nothing OS 4.1 device modules `ee2be53c`. Patch `0095` adds the
+last Linux 6.18 source compatibility needed for 39 new individual objects.
+No ECCCI or DPMAIF module is linked, packaged, autoloaded or run.
 
-- `ccci_ringbuf.o`: compiles;
-- an isolated compatibility patch replaces `from_timer()` with
-  `timer_container_of()` and the old non-sync `del_timer()` with
-  `timer_delete()`;
-- `ccci_hif_ccif.o`: both timer errors are gone and the first failure is now
-  the unowned `MTK_SIP_KERNEL_CCCI_CONTROL` dependency;
-- `ccci_ccif.ko`: neither requested nor emitted.
-
-The include-graph and timer patches pass dry-run, strict checkpatch and their
-targeted object gates, but remain outside the active package. The timer lifetime
-review preserves the old rearm-permitted non-sync semantics and does not approve
-the vendor driver's broader missing teardown path for runtime. The secure
-command must come from an authoritative firmware/LK contract rather than a
-copied numeric constant.
+The selected objects still leave 241 external references after internal
+resolution. The numeric CCCI command fallback allows compilation against the
+mainline SiP header but is not evidence that installed trusted firmware accepts
+the command or implements its semantics. That firmware contract remains a hard
+runtime blocker.
 
 ### Memory and isolation trace
 
