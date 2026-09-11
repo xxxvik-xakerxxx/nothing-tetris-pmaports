@@ -2,10 +2,36 @@
 
 Updated: 2026-09-11.
 
+## Latest GPS reliability result
+
+The unchanged supervised v2 protocol passed another clean boot on c931695,
+then failed its next repetition waiting for the post-stop RESET_DONE record.
+The late normal close does not turn that timeout into a pass. Recovery was
+an orderly reboot, never a module reload. Three repeatable starts are not
+established, and no position fix has been obtained.
+
+An isolated six-function trace on the next clean boot passed the full cycle.
+The stop handler completed in about 116 us; its FSM call took about 17 us.
+The corresponding journal record appeared roughly 277 ms later. This run
+does not reproduce the earlier multi-second delay or prove its cause.
+Vendor FSM messages lack a trailing newline; log finalization is now being
+checked before changing hardware timing or the eight-second test deadline.
+USB 32 MiB hashes passed before/after, Wi-Fi remained connected, BT powered,
+no GPS owners or failed units remained, and the isolated tracer was removed
+with global tracing still nop. Raw evidence is retained locally under
+gnss-supervised-c931-repeat-{1,2} and gnss-supervised-c931-stop-trace.
+
+The display promotion candidate has advanced to
+7e8503e8371cb0394425ca0698b9acf8602aaf7a (kernel r154/device 8-r11).
+It preserves the installed audio and greeter configuration and creates the
+greeter dconf directory with checked ownership. CI 34587197925 is building;
+the image is not installed or merged. Its older unrelated GNSS package is
+not the v051 research environment. Main has not moved.
+
 ## Latest bootloader observation
 
 The subsequent bounded header-list candidate c931695bb963efaa0dfdf928ea475440581838b4
-also passed CI 34584756418 and is now installed in lk_a. Current boot is
+also passed CI 34584756418 and is now installed in lk_a. That observation was on
 3bcabc1f-8d6e-4c0c-8d97-977eae5affc2, loader c931695bb963, unchanged r153.
 tag-list-header-error=0, count=38, ID masks low=0x3b0c7fff,
 high=0x0026ff3b. Their combined population is 38, so this observed list has

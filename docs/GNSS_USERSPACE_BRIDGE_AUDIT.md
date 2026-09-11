@@ -70,6 +70,28 @@ manual executable and v051 module are present.
 
 ## Latest experiment and remaining gate (2026-09-11)
 
+Subsequent c931695/r153 repetitions supersede the single-pass reliability
+claim below: repeat 1 passed, repeat 2 timed out waiting for phase 4 after
+STOP_WRITTEN. Its later normal OFF/CLOSED is retained but is not a pass.
+The eight-second deadline and protocol were unchanged. No unload/retry was
+performed; the phone was rebooted cleanly.
+
+An isolated function-graph observation on the next clean boot passed. All
+six function filters were verified, a no-op setup/cleanup passed before GPS
+was opened, all CPU trace-loss counters stayed zero, and cleanup restored
+nop with no remaining instance. At stop, MCUB handler duration was 115.693 us,
+clear flag 4.923 us, FSM 16.615 us and state change 4.923 us. The FSM returned
+at monotonic 767.019633, while the journal displayed its record at 767.296379.
+This is an observation discrepancy, not proof of a slow SMC or driver lock.
+The missing trailing newline in vendor FSM logs is a candidate explanation
+under investigation. Tracing can perturb timing; the earlier timeout remains
+unresolved. USB transfer and post-test ownership checks passed. No navigation
+configuration or position request was sent.
+
+Local evidence: gnss-supervised-c931-repeat-1/kernel.log,
+gnss-supervised-c931-repeat-2/kernel.log, and
+gnss-supervised-c931-stop-trace/{result.txt,kernel-active.log,LIVE-PLAN.md}.
+
 The corrected v2 experiment now PASSED one observed download/start/stop
 cycle after clean reboot and host USB recovery. On boot
 3baa4f13-1c6d-4cf7-858a-6497d04f0de5 (unchanged r153/device8-r9), the
