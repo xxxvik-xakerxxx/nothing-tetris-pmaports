@@ -1,0 +1,41 @@
+From 34f09efea11c9402d9917ecf1b39bd68cf754bc1 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Thu, 10 Sep 2026 21:20:00 +0300
+Subject: [PATCH] drm: mediatek: use MT6878 default DSC parameter flow
+
+The Tetris S6E8FC3X02 panel leaves dsc_param_load_mode at zero in the
+authoritative Nothing OS 4.1 driver. The MT6878 vendor DSC path therefore
+programs only slice mode in DISP_REG_DSC_MODE.
+
+Do not force PARAM_LOAD_MODE for this mainline port. That bit selects the
+vendor key-parameter loading path and made the native pipeline start with
+DSC_MODE 0x00010001 instead of the expected 0x00000001.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_ddp_comp.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+index d154d83..d104632 100644
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -53,7 +53,6 @@
+ #define DISP_REG_DSC_CHUNK_SIZE			0x0028
+ #define DISP_REG_DSC_BUF_SIZE			0x002c
+ #define DISP_REG_DSC_MODE			0x0030
+-#define DSC_PARAM_LOAD_MODE			BIT(16)
+ #define DISP_REG_DSC_CFG			0x0034
+ #define DISP_REG_DSC_PAD			0x0038
+ #define DISP_REG_DSC_ENC_WIDTH			0x003c
+@@ -281,7 +280,7 @@ static void mtk_dsc_encoder_config(struct device *dev,
+ 	mtk_ddp_write(cmdq_pkt, chunk_size * dsc->slice_height,
+ 		      &priv->cmdq_reg, priv->regs, DISP_REG_DSC_BUF_SIZE);
+ 	mtk_ddp_write(cmdq_pkt,
+-		      DSC_PARAM_LOAD_MODE | (dsc->slice_count > 1),
++		      dsc->slice_count > 1,
+ 		      &priv->cmdq_reg,
+ 		      priv->regs, DISP_REG_DSC_MODE);
+ 	mtk_ddp_write(cmdq_pkt, 0x22, &priv->cmdq_reg, priv->regs,
+-- 
+2.50.1 (Apple Git-155)

@@ -1,7 +1,7 @@
 /dts-v1/;
 
 / {
-	description = "Nothing CMF Phone 1 FIT Image";
+	description = "Nothing CMF Phone 1 native display FIT Image";
 	#address-cells = <1>;
 
 	images {
@@ -17,8 +17,8 @@
 		};
 
 		fdt {
-			description = "MT6878 Nothing Tetris DTB";
-			data = /incbin/("mt6878-nothing-tetris.dtb");
+			description = "MT6878 Nothing Tetris native display DTB";
+			data = /incbin/("mt6878-nothing-tetris-native.dtb");
 			type = "flat_dt";
 			arch = "arm64";
 			compression = "none";
@@ -39,9 +39,9 @@
 	};
 
 	configurations {
-		default = "standard";
-		standard {
-			description = "Standard Boot";
+		default = "native-display";
+		native-display {
+			description = "Native display";
 			kernel = "kernel";
 			fdt = "fdt";
 			ramdisk = "initrd";

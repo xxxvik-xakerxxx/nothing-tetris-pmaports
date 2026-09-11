@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=122
+pkgrel=154
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -78,6 +78,42 @@ source="
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
+	0050-drm-panel-samsung-s6e8fc3x02.patch
+	0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
+	0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch
+	0058-arm64-dts-mediatek-add-opt-in-MT6878-display-power.patch
+	0059-soc-mediatek-add-MT6878-display-routing-data.patch
+	0060-soc-mediatek-route-MT6878-OVL-through-DSC.patch
+	0061-drm-mediatek-mt6878-ovl-frame-start.patch
+	0062-drm-mediatek-program-MT6878-DSC.patch
+	0063-drm-mediatek-add-minimal-MT6878-display-path.patch
+	0064-dt-bindings-display-mediatek-add-MT6878-components.patch
+	0065-dt-bindings-phy-mediatek-add-MT6878-MIPI-TX.patch
+	0066-phy-mediatek-add-MT6878-MIPI-TX-N4-data.patch
+	0067-dt-bindings-display-mediatek-add-MT6878-DSI.patch
+	0068-drm-mediatek-add-MT6878-DSI-host-data.patch
+	0069-dt-bindings-mediatek-add-MT6878-display-DMA.patch
+	0070-iommu-mediatek-add-MT6878-display-DMA-data.patch
+	0071-arm64-dts-mediatek-add-MT6878-display-DMA.patch
+	0072-arm64-dts-mediatek-add-Nothing-Tetris-native-display-DTB.patch
+	0073-drm-mediatek-use-MT6878-panel-data-rate.patch
+	0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch
+	0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch
+	0076-drm-mediatek-publish-DSI-state-before-host-register.patch
+	0077-drm-mediatek-wait-for-display-mutex-probe.patch
+	0078-drm-mediatek-reset-MT6878-DSI-to-command-mode.patch
+	0079-drm-panel-set-maximum-return-packet-size.patch
+	0080-drm-panel-accept-S6E8FC3X02-revisions.patch
+	0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch
+	0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch
+	0083-drm-mediatek-use-full-MT6878-OVL-chain.patch
+	0084-drm-mediatek-bypass-MT6878-OVL-shadow.patch
+	0085-drm-mediatek-program-MT6878-DSC-version.patch
+	0086-drm-mediatek-match-MT6878-native-display-state.patch
+	0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
+	0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch
+	0096-soc-mediatek-retain-verified-MT6878-display-route.patch
+	0097-drm-mediatek-update-MT6878-planes-at-frame-end.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -460,7 +496,7 @@ build() {
 	make -j"$_jobs" ARCH="$_carch" LLVM=1 \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
-		mediatek/mt6878-nothing-tetris.dtb
+		mediatek/mt6878-nothing-tetris-native.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
 	_build_pd9302a_compile_only
@@ -486,8 +522,8 @@ package() {
 		INSTALL_MOD_PATH="$pkgdir" \
 		INSTALL_MOD_STRIP=1 \
 		LLVM=1
-	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris.dtb" \
-		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris.dtb"
+	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \
+		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
 	_release="$(cat "$builddir"/include/config/kernel.release)"
@@ -540,12 +576,12 @@ sha512sums="
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
 ac703d53b671d8dc4a798670e2b0f1b6f1d4b7c64be16e5ed331c4d8e01371279efa613cb45f87e8fed482a08cb9eb642bbce5d57d5b545313ba6e101b675dae  android-kernel-modules-e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.tar.gz
 829db7a368cf7a9b02e0f0e0a8406aa60f391018138809359373c3779ebadf26fc9fb3ab8aed94b2af4c2c0e21a6c661b9bfc5dfe74fe69ad95768cda7ee11dc  android-kernel-device-modules-ee2be53cb75670b548948636a0db1d1ff112bf12.tar.gz
-a7ecb72d1a87facd09ccfa875848e5193c7b3b660bed6c4faa5e3158cd4444ae2dc454615a0e8d96a46cac632e5ae56b24b1f6b07c31289b06f16f92d0122581  config-postmarketos-mediatek-mt6878.aarch64
+49cbc2f6c559ac1dbeb4eefa180c9474b8b47717c2ba911c7336957da4febaf952b5d3f7e3e42db6c0a0a8e2def1d4e58e0e729ae5be216d1cbd400398e28342  config-postmarketos-mediatek-mt6878.aarch64
 63009bf026eefb20b36cff3d1d8528135adccd44c4ebed2aecdaab8040966f31761ffb43f8e2c18358b1ca0ee144fc32e3af6c22c4e00224612c6355a4ed1385  0001-input-touchscreen-ft3519t-tetris.patch
 3323036613300168eda28857698364a3662324b290d9b9887c8b813b8166104222a5b2d0a4469a32de6bbefdd396ffa7bb129efbc859867bc169e34c4a393349  0002-mfd-mt6369-spmi-pmic.patch
 e589d0aed09a2d0cd9705f16eaec49c97f45e161429e244fe857b382503aafb8522fb8d4a6972820d67c97dcd4d3b096e21a05b38b283a9a2cd355f040c56bb2  0003-mfd-mt6363-keys-mt6375-telemetry.patch
 42564b85465ff94c610d5c8f38749f60c9965a1a61969706431ffe480ef0cf5be5ec857e86e23bc4f0c35430808328c6d9a2b4852d615ace1f7b52d99b8618ea  0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch
-4dc6bd68565355553bbd126c7588ad1baafa0b0f21c3d4382c1aa2902726de256e304a1a5e792c0e27eb1f290b2703f47083d5b34adacc73b2acad526bca9c5d  0005-drm-sysfb-tetris-framebuffer.patch
+720336991f0a41f74640ef5901c68b97140300ceb5eb02b6c1e234140ee75aa4e386df3af635f39dc0a19041ff858e35634b754d87e631f7219dc44693bcdfee  0005-drm-sysfb-tetris-framebuffer.patch
 261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0006-pinctrl-mediatek-mt6878-eint.patch
 2d00776c2f409dbc76dc412e41f343279e0f7c8e16340071fd71771b9fb5b883cb65262be64d923fc8600d55db5ad45220f8b12870a0c377c9f2236ec9d2f575  0007-power-supply-mt6375-monitor.patch
 1f34c790726bd24e0385e4c10541e61391b9232e0b4d3d873098e2df0e2c26fce8a8fa8233cb260b3c1d6605db9ddd24810ba353efb5b2d3391a985704278be8  0008-connectivity-mt6878-mt6631-connsys.patch
@@ -592,4 +628,40 @@ c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1
 e390543280ac810da413bbc629744ba9e418ab8a433ad523acce8679d9f334d273e01a6d54a0083e081d24773674e844ee425e979a68a81b01e560701cc7fbca  1103-vendor-audio-mt6685-clock.patch.vendor
 78497d14b8dac9f70a27318c80eb2143b5ffdf2bc1a678edd0e449db3de80a2c7e68371aa9f83a5ddbd4fbb4e6737cbe766f7022a53c99cf366b755ab6284fda  1200-vendor-sensor-framework-linux-6.18.patch.vendor
 
+7607fe1d467067fca42d8671b7884ce28e6a2627e4ce17ab46e75535d955f5e68f6cdf98ee8f4597cbd597d38ca2001c94a85b9e7618ecc70a1d1eeeb876e551  0050-drm-panel-samsung-s6e8fc3x02.patch
+58f2e7b7ca1a4255dc57a003cfa998ea4364e743dffd83d07cf2c76a20f8b29dbdc5849a3a2c35015fce4f01fb7e58a74c7ef37af9941f27383e7042d0b769e9  0056-clk-mediatek-add-MT6878-MMSYS-gates.patch
+ec8ea63a07e299132c4776290bf012faa65d2b6201e8831723347a1fa0328604c126b4a378f5f93d9aa75980e5811bfe8d63e92a38e3040e4ddde74e673e31d3  0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch
+41cc0fc01c68a4e8e070075c5a6f0fe4aba234b5774606e1ee5e85a550d481cb6f5e85296c81fe67398a5d184b44904c69c641142b8e71eb7a74d7bdf0815150  0058-arm64-dts-mediatek-add-opt-in-MT6878-display-power.patch
+935ab6707fbd1fa60a445819f8dbbb6e5f88d0712e4bdcbc269728d677e1f53cdff30e222f4dd0602a4a3c1b20d012216f4fba608cb33d08045ffba81f832dfc  0059-soc-mediatek-add-MT6878-display-routing-data.patch
+a44d1409c8b4124b474d74606a71d3733428de590664f5240dfab585aff3665a4af1af7432d3551226d78847e7616daa1798a4af20bd55298d72b317294c45f5  0060-soc-mediatek-route-MT6878-OVL-through-DSC.patch
+da8f6f4357bd0b16872e1fb42c6368eafaeb0e90518133ddb6731fd886ccabdf6ca18552855db1fec686a80ba64395f636d2c8b1bc0ad1d20e6d7276261f4b03  0061-drm-mediatek-mt6878-ovl-frame-start.patch
+2bf5788e52d3c52be71f58fb1b7ba2d9730657671f9552b298469877cd4d5282bf2380742526c4ef04ca515d05114d848f56e83f6ed6f1a6109ac032b61af7df  0062-drm-mediatek-program-MT6878-DSC.patch
+c4db794dee76469f89bbc41573dee42da644daf7d643b66cde103c8e9bf7f644b8a0fdf02af5e7530316335dbf261540f69f0ac5ae9cb74ca59effe2c9b173f7  0063-drm-mediatek-add-minimal-MT6878-display-path.patch
+39c9bd2dbc925b7b6203602f66b95005a46af25db35e8190ad6793e51748d57ed1b97e950297de2b0b8d1ddb5ecbd70cf923d7733b1fafff6a1812d3231e372e  0064-dt-bindings-display-mediatek-add-MT6878-components.patch
+c060f07d4ec749d6d5714e0889eb8c9ac627a91ea35ac97c11fa714bbf2a9a3b9e1960c51bc8a9944f0d9f14c74bf513ca9fcb6969249ff42d5e2bbc2247c9b3  0065-dt-bindings-phy-mediatek-add-MT6878-MIPI-TX.patch
+c3779429df02a6e45520e023fffec6db674f286a4422c5f30f58b149ef92571ca89f5d2e5e23c9d99b618c43f647939019c7956624b354baca1e7b94047fbbb6  0066-phy-mediatek-add-MT6878-MIPI-TX-N4-data.patch
+de4600320b6d60de42b05b6fe75e7670d29c116bbe8f1590bb8ade4125e5f268224a2294386b4da7dcb34f41e064c5d2ca72adec074ec8e0a155bab3244855f7  0067-dt-bindings-display-mediatek-add-MT6878-DSI.patch
+cd2e158301ffd0bd8e65d04c65bfabd00b36294fb418be71d116ddcf9ef8b63e74098b517cec2d1c39a42449ca64a8685e3ef3ca8f5319acc50d23c57ee61826  0068-drm-mediatek-add-MT6878-DSI-host-data.patch
+6960b4b3d927772d83c0867b8730c4a3a80e6c3e11f00a17cbab02d6c70d86889c7aa876a9dae7054f14fb566e8479898883c95ae2e66c167454a22e4b5078fe  0069-dt-bindings-mediatek-add-MT6878-display-DMA.patch
+61843f6fba2bbfd090c1f0fc95283e6714b2414eb46683a895ba6f12bcf42030da49c4f839f4ede957068c40c64ee97f04a0834cb6f0d13cf8b5a06b4742fff9  0070-iommu-mediatek-add-MT6878-display-DMA-data.patch
+3a70dfda3ea1312983ee3895af4341f22d4c402b4e7d69281756fdf29a252d942885afad3b5603ae889280078bb61aa28299c8c8293233d409333303d5690b7b  0071-arm64-dts-mediatek-add-MT6878-display-DMA.patch
+e9f5910e336b1dae2a91e6c78bce4e1add62a8c095515ffb676ad6837c5c4ffa1e9fa47471a256f4c286ad966d8b024ff0bfaa28a45930e554a037be9329bb61  0072-arm64-dts-mediatek-add-Nothing-Tetris-native-display-DTB.patch
+84d98e265c5a96560f9461b3fe2c58a41dc360cb290ca728e48ede00f3388d26c3b2692a49bef2f9c95934d291ae3035c72ffd804e0a6fb57e92af91b51e0119  0073-drm-mediatek-use-MT6878-panel-data-rate.patch
+5fe8197515612490511accc35877f57a706eca573b88c0ab0f19e9e6f8519c863be5e85f381d043b33c6c3df94613b45df03a1603e618c88d1ce0d458cc4fc6a  0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch
+c2ea45b2a0c273cdfc4640d6b9457c97e5cadbd9b78c92536e2d4380058af7082b10f2969344548aa91bf32c55166d85530361db493c88870a2956dde821cfd1  0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch
+274c4945505a57d058ff9c6e4069e3e156361893c587e8fab890574d4de18082e94b99a32b78c866f8c16f6783abbf3158f7c5fa0ea990bff48b2d128cbc4ba8  0076-drm-mediatek-publish-DSI-state-before-host-register.patch
+118bb03519e1538a67bed572cd98e8a69f8a7a299ac61cbc07a0c3d480c31e1a9a2ac0f67de53b7e55bb3aee9c614fcaef7bf8224707c2b32742a088c95d559f  0077-drm-mediatek-wait-for-display-mutex-probe.patch
+c53d6f59b9cc1fb5813a9a1aeea4dc2fcd9e067b3fb5a28a7f577338e391aabe4e5b7276eecb9d8ab4cc6f7b6eaea3e019d313e336eb1ddcbef65b371075c174  0078-drm-mediatek-reset-MT6878-DSI-to-command-mode.patch
+c8b87a0ebff1b8a34d6837dc8d48e3642abf6b0617013a39574d16cd7946b1ae473b7e6bb3bdf1f2196d5babe52a6776309dee60a86c919b1be2ef5c65a829e0  0079-drm-panel-set-maximum-return-packet-size.patch
+17edb41c07b7eaceeecb6a582c761f570fa7e529c841f93fba663bd396a07e9cf81dd32667761eca02cbe656d614b1e26218615464f3e2e1fbc54c8b979c21ed  0080-drm-panel-accept-S6E8FC3X02-revisions.patch
+e76faeaf820e36a3b76857429eb0d908046346812e0e6d8cd331e18dfd584f1554c182871be2a0d5920284426a46ef3fd98894923a4a6501394c78e650d80788  0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch
+b44fb646e66b23f36f2b89e42d5f1152d216b5a8473f99b29e332f19d244ed462059bf379e6c8e08fd5f83c29e2a0fb327fed6753e0b098ab62cc58901d2f840  0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch
+90cb348917c58293d0031cc12d7ea27c990e5b8fe0cf4d5e3ba329e06bd0b419b16dd6478f167120c15ee1423eb0e05d9b2080a47b524f35778df5a78da92778  0083-drm-mediatek-use-full-MT6878-OVL-chain.patch
+05073d90edeadd0d42c881b51c49448b97d926aedcfc70cbdc8faf3d7273c51d4d6158fa757737a6ecd702a0af66969f5ce8aaadc27594c9f5f2ccbdd360f3a2  0084-drm-mediatek-bypass-MT6878-OVL-shadow.patch
+8a3b50188f05cc106f403c090c7a9110e4397249ab50d3dcf12d507d18ca2af1867ea7600114ebe6ffe14ba2f7d35bb68f25dbe38c993e5f64b6b6a09d798aaf  0085-drm-mediatek-program-MT6878-DSC-version.patch
+fa01b5106883144835c826948dbef4bdca05894b3c3c6221b5f7bff9bf561be5a93a071d19435bbbf8ea9af2faba0057329d8859be39ce1372e4ee31ba051604  0086-drm-mediatek-match-MT6878-native-display-state.patch
+2b94416b89b79dd5c8b4f54c20d767f4a2bf154ce051064f2fbd84cd15fd0ef66a6d2de56487b2fde784b5ff62357d5d9780917b70f4c489f79304f7e37bfe35  0087-drm-mediatek-complete-MT6878-DSC-handoff.patch
+593c89d48ba71f22354239f71cdabd6acf7f4dbffa3991a6fa6d565378b57678033d30f97a460e7261366ece13fe2d70f66a8a84cfad60ab94670012a955f330  0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch
+2b308205d6bce881820155eb30dfa4ac6ffb8190d64686c23c81de93b3d8fbb7260681b754480e0f49ab9702ee9eafd68fb4b66d7f3a6d290678e2b1f2de7b6b  0096-soc-mediatek-retain-verified-MT6878-display-route.patch
+332eb074ae83b7c7d71f19d4c0b480054b488c82e10722957f2df8e2c76b003847427adb677795c6766b9b20fc37cc83e54d491c042fd69711497bc8a280442d  0097-drm-mediatek-update-MT6878-planes-at-frame-end.patch
 "

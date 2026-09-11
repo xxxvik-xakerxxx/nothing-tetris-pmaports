@@ -1,0 +1,46 @@
+From 8b6b2ad64ba31b2bdfe8543a1c4c73fd1bb412ef Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 20:59:46 +0300
+Subject: [PATCH 4/4] drm/mediatek: add MT6878 DSI host data
+
+Describe the MT6878 command queue, VM command and shadow offsets.
+
+Use only capabilities exposed by the mainline MediaTek DSI host.
+
+This adds OF match data without enabling a display pipeline.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_dsi.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index 0e2bcd5..151597c 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -1279,6 +1279,14 @@ static const struct mtk_dsi_driver_data mt2701_dsi_driver_data = {
+ 	.reg_shadow_dbg_off = 0x190
+ };
+ 
++static const struct mtk_dsi_driver_data mt6878_dsi_driver_data = {
++	.reg_cmdq_off = 0xd00,
++	.reg_vm_cmd_off = 0x200,
++	.reg_shadow_dbg_off = 0xc00,
++	.has_shadow_ctl = true,
++	.has_size_ctl = true,
++};
++
+ static const struct mtk_dsi_driver_data mt8183_dsi_driver_data = {
+ 	.reg_cmdq_off = 0x200,
+ 	.reg_vm_cmd_off = 0x130,
+@@ -1307,6 +1315,7 @@ static const struct mtk_dsi_driver_data mt8188_dsi_driver_data = {
+ 
+ static const struct of_device_id mtk_dsi_of_match[] = {
+ 	{ .compatible = "mediatek,mt2701-dsi", .data = &mt2701_dsi_driver_data },
++	{ .compatible = "mediatek,mt6878-dsi", .data = &mt6878_dsi_driver_data },
+ 	{ .compatible = "mediatek,mt8173-dsi", .data = &mt8173_dsi_driver_data },
+ 	{ .compatible = "mediatek,mt8183-dsi", .data = &mt8183_dsi_driver_data },
+ 	{ .compatible = "mediatek,mt8186-dsi", .data = &mt8186_dsi_driver_data },
+-- 
+2.50.1 (Apple Git-155)
+

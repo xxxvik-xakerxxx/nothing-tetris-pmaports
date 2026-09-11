@@ -1,0 +1,64 @@
+From 8ac36a4078e4b147f20b84f99ed52ccba3d71ca3 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 22:00:00 +0300
+Subject: [PATCH] drm/mediatek: publish DSI state before host registration
+
+mipi_dsi_host_register() may synchronously probe a child panel.  Its attach
+callback then adds the DSI component and can trigger the DRM aggregate bind
+before mtk_dsi_probe() returns.
+
+Publish the platform drvdata and bridge metadata before registering the
+host.
+Without this ordering, mtk_dsi_bind() reads NULL drvdata.  It then passes
+an encoder base at address 0x40 to DRM, causing a NULL pointer Oops in
+drm_mode_object_add().
+
+Clear drvdata if host registration fails so a failed probe leaves no stale
+state behind.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_dsi.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index c141926..b61c179 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -1236,25 +1236,27 @@ static int mtk_dsi_probe(struct platform_device *pdev)
+ 	if (irq_num < 0)
+ 		return irq_num;
+ 
++	platform_set_drvdata(pdev, dsi);
++	dsi->bridge.of_node = dev->of_node;
++	dsi->bridge.type = DRM_MODE_CONNECTOR_DSI;
++
+ 	dsi->host.ops = &mtk_dsi_ops;
+ 	dsi->host.dev = dev;
+ 	ret = mipi_dsi_host_register(&dsi->host);
+-	if (ret < 0)
++	if (ret < 0) {
++		platform_set_drvdata(pdev, NULL);
+ 		return dev_err_probe(dev, ret, "Failed to register DSI host\n");
++	}
+ 
+ 	ret = devm_request_irq(&pdev->dev, irq_num, mtk_dsi_irq,
+ 			       IRQF_TRIGGER_NONE, dev_name(&pdev->dev), dsi);
+ 	if (ret) {
+ 		mipi_dsi_host_unregister(&dsi->host);
++		platform_set_drvdata(pdev, NULL);
+ 		return dev_err_probe(&pdev->dev, ret, "Failed to request DSI irq\n");
+ 	}
+ 
+ 	init_waitqueue_head(&dsi->irq_wait_queue);
+ 
+-	platform_set_drvdata(pdev, dsi);
+-
+-	dsi->bridge.of_node = dev->of_node;
+-	dsi->bridge.type = DRM_MODE_CONNECTOR_DSI;
+-
+ 	return 0;
+ }
+ 
+-- 
+2.50.1 (Apple Git-155)

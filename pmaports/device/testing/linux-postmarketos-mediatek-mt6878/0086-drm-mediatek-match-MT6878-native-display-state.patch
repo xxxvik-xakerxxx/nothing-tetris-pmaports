@@ -1,0 +1,429 @@
+diff --git a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+index 02f9fba..d154d83 100644
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -46,6 +46,7 @@
+ #define DSC_DUAL_INOUT				BIT(2)
+ #define DSC_BYPASS				BIT(4)
+ #define DSC_UFOE_SEL				BIT(16)
++#define DISP_REG_DSC_SPR			0x0014
+ #define DISP_REG_DSC_PIC_W			0x0018
+ #define DISP_REG_DSC_PIC_H			0x001c
+ #define DISP_REG_DSC_SLICE_W			0x0020
+@@ -255,6 +256,8 @@ static void mtk_dsc_encoder_config(struct device *dev,
+ 	pad_num = DIV_ROUND_UP(chunk_size * dsc->slice_count, 3) * 3 -
+ 		  chunk_size * dsc->slice_count;
+ 
++	mtk_ddp_write(cmdq_pkt, 0, &priv->cmdq_reg, priv->regs,
++		      DISP_REG_DSC_SPR);
+ 	mtk_ddp_write(cmdq_pkt, 0x800002d9, &priv->cmdq_reg, priv->regs,
+ 		      DISP_REG_DSC_OBUF);
+ 	mtk_ddp_write(cmdq_pkt, dsc->pic_width << 16 | dsc->slice_width,
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+index 3e8f4f5..66d6cb9 100644
+--- a/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
++++ b/drivers/gpu/drm/mediatek/mtk_disp_ovl.c
+@@ -31,2 +31,3 @@
+ #define DISP_REG_OVL_DATAPATH_CON		0x0024
++#define DISP_REG_OVL_PQ_LOOP_CON		0x02e0
+ #define OVL_LAYER_SMI_ID_EN				BIT(0)
+@@ -154,6 +155,8 @@ struct mtk_disp_ovl_data {
+ 	bool supports_clrfmt_ext;
+ 	u32 vblank_irq_mask;
+ 	bool bypass_shadow;
++	bool reset_on_start;
++	bool force_relay;
+ };
+ 
+ /*
+@@ -274,7 +277,25 @@ void mtk_ovl_start(struct device *dev)
+ 		writel_relaxed(reg, ovl->regs + DISP_REG_OVL_DATAPATH_CON);
+ 	}
+ 
++	if (ovl->data->reset_on_start) {
++		writel(BIT(0), ovl->regs + DISP_REG_OVL_RST);
++		writel(0, ovl->regs + DISP_REG_OVL_RST);
++		writel(0, ovl->regs + DISP_REG_OVL_INTSTA);
++	}
++
++	if (ovl->data->force_relay) {
++		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_PQ_LOOP_CON);
++
++		writel_relaxed(reg & ~BIT(0), ovl->regs + DISP_REG_OVL_PQ_LOOP_CON);
++	}
++
+	writel_relaxed(0x1 | (ovl->data->bypass_shadow ?
+				 OVL_BYPASS_SHADOW : 0),
+		       ovl->regs + DISP_REG_OVL_EN);
++
++	if (ovl->data->force_relay) {
++		unsigned int reg = readl(ovl->regs + DISP_REG_OVL_SRC_CON);
++
++		writel_relaxed(reg | BIT(8), ovl->regs + DISP_REG_OVL_SRC_CON);
++	}
+ }
+@@ -335,8 +342,12 @@ void mtk_ovl_config(struct device *dev, unsigned int w,
+ 	mtk_ddp_write_relaxed(cmdq_pkt, OVL_COLOR_ALPHA, &ovl->cmdq_reg,
+ 			      ovl->regs, DISP_REG_OVL_ROI_BGCLR);
+ 
+-	mtk_ddp_write(cmdq_pkt, 0x1, &ovl->cmdq_reg, ovl->regs, DISP_REG_OVL_RST);
+-	mtk_ddp_write(cmdq_pkt, 0x0, &ovl->cmdq_reg, ovl->regs, DISP_REG_OVL_RST);
++	if (!ovl->data->reset_on_start) {
++		mtk_ddp_write(cmdq_pkt, 0x1, &ovl->cmdq_reg, ovl->regs,
++			      DISP_REG_OVL_RST);
++		mtk_ddp_write(cmdq_pkt, 0x0, &ovl->cmdq_reg, ovl->regs,
++			      DISP_REG_OVL_RST);
++	}
+ }
+ 
+ unsigned int mtk_ovl_layer_nr(struct device *dev)
+@@ -745,6 +768,8 @@ static const struct mtk_disp_ovl_data mt6878_ovl_2l_driver_data = {
+ 	.num_formats = ARRAY_SIZE(mt8173_formats),
+ 	.vblank_irq_mask = OVL_FME_START_INT,
+ 	.bypass_shadow = true,
++	.reset_on_start = true,
++	.force_relay = true,
+ };
+ 
+ static const struct mtk_disp_ovl_data mt8195_ovl_driver_data = {
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+index 444b80d..80f89bd 100644
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -69,9 +69,10 @@
+ #define EXT_TE_EDGE			BIT(10)
+ #define MAX_RTN_SIZE			GENMASK(15, 12)
+ #define HSTX_CKLP_EN			BIT(16)
++#define EXT_TE_TIME_VM			GENMASK(23, 20)
+ 
+ #define DSI_PSCTRL		0x1c
+-#define DSI_PS_WC			GENMASK(13, 0)
++#define DSI_PS_WC			GENMASK(14, 0)
+ #define DSI_PS_SEL			GENMASK(19, 16)
+ #define PACKED_PS_16BIT_RGB565		0
+ #define PACKED_PS_18BIT_RGB666		1
+@@ -100,6 +101,25 @@
+ #define DSI_HSTX_CKL_WC		0x64
+ #define HSTX_CKL_WC			GENMASK(15, 2)
+ 
++#define DSI_DEBUG_SEL		0x170
++#define MM_RST_SEL			BIT(10)
++
++#define DSI_BUF_CON0		0x400
++#define BUF_BUF_EN			BIT(0)
++#define BUF_VDE_BLOCK_URGENT		BIT(3)
++#define BUF_PREURGENT_EN		BIT(20)
++#define BUF_PREURGENT_MODE		BIT(21)
++#define DSI_BUF_CON1		0x404
++#define DSI_TX_BUF_RW_TIMES	0x410
++#define DSI_BUF_SODI_HIGH	0x414
++#define DSI_BUF_SODI_LOW	0x418
++#define DSI_BUF_PREULTRA_HIGH	0x424
++#define DSI_BUF_PREULTRA_LOW	0x428
++#define DSI_BUF_ULTRA_HIGH	0x42c
++#define DSI_BUF_ULTRA_LOW	0x430
++#define DSI_BUF_URGENT_HIGH	0x434
++#define DSI_BUF_URGENT_LOW	0x438
++
+ #define DSI_RX_DATA0		0x74
+ #define DSI_RX_DATA1		0x78
+ #define DSI_RX_DATA2		0x7c
+@@ -192,8 +212,15 @@ struct mtk_dsi_driver_data {
+ 	const u32 reg_vm_cmd_off;
+ 	const u32 reg_shadow_dbg_off;
+ 	const u32 fixed_data_rate;
++	const u32 phy_timcon[4];
+ 	bool has_shadow_ctl;
+ 	bool has_size_ctl;
++	bool mt6878_video_timing;
++	bool has_dsi_buffer;
++	bool ignore_no_eot;
++	bool skip_hstx_ckl_wc;
++	bool preserve_psctrl;
++	bool ext_te_time_vm;
+ 	bool cmdq_long_packet_ctl;
+ 	bool support_per_frame_lp;
+ 	bool force_cmd_mode_on_poweron;
+@@ -253,6 +280,18 @@ static void mtk_dsi_phy_timconfig(struct mtk_dsi *dsi)
+ 	u32 data_rate_mhz = DIV_ROUND_UP(dsi->data_rate, HZ_PER_MHZ);
+ 	struct mtk_phy_timing *timing = &dsi->phy_timing;
+ 
++	if (dsi->driver_data->phy_timcon[0]) {
++		writel(dsi->driver_data->phy_timcon[0],
++		       dsi->regs + DSI_PHY_TIMECON0);
++		writel(dsi->driver_data->phy_timcon[1],
++		       dsi->regs + DSI_PHY_TIMECON1);
++		writel(dsi->driver_data->phy_timcon[2],
++		       dsi->regs + DSI_PHY_TIMECON2);
++		writel(dsi->driver_data->phy_timcon[3],
++		       dsi->regs + DSI_PHY_TIMECON3);
++		return;
++	}
++
+ 	timing->lpx = (60 * data_rate_mhz / (8 * 1000)) + 1;
+ 	timing->da_hs_prepare = (80 * data_rate_mhz + 4 * 1000) / 8000;
+ 	timing->da_hs_zero = (170 * data_rate_mhz + 10 * 1000) / 8000 + 1 -
+@@ -391,7 +430,8 @@ static void mtk_dsi_rxtx_control(struct mtk_dsi *dsi)
+ 	if (dsi->mode_flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)
+ 		regval |= HSTX_CKLP_EN;
+ 
+-	if (dsi->mode_flags & MIPI_DSI_MODE_NO_EOT_PACKET)
++	if ((dsi->mode_flags & MIPI_DSI_MODE_NO_EOT_PACKET) &&
++	    !dsi->driver_data->ignore_no_eot)
+ 		regval |= DIS_EOT;
+ 
+ 	writel(regval, dsi->regs + DSI_TXRX_CTRL);
+@@ -441,7 +481,8 @@ static void mtk_dsi_ps_control(struct mtk_dsi *dsi, bool config_vact)
+ 	if (config_vact) {
+ 		vact_nl = FIELD_PREP(VACT_NL, dsi->vm.vactive);
+ 		writel(vact_nl, dsi->regs + DSI_VACT_NL);
+-		writel(ps_wc, dsi->regs + DSI_HSTX_CKL_WC);
++		if (!dsi->driver_data->skip_hstx_ckl_wc)
++			writel(ps_wc, dsi->regs + DSI_HSTX_CKL_WC);
+ 	}
+ 
+ 	if (dsi->driver_data->has_size_ctl && dsi->dsc)
+@@ -450,7 +491,37 @@ static void mtk_dsi_ps_control(struct mtk_dsi *dsi, bool config_vact)
+ 				  DIV_ROUND_UP(ps_wc, dsi_buf_bpp)),
+ 		       dsi->regs + DSI_SIZE_CON);
+ 
+-	writel(ps_val, dsi->regs + DSI_PSCTRL);
++	if (dsi->driver_data->preserve_psctrl)
++		mtk_dsi_mask(dsi, DSI_PSCTRL, DSI_PS_WC | DSI_PS_SEL,
++			     ps_val);
++	else
++		writel(ps_val, dsi->regs + DSI_PSCTRL);
++}
++
++static void mtk_dsi_configure_buffer(struct mtk_dsi *dsi)
++{
++	if (!dsi->driver_data->has_dsi_buffer)
++		return;
++
++	/*
++	 * MT6878 N4 video-mode FIFO thresholds at 1140 Mbps. Preserve the
++	 * SRAM capacity field and buffer ownership bits programmed by hardware.
++	 */
++	mtk_dsi_mask(dsi, DSI_BUF_CON1, GENMASK(14, 0), 0);
++	mtk_dsi_mask(dsi, DSI_DEBUG_SEL, MM_RST_SEL, MM_RST_SEL);
++	writel(0x000fffff, dsi->regs + DSI_BUF_SODI_HIGH);
++	writel(0x000001f2, dsi->regs + DSI_BUF_SODI_LOW);
++	writel(0x000001cf, dsi->regs + DSI_BUF_PREULTRA_HIGH);
++	writel(0x000001bd, dsi->regs + DSI_BUF_PREULTRA_LOW);
++	writel(0x000001bd, dsi->regs + DSI_BUF_ULTRA_HIGH);
++	writel(0x00000199, dsi->regs + DSI_BUF_ULTRA_LOW);
++	writel(0x0000010b, dsi->regs + DSI_BUF_URGENT_HIGH);
++	writel(0x000000f9, dsi->regs + DSI_BUF_URGENT_LOW);
++	writel(0x000278d0, dsi->regs + DSI_TX_BUF_RW_TIMES);
++	mtk_dsi_mask(dsi, DSI_BUF_CON0,
++		     BUF_BUF_EN | BUF_VDE_BLOCK_URGENT |
++		     BUF_PREURGENT_EN | BUF_PREURGENT_MODE,
++		     BUF_BUF_EN | BUF_PREURGENT_EN);
+ }
+ 
+ static void mtk_dsi_config_vdo_timing_per_frame_lp(struct mtk_dsi *dsi)
+@@ -599,6 +670,14 @@ static void mtk_dsi_config_vdo_timing(struct mtk_dsi *dsi)
+ 			FIELD_PREP(DSI_WIDTH, vm->hactive),
+ 			dsi->regs + DSI_SIZE_CON);
+ 
++	if (dsi->driver_data->mt6878_video_timing) {
++		writel(0x02c, dsi->regs + DSI_HSA_WC);
++		writel(0x070, dsi->regs + DSI_HBP_WC);
++		writel(0x1fc, dsi->regs + DSI_HFP_WC);
++		mtk_dsi_ps_control(dsi, false);
++		return;
++	}
++
+ 	if (dsi->driver_data->support_per_frame_lp)
+ 		mtk_dsi_config_vdo_timing_per_frame_lp(dsi);
+ 	else
+@@ -802,6 +881,7 @@ static void mtk_dsi_lane_ready(struct mtk_dsi *dsi)
+ 	if (!dsi->lanes_ready) {
+ 		dsi->lanes_ready = true;
+ 		mtk_dsi_rxtx_control(dsi);
++		mtk_dsi_configure_buffer(dsi);
+ 		usleep_range(30, 100);
+ 		mtk_dsi_reset_dphy(dsi);
+ 		mtk_dsi_clk_ulp_mode_leave(dsi);
+@@ -818,6 +898,9 @@ static void mtk_output_dsi_enable(struct mtk_dsi *dsi)
+ 		return;
+ 
+ 	mtk_dsi_lane_ready(dsi);
++	if (dsi->driver_data->ext_te_time_vm)
++		mtk_dsi_mask(dsi, DSI_TXRX_CTRL, EXT_TE_TIME_VM,
++			     FIELD_PREP(EXT_TE_TIME_VM, 1));
+ 	mtk_dsi_set_mode(dsi);
+ 	mtk_dsi_clk_hs_mode(dsi, 1);
+ 
+@@ -1327,8 +1410,20 @@ static const struct mtk_dsi_driver_data mt6878_dsi_driver_data = {
+ 	.reg_vm_cmd_off = 0x200,
+ 	.reg_shadow_dbg_off = 0xc00,
+ 	.fixed_data_rate = 1140000000,
++	.phy_timcon = {
++		0x0c140a0c,
++		0x1337102c,
++		0x0b290103,
++		0x00121409,
++	},
+ 	.has_shadow_ctl = true,
+ 	.has_size_ctl = true,
++	.mt6878_video_timing = true,
++	.has_dsi_buffer = true,
++	.ignore_no_eot = true,
++	.skip_hstx_ckl_wc = true,
++	.preserve_psctrl = true,
++	.ext_te_time_vm = true,
+ 	.force_cmd_mode_on_poweron = true,
+ };
+ 
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c b/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
+index dacd79c..dbde854 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.c
+@@ -63,14 +63,37 @@ static void s6e8fc3x02_reset(struct s6e8fc3x02 *ctx)
+ 	usleep_range(10000, 11000);
+ }
+ 
++static void s6e8fc3x02_write_multi(struct mipi_dsi_multi_context *dsi_ctx,
++				   const void *data, size_t len)
++{
++	const u8 *payload = data;
++
++	if (payload[0] < 0xb0)
++		mipi_dsi_dcs_write_buffer_multi(dsi_ctx, data, len);
++	else
++		mipi_dsi_generic_write_multi(dsi_ctx, data, len);
++}
++
++#define s6e8fc3x02_write_seq_multi(ctx, seq...)				\
++	do {								\
++		static const u8 d[] = { seq };				\
++		s6e8fc3x02_write_multi(ctx, d, ARRAY_SIZE(d));		\
++	} while (0)
++
++#define s6e8fc3x02_write_var_seq_multi(ctx, seq...)			\
++	do {								\
++		const u8 d[] = { seq };					\
++		s6e8fc3x02_write_multi(ctx, d, ARRAY_SIZE(d));		\
++	} while (0)
++
+ static void s6e8fc3x02_set_vdc(struct mipi_dsi_multi_context *dsi_ctx,
+ 			       bool enable)
+ {
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf0, 0x5a, 0x5a);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x89, 0xb1);
+-	mipi_dsi_dcs_write_var_seq_multi(dsi_ctx, 0xb1,
+-					 enable ? 0x0d : 0x2d);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf0, 0xa5, 0xa5);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf0, 0x5a, 0x5a);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x89, 0xb1);
++	s6e8fc3x02_write_var_seq_multi(dsi_ctx, 0xb1,
++				       enable ? 0x0d : 0x2d);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf0, 0xa5, 0xa5);
+ }
+ 
+ static void s6e8fc3x02_set_brightness(struct s6e8fc3x02 *ctx,
+@@ -94,17 +117,17 @@ static void s6e8fc3x02_set_brightness(struct s6e8fc3x02 *ctx,
+ 
+ 	if (brightness > 0x7ff) {
+ 		panel_level = brightness - 0x800;
+-		mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x53, 0xe0);
++		s6e8fc3x02_write_seq_multi(dsi_ctx, 0x53, 0xe0);
+ 	} else {
+ 		panel_level = brightness;
+-		mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x53, 0x20);
++		s6e8fc3x02_write_seq_multi(dsi_ctx, 0x53, 0x20);
+ 	}
+ 
+ 	brightness_cmd[1] = (panel_level >> 8) & 0x0f;
+ 	brightness_cmd[2] = panel_level & 0xff;
+-	mipi_dsi_dcs_write_buffer_multi(dsi_ctx, brightness_cmd,
+-					ARRAY_SIZE(brightness_cmd));
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf7, 0x0b);
++	s6e8fc3x02_write_multi(dsi_ctx, brightness_cmd,
++			       ARRAY_SIZE(brightness_cmd));
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf7, 0x0b);
+ }
+ 
+ static void s6e8fc3x02_panel_init(struct s6e8fc3x02 *ctx,
+@@ -113,17 +136,17 @@ static void s6e8fc3x02_panel_init(struct s6e8fc3x02 *ctx,
+ 	u8 refresh_cmd[] = { 0x60, ctx->refresh_rate == 120 ? 0x01 : 0x21 };
+ 	u16 brightness = backlight_get_brightness(ctx->backlight);
+ 
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x9f, 0xa5, 0xa5);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf0, 0x5a, 0x5a);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xfc, 0x5a, 0x5a);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0x9f, 0xa5, 0xa5);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf0, 0x5a, 0x5a);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xfc, 0x5a, 0x5a);
+ 	mipi_dsi_dcs_exit_sleep_mode_multi(dsi_ctx);
+ 	mipi_dsi_msleep(dsi_ctx, 20);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x35, 0x00);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb2, 0x01, 0x31);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xdf, 0x09, 0x30, 0x95,
+-				     0x41, 0x3a, 0x41, 0x3a);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x9d, 0x01);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0x9e,
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0x35, 0x00);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb2, 0x01, 0x31);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xdf, 0x09, 0x30, 0x95,
++				   0x41, 0x3a, 0x41, 0x3a);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0x9d, 0x01);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0x9e,
+-				     0x11, 0x00, 0x00, 0x89, 0x30, 0x80, 0x09, 0x60,
++				   0x11, 0x00, 0x00, 0x89, 0x30, 0x80, 0x09, 0x60,
+ 		0x04, 0x38, 0x00, 0x28, 0x02, 0x1c, 0x02, 0x1c,
+ 		0x02, 0x00, 0x02, 0x0e, 0x00, 0x20, 0x03, 0xdd,
+@@ -138,35 +161,35 @@ static void s6e8fc3x02_panel_init(struct s6e8fc3x02 *ctx,
+ 		0x00);
+ 
+ 	/* Flat gamma control. */
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x89, 0xb1);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb1, 0x2d);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x89, 0xb1);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb1, 0x2d);
+ 
+-	mipi_dsi_dcs_write_buffer_multi(dsi_ctx, refresh_cmd,
+-					ARRAY_SIZE(refresh_cmd));
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf7, 0x0b);
++	s6e8fc3x02_write_multi(dsi_ctx, refresh_cmd,
++			       ARRAY_SIZE(refresh_cmd));
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf7, 0x0b);
+ 
+ 	/* VINT voltage control. */
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x11, 0xfe);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xfe, 0x00);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x11, 0xfe);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xfe, 0x00);
+ 
+ 	/* Dimming settings. */
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x0d, 0xb2);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb2, 0x01);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x0c, 0xb2);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb2, 0x20);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x0d, 0xb2);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb2, 0x01);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x0c, 0xb2);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb2, 0x20);
+ 
+ 	s6e8fc3x02_set_brightness(ctx, dsi_ctx, brightness);
+ 
+ 	/* Error-flag settings. */
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xed, 0x01, 0xcd, 0x00);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xe1, 0x83);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x06, 0xf4);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf4, 0x1f);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xed, 0x01, 0xcd, 0x00);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xe1, 0x83);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xb0, 0x00, 0x06, 0xf4);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf4, 0x1f);
+ 
+ 	mipi_dsi_msleep(dsi_ctx, 100);
+ 	mipi_dsi_dcs_set_display_on_multi(dsi_ctx);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xf0, 0xa5, 0xa5);
+-	mipi_dsi_dcs_write_seq_multi(dsi_ctx, 0xfc, 0xa5, 0xa5);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xf0, 0xa5, 0xa5);
++	s6e8fc3x02_write_seq_multi(dsi_ctx, 0xfc, 0xa5, 0xa5);
+ }
+ 
+ static int s6e8fc3x02_check_id(struct s6e8fc3x02 *ctx)

@@ -1,0 +1,173 @@
+From 1eedff668d98d704bdad8965e60095cc643e5beb Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 21:00:22 +0300
+Subject: [PATCH 1/3] clk: mediatek: add MT6878 MMSYS gates
+
+Port the 35 MMSYS display gates from Nothing OS 4.1 commit
+ee2be53cb75670b548948636a0db1d1ff112bf12 using the mainline MediaTek
+clock-provider pattern. Register the provider as the child created by
+mtk-mmsys, so the clock and routing drivers share the 0x14000000 syscon.
+
+This adds no DT node and therefore changes no default runtime behavior.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../bindings/arm/mediatek/mediatek,mmsys.yaml |  1 +
+ drivers/clk/mediatek/Makefile                 |  2 +-
+ drivers/clk/mediatek/clk-mt6878-mmsys.c       | 96 +++++++++++++++++++
+ drivers/soc/mediatek/mtk-mmsys.c              |  5 +
+ 4 files changed, 103 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/clk/mediatek/clk-mt6878-mmsys.c
+
+diff --git a/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml b/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
+index 3f4262e93..5aa4ba096 100644
+--- a/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
++++ b/Documentation/devicetree/bindings/arm/mediatek/mediatek,mmsys.yaml
+@@ -27,6 +27,7 @@ properties:
+               - mediatek,mt6779-mmsys
+               - mediatek,mt6795-mmsys
+               - mediatek,mt6797-mmsys
++              - mediatek,mt6878-mmsys0
+               - mediatek,mt8167-mmsys
+               - mediatek,mt8173-mmsys
+               - mediatek,mt8183-mmsys
+diff --git a/drivers/clk/mediatek/Makefile b/drivers/clk/mediatek/Makefile
+index 786094a90..28f90d8bd 100644
+--- a/drivers/clk/mediatek/Makefile
++++ b/drivers/clk/mediatek/Makefile
+@@ -34,7 +34,7 @@ obj-$(CONFIG_COMMON_CLK_MT6797_IMGSYS) += clk-mt6797-img.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_MMSYS) += clk-mt6797-mm.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VDECSYS) += clk-mt6797-vdec.o
+ obj-$(CONFIG_COMMON_CLK_MT6797_VENCSYS) += clk-mt6797-venc.o
+-obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-mfg.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o clk-mt6878-audio.o
++obj-$(CONFIG_COMMON_CLK_MT6878) += clk-mt6878-apmixedsys.o clk-mt6878-mfg.o clk-mt6878-topckgen.o clk-mt6878-peri_ao.o clk-mt6878-ufs_ao.o clk-mt6878-ufs_pdn.o clk-mt6878-imp_iic_wrap.o clk-mt6878-audio.o clk-mt6878-mmsys.o
+ obj-$(CONFIG_COMMON_CLK_MT2701) += clk-mt2701.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_AUDSYS) += clk-mt2701-aud.o
+ obj-$(CONFIG_COMMON_CLK_MT2701_BDPSYS) += clk-mt2701-bdp.o
+diff --git a/drivers/clk/mediatek/clk-mt6878-mmsys.c b/drivers/clk/mediatek/clk-mt6878-mmsys.c
+new file mode 100644
+index 000000000..f6c4ce50e
+--- /dev/null
++++ b/drivers/clk/mediatek/clk-mt6878-mmsys.c
+@@ -0,0 +1,96 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2023 MediaTek Inc.
++ * Author: Chuan-wen Chen <chuan-wen.chen@mediatek.com>
++ */
++
++#include <linux/clk-provider.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++
++#include <dt-bindings/clock/mediatek,mt6878-clock.h>
++
++#include "clk-gate.h"
++#include "clk-mtk.h"
++
++static const struct mtk_gate_regs mm0_cg_regs = {
++	.set_ofs = 0x104,
++	.clr_ofs = 0x108,
++	.sta_ofs = 0x100,
++};
++
++static const struct mtk_gate_regs mm1_cg_regs = {
++	.set_ofs = 0x114,
++	.clr_ofs = 0x118,
++	.sta_ofs = 0x110,
++};
++
++#define GATE_MM0(_id, _name, _shift) \
++	GATE_MTK(_id, _name, "top_disp0_sel", &mm0_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++#define GATE_MM1(_id, _name, _shift) \
++	GATE_MTK(_id, _name, "top_disp0_sel", &mm1_cg_regs, _shift, \
++		 &mtk_clk_gate_ops_setclr)
++
++static const struct mtk_gate mm_clks[] = {
++	GATE_MM0(CLK_MM_DISP_OVL0_2L, "mm_disp_ovl0_2l", 0),
++	GATE_MM0(CLK_MM_DISP_OVL1_2L, "mm_disp_ovl1_2l", 1),
++	GATE_MM0(CLK_MM_DISP_OVL2_2L, "mm_disp_ovl2_2l", 2),
++	GATE_MM0(CLK_MM_DISP_OVL3_2L, "mm_disp_ovl3_2l", 3),
++	GATE_MM0(CLK_MM_DISP_UFBC_WDMA0, "mm_disp_ufbc_wdma0", 4),
++	GATE_MM0(CLK_MM_DISP_RSZ1, "mm_disp_rsz1", 5),
++	GATE_MM0(CLK_MM_DISP_RSZ0, "mm_disp_rsz0", 6),
++	GATE_MM0(CLK_MM_DISP_TDSHP0, "mm_disp_tdshp0", 7),
++	GATE_MM0(CLK_MM_DISP_C3D0, "mm_disp_c3d0", 8),
++	GATE_MM0(CLK_MM_DISP_COLOR0, "mm_disp_color0", 9),
++	GATE_MM0(CLK_MM_DISP_CCORR0, "mm_disp_ccorr0", 10),
++	GATE_MM0(CLK_MM_DISP_CCORR1, "mm_disp_ccorr1", 11),
++	GATE_MM0(CLK_MM_DISP_AAL0, "mm_disp_aal0", 12),
++	GATE_MM0(CLK_MM_DISP_GAMMA0, "mm_disp_gamma0", 13),
++	GATE_MM0(CLK_MM_DISP_POSTMASK0, "mm_disp_postmask0", 14),
++	GATE_MM0(CLK_MM_DISP_DITHER0, "mm_disp_dither0", 15),
++	GATE_MM0(CLK_MM_DISP_TDSHP1, "mm_disp_tdshp1", 16),
++	GATE_MM0(CLK_MM_DISP_C3D1, "mm_disp_c3d1", 17),
++	GATE_MM0(CLK_MM_DISP_CCORR2, "mm_disp_ccorr2", 18),
++	GATE_MM0(CLK_MM_DISP_CCORR3, "mm_disp_ccorr3", 19),
++	GATE_MM0(CLK_MM_DISP_GAMMA1, "mm_disp_gamma1", 20),
++	GATE_MM0(CLK_MM_DISP_DITHER1, "mm_disp_dither1", 21),
++	GATE_MM0(CLK_MM_DISP_SPLITTER0, "mm_disp_splitter0", 22),
++	GATE_MM0(CLK_MM_DISP_DSC_WRAP0, "mm_disp_dsc_wrap0", 23),
++	GATE_MM0(CLK_MM_DISP_DSI0, "mm_disp_dsi0", 24),
++	GATE_MM0(CLK_MM_DISP_DSI1, "mm_disp_dsi1", 25),
++	GATE_MM0(CLK_MM_DISP_WDMA1, "mm_disp_wdma1", 26),
++	GATE_MM0(CLK_MM_DISP_APB_BUS, "mm_disp_apb_bus", 27),
++	GATE_MM0(CLK_MM_DISP_FAKE_ENG0, "mm_disp_fake_eng0", 28),
++	GATE_MM0(CLK_MM_DISP_FAKE_ENG1, "mm_disp_fake_eng1", 29),
++	GATE_MM0(CLK_MM_DISP_MUTEX0, "mm_disp_mutex0", 30),
++	GATE_MM0(CLK_MM_SMI_COMMON, "mm_smi_common", 31),
++	GATE_MM1(CLK_MM_DSI0, "mm_dsi0", 0),
++	GATE_MM1(CLK_MM_DSI1, "mm_dsi1", 1),
++	GATE_MM1(CLK_MM_26M, "mm_26m", 11),
++};
++
++static const struct mtk_clk_desc mm_desc = {
++	.clks = mm_clks,
++	.num_clks = ARRAY_SIZE(mm_clks),
++};
++
++static const struct platform_device_id clk_mt6878_mmsys_id_table[] = {
++	{ .name = "clk-mt6878-mmsys", .driver_data = (kernel_ulong_t)&mm_desc },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(platform, clk_mt6878_mmsys_id_table);
++
++static struct platform_driver clk_mt6878_mmsys_driver = {
++	.probe = mtk_clk_pdev_probe,
++	.remove = mtk_clk_pdev_remove,
++	.driver = {
++		.name = "clk-mt6878-mmsys",
++	},
++	.id_table = clk_mt6878_mmsys_id_table,
++};
++module_platform_driver(clk_mt6878_mmsys_driver);
++
++MODULE_DESCRIPTION("MediaTek MT6878 MMSYS clocks driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/soc/mediatek/mtk-mmsys.c b/drivers/soc/mediatek/mtk-mmsys.c
+index bb4639ca0..a13cc0ac3 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -53,6 +53,10 @@ static const struct mtk_mmsys_driver_data mt6797_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6797-mm",
+ };
+ 
++static const struct mtk_mmsys_driver_data mt6878_mmsys_driver_data = {
++	.clk_driver = "clk-mt6878-mmsys",
++};
++
+ static const struct mtk_mmsys_driver_data mt8167_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt8167-mm",
+ 	.routes = mt8167_mmsys_routing_table,
+@@ -461,6 +465,7 @@ static const struct of_device_id of_match_mtk_mmsys[] = {
+ 	{ .compatible = "mediatek,mt6779-mmsys", .data = &mt6779_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt6795-mmsys", .data = &mt6795_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt6797-mmsys", .data = &mt6797_mmsys_driver_data },
++	{ .compatible = "mediatek,mt6878-mmsys0", .data = &mt6878_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt8167-mmsys", .data = &mt8167_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt8173-mmsys", .data = &mt8173_mmsys_driver_data },
+ 	{ .compatible = "mediatek,mt8183-mmsys", .data = &mt8183_mmsys_driver_data },
+-- 
+2.50.1 (Apple Git-155)

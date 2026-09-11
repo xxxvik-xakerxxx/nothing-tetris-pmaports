@@ -1,0 +1,101 @@
+From 7dc7c316094f16ff65bdd8d5fcf628ad341b86d7 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 15:10:00 +0300
+Subject: [PATCH] drm: mediatek: frame MT6878 DSC pixel stream
+
+The MediaTek DSI host currently describes every RGB888 video line as an
+uncompressed 3240-byte pixel stream.  The Tetris panel is fed by the DSC
+encoder and expects two 540-byte chunks instead.  Sending the compressed
+payload with the uncompressed packet framing produces stable but corrupt
+physical pixels even though the DRM framebuffer and panel lifecycle work.
+
+When a DSC configuration is attached, program the compressed pixel-stream
+type, derive the word count from the slice chunk size and expose the matching
+input width to the MT6878 DSI buffer.  This follows the Nothing OS 4.1 MT6878
+host programming: PS_SEL 5, PS_WC 1080 and SIZE_CON width 360 for this panel.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/mediatek/mtk_dsi.c | 31 +++++++++++++++++++++++++------
+ 1 file changed, 25 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_dsi.c b/drivers/gpu/drm/mediatek/mtk_dsi.c
+--- a/drivers/gpu/drm/mediatek/mtk_dsi.c
++++ b/drivers/gpu/drm/mediatek/mtk_dsi.c
+@@ -18,6 +18,7 @@
+ #include <video/mipi_display.h>
+ #include <video/videomode.h>
+ 
++#include <drm/display/drm_dsc.h>
+ #include <drm/drm_atomic_helper.h>
+ #include <drm/drm_bridge.h>
+ #include <drm/drm_bridge_connector.h>
+@@ -71,11 +71,12 @@
+ 
+ #define DSI_PSCTRL		0x1c
+ #define DSI_PS_WC			GENMASK(13, 0)
+-#define DSI_PS_SEL			GENMASK(17, 16)
++#define DSI_PS_SEL			GENMASK(19, 16)
+ #define PACKED_PS_16BIT_RGB565		0
+ #define PACKED_PS_18BIT_RGB666		1
+ #define LOOSELY_PS_24BIT_RGB666		2
+ #define PACKED_PS_24BIT_RGB888		3
++#define COMPRESSED_PS_24BIT_RGB888	5
+ 
+ #define DSI_VSA_NL		0x20
+ #define DSI_VBP_NL		0x24
+@@ -396,7 +397,7 @@ static void mtk_dsi_rxtx_control(struct mtk_dsi *dsi)
+ 
+ static void mtk_dsi_ps_control(struct mtk_dsi *dsi, bool config_vact)
+ {
+-	u32 dsi_buf_bpp, ps_val, ps_wc, vact_nl;
++	u32 dsi_buf_bpp, ps_sel, ps_val, ps_wc, vact_nl;
+ 
+ 	if (dsi->format == MIPI_DSI_FMT_RGB565)
+ 		dsi_buf_bpp = 2;
+@@ -404,15 +405,25 @@ static void mtk_dsi_ps_control(struct mtk_dsi *dsi, bool config_vact)
+ 		dsi_buf_bpp = 3;
+ 
+ 	/* Word count */
+-	ps_wc = FIELD_PREP(DSI_PS_WC, dsi->vm.hactive * dsi_buf_bpp);
+-	ps_val = ps_wc;
++	if (dsi->dsc) {
++		ps_wc = dsi->dsc->slice_chunk_size * dsi->dsc->slice_count;
++		ps_sel = COMPRESSED_PS_24BIT_RGB888;
++	} else {
++		ps_wc = dsi->vm.hactive * dsi_buf_bpp;
++		ps_sel = PACKED_PS_24BIT_RGB888;
++	}
++
++	if (WARN_ON(!ps_wc || ps_wc > FIELD_MAX(DSI_PS_WC)))
++		return;
++
++	ps_val = FIELD_PREP(DSI_PS_WC, ps_wc);
+ 
+ 	/* Pixel Stream type */
+-	switch (dsi->format) {
++	switch (dsi->dsc ? MIPI_DSI_FMT_RGB888 : dsi->format) {
+ 	default:
+ 		fallthrough;
+ 	case MIPI_DSI_FMT_RGB888:
+-		ps_val |= FIELD_PREP(DSI_PS_SEL, PACKED_PS_24BIT_RGB888);
++		ps_val |= FIELD_PREP(DSI_PS_SEL, ps_sel);
+ 		break;
+ 	case MIPI_DSI_FMT_RGB666:
+ 		ps_val |= FIELD_PREP(DSI_PS_SEL, LOOSELY_PS_24BIT_RGB666);
+@@ -430,6 +441,13 @@ static void mtk_dsi_ps_control(struct mtk_dsi *dsi, bool config_vact)
+ 		writel(vact_nl, dsi->regs + DSI_VACT_NL);
+ 		writel(ps_wc, dsi->regs + DSI_HSTX_CKL_WC);
+ 	}
++
++	if (dsi->driver_data->has_size_ctl && dsi->dsc)
++		writel(FIELD_PREP(DSI_HEIGHT, dsi->vm.vactive) |
++		       FIELD_PREP(DSI_WIDTH,
++				  DIV_ROUND_UP(ps_wc, dsi_buf_bpp)),
++		       dsi->regs + DSI_SIZE_CON);
++
+ 	writel(ps_val, dsi->regs + DSI_PSCTRL);
+ }
+ 
+-- 
+2.50.1 (Apple Git-155)

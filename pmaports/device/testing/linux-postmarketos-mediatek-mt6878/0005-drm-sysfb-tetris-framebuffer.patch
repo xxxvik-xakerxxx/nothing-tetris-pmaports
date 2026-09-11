@@ -363,8 +363,42 @@ diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm
 +			iosys_map_set_vaddr(&sysfb->fb_addr, screen_base);
 +		}
 +
- 		if (sysfb->flush_framebuffer_cache) {
- 			sysfb->fb_phys = mem->start;
- 			sysfb->fb_size = resource_size(mem);
+		if (sysfb->flush_framebuffer_cache) {
+			sysfb->fb_phys = mem->start;
+			sysfb->fb_size = resource_size(mem);
 -- 
 2.50.1
+
+From 0000000000000000000000000000000000000016 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 17:10:00 +0300
+Subject: [PATCH] drm/sysfb: keep damage-limited Tetris I/O updates
+
+The I/O framebuffer quirk currently promotes every atomic damage update to
+a full 1080x2400 copy.  That writes 10 MiB to the active bootloader scanout
+even when the compositor changed only a small rectangle, and sustained
+compositor updates corrupt the physical display while fbcon remains stable.
+
+Keep the write-combined I/O mapping and memcpy_toio path, but let the DRM
+damage helper copy only the rectangles supplied by the atomic commit.  This
+does not change the framebuffer address, stride, format or bootloader display
+state.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/gpu/drm/sysfb/simpledrm.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm.c
+--- a/drivers/gpu/drm/sysfb/simpledrm.c
++++ b/drivers/gpu/drm/sysfb/simpledrm.c
+@@ -682,7 +682,6 @@ static struct simpledrm_device *simpledrm_device_create(struct drm_driver *drv,
+ 	sysfb->fb_pitch = stride;
+ 	sysfb->force_iomem_updates = of_node &&
+ 		of_property_read_bool(of_node, "linux,force-iomem-updates");
+-	sysfb->force_full_frame_updates = sysfb->force_iomem_updates;
+ 
+ 	drm_dbg(dev, "display mode={" DRM_MODE_FMT "}\n", DRM_MODE_ARG(&sysfb->fb_mode));
+ 	drm_dbg(dev, "framebuffer format=%p4cc, size=%dx%d, stride=%d byte\n",
+-- 
+2.51.0

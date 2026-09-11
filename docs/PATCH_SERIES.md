@@ -1,5 +1,22 @@
 # Nothing Tetris postmarketOS patch series
 
+## Native Display Promotion
+
+The display-only candidate carries panel patch 0050, the ordered display
+dependency series 0056-0088, route patch 0096 and frame-completion patch 0097.
+They are build inputs in the kernel APKBUILD, not unattached patch archives.
+The selected native DTB is used by both the kernel package and device FIT.
+Patch 0057 has only its unrelated MFG enum context removed for the older
+main baseline. Other new integration experiments are not imported.
+
+All 72 kernel patches in the candidate apply in APKBUILD order to the
+pinned upstream archive. Source/checksum validation and the route
+connect/disconnect test pass. This is not a clean-install or lifecycle pass.
+See [CURRENT_STATUS.md](CURRENT_STATUS.md) for provenance, remaining gates
+and the distinction between the installed r153 image and this candidate.
+
+## Existing Series
+
 This repository carries a postmarketOS overlay for the Nothing CMF Phone 1
 (`nothing-tetris`) on top of the MT6878 mainline kernel fork.
 

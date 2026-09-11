@@ -1,0 +1,59 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] soc: mediatek: retain verified MT6878 display route
+
+The PQ bypass graph leaves native scanout stalled at 1x1 with abnormal DSC
+EOF. Selecting the exclusive retained LK PQ route on the same r151 kernel
+produces a user-confirmed native interface. Acknowledged sampling with the
+route held stable reports FRAME_DONE without new abnormal EOF events.
+
+Apply that route in the DRM connect path so blank/unblank and session changes
+cannot restore the broken bypass path. No diagnostic module is required.
+The low selector fields identify RSZ0 rather than the parallel PQ bypass,
+disable the unused PQ output CB4, and select split input zero. The full words
+match the verified live transaction, including retained upper fields.
+
+This is an explicitly partial bring-up change: flicker remains, and the PQ
+processing blocks still depend on the documented LK handoff. It is not a
+claim of independent cold initialization or completed display support.
+Source definitions: Nothing OS 4.1 ee2be53cb75670b548948636a0db1d1ff112bf12,
+mtk_drm_ddp.c. See docs/DISPLAY_FIRST_FRAME_AUDIT.md for the live evidence.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+--- a/drivers/soc/mediatek/mt6878-mmsys.h
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -31,9 +31,9 @@
+ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
+ 	/*
+ 	 * Nothing OS chains all three primary 2-layer OVL blocks before the
+-	 * DRM_BYPASS_PQ crossbars. OVL1 and OVL2 contribute no DMA layers in the
+-	 * minimal pipeline, but they must pass the background stream and share
+-	 * the display mutex with OVL0.
++	 * retained LK PQ path. Its RSZ/PQ initialization remains a handoff
++	 * dependency until these blocks have native lifecycle ownership.
++	 * OVL1 and OVL2 pass the background stream and share the OVL0 mutex.
+ 	 */
+ 	{
+ 		DDP_COMPONENT_OVL_2L0, DDP_COMPONENT_OVL_2L1,
+@@ -58,9 +58,10 @@
+ 	}, {
+ 		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+-		MT6878_PQ_IN_CROSSBAR0_MOUT_EN, BIT(2), BIT(2),
++		/* Exclusive RSZ0 path; do not fan out into the unused bypass. */
++		MT6878_PQ_IN_CROSSBAR0_MOUT_EN, ~0U, 0x00010001,
+ 	}, {
+ 		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+-		MT6878_PQ_OUT_CROSSBAR4_MOUT_EN, BIT(1), BIT(1),
++		MT6878_PQ_OUT_CROSSBAR4_MOUT_EN, ~0U, 0,
+ 	}, {
+ 		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, ~0U, BIT(0),
+@@ -81,6 +82,6 @@
+ 	}, {
+ 		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+-		MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN, ~0U, 2,
++		MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN, ~0U, 0x00020000,
+ 	}, {
+ 		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR2_SEL_IN, ~0U, 0,

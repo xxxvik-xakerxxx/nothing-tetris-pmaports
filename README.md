@@ -49,12 +49,16 @@ in [docs/PORT_COMPLETION_PLAN.md](docs/PORT_COMPLETION_PLAN.md).
 
 ## Feature Status
 
+The native-display promotion and current hardware evidence are tracked in
+[CURRENT_STATUS.md](docs/CURRENT_STATUS.md). Other rows below retain the older
+main-branch inventory; they are not fresh functional test results.
+
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
 | Boot | U-Boot boot flow | Works | Uses `fastboot oem board:boot_pmos` and FIT image handoff. |
 | Boot | Kernel boot | Works | Mainline MT6878 kernel reaches userspace. |
-| Display | Simple framebuffer | Partial | Inherited U-Boot framebuffer provides basic scanout through `simpledrm`, but has no native brightness, vblank/page-flip or validated suspend/resume path and desktop rendering is CPU-bound. |
-| Display | Native DSI/panel | Broken | MT6878 DSI/DSC and the AMOLED panel driver are not integrated. |
+| Display | Simple framebuffer | Disabled | Native-display images no longer use the inherited simpledrm framebuffer. |
+| Display | Native DSI/panel | Partial | The route and frame-completion fixes produced user-confirmed output without redraw flicker on installed r153. This display-only promotion needs its own CI and clean-install regression checks; 120 Hz, acceleration and full lifecycle are not proven. |
 | Input | Touchscreen | Works | FT3519 touchscreen is enabled. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | Read-only MT6375 monitor is present. Charging control is not implemented. |

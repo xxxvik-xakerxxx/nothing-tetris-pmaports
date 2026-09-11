@@ -1,0 +1,106 @@
+From 963f728e252860304a410840f7ef764f38b3a649 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sun, 6 Sep 2026 07:36:00 +0300
+Subject: [PATCH 2/3] iommu: mediatek: add bounded MT6878 display DMA data
+
+Add the single display IOMMU bank and larb0 data needed by the primary
+OVL0_2L path. Model the vendor Gen3 SMI common as a clock and power
+supplier without applying Gen2 common-register programming.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/iommu/mtk_iommu.c                              | 14 ++++++++++++++
+ drivers/memory/mtk-smi.c                               | 11 +++++++++++
+ 2 files changed, 25 insertions(+)
+
+diff --git a/drivers/iommu/mtk_iommu.c b/drivers/iommu/mtk_iommu.c
+index 0e02853..d52a42b 100644
+--- a/drivers/iommu/mtk_iommu.c
++++ b/drivers/iommu/mtk_iommu.c
+@@ -167,6 +167,7 @@ enum mtk_iommu_plat {
+ 	M4U_MT2712,
+ 	M4U_MT6779,
+ 	M4U_MT6795,
++	M4U_MT6878,
+ 	M4U_MT8167,
+ 	M4U_MT8173,
+ 	M4U_MT8183,
+@@ -1572,6 +1573,18 @@ static const struct mtk_iommu_plat_data mt6893_data = {
+ 			    {0, 14, 16}, {0, 13, 18, 17}},
+ };
+ 
++static const struct mtk_iommu_plat_data mt6878_data = {
++	.m4u_plat       = M4U_MT6878,
++	.flags          = OUT_ORDER_WR_EN | IOVA_34_EN | PGTABLE_PA_35_EN |
++			  MTK_IOMMU_TYPE_MM,
++	.inv_sel_reg    = REG_MMU_INV_SEL_GEN2,
++	.banks_num      = 1,
++	.banks_enable   = {true},
++	.iova_region    = single_domain,
++	.iova_region_nr = ARRAY_SIZE(single_domain),
++	.larbid_remap   = {{0}},
++};
++
+ static const struct mtk_iommu_plat_data mt8167_data = {
+ 	.m4u_plat     = M4U_MT8167,
+ 	.flags        = RESET_AXI | HAS_LEGACY_IVRP_PADDR | MTK_IOMMU_TYPE_MM,
+@@ -1788,6 +1801,7 @@ static const struct of_device_id mtk_iommu_of_ids[] = {
+ 	{ .compatible = "mediatek,mt2712-m4u", .data = &mt2712_data},
+ 	{ .compatible = "mediatek,mt6779-m4u", .data = &mt6779_data},
+ 	{ .compatible = "mediatek,mt6795-m4u", .data = &mt6795_data},
++	{ .compatible = "mediatek,mt6878-disp-iommu", .data = &mt6878_data},
+ 	{ .compatible = "mediatek,mt6893-iommu-mm", .data = &mt6893_data},
+ 	{ .compatible = "mediatek,mt8167-m4u", .data = &mt8167_data},
+ 	{ .compatible = "mediatek,mt8173-m4u", .data = &mt8173_data},
+diff --git a/drivers/memory/mtk-smi.c b/drivers/memory/mtk-smi.c
+index 733e22f..f570388 100644
+--- a/drivers/memory/mtk-smi.c
++++ b/drivers/memory/mtk-smi.c
+@@ -102,6 +102,7 @@ struct mtk_smi_reg_pair {
+ enum mtk_smi_type {
+ 	MTK_SMI_GEN1,
+ 	MTK_SMI_GEN2,		/* gen2 smi common */
++	MTK_SMI_GEN3,		/* gen3 clock and power supplier */
+ 	MTK_SMI_GEN2_SUB_COMM,	/* gen2 smi sub common */
+ };
+ 
+@@ -504,6 +505,10 @@ static const struct mtk_smi_larb_gen mtk_smi_larb_mt6893 = {
+ 	.ostd		            = mtk_smi_larb_mt6893_ostd,
+ };
+ 
++static const struct mtk_smi_larb_gen mtk_smi_larb_mt6878 = {
++	.config_port = mtk_smi_larb_config_port_gen2_general,
++};
++
+ static const struct mtk_smi_larb_gen mtk_smi_larb_mt8167 = {
+ 	/* mt8167 do not need the port in larb */
+ 	.config_port = mtk_smi_larb_config_port_mt8167,
+@@ -550,6 +555,7 @@ static const struct of_device_id mtk_smi_larb_of_ids[] = {
+ 	{.compatible = "mediatek,mt2712-smi-larb", .data = &mtk_smi_larb_mt2712},
+ 	{.compatible = "mediatek,mt6779-smi-larb", .data = &mtk_smi_larb_mt6779},
+ 	{.compatible = "mediatek,mt6795-smi-larb", .data = &mtk_smi_larb_mt8173},
++	{.compatible = "mediatek,mt6878-smi-larb", .data = &mtk_smi_larb_mt6878},
+ 	{.compatible = "mediatek,mt6893-smi-larb", .data = &mtk_smi_larb_mt6893},
+ 	{.compatible = "mediatek,mt8167-smi-larb", .data = &mtk_smi_larb_mt8167},
+ 	{.compatible = "mediatek,mt8173-smi-larb", .data = &mtk_smi_larb_mt8173},
+@@ -778,6 +784,10 @@ static const struct mtk_smi_common_plat mtk_smi_common_mt6893 = {
+ 		    F_MMU1_LARB(5) | F_MMU1_LARB(7),
+ };
+ 
++static const struct mtk_smi_common_plat mtk_smi_common_mt6878 = {
++	.type = MTK_SMI_GEN3,
++};
++
+ static const struct mtk_smi_common_plat mtk_smi_common_mt8183 = {
+ 	.type     = MTK_SMI_GEN2,
+ 	.has_gals = true,
+@@ -840,6 +850,7 @@ static const struct of_device_id mtk_smi_common_of_ids[] = {
+ 	{.compatible = "mediatek,mt2712-smi-common", .data = &mtk_smi_common_gen2},
+ 	{.compatible = "mediatek,mt6779-smi-common", .data = &mtk_smi_common_mt6779},
+ 	{.compatible = "mediatek,mt6795-smi-common", .data = &mtk_smi_common_mt6795},
++	{.compatible = "mediatek,mt6878-smi-common", .data = &mtk_smi_common_mt6878},
+ 	{.compatible = "mediatek,mt6893-smi-common", .data = &mtk_smi_common_mt6893},
+ 	{.compatible = "mediatek,mt8167-smi-common", .data = &mtk_smi_common_gen2},
+ 	{.compatible = "mediatek,mt8173-smi-common", .data = &mtk_smi_common_gen2},
+-- 
+2.50.1 (Apple Git-155)

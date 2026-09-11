@@ -1,0 +1,202 @@
+From ea3235fb46ff83d5f9d197fa2eeef92f8a70b520 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 20:27:33 +0300
+Subject: [PATCH 1/2] soc: mediatek: add bounded MT6878 display routing data
+
+Add the vendor-proven MT6878 selector values for the downstream native
+display path and the corresponding display mutex module and DSI0 SOF/EOF
+tables.
+
+The direct OVL0_2L-to-COLOR0 edge is intentionally not fabricated. Nothing
+OS 4.1 routes it through crossbar and RSZ/TDSHP components that are outside
+this bounded path description.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/soc/mediatek/mt6878-mmsys.h | 64 +++++++++++++++++++++++++++++
+ drivers/soc/mediatek/mtk-mmsys.c    |  3 ++
+ drivers/soc/mediatek/mtk-mutex.c    | 46 +++++++++++++++++++++
+ 3 files changed, 113 insertions(+)
+ create mode 100644 drivers/soc/mediatek/mt6878-mmsys.h
+
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+new file mode 100644
+index 0000000..933f011
+--- /dev/null
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -0,0 +1,64 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++#ifndef __SOC_MEDIATEK_MT6878_MMSYS_H
++#define __SOC_MEDIATEK_MT6878_MMSYS_H
++
++/*
++ * Nothing OS 4.1 Tetris source, commit
++ * ee2be53cb75670b548948636a0db1d1ff112bf12, mtk_drm_ddp.c:
++ * MT6878_DISP_{AAL0,COLOR0,CCORR0,GAMMA0,POSTMASK0}_* and the
++ * MT6878 split/compression output crossbar definitions.
++ */
++#define MT6878_DISP_AAL0_SOUT_SEL		0xe00
++#define MT6878_DISP_CCORR0_SEL_IN		0xe0c
++#define MT6878_DISP_COLOR0_SOUT_SEL		0xe18
++#define MT6878_DISP_GAMMA0_SEL_IN		0xe1c
++#define MT6878_DISP_POSTMASK0_SOUT_SEL		0xe24
++
++#define MT6878_PQ_OUT_CROSSBAR0_MOUT_EN		0xd20
++#define MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN	0xd54
++#define MT6878_COMP_OUT_CROSSBAR0_MOUT_EN	0xd74
++
++#define MT6878_AAL0_SOUT_SEL_TO_GAMMA0		3
++#define MT6878_GAMMA0_SEL_IN_FROM_AAL0		2
++
++static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
++	/* COLOR0 -> CCORR0 selects zero in both one-bit selectors. */
++	{
++		DDP_COMPONENT_COLOR0, DDP_COMPONENT_CCORR,
++		MT6878_DISP_COLOR0_SOUT_SEL, BIT(0), 0,
++	}, {
++		DDP_COMPONENT_COLOR0, DDP_COMPONENT_CCORR,
++		MT6878_DISP_CCORR0_SEL_IN, BIT(0), 0,
++	},
++	/* CCORR0 -> AAL0 and GAMMA0 -> POSTMASK0 are fixed links. */
++	{
++		DDP_COMPONENT_AAL0, DDP_COMPONENT_GAMMA,
++		MT6878_DISP_AAL0_SOUT_SEL, GENMASK(1, 0),
++		MT6878_AAL0_SOUT_SEL_TO_GAMMA0,
++	}, {
++		DDP_COMPONENT_AAL0, DDP_COMPONENT_GAMMA,
++		MT6878_DISP_GAMMA0_SEL_IN, GENMASK(1, 0),
++		MT6878_GAMMA0_SEL_IN_FROM_AAL0,
++	},
++	/* POSTMASK0 -> DITHER0 selects zero in its one-bit selector. */
++	{
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DITHER0,
++		MT6878_DISP_POSTMASK0_SOUT_SEL, BIT(0), 0,
++	},
++	/* DITHER0 reaches DSC0 through PQ output crossbar 0 and split lane 2. */
++	{
++		DDP_COMPONENT_DITHER0, DDP_COMPONENT_DSC0,
++		MT6878_PQ_OUT_CROSSBAR0_MOUT_EN, BIT(1), BIT(1),
++	}, {
++		DDP_COMPONENT_DITHER0, DDP_COMPONENT_DSC0,
++		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
++	},
++	/* DSC0 -> DSI0 uses compression output crossbar 0, output zero. */
++	{
++		DDP_COMPONENT_DSC0, DDP_COMPONENT_DSI0,
++		MT6878_COMP_OUT_CROSSBAR0_MOUT_EN, BIT(0), BIT(0),
++	},
++};
++
++#endif /* __SOC_MEDIATEK_MT6878_MMSYS_H */
+diff --git a/drivers/soc/mediatek/mtk-mmsys.c b/drivers/soc/mediatek/mtk-mmsys.c
+index bb4639c..2d0529c 100644
+--- a/drivers/soc/mediatek/mtk-mmsys.c
++++ b/drivers/soc/mediatek/mtk-mmsys.c
+@@ -14,6 +14,7 @@
+ #include <linux/soc/mediatek/mtk-mmsys.h>
+ 
+ #include "mtk-mmsys.h"
++#include "mt6878-mmsys.h"
+ #include "mt8167-mmsys.h"
+ #include "mt8173-mmsys.h"
+ #include "mt8183-mmsys.h"
+@@ -55,2 +56,4 @@ static const struct mtk_mmsys_driver_data mt6878_mmsys_driver_data = {
+ 	.clk_driver = "clk-mt6878-mmsys",
++	.routes = mt6878_mmsys_routing_table,
++	.num_routes = ARRAY_SIZE(mt6878_mmsys_routing_table),
+ };
+diff --git a/drivers/soc/mediatek/mtk-mutex.c b/drivers/soc/mediatek/mtk-mutex.c
+index 38179e8..d9cae5f 100644
+--- a/drivers/soc/mediatek/mtk-mutex.c
++++ b/drivers/soc/mediatek/mtk-mutex.c
+@@ -23,6 +23,10 @@
+ #define MT8183_MUTEX0_MOD1			0x34
+ #define MT8183_MUTEX0_SOF0			0x2c
+ 
++/* Nothing OS 4.1 Tetris ee2be53c, MT6878 DISP_MUTEX register layout. */
++#define MT6878_MUTEX0_MOD0			0x30
++#define MT6878_MUTEX0_SOF0			0x2c
++
+ #define DISP_REG_MUTEX_EN(n)			(0x20 + 0x20 * (n))
+ #define DISP_REG_MUTEX(n)			(0x24 + 0x20 * (n))
+ #define DISP_REG_MUTEX_RST(n)			(0x28 + 0x20 * (n))
+@@ -49,6 +53,23 @@
+ 
+ #define INT_MUTEX				BIT(1)
+ 
++/*
++ * Nothing OS 4.1 Tetris ee2be53c, MT6878_MUTEX_MOD0_DISP_* bit numbers.
++ * Keep these as bit indices: mtk_mutex_add_comp() applies BIT() itself.
++ */
++#define MT6878_MUTEX_MOD_DISP_OVL0_2L		0
++#define MT6878_MUTEX_MOD_DISP_COLOR0		9
++#define MT6878_MUTEX_MOD_DISP_CCORR0		10
++#define MT6878_MUTEX_MOD_DISP_AAL0		12
++#define MT6878_MUTEX_MOD_DISP_GAMMA0		13
++#define MT6878_MUTEX_MOD_DISP_POSTMASK0		14
++#define MT6878_MUTEX_MOD_DISP_DITHER0		15
++#define MT6878_MUTEX_MOD_DISP_DSC0		23
++#define MT6878_MUTEX_MOD_DISP_DSI0		25
++
++#define MT6878_MUTEX_SOF_DSI0			1
++#define MT6878_MUTEX_EOF_DSI0			(MT6878_MUTEX_SOF_DSI0 << 6)
++
+ #define MT8186_MUTEX_MOD_DISP_OVL0		0
+ #define MT8186_MUTEX_MOD_DISP_OVL0_2L		1
+ #define MT8186_MUTEX_MOD_DISP_RDMA0		2
+@@ -568,6 +589,18 @@ static const u8 mt8192_mutex_mod[DDP_COMPONENT_ID_MAX] = {
+ 	[DDP_COMPONENT_RDMA4] = MT8192_MUTEX_MOD_DISP_RDMA4,
+ };
+ 
++static const u8 mt6878_mutex_mod[DDP_COMPONENT_ID_MAX] = {
++	[DDP_COMPONENT_OVL_2L0] = MT6878_MUTEX_MOD_DISP_OVL0_2L,
++	[DDP_COMPONENT_COLOR0] = MT6878_MUTEX_MOD_DISP_COLOR0,
++	[DDP_COMPONENT_CCORR] = MT6878_MUTEX_MOD_DISP_CCORR0,
++	[DDP_COMPONENT_AAL0] = MT6878_MUTEX_MOD_DISP_AAL0,
++	[DDP_COMPONENT_GAMMA] = MT6878_MUTEX_MOD_DISP_GAMMA0,
++	[DDP_COMPONENT_POSTMASK0] = MT6878_MUTEX_MOD_DISP_POSTMASK0,
++	[DDP_COMPONENT_DITHER0] = MT6878_MUTEX_MOD_DISP_DITHER0,
++	[DDP_COMPONENT_DSC0] = MT6878_MUTEX_MOD_DISP_DSC0,
++	[DDP_COMPONENT_DSI0] = MT6878_MUTEX_MOD_DISP_DSI0,
++};
++
+ static const u8 mt8195_mutex_mod[DDP_COMPONENT_ID_MAX] = {
+ 	[DDP_COMPONENT_OVL0] = MT8195_MUTEX_MOD_DISP_OVL0,
+ 	[DDP_COMPONENT_WDMA0] = MT8195_MUTEX_MOD_DISP_WDMA0,
+@@ -698,6 +731,11 @@ static const u16 mt8186_mutex_sof[MUTEX_SOF_DSI3 + 1] = {
+ 	[MUTEX_SOF_DPI0] = MT8186_MUTEX_SOF_DPI0 | MT8186_MUTEX_EOF_DPI0,
+ };
+ 
++static const u16 mt6878_mutex_sof[DDP_MUTEX_SOF_MAX] = {
++	[MUTEX_SOF_SINGLE_MODE] = MUTEX_SOF_SINGLE_MODE,
++	[MUTEX_SOF_DSI0] = MT6878_MUTEX_SOF_DSI0 | MT6878_MUTEX_EOF_DSI0,
++};
++
+ /*
+  * To support refresh mode(video mode), DISP_REG_MUTEX_SOF should
+  * select the EOF source and configure the EOF plus timing from the
+@@ -820,6 +858,13 @@ static const struct mtk_mutex_data mt8192_mutex_driver_data = {
+ 	.mutex_sof_reg = MT8183_MUTEX0_SOF0,
+ };
+ 
++static const struct mtk_mutex_data mt6878_mutex_driver_data = {
++	.mutex_mod = mt6878_mutex_mod,
++	.mutex_sof = mt6878_mutex_sof,
++	.mutex_mod_reg = MT6878_MUTEX0_MOD0,
++	.mutex_sof_reg = MT6878_MUTEX0_SOF0,
++};
++
+ static const struct mtk_mutex_data mt8195_mutex_driver_data = {
+ 	.mutex_mod = mt8195_mutex_mod,
+ 	.mutex_sof = mt8195_mutex_sof,
+@@ -1133,6 +1178,7 @@ static const struct of_device_id mutex_driver_dt_match[] = {
+ 	{ .compatible = "mediatek,mt2701-disp-mutex", .data = &mt2701_mutex_driver_data },
+ 	{ .compatible = "mediatek,mt2712-disp-mutex", .data = &mt2712_mutex_driver_data },
+ 	{ .compatible = "mediatek,mt6795-disp-mutex", .data = &mt6795_mutex_driver_data },
++	{ .compatible = "mediatek,mt6878-disp-mutex", .data = &mt6878_mutex_driver_data },
+ 	{ .compatible = "mediatek,mt8167-disp-mutex", .data = &mt8167_mutex_driver_data },
+ 	{ .compatible = "mediatek,mt8173-disp-mutex", .data = &mt8173_mutex_driver_data },
+ 	{ .compatible = "mediatek,mt8183-disp-mutex", .data = &mt8183_mutex_driver_data },
+-- 
+2.50.1 (Apple Git-155)

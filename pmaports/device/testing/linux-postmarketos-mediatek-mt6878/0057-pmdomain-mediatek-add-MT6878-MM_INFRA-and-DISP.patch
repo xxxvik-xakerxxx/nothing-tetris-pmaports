@@ -1,0 +1,437 @@
+From 80c3ca1a77ec8bd5c8d874fa0918b144ae2bb5db Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Sat, 5 Sep 2026 21:00:22 +0300
+Subject: [PATCH 2/3] pmdomain: mediatek: add MT6878 MM_INFRA and DISP
+
+Add a bounded hardware-voter path to the generic MediaTek provider and
+describe the MT6878 MM_INFRA parent and DISP child with exact Nothing OS
+4.1 offsets. MM_INFRA uses HWCCF SMC 0x540 around its vote; DISP uses the
+SPM control register, SRAM handshake and MMSYS bus protection.
+
+No power-domain DT nodes are enabled by this patch.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ .../power/mediatek,power-controller.yaml      |   7 +
+ drivers/pmdomain/mediatek/mt6878-pm-domains.h |  31 +++
+ drivers/pmdomain/mediatek/mtk-pm-domains.c    | 205 +++++++++++++++++-
+ drivers/pmdomain/mediatek/mtk-pm-domains.h    |   9 +
+ include/linux/soc/mediatek/mtk_sip_svc.h      |   3 +
+ 5 files changed, 250 insertions(+), 5 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+index 55e0bea03..40ccb64bb 100644
+--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
++++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+@@ -25,5 +25,6 @@ properties:
+     enum:
+       - mediatek,mt6735-power-controller
+       - mediatek,mt6795-power-controller
++      - mediatek,mt6878-power-controller
+       - mediatek,mt6893-power-controller
+       - mediatek,mt8167-power-controller
+@@ -134,6 +135,12 @@ $defs:
+         description: phandle to the device containing the INFRACFG register range.
+         deprecated: true
+ 
++      mediatek,hardware-voter:
++        $ref: /schemas/types.yaml#/definitions/phandle
++        description:
++          Phandle to the hardware voter register block used by domains that
++          cannot be sequenced through the power-control register directly.
++
+       mediatek,infracfg-nao:
+         $ref: /schemas/types.yaml#/definitions/phandle
+         description: phandle to the device containing the INFRACFG-NAO register range.
+diff --git a/drivers/pmdomain/mediatek/mt6878-pm-domains.h b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
+index 6f3a71e90..710fafe7d 100644
+--- a/drivers/pmdomain/mediatek/mt6878-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mt6878-pm-domains.h
+@@ -18,6 +18,10 @@
+ #define MT6878_INFRA_PROT_SET		0x0c44
+ #define MT6878_INFRA_PROT_CLR		0x0c48
+ #define MT6878_INFRA_PROT_STA		0x0c4c
++#define MT6878_MMSYS_PROT_DISP		(BIT(0) | BIT(1) | BIT(18))
++#define MT6878_MMSYS_PROT_SET		0x0c14
++#define MT6878_MMSYS_PROT_CLR		0x0c18
++#define MT6878_MMSYS_PROT_STA		0x0c1c
+ 
+ static enum scpsys_bus_prot_block scpsys_bus_prot_blocks_mt6878[] = {
+ 	BUS_PROT_BLOCK_INFRA,
+@@ -62,6 +66,33 @@ scpsys_domain_data_mt6878[MT6878_POWER_DOMAIN_NR] = {
+ 		.caps = MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_SRAM_ISO |
+ 			MTK_SCPD_STATUS_IN_CTL,
+ 	},
++	[MT6878_POWER_DOMAIN_MM_INFRA] = {
++		.name = "mm-infra",
++		.hwv_done_offs = 0x141c,
++		.hwv_set_offs = 0x0198,
++		.hwv_clr_offs = 0x019c,
++		.hwv_en_offs = 0x1410,
++		.hwv_set_sta_offs = 0x146c,
++		.hwv_clr_sta_offs = 0x1470,
++		.hwv_shift = 0,
++		.caps = MTK_SCPD_HWV_OPS | MTK_SCPD_INFRA_REQ_OPT,
++	},
++	[MT6878_POWER_DOMAIN_DISP] = {
++		.name = "disp",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e70,
++		.pwr_sta_offs = 0x0e70,
++		.pwr_sta2nd_offs = 0x0e70,
++		.sram_pdn_bits = BIT(8),
++		.sram_pdn_ack_bits = BIT(12),
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, MT6878_MMSYS_PROT_DISP,
++					MT6878_MMSYS_PROT_SET,
++					MT6878_MMSYS_PROT_CLR,
++					MT6878_MMSYS_PROT_STA),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
+ };
+ 
+ static const struct scpsys_soc_data mt6878_scpsys_data = {
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+index 0ea312cd1..5abd72e18 100644
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -4,6 +4,7 @@
+  */
+ #include <linux/clk.h>
+ #include <linux/clk-provider.h>
++#include <linux/arm-smccc.h>
+ #include <linux/init.h>
+ #include <linux/io.h>
+ #include <linux/iopoll.h>
+@@ -15,6 +16,7 @@
+ #include <linux/regmap.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/soc/mediatek/infracfg.h>
++#include <linux/soc/mediatek/mtk_sip_svc.h>
+ 
+ #include "mt6735-pm-domains.h"
+ #include "mt6795-pm-domains.h"
+@@ -31,6 +33,7 @@
+ 
+ #define MTK_POLL_DELAY_US		10
+ #define MTK_POLL_TIMEOUT		USEC_PER_SEC
++#define MTK_HWV_POLL_TIMEOUT		300000
+ 
+ #define PWR_RST_B_BIT			BIT(0)
+ #define PWR_ISO_BIT			BIT(1)
+@@ -57,6 +60,7 @@ struct scpsys_domain {
+ 	int num_subsys_clks;
+ 	struct clk_bulk_data *subsys_clks;
+ 	struct regulator *supply;
++	struct regmap *hwv;
+ };
+ 
+ struct scpsys {
+@@ -66,15 +70,29 @@ struct scpsys {
+ 	u8 bus_prot_index[BUS_PROT_BLOCK_COUNT];
+ 	struct regmap **bus_prot;
+ 	struct genpd_onecell_data pd_data;
++	spinlock_t hwv_lock;
++	unsigned int infra_req_count;
+ 	struct generic_pm_domain *domains[];
+ };
+ 
+ #define to_scpsys_domain(gpd) container_of(gpd, struct scpsys_domain, genpd)
+ 
++static int scpsys_regulator_enable(struct regulator *supply);
++static int scpsys_regulator_disable(struct regulator *supply);
++
+ static bool scpsys_domain_is_on(struct scpsys_domain *pd)
+ {
+ 	struct scpsys *scpsys = pd->scpsys;
+ 	u32 status, status2;
++	u32 mask;
++
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
++		mask = BIT(pd->data->hwv_shift);
++		regmap_read(pd->hwv, pd->data->hwv_done_offs, &status);
++		regmap_read(pd->hwv, pd->data->hwv_en_offs, &status2);
++
++		return (status & mask) && (status2 & mask);
++	}
+ 
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_STATUS_IN_CTL)) {
+ 		regmap_read(scpsys->base, pd->data->ctl_offs, &status);
+@@ -92,6 +110,166 @@ static bool scpsys_domain_is_on(struct scpsys_domain *pd)
+ 	return status && status2;
+ }
+ 
++static int scpsys_hwv_infra_request(struct scpsys_domain *pd, bool enable)
++{
++	struct scpsys *scpsys = pd->scpsys;
++	struct arm_smccc_res res;
++	unsigned long flags;
++	unsigned long command;
++	int ret = 0;
++
++	if (!MTK_SCPD_CAPS(pd, MTK_SCPD_INFRA_REQ_OPT))
++		return 0;
++
++	spin_lock_irqsave(&scpsys->hwv_lock, flags);
++	if (enable) {
++		if (scpsys->infra_req_count++)
++			goto out;
++		command = 1;
++	} else {
++		if (WARN_ON(!scpsys->infra_req_count)) {
++			ret = -EINVAL;
++			goto out;
++		}
++		if (--scpsys->infra_req_count)
++			goto out;
++		command = 0;
++	}
++
++	arm_smccc_smc(MTK_SIP_KERNEL_HWCCF_CONTROL, command,
++		      0, 0, 0, 0, 0, 0, &res);
++	ret = (long)res.a0;
++	if (ret > 0)
++		ret = -EIO;
++	if (ret) {
++		if (enable)
++			scpsys->infra_req_count--;
++		else
++			scpsys->infra_req_count++;
++	}
++
++out:
++	spin_unlock_irqrestore(&scpsys->hwv_lock, flags);
++	return ret;
++}
++
++static bool scpsys_hwv_idle(struct scpsys_domain *pd)
++{
++	u32 status;
++
++	regmap_read(pd->hwv, pd->data->hwv_done_offs, &status);
++	return status & BIT(pd->data->hwv_shift);
++}
++
++static bool scpsys_hwv_enable_done(struct scpsys_domain *pd)
++{
++	u32 done, enabled, set_status;
++	u32 mask = BIT(pd->data->hwv_shift);
++
++	regmap_read(pd->hwv, pd->data->hwv_done_offs, &done);
++	regmap_read(pd->hwv, pd->data->hwv_en_offs, &enabled);
++	regmap_read(pd->hwv, pd->data->hwv_set_sta_offs, &set_status);
++
++	return (done & mask) && (enabled & mask) && !(set_status & mask);
++}
++
++static bool scpsys_hwv_disable_done(struct scpsys_domain *pd)
++{
++	u32 done, clear_status;
++	u32 mask = BIT(pd->data->hwv_shift);
++
++	regmap_read(pd->hwv, pd->data->hwv_done_offs, &done);
++	regmap_read(pd->hwv, pd->data->hwv_clr_sta_offs, &clear_status);
++
++	return (done & mask) && !(clear_status & mask);
++}
++
++static int scpsys_hwv_power_on(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	u32 mask = BIT(pd->data->hwv_shift);
++	bool done;
++	u32 status;
++	int ret;
++
++	ret = scpsys_hwv_infra_request(pd, true);
++	if (ret)
++		return ret;
++
++	ret = scpsys_regulator_enable(pd->supply);
++	if (ret)
++		goto err_infra;
++
++	ret = clk_bulk_prepare_enable(pd->num_clks, pd->clks);
++	if (ret)
++		goto err_regulator;
++
++	ret = readx_poll_timeout(scpsys_hwv_idle, pd, done, done,
++				 MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto err_clocks;
++
++	regmap_write(pd->hwv, pd->data->hwv_set_offs, mask);
++	ret = regmap_read_poll_timeout(pd->hwv, pd->data->hwv_set_offs,
++				       status, status & mask,
++				       MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto err_clocks;
++
++	ret = readx_poll_timeout(scpsys_hwv_enable_done, pd, done, done,
++				 MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto err_clocks;
++
++	return scpsys_hwv_infra_request(pd, false);
++
++err_clocks:
++	clk_bulk_disable_unprepare(pd->num_clks, pd->clks);
++err_regulator:
++	scpsys_regulator_disable(pd->supply);
++err_infra:
++	scpsys_hwv_infra_request(pd, false);
++	return ret;
++}
++
++static int scpsys_hwv_power_off(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	u32 mask = BIT(pd->data->hwv_shift);
++	bool done;
++	u32 status;
++	int ret;
++
++	ret = scpsys_hwv_infra_request(pd, true);
++	if (ret)
++		return ret;
++
++	ret = readx_poll_timeout(scpsys_hwv_idle, pd, done, done,
++				 MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto out_infra;
++
++	regmap_write(pd->hwv, pd->data->hwv_clr_offs, mask);
++	ret = regmap_read_poll_timeout(pd->hwv, pd->data->hwv_clr_offs,
++				       status, !(status & mask),
++				       MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto out_infra;
++
++	usleep_range(100, 200);
++	ret = readx_poll_timeout(scpsys_hwv_disable_done, pd, done, done,
++				 MTK_POLL_DELAY_US, MTK_HWV_POLL_TIMEOUT);
++	if (ret)
++		goto out_infra;
++
++	clk_bulk_disable_unprepare(pd->num_clks, pd->clks);
++	scpsys_regulator_disable(pd->supply);
++
++out_infra:
++	scpsys_hwv_infra_request(pd, false);
++	return ret;
++}
++
+ static int scpsys_sram_enable(struct scpsys_domain *pd)
+ {
+ 	u32 expected_ack, pdn_ack = pd->data->sram_pdn_ack_bits;
+@@ -544,7 +722,8 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
+ 	}
+ 
+ 	domain_data = &scpsys->soc_data->domains_data[id];
+-	if (domain_data->sta_mask == 0) {
++	if (!domain_data->sta_mask &&
++	    !(domain_data->caps & MTK_SCPD_HWV_OPS)) {
+ 		dev_err(scpsys->dev, "%pOF: undefined domain id %d\n", node, id);
+ 		return ERR_PTR(-EINVAL);
+ 	}
+@@ -555,6 +734,13 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
+ 
+ 	pd->data = domain_data;
+ 	pd->scpsys = scpsys;
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
++		pd->hwv = syscon_regmap_lookup_by_phandle(node, "mediatek,hardware-voter");
++		if (IS_ERR(pd->hwv))
++			return dev_err_cast_probe(scpsys->dev, pd->hwv,
++						  "%pOF: failed to get hardware voter\n",
++						  node);
++	}
+ 
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_DOMAIN_SUPPLY)) {
+ 		pd->supply = devm_of_regulator_get_optional(scpsys->dev, node, "domain");
+@@ -624,7 +811,10 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
+ 			dev_warn(scpsys->dev,
+ 				 "%pOF: A default off power domain has been ON\n", node);
+ 	} else {
+-		ret = scpsys_power_on(&pd->genpd);
++		if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS))
++			ret = scpsys_hwv_power_on(&pd->genpd);
++		else
++			ret = scpsys_power_on(&pd->genpd);
+ 		if (ret < 0) {
+ 			dev_err(scpsys->dev, "%pOF: failed to power on domain: %d\n", node, ret);
+ 			goto err_put_subsys_clocks;
+@@ -646,8 +836,13 @@ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_no
+ 	else
+ 		pd->genpd.name = pd->data->name;
+ 
+-	pd->genpd.power_off = scpsys_power_off;
+-	pd->genpd.power_on = scpsys_power_on;
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
++		pd->genpd.power_off = scpsys_hwv_power_off;
++		pd->genpd.power_on = scpsys_hwv_power_on;
++	} else {
++		pd->genpd.power_off = scpsys_power_off;
++		pd->genpd.power_on = scpsys_power_on;
++	}
+ 
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_ACTIVE_WAKEUP))
+ 		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
+@@ -736,7 +931,7 @@ static void scpsys_remove_one_domain(struct scpsys_domain *pd)
+ 			"failed to remove domain '%s' : %d - state may be inconsistent\n",
+ 			pd->genpd.name, ret);
+ 	if (scpsys_domain_is_on(pd))
+-		scpsys_power_off(&pd->genpd);
++		pd->genpd.power_off(&pd->genpd);
+ 
+ 	clk_bulk_put(pd->num_clks, pd->clks);
+ 	clk_bulk_put(pd->num_subsys_clks, pd->subsys_clks);
+@@ -973,6 +1168,7 @@ static int scpsys_probe(struct platform_device *pdev)
+ 
+ 	scpsys->dev = dev;
+ 	scpsys->soc_data = soc;
++	spin_lock_init(&scpsys->hwv_lock);
+ 
+ 	scpsys->pd_data.domains = scpsys->domains;
+ 	scpsys->pd_data.num_domains = soc->num_domains;
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.h b/drivers/pmdomain/mediatek/mtk-pm-domains.h
+index bfd9325de..e1949eb3c 100644
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.h
+@@ -17,6 +17,8 @@
+ #define MTK_SCPD_MODEM_PWRSEQ		BIT(10)
+ #define MTK_SCPD_SKIP_RESET_B		BIT(11)
+ #define MTK_SCPD_STATUS_IN_CTL		BIT(12)
++#define MTK_SCPD_HWV_OPS		BIT(13)
++#define MTK_SCPD_INFRA_REQ_OPT		BIT(14)
+ #define MTK_SCPD_CAPS(_scpd, _x)	((_scpd)->data->caps & (_x))
+ 
+ #define SPM_VDE_PWR_CON			0x0210
+@@ -146,6 +148,13 @@ struct scpsys_domain_data {
+ 	u32 sram_pdn_ack_bits;
+ 	int ext_buck_iso_offs;
+ 	u32 ext_buck_iso_mask;
++	u32 hwv_done_offs;
++	u32 hwv_set_offs;
++	u32 hwv_clr_offs;
++	u32 hwv_en_offs;
++	u32 hwv_set_sta_offs;
++	u32 hwv_clr_sta_offs;
++	u8 hwv_shift;
+ 	u16 caps;
+ 	enum scpsys_rtff_type rtff_type;
+ 	const struct scpsys_bus_prot_data bp_cfg[SPM_MAX_BUS_PROT_DATA];
+diff --git a/include/linux/soc/mediatek/mtk_sip_svc.h b/include/linux/soc/mediatek/mtk_sip_svc.h
+index abe24a73e..032010fde 100644
+--- a/include/linux/soc/mediatek/mtk_sip_svc.h
++++ b/include/linux/soc/mediatek/mtk_sip_svc.h
+@@ -28,4 +28,7 @@
+ /* IOMMU related SMC call */
+ #define MTK_SIP_KERNEL_IOMMU_CONTROL	MTK_SIP_SMC_CMD(0x514)
+ 
++/* Hardware clock control framework */
++#define MTK_SIP_KERNEL_HWCCF_CONTROL	MTK_SIP_SMC_CMD(0x540)
++
+ #endif
+-- 
+2.50.1 (Apple Git-155)
