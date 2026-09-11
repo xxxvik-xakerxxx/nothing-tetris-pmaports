@@ -1,8 +1,121 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-10.
+Updated: 2026-09-11.
+
+## Publication and radio follow-up
+
+The display-only promotion candidate is published as
+`codex/display-main-promotion` at `8f61a02d2e0d12584a11a111998c1adf4e89b040`,
+based on primary branch `main` at `ee994e4236d69c9f3eb18e81614dd0dff9e60266`.
+It carries the display dependency series and fixes 0096/0097, with kernel
+6.18-r154 and device 8-r10. It is not the installed full-integration r153
+image and does not include the later unrelated hardware experiments.
+All 72 kernel patches apply in package order; source/checksum and route
+tests pass. CI 34575901650 has passed validate-overlay and is still building
+the kernel. Main has not moved. Clean-install/regression and lifecycle
+checks remain prerequisites; review the candidate's older unrelated
+userspace packaging before replacing the working r153 installation.
+
+U-Boot diagnostic 38192f202c8bc3009efbb1d357b97975768424af was explicitly
+approved and published. CI 34575135682 passed; downloaded artifact hashes
+match its manifest. It is not installed. Installed 60bcf22 still reports
+CCCI no-fdt; neither modem boot nor SIM/network functionality is established.
+See MODEM_SIM_EVIDENCE_PLAN.md for the bounded diagnostic and next gate.
+
+The r153 GNSS experiment received one checksum-valid FE31 acknowledgement
+after BINFO, but closing this incomplete download failed the kernel off-done
+poll and forced A-die off. A clean reboot restored the baseline; the last
+verified boot is 3334a5ab-4658-4310-b07e-77b6fcaf0fa1, with USB/SSH available
+and GNSS inactive. A full-fragment research probe passes 29 mocked-I/O
+scenarios but has not run on the phone. DSP readiness and safe shutdown
+remain unresolved; there is no position fix. See GNSS_BRINGUP.md.
 
 ## Latest display result
+
+Installed now: CI `34492172863`, commit
+`aecf4f44f4170952709a7dd514538f0d75b55e22`, kernel `6.18-r153` / `#154`,
+device package `8-r9`. All image hashes matched the CI manifest. The paired
+super/userdata clean flash completed (17 sparse userdata transfers); the
+unchanged U-Boot is `60bcf22`. Although fastboot reboot lost its USB status
+reply, Linux and USB NCM/SSH returned automatically. Native DRM exposes an
+active 1080x2400 XR24 framebuffer without either diagnostic patch module.
+The installed FIT hash is
+`da5e33c9342b1a7d4ea4af7b278496021b3d222ca5756dd1d7338058282602a2`.
+
+The 32 MiB USB transfer regression gate passed at
+`local/live-logs/20260910T192547Z-172.16.42.1-regression-gate`.
+A ten-cycle DPMS test stopped at cycle five: the first four cycles produced
+the requested DRM sequence events, then QUEUE_SEQUENCE returned EINVAL.
+The connector remained available afterward, USB/SSH survived, and no DRM
+timeout or Oops was found. Phoc logged additional off/on transitions around
+the failing cycle. That run's root cause was not isolated; do not count it
+as ten passed cycles or erase the first failure with retries. This is not a
+suspend/resume test. The user subsequently confirmed visible working output
+on the installed image. Repeated cold boots, stable lifecycle and 120 Hz
+remain pending. The earlier live experiments are recorded below.
+
+A separate controlled test now passes all ten DPMS cycles on unchanged r153.
+It holds a session idle inhibitor and observes GET_SEQUENCE readiness before
+queuing frame events, reporting every pre-ready EINVAL. Enabling needs
+288-298 ms after the D-Bus request. Every cycle then delivers 30 sequence
+steps without a queue retry, timeout or discontinuity. The Phoc journal
+contains exactly ten off/on pairs in the interval; no DRM fault was found,
+USB/SSH remain UP and the idle inhibitor was released. Evidence:
+`local/r153-dpms-ready-10cycles.txt`, `local/r153-dpms-ready-post.txt`,
+`local/r153-dpms-ready-transitions.txt`. This supports a readiness race in
+the older test, not a proof that every earlier artifact had that cause.
+Physical pixel inspection after this new run is still pending.
+
+One bounded exclusive-PQ-bypass experiment was rejected: retaining working
+DSC selection while selecting only the bypass produced 16 abnormal EOF
+events and zero frame completions. Automatic route restoration immediately
+restored frame completions, the post-test DRM event completed, USB/SSH stayed
+UP and the diagnostic was removed. No production source/timing/firmware
+change follows that failed candidate. Native RSZ/PQ lifecycle ownership
+remains the next source boundary; see the complete first-frame audit.
+
+Read-only PQ capture now narrows that boundary: RSZ is disabled with zero
+dimensions, while subsequent blocks retain their configuration. POSTMASK
+is enabled with relay clear, DRAM mode set and local INTEN=0x917, without a
+native owner. Actual DMA transactions were not measured. The next causal
+test is its vendor-defined relay bit, not blindly enabling an RSZ scaler.
+All ten PQ clocks were on; frame events and USB survived the read-only
+capture and diagnostic removal.
+
+The next bounded POSTMASK test changed only CFG bit 0 (0x146 -> 0x147), then
+automatically restored it. Relay sustained 15 frame completions but produced
+one abnormal EOF at transition; the restored phase had 15 completions and
+no abnormal EOF. This is not a clean pass and does not justify a persistent
+live toggle. Configure while the path is stopped before enabling OVL in
+the native lifecycle; interrupt/DMA quiescence and pixel proof remain open.
+USB/SSH survived and the temporary module was removed.
+
+An unreferenced native POSTMASK helper candidate now exists under
+`patches/native-display/`. Eight host configurations and a negative mutation
+pass; its translation unit compiles for ARM64 against the prepared 6.18
+diagnostic tree. It adds MT6878-specific interrupt masking, shadow bypass
+and relay configuration, preserving generic behavior. It is not packaged
+or enabled. CRTC currently interleaves config/start, so activation also
+requires a reviewed configure-before-start order, DT/clock/mutex/routing
+integration and stopped-path live evidence. See the candidate README.
+
+Candidate 0002 now supplies the MT6878-only configure-all-before-start
+callback order. Reconstructed APKBUILD-order source passes 24 host traces,
+a negative interleaving mutation and ARM64 object compilation with local
+patched headers. It remains unreferenced; inherited engine quiescence,
+POSTMASK DT/routing/clock ownership and live lifecycle are not proven by
+the callback order test. Installed r153 is unchanged.
+
+Current performance observation: the running Phoc session uses Pixman after
+EGL/Vulkan initialization failure, and only card0 exists (no render node).
+The fixed panel DT selects 60 Hz; it does not expose a runtime 120 Hz mode.
+A bounded 120-sequence measurement on an active CRTC took 2032465770 ns
+(59.0416 sequence Hz). This is not compositor FPS or a long-term stability
+result. An initial attempt on a disabled CRTC and an attempt immediately
+after the wake request both failed with EINVAL; neither is silently retried.
+See DISPLAY_FIRST_FRAME_AUDIT.md for the measurement boundary.
+
+## Historical r151 live experiments
 
 Update after the route-only test: changing OVL0 INTEN from frame-start bit 14
 to frame-completion bit 1 eliminated redraw flicker according to the user.
@@ -31,7 +144,7 @@ Inherited LK PQ initialization, flicker, cold repeat and lifecycle validation
 remain open. The older rows below describe baseline images, not this live
 experiment. Full evidence is in `DISPLAY_FIRST_FRAME_AUDIT.md`.
 
-## Exact software state
+## Historical software state before r153
 
 | Role | Revision | Device state |
 | --- | --- | --- |
@@ -102,7 +215,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Charging | Partial | Clean #128 uses AICR/ICHG 500000 uA when TCPM publishes no current limit. A later real PD session published 5 V / 2 A and drove the policy to 2 A. On installed r151, the source-aware power gate passed: this PD-capable computer attachment reports 5 V but `CURRENT_MAX=0`, so the conservative 500 mA fallback remains correct. These are contract/taper snapshots, not a full charge-rate result. Native BC1.2 SDP/CDP/DCP classification is absent. | Repeat PD from a partially discharged battery while logging battery/connector temperatures, rate, taper, termination and detach. Separately observe a USB 2.0 host, known Rp source and known 5 V BC1.2 DCP. Preserve USB2 DP/DM ownership; explicit PPS setpoints, higher voltages and OTG remain disabled. |
 | Idle battery drain | Broken | Roughly half the battery was reported lost overnight. A live r147 capture found `dconf-service` at 5.1 GiB RSS plus 596 MiB swap and persistent CPU use because `/var/lib/greetd/.config/dconf` did not exist; Calls and Chatty retried failed writes continuously. A soft restart reclaimed the memory, but growth resumed until the directory was created. Device package r9 now ships the private dconf directory directly and the overlay validator rejects regressions. Wi-Fi and USB suspend costs remain unisolated. | Build and clean-install r9, validate flat dconf RSS/CPU across reboot, then run physically unplugged screen-off A/B intervals with Wi-Fi associated and disabled. Record coulomb, suspend and wake/IRQ deltas. |
 | GNSS | Partial | Fastboot proved the previous executable loader was `8aa048f`; after `b76e47e` was installed in `lk_a/b`, live DT exposed GPS EMI `0x86a00000/0x100000`. Clean #130 manual v051 then created both nodes and completed bounded link0 open, ATF boot-info ioctl 23 and close. No owner/modem module remained; Wi-Fi, Bluetooth and exact 32 MiB USB survived. The `pkgrel=150` candidate now extracts the three proven read-only ioctls and packages an explicit, deadline-bounded link0 diagnostic with no autostart. | Run the manual diagnostic regression gate. A position bridge remains blocked on locally absent MNL/MVCD/navigation protocol evidence; after that is obtained, prove a timed/accurate fix, cold starts, restart and suspend/resume. |
-| Modem / SIM | Broken | No ModemManager modem, CCCI/DPMAIF/WWAN device or SIM state. U-Boot validates the LK CCCI payload. CCCI core, CCIF, modem common and the 39-object FSM/port/non-page-pool-DPMAIF groups compile only; no ECCCI/DPMAIF module is linked, shipped, autoloaded or run. | Classify the 241 external references left after internal resolution, then stage page-pool and CCMNI compile boundaries. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT and runtime remain later gates. |
+| Modem / SIM | Broken | No ModemManager modem, CCCI/DPMAIF/WWAN device or SIM state. U-Boot validates the LK CCCI payload. The combined 64-object CCCI/util/CCMNI/RPS/ADC/UDC/non-page-pool-DPMAIF inventory classifies 242 remaining references; optional MRDUMP dependency is guarded and checked in both configurations. No ECCCI/DPMAIF module is linked, shipped, autoloaded or run. | Validate actual configured-kernel exports, module ownership and final LTO/modpost; then cover page-pool and UDC provider lifecycle. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT and runtime remain later gates. |
 | Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub remain manual-only; no accelerometer, gyro, proximity or light sensor is exposed. Patch `0093` structurally rejects malformed TCM region-info before SCP recovery. U-Boot candidate `5e450af73a` passes host-only slot/identity/carveout/region-info agreement tests but deliberately returns `-EOPNOTSUPP` on the board because its live adapters are absent. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Panthor is configured and has a pinned LLVM 21 compile/source-trace gate, but no Mali platform device or render node exists. The shipped DT has no GPU node; MFG RPC remains disabled inventory, with no GPU regulator consumer or autoload. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. |
 | Rear/front cameras | Broken | No camera media pipeline or preview/capture. Torch channels work independently. | The source candidate records the main IMX882 I2C8/CAMTG2/reset/four-rail topology with the sensor and every provider disabled. Compile-only gates still ship no camera module or live client. Final-DTB CI, observation-only clean boots, sensor identity, SENINF/ISP, CCU and the media graph remain. |

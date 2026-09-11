@@ -3,7 +3,84 @@
 This file tracks the current working order for turning the CMF Phone 1
 postmarketOS port into a stable daily-phone build.
 
-## Current source of truth
+## Publication follow-up (2026-09-11)
+
+Confirmed fixes must be promoted with their evidence and documentation, not
+left only in research branches. The repository uses `main`, not `master`.
+The isolated display candidate `codex/display-main-promotion` at 8f61a02
+carries the verified implementation and dependency series without importing
+all integration experiments. CI 34575901650 has passed validation and is
+building the kernel; it has not been merged or installed. Candidate r154
+must not inherit r153's installation claims. Review userspace differences
+and pass installation/regression/lifecycle gates before promotion.
+
+Modem diagnostic U-Boot 38192f2 is approved, published and passes CI
+34575135682 with verified downloaded hashes; handset installation remains
+pending. GNSS BINFO/FE31 worked once, but incomplete-download teardown failed
+and required a clean reboot. The staged full-fragment probe is host-tested
+only and must wait for a proven DSP readiness/shutdown contract. These
+results do not establish SIM service or a GPS fix. CURRENT_STATUS.md and
+the subsystem evidence documents track the exact boundaries.
+
+## Installed milestone (2026-09-10)
+
+Installed: integration commit aecf4f4, CI 34492172863, kernel 6.18-r153,
+device 8-r9, unchanged U-Boot 60bcf22. Paired clean install and 32 MiB USB
+gate passed; the user confirms native display output without diagnostic
+modules. Display remains Partial: fixed 60 Hz, software rendering, inherited
+PQ state and incomplete lifecycle gates. The first DPMS test failed; a
+separate readiness-synchronized, idle-inhibited ten-cycle DPMS test now
+passes on the unchanged image. CURRENT_STATUS.md and
+DISPLAY_FIRST_FRAME_AUDIT.md contain hashes and the first-failure record.
+
+At the user's request, source work proceeds concurrently; one coordinator
+owns all phone experiments. No concurrent SCP, GPU, camera or modem probes.
+
+| Workstream | Immediate boundary | Before a hardware claim |
+| --- | --- | --- |
+| Display | Synchronize lifecycle tests with completed modesets; separate scanout cadence from rendering FPS; trace panel/host 120 Hz switch and Linux PQ ownership. | Three clean boots, controlled DPMS, brightness, 60/120 Hz, sustained redraw and suspend/resume with USB intact. |
+| GPU | Validate Panthor rail, power-domain and firmware prerequisites against B4.1; retain disabled consumers until ownership is established. | Render node plus accelerated compositor, load/thermal and lifecycle evidence. |
+| Sensors | Validate SCP firmware/region handoff before adding the missing DVFS provider. | Safe SCP boot and plausible calibrated sensor events, not merely module compilation. |
+| Camera | Establish the next clock/power dependency for a bounded sensor identity read. | Variant-aware identity, then media pipeline, preview/capture and clean teardown. |
+| SIM/modem | Establish authenticated handoff, trusted-firmware ABI and DMA/MPU isolation before modem boot. | SIM detection, registration, calls/SMS/data and radio coexistence. |
+| GNSS | Keep read-only transport diagnostics fail-closed while resolving the navigation userspace protocol. | Timed position fix with accuracy, restart and coexistence; transport open is insufficient. |
+
+The active integration branch is codex/hardware-integration. Changes in
+isolated worktrees are candidates, not automatically merged or enabled.
+No full build is justified by an untested timing guess or host-only result.
+
+### Parallel candidate results
+
+These candidates remain in sibling worktrees, not in the installed r153
+image or this branch's package inputs. Their host tests were rerun by the
+integration coordinator; no phone probes were delegated.
+
+- `nothing-tetris-panthor-prereq/scripts/check-panthor-vgpu-readback.py`:
+  exact B4.1 vendor enabled-rail readback uses DBG0, whereas the mainline
+  helper uses ELR2. 73728 synthetic combinations, five read failures and
+  two negative mutations pass. Read actual rail state without changing
+  regulator ownership before proposing a runtime correction.
+- `camera-clk-prereq/patches/camera-identity/`: reset-only candidate fixes
+  inverted logical values for GPIO_ACTIVE_LOW. Actual power functions pass
+  success plus 11 injected failures; the baseline fails the same test.
+  Shared rail ownership, measured clock rate, DOVDD settling and teardown
+  error handling still block a sensor identity probe.
+- `nothing-tetris-scp-region/scripts/check-scp-region-host.py`: candidate
+  validates the full rounded, multiplied DRAM recovery range even when the
+  DT flag is off. Baseline fails 10 of 18 cases; candidate passes all under
+  UBSan. Reserved-memory ownership and authenticated loader handoff are
+  still unproven. Review/renumber the local 0094 candidate before integration.
+- `gnss-userspace-bridge/scripts/check-gnss-v051-readonly.sh`: 19 cases
+  cover early abort on malformed fragment count and output only after
+  successful close, with key redaction. MNL/navigation protocol remains
+  missing; these changes do not produce a position fix. Modem authenticated
+  handoff and DMA/MPU isolation remain unresolved.
+
+No candidate has a new full CI artifact, target lifecycle proof or a reason
+to enable its hardware automatically. Preserve the existing known failures
+when promoting a later tested candidate.
+
+## Historical source of truth before native r153
 
 | Track | Branch / path | State |
 | --- | --- | --- |
@@ -37,7 +114,7 @@ for CI and hardware bring-up, but they must not be merged to `main` until:
 4. The branch has a documented rollback point and no automatic loading of
    unvalidated high-risk modules.
 
-`codex/next-hardware` is the current promotion candidate. It must remain
+`codex/hardware-integration` is the current promotion candidate. It must remain
 separate from `main` until the CI image boots and completes the hard regression
 gates below. Sensors/SCP, Modem/SIM, GPU, Camera and native display remain
 staged or compile-only until their own gates pass.
@@ -60,7 +137,7 @@ stable baseline:
 7. Any new default module must be packaged, dependency-checked, and covered by
    `scripts/validate-pmaports-overlay.sh`.
 
-## Bring-up order
+## Earlier Bring-up Order and Dependency Inventory
 
 | Order | Block | Goal | Promotion gate |
 | --- | --- | --- | --- |

@@ -2,12 +2,91 @@
 
 ## Current boundary
 
-The installed kernel package `6.18-r129` uses only the stock-derived Tetris
+The currently verified kernel package `6.18-r153` uses the stock-derived Tetris
 v051 data-link module from Nothing OS 4.1 commit
 `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. Patch `0020` publishes its DT
 platform device. The firmware package installs the exact
 MT6878/MT6631 GNSS payload as
 `connsys_gnss_mt6878_mt6631.bin`.
+
+Pre-experiment read-only runtime check: boot ID
+`3c9afcd9-04a0-4bed-8333-1f7c5ab4a7f5`, runtime `6.18.0 #154`, device
+package `8-r9`. Package versions were read directly from the installed APK
+database. The GNSS transport service was inactive and `/proc/modules`
+contained neither `gps_drv_dl_v051` nor modem drivers. Connectivity, WLAN
+and Bluetooth drivers were present. This is a baseline, not a new GPS test.
+
+SSH initially timed out while the host route selected Wi-Fi. USB inspection
+still identified the postmarketOS phone; its `en4` interface subsequently
+had `172.16.42.2/24`, and SSH to `172.16.42.1` succeeded without changing
+network configuration or rebooting. Do not record that timeout as a kernel
+crash. Repository DNS lookups failed during package inspection; future
+baseline checks should use the installed database without network access.
+
+The B4.1 userspace analysis now identifies the normal MT6878 startup path:
+all three chipset capability records select driver-assisted MVCD. The
+kernel supplies boot metadata through secure operation `0x1f` and submits
+only a DSP selector and fragment number through operation `0x20`; the
+latter carries no userspace firmware buffer. Consequently the packaged
+firmware's existence does not prove secure firmware loading. Conversely,
+the historical successful v051 ioctl-23 test below already proves this
+metadata boundary on that earlier boot and must not be discarded as
+untested. Repeat on the current build from a controlled clean baseline
+before advancing to the newly decoded FE08/BINFO and FE31/FE32 ACK exchange.
+No new secure calls, link opens or fragment submissions were performed in
+that baseline check.
+
+A subsequent single transport-only service start on this same boot
+succeeded at kernel time 1655.72. Both devices appeared, both links stayed
+CLOSED, and a root ownership check found no users. USB stayed UP; a 32 MiB
+zero-stream transfer retained SHA256 `83ee4724...`. Wi-Fi scanning also
+succeeded, but routed Wi-Fi and Bluetooth functionality were not tested.
+At this stage the module remained loaded; it was not unloaded or reloaded. Source triage
+confirmed that mapped TIA2 takes precedence over the absent TIA1 resource.
+The empty default pinctrl node explains its warning, while a live debugfs
+read confirmed all six required L1/L5 control states. Raw evidence is in
+`local/gnss-r153-live/TEST.md` and `transport-dmesg.txt`. This is transport
+registration evidence only.
+
+The subsequent single bounded readonly-helper invocation on r153 returned
+status 0 and fragment count 106 (code_size field 42505, units unresolved).
+The log identifies A-die 6631 and shows link0 OPENING -> OPENED -> CLOSING
+-> CLOSED, with DSP reset readiness followed by OFF on close. No owner
+remained; USB and the repeated 32 MiB hash check passed. The key was
+redacted, and no fragments or device data reads/writes were submitted.
+See `boot-info.txt` and `boot-info-dmesg.txt` in the same local evidence
+directory. This confirms current-build metadata access, not a firmware
+download, satellite fix, cold-repeat or full coexistence result.
+
+### BINFO result and recovery (2026-09-11)
+
+One bounded BINFO-only probe subsequently wrote a single FE08/BINFO frame
+and received a checksum-valid FE31 index-zero acknowledgement. Probe SHA256:
+`dac1ef53afb64abd7f5d0c312f1229ee981494027a778449f5d25f0598fad76b`.
+The metadata-only close result above does not describe this later test:
+after the write, shutdown exhausted 200 off-done polls, reported
+need_dump_for_reset_done=1 and forced A-die off. Userspace exit 0 did not
+prove clean teardown. No fragment submissions or navigation commands ran.
+Evidence: `local/gnss-r153-live/binfo-only-kernel.log` and the test plan in
+that directory. The phone was cleanly rebooted, not subjected to a module
+unload/reload retry.
+
+Last verified post-recovery boot:
+`3334a5ab-4658-4310-b07e-77b6fcaf0fa1`, unchanged r153 / kernel #154,
+GNSS service inactive and no gpsdl nodes; USB/SSH available. Revalidate this
+baseline before the next experiment. A staged full-fragment native probe
+passes 29 mocked-I/O scenarios, including 1/106/256-fragment ACK chains and
+fail-closed framing/index/error cases. It has not been installed or run.
+The kernel's off-done check precedes USRT/hardware power-off; the vendor
+userspace cleanup traced so far does not establish a DSP stop contract.
+Do not run the staged probe merely because its fragment exchange compiles:
+RAM-code readiness and safe shutdown must first be resolved. GPS remains
+Partial at the transport/protocol boundary, with no satellite fix.
+
+## Historical Evidence
+
+The following dated tests describe earlier installed images. They are not
+claims that the current boot has passed those gates.
 
 The module exposes two vendor character devices, `/dev/gpsdl0` and
 `/dev/gpsdl1`. Their read/write/ioctl ABI is consumed by MediaTek MNL userspace;

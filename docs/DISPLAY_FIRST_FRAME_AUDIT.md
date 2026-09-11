@@ -321,3 +321,289 @@ patch tool in APKBUILD order, including 0097, then compiled the resulting
 translation unit successfully with clang21. No production build was run
 locally. The diagnostic source selection remains temporary until CI install;
 driver re-enabling vblank or modesetting can still restore the old setting.
+
+## CI r153 clean installation and first lifecycle test
+
+CI `34492172863` succeeded for `aecf4f44f4170952709a7dd514538f0d75b55e22`.
+Downloaded image directory: `local/ci-run-34492172863-images-r153` in the
+integration worktree. SHA256SUMS verification passed for all three payloads:
+
+- FIT: `da5e33c9342b1a7d4ea4af7b278496021b3d222ca5756dd1d7338058282602a2`
+- boot filesystem: `45c6d41c795197a3c9cff74e7dec54edb4baec4c4ee7f2204ef1ea1e82a2dfd5`
+- root sparse: `bba6faf07c3e395645be6343586bbaa5f277fe9a0d51ab9c94b4b46f9ff26ac3`
+
+User placed the phone in fastboot. Confirmed product nothing-tetris,
+platform mt6878, U-Boot 60bcf22, slot a, 128 MiB download limit and sufficient
+partition sizes. Wrote boot to super and all 17 sparse root pieces to
+userdata; every write succeeded. No bootloader or calibration partition was
+written. Fastboot reboot lost the USB status reply, but after 20 seconds
+Linux #154 and USB NCM/SSH were available. Verified package versions r153 and
+device 8-r9, native FIT hash, active DRM XR24 1080x2400 mode, no diagnostic
+route/IRQ modules and no failed units. Capture: `local/r153-first-boot.txt`.
+An initial package info command unnecessarily attempted repository access;
+the later `apk --no-network info -vv` verified installed versions directly.
+
+USB 32 MiB transfer and existing device-presence gate passed:
+`local/live-logs/20260910T192547Z-172.16.42.1-regression-gate`.
+This is not proof of all Wi-Fi/BT/audio end-user functions.
+
+The local DPMS test toggled DisplayConfig PowerSaveMode 3/0 and waited for
+connector disabled/enabled. After each wake it queued 30 frame events with a
+3-second timeout, without any diagnostic kernel module. Cycles 1-4 passed.
+Cycle 5 failed at QUEUE_SEQUENCE with EINVAL; preserved the failure rather
+than retrying. Captures: `local/r153-dpms-10cycles.txt` and
+`local/r153-dpms-first-failure.txt`. The latter shows active DRM and USB UP.
+No DRM flip/vblank timeout, BUG or Oops was found. Phoc reports additional
+off/on transitions around the failed cycle and input processing delays of
+23-86 ms. Pinned drm_vblank.c permits EINVAL when vblank is disabled during
+the sequence request; a modeset race is a hypothesis, not an established
+root cause. A controlled session/idle condition is needed before another
+test; no ten-cycle pass or suspend/resume claim is justified yet.
+
+## Installed-image visual confirmation and cadence
+
+The user subsequently confirmed that r153 displays the interface. This does
+not prove flawless redraw under load, 120 Hz or lifecycle stability.
+Read-only runtime inspection confirms Pixman rendering after failed EGL and
+Vulkan initialization, no renderD node and input processing delays of
+23-86 ms. GPU acceleration is a separate missing dependency; those messages
+alone do not identify every performance bottleneck.
+
+Patch 0050 exposes only the mode selected by samsung,refresh-rate; patch
+0072 fixes that property at 60. The existing 120 Hz timing table is not proof
+of a working runtime switch. Both tables use 377349 kHz / htotal 1293;
+vtotal changes from 4864 to 2432 and the panel command changes from 0x21 to
+0x01. Do not simply advertise both modes without synchronizing panel/host
+configuration and testing the complete inherited RSZ/PQ route.
+
+`scripts/measure-drm-sequence.py` queues two bounded sequence events without
+changing registers or mode. It checks event type/size/cookie and rejects
+timestamp or sequence discontinuities. Pending events hold a temporary
+vblank reference. It measures DRM sequence cadence, not newly rendered
+frames, pixels or per-frame jitter. Host tests cover 60/120 Hz arithmetic,
+malformed events, discontinuities, timeout and close-on-first-error.
+
+Three distinct observations on r153 (in order):
+
+1. Initial measurement: EINVAL, subsequent state confirmed connector
+   disabled and CRTC active=0. USB remained UP.
+2. Single ordinary DisplayConfig wake followed immediately by measurement:
+   EINVAL although connector enabled was already visible. Subsequent DRM
+   state showed active=1, the 60 Hz mode and framebuffer 63; no vblank/flip
+   fault was logged. D-Bus return/connector enabled are not sufficient
+   completion barriers. This does not resolve the earlier fifth-cycle fault.
+3. Separate measurement after active state inspection: 120 sequence steps
+   in 2032465770 ns, or 59.0415847 Hz. USB remained UP. No driver or timing
+   change was made between these observations.
+
+Next lifecycle test must synchronize with completed modesetting and control
+idle/session activity, without retrying failed sequence ioctls. Retain these
+failures alongside any later successful test.
+
+## Controlled r153 DPMS repeat
+
+The earlier test's connector state was an insufficient completion barrier.
+New `scripts/check-live-display-dpms.py` retains one session D-Bus connection
+and an idle inhibitor (flag 8), requiring an initially active CRTC. Each
+ordinary PowerSaveMode change is followed by a bounded readiness observation
+using connector state plus GET_SEQUENCE. Every pre-ready EINVAL is counted
+in the log. Non-EINVAL errors and readiness timeouts stop the test. Once
+ready, QUEUE_SEQUENCE is issued exactly once for each measurement event;
+any queue error, timeout or sequence discontinuity fails immediately.
+No diagnostic module, timing change, register override or kernel rebuild.
+
+This distinction is deliberate: polling the documented inactive transition
+is not retrying a failed frame measurement or claiming every ioctl succeeds.
+On this target, successful GET_SEQUENCE acquires a vblank reference whereas
+connector-enabled alone can precede that readiness by nearly 300 ms.
+
+On the installed r153 / #154 / aecf4f4 image, all ten cycles passed:
+
+- On readiness: 288-298 ms, ten observations with nine pre-ready EINVALs in
+  each cycle. Off readiness: 345-353 ms, two observations with one EINVAL.
+- Each subsequent 30-step event measurement completed in 508.03-508.27 ms,
+  59.024-59.052 sequence Hz. No frame-queue errors, retries or discontinuities.
+- Phoc's monotonic journal contains exactly ten off/on pairs between
+  1187.399810 and 1198.568721 seconds. No extra transitions in that interval.
+- Final CRTC active, XR24 1080x2400 at nominal 60 Hz; no matching DRM
+  timeout/Oops/BUG. USB UP before and after; SSH intact.
+- IsInhibited(8) returned false afterward. Normal idle blanking occurred
+  at 1259.403588 seconds, after the test and inhibitor release.
+
+Raw captures: `local/r153-dpms-ready-10cycles.txt`,
+`local/r153-dpms-ready-post.txt`, `local/r153-dpms-ready-transitions.txt`.
+The host suite `ci/test-drm-sequence.py` now has nine passing tests including
+readiness/error separation, connector-only rejection and bounded timeout.
+
+This passes the controlled DPMS/event gate only. The first failed test is
+retained, and its additional transitions were not reproduced here. Do not
+infer correct pixels after every transition, compositor FPS, cold startup,
+120 Hz, suspend/resume or complete native PQ ownership from this result.
+
+## Exclusive PQ bypass experiment on r153
+
+Hypothesis: the earlier bypass failure could have been caused by the changed
+DSC input selector or simultaneous fan-out rather than the bypass itself.
+Test only the exclusive PQ_IN_CB0 -> PQ_OUT_CB4 -> SPLIT_OUT_CB2 route,
+keeping the working DSC selector 0xd60=0x00020000 and all clocks, power,
+timing, OVL and DSC configuration unchanged.
+
+Authoritative route definitions are in B4.1 `mtk_drm_ddp.c` at ee2be53:
+PQ0_IN_CB_TO_PQ_OUT_CB4 is BIT(2) at 0xd00; PQ0_OUT_CB_TO_SPLIT_OUT_CB2 is
+BIT(1) at 0xd30. The bounded local `mt6878_bypass_probe` uses DT resources
+for MMSYS0/DSC/DSI. It requires active engines, disabled DSC IRQ and the exact
+working route before writes. It samples 128 times before, during and after
+the change, acknowledges sampled DSC flags without resetting engines, and
+restores its two owned route words before returning. No firmware/partition,
+regulator, IRQ registration or background worker changes.
+
+Single live test on unchanged r153 (about 0.8 seconds in total):
+
+| Phase | d00 / d30 / d60 | 128-sample result |
+| --- | --- | --- |
+| Baseline | 00010001 / 00000000 / 00020000 | 16 FRAME_DONE, 112 zero, no abnormal EOF; 262045 us |
+| Exclusive bypass | 00040004 / 00020002 / 00020000 | 16 abnormal EOF, 112 zero, no FRAME_DONE; 262637 us |
+| Restored | 00010001 / 00000000 / 00020000 | 15 FRAME_DONE, 113 zero, no abnormal EOF; 261794 us |
+
+Kernel journal confirms exact changed route and `count=384 restored=1
+capture_result=0`; zero means the diagnostic finished, not that bypass works.
+Thirty-step DRM event measurements before/after returned 59.0322/59.0470 Hz.
+USB/SSH remained UP, and the completed diagnostic module was removed once
+without reload. The normal session idle inhibitor was released. Physical
+pixel correctness during the quarter-second bypass was not asserted.
+
+Evidence: `local/r153-exclusive-bypass-probe.txt`,
+`local/r153-exclusive-bypass-kernel.txt`,
+`local/r153-exclusive-bypass-cleanup.txt`. The diagnostic and runner remain
+ignored local artifacts, not package inputs. Build used clang 21.1.8 against
+the prepared kernel with missing Module.symvers warnings; successful runtime
+load does not replace a production ABI/package check.
+
+Conclusion: this exact bypass candidate is disproven even with exclusive
+fan-out and the retained working DSC selector. Do not merge it or trigger
+CI for it. This does not rule out all possible alternative routes. The next
+boundary is explicit lifecycle ownership of the known-working RSZ/PQ chain,
+starting with read-only state and B4.1 reset/config/clock ordering. Vendor
+RSZ0 is at 0x14008000; its prepare sets shadow bypass, and its start/config
+behavior depends on scaling ownership. Blindly enabling a generic resizer
+with copied dimensions would not reproduce that contract. Its address must
+be represented by a real DT resource in any production driver.
+
+## Read-only PQ state on r153
+
+One bounded `mt6878_pq_snapshot` load captured selected configuration words
+from the known-working path. It checks nothing,tetris and the MT6878 MMSYS0
+resource, requires the known route and DSC/DSI/APB clock gates, and skips any
+PQ block whose gate is off. No MMIO writes, IRQ acknowledgement, clock
+changes, reset, firmware access or background tasks. Addresses are pinned
+B4.1 diagnostic data, not proposed production hard-coded resources.
+
+All ten blocks were clocked (`captured=0x3ff`, MMSYS gate word 0x003f0000).
+Before/after 30-step DRM measurements were 59.0281/59.0257 Hz. USB/SSH stayed
+UP and the snapshot module was removed after evidence collection.
+
+| Block | Selected captured configuration |
+| --- | --- |
+| RSZ0 | EN=0, CONTROL1=80000000, CONTROL2=0, input/output/steps=0, SHADOW=f0:3 |
+| TDSHP0 | CTRL=5, CFG=1, input/output=04380960, shadow724=0, INTEN=0 |
+| C3D0 | EN=1, CFG=11, SIZE=04380960, SHADOW=7, INTEN=0 |
+| COLOR0 | CFG_MAIN=80, START=1, INTEN=0, width=438, height=960, shadow=7 |
+| CCORR0/1 | EN=1, CFG=301, SIZE=04380960, SHADOW=7, INTEN=0 |
+| AAL0 | EN=1, CFG=00400127, SIZE/output=04380960, SHADOW_f0=7, INTEN=0 |
+| GAMMA0 | EN=1, CFG=101, SIZE=04380960 |
+| POSTMASK0 | EN=1, INTEN=917, CFG=146, SHADOW=3, SIZE=04380960, SRAM_CFG=0 |
+| DITHER0 | EN=1, CFG=80000183, SIZE=04380960, INTEN=0 |
+
+Values are hexadecimal. These are configuration readbacks, not proof that
+every processing operation is active; shadow semantics differ by block.
+In particular, RSZ EN=0 with zero dimensions disproves the assumption that
+the native path must initialize an active scaler to reproduce this state.
+Do not set RSZ EN=1 merely because the crossbar route is named RSZ0.
+
+POSTMASK requires special attention: CFG=0x146 has DRAM_MODE set and
+RELAY_MODE clear, and its local interrupt enable is nonzero even though
+native Linux has no POSTMASK node/owner. This does not prove a current DMA
+transaction, an unmasked GIC interrupt or corruption; memory address/length
+and transactions were not captured. The B4.1 no-round-corner config uses
+0x147, and `mtk_postmask_bypass()` changes only CFG bit 0. Upstream already
+has generic POSTMASK config/start/stop in `mtk_ddp_comp.c`, but that config
+writes CFG=1 and does not initialize MT6878 shadow/INTEN state. Reusing it
+without MT6878 handoff handling is insufficient.
+
+Next isolated live boundary: prove the documented POSTMASK relay bit while
+preserving other configuration, checking frame completion and pixels, then
+separately validate interrupt/DMA quiescence and native start/stop ownership.
+Do not infer those gates from this read-only capture or blindly copy all
+captured words into a startup script.
+
+Raw evidence: `local/r153-pq-snapshot.txt` and
+`local/r153-pq-snapshot-kernel.txt`. Source diagnostic is in the sibling
+display-probe directory; it is not packaged. Targeted module build has the
+same clang-version/missing-Module.symvers limitations recorded above.
+
+## POSTMASK relay-bit live boundary
+
+One local bounded experiment applied exactly the B4.1
+`mtk_postmask_bypass()` bit change, CFG 0x146 -> 0x147, on unchanged r153.
+It preserved addresses, lengths, interrupt enable, shadow, clocks, routing
+and engine enable. Preconditions required the known route, active engines,
+clocked POSTMASK, EN=1, CFG=146 and shadow bypass. The module captured 128
+DSC samples before/during/after, then restored CFG=146 before returning.
+Only sampled DSC flags were acknowledged with DSC IRQ disabled; no resets.
+
+| Phase | Result | Sample span |
+| --- | --- | --- |
+| Before | 16 FRAME_DONE, 112 zero, no abnormal EOF | 261455 us |
+| Relay 0x147 | 15 FRAME_DONE, 112 zero, **one abnormal EOF** | 262057 us |
+| Restored 0x146 | 15 FRAME_DONE, 113 zero, no abnormal EOF | 261885 us |
+
+All 384 samples completed and restoration was confirmed. The kernel journal
+reports relay CFG=147, capture=0 and restored=1. Baseline/post-test DRM
+sequence cadence was 59.0296/59.0388 Hz; USB/SSH remained UP. The module was
+removed after collection, with no reload or persisted register override.
+No pixel-correctness claim was made for the quarter-second relay interval.
+
+This is **partial**, not a clean pass: relay sustains subsequent frames, but
+changing it mid-stream causes a transition error in this observation. Do
+not ship a live register toggle or erase that error by averaging samples.
+Native configuration must occur while the path is stopped and before OVL
+fetch starts; that transition, POSTMASK interrupt/DMA quiescence and repeated
+lifecycle still need separate validation. Upstream's existing POSTMASK
+config/start/stop helpers are the integration point, with MT6878-specific
+shadow and interrupt handoff rather than a register-writing service.
+
+Evidence: `local/r153-postmask-relay-probe.txt` and
+`local/r153-postmask-relay-kernel.txt`. The module and runner remain local
+diagnostic artifacts, not production package inputs.
+
+## Offline POSTMASK topology validation (2026-09-11)
+
+Candidate `patches/native-display/0003-mt6878-postmask-topology.patch` now
+connects the proposed native POSTMASK lifecycle helpers to a DT node,
+component match, static DRM path and split routing. It is not in APKBUILD
+and has not changed the installed r153 image. Matching B4.1 source confirms
+register resource 0x14010000/0x1000, SPI 317 and POSTMASK clock identity;
+the native node uses its parent bus's one-cell address/size encoding.
+
+`check-topology.sh` reconstructed relevant packaged files, applied the
+candidate and passed 768 host register-array comparisons, component order,
+nonempty path-edge and mutex bit 14 checks. The incorrect d00=0x50005 mutant
+was rejected. The changed mtk_drm_drv.o compiled for ARM64 with clang 21.1.8
+against the prepared diagnostic tree and reconstructed local headers,
+with the expected original-compiler-version warning (21.1.2). Nine DRM
+sequence/readiness tests also passed. None of this is hardware or DT/schema
+validation, complete linking, or a CI-image result.
+
+A read-only phone check returned Linux 6.18.0, usb0 UP and /dev/dri/card0,
+with no diagnostic modules or render node. The old SSH control session had
+expired and the first fresh connection rejected the pre-install known-host
+key; the established disposable USB connection options restored access.
+This was an SSH identity-cache issue, not observed USB loss or kernel crash.
+
+Remaining activation gates are concrete: prove inherited POSTMASK engine
+and DMA quiescence, compile/validate the complete DT, and exercise native
+startup/stop with frame and pixel checks. Configure-before-start callbacks
+alone do not establish quiescence: the current CRTC enables its mutex before
+configuration and does not stop bootloader-owned engines at entry. Other PQ
+blocks remain inherited. No 120 Hz, accelerated compositor, cold-repeat or
+suspend/resume claim follows from these checks.

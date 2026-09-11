@@ -6,7 +6,7 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Source identity
 
-- Current port branch: `codex/next-hardware`, current candidate recorded in
+- Current port branch: `codex/hardware-integration`, current candidate recorded in
   `docs/CURRENT_STATUS.md`.
 - The original source audit was performed on historical branch
   `codex/scp-thermal` at `cd8fbdf`; its vendor-source conclusions remain the
@@ -25,6 +25,99 @@ does not authorize loading a modem module or enabling a DT node.
   inputs. The latter contains CPU-idle and Wi-Fi power work only.
 
 ## Boot-chain trace
+
+### Current r153 observation
+
+A fresh read-only check on the running r153 phone reports kernel
+6.18.0 #154-postmarketos and U-Boot 2026.07-rc1-g60bcf22fdc0a. The published
+/chosen/nothing,ccci-handoff-status values are failure=no-fdt,
+observation-status=invalid, payload-status=not-checked. USB usb0 is UP before
+and after collection. No SMC, modem module, NV access, reboot or power action
+was performed. The phone SSH ED25519 fingerprint matched the previously
+recorded r153 identity; a separate temporary known-host file was used rather
+than changing the user's stale entry.
+
+This is an earlier live failure than the descriptor/payload gates discussed
+below. Do not interpret presence of the validator in U-Boot as a successful
+handoff on this boot. At installed commit 60bcf22fdc0a94526424db59fc7640298ea8f0dd,
+tetris_observe_ccci_handoff() starts with TETRIS_CCCI_NO_FDT. A failed
+get_preserved_prev_bl_fdt() or map operation leaves that generic result;
+tetris_ccci_read_descriptor() also uses it for a null/invalid FDT. Therefore
+the current status cannot distinguish absent early input from a rejected or
+damaged preserved copy. The exact errno and early preservation failure must
+be surfaced before designing a handoff fix; neither register addresses nor
+raw LK/calibration payloads need to be published for that diagnosis.
+
+The installed arch/arm/lib/save_prev_bl_data.c keeps preserved_fdt_error for
+console diagnostics but get_preserved_prev_bl_fdt() returns generic ENODATA
+when the saved address/size are absent. It revalidates the copy on access.
+The selection path prefers x2 only when its FDT contains devinfo, otherwise
+tries x0. This is code to inspect, not proof that changing register preference
+or relaxing range/FDT validation will fix the live failure.
+
+### Source-diagnostic candidate
+
+The local follow-up candidate is U-Boot commit 38192f202c on
+codex/ccci-prev-fdt-diagnostic, based exactly on installed 60bcf22fdc0a.
+Its working tree is ../uboot-ccci-prev-fdt. It records bounded x0/x2 FDT
+validation errors during early preservation and publishes four diagnostics
+alongside the existing sanitized CCCI status:
+
+- source-error: access/revalidation/map result for the preserved source;
+- preservation-error: saved early preservation result;
+- x0-validation-error and x2-validation-error: bounded validation results for
+  the original inputs, without their addresses or content.
+
+These FDT cells encode signed 32-bit errno values in big-endian two's
+complement. Absence means the diagnostic was not recorded, not success.
+Zero means that specific check passed, never modem-runtime readiness. An
+early preservation error distinguishes a failed copy from a later source
+revalidation failure; valid inputs with preservation ENODATA direct the next
+inspection toward source-selection rules. No range check, x2-devinfo selection
+rule, firmware loader, memory handoff or power/SMC behavior is relaxed.
+
+The existing CCCI host suite passes with five new diagnostic scenarios and
+an omission/stale-property test. Checkpatch reports zero errors/warnings.
+The three changed/relevant ARM64 objects compile in normal and initramfs-only
+configurations with Clang 21.1.8. After the initial publication rejection,
+the user explicitly approved this exact push. Commit
+38192f202c8bc3009efbb1d357b97975768424af is now published on that branch in
+xxxvik-xakerxxx/u-boot. CI run 34575135682 passed the full GCC build,
+initramfs-only compilation, tests, boot-contract checks and LK packaging.
+The downloaded u-boot.bin, u-boot-nodtb.bin and u-boot-tetris-lk.img all
+match the artifact SHA256SUMS manifest. This is build/artifact evidence only:
+the diagnostic bootloader has not been installed or tested on the handset.
+Installed U-Boot remains 60bcf22; live diagnostics are the next gate, after
+revalidating USB/SSH, the current boot and the recovery image.
+
+### Static source-range hypothesis (not a diagnosed device cause)
+
+The exact installed base and diagnostic candidate call reserve_prev_bl_fdt
+after dram_init/setup_dest_addr/reserve_malloc and before reserve_board,
+reserve_global_data, reserve_fdt and stack reservation. The reservation
+advances start_addr_sp below its copied FDT on success. Thus the source trace
+does not support a simple claim that the copy was never reserved in the
+normal enabled configuration.
+
+arch/arm/mach-mediatek/mt6878/init.c caps the probed gd->ram_size at 2 GiB.
+The previous-FDT predicate requires BOTH membership in that DRAM interval
+and containment in one MT_NORMAL map entry. The board memory map extends
+beyond the capped interval; membership in that wider map alone is not enough.
+With a synthetic base of 0x40000000 and size 0x80000000, a 40-byte header
+ending exactly at 0xc0000000 is accepted and one crossing that end is rejected.
+An input beginning at 0xc0000000 is rejected despite a normal-memory mapping.
+This is not evidence of the actual x0/x2 input addresses or the live failure.
+
+`patches/modem/check-prev-fdt-range.py ../uboot-ccci-prev-fdt` extracts the
+actual predicate and board map, compiles them with a host-only fixture, and
+passes 17 boundary/overflow/zero-size/reserved-hole cases. The fixture uses
+synthetic memory attribute encodings and never accesses physical memory.
+It does not test FDT validity, copying, relocation, MMU behavior or LK inputs.
+No memory limit/check was relaxed. An EFAULT diagnostic would still require
+distinguishing a capped-range rejection from a reserved/non-normal range;
+it would not authorize extending the accessible range by itself.
+
+### Historical validator bring-up
 
 The installed boot path does not reproduce the Nothing OS modem handoff. A
 newer installed U-Boot validates its structure but deliberately does not start
@@ -347,6 +440,52 @@ rollback. Stop at the first error or any USB/Wi-Fi regression and recover by a
 clean reboot; do not unload/reload modem, SCP or connectivity modules.
 
 ## Definition of modem progress
+
+### 2026-09-11 network object continuation
+
+Two offline candidates in `patches/modem/` now adapt CCMNI sysctl/GRO access
+and RPS header ownership to Linux 6.18. Both ARM64 objects compile against
+the prepared diagnostic tree. The exact-source host flush harness passes
+48 cases and rejects a stale queue-count mutant. The first compile failures
+and an initially unexported GRO helper dependency are recorded in that
+directory's README; the final CCMNI object uses the public receive-list API.
+This advances the previously missing CCMNI dependency, not modem boot or
+the earlier 241-reference full-stack closure. No loadable modem module,
+package activation or phone state change was made.
+
+The read-only phone check found USB UP, ModemManager active, an empty WWAN
+class, no CCCI/GPS device nodes and inactive GNSS transport service. A running
+ModemManager daemon is not a detected modem. Installed r153 was preserved.
+
+### 2026-09-11 combined object dependency audit
+
+The earlier 241-reference partial count is superseded by the reproducible
+64-object inventory in `patches/modem/object-symbol-audit.json`, not by a
+module-link result. Additional core/CCIF/util objects and the unmodified
+ADC/UDC wrappers compile with clang 21.1.8. Candidate 0003 conditionally
+registers the MDSS crash dump only when the Android AEE provider is configured;
+both enabled and absent-provider object variants were checked. No memory or
+modem-power semantics changed. The final 242 references are classified in
+`patches/modem/README.md`; configured exports, module boundaries and final LTO
+remain unverified. No installed artifact, modem state or SIM result changed.
+
+### 2026-09-11 composite code generation
+
+The vendor Kbuild compositions now produce actual ELF64/AArch64 relocatable
+objects for ccci_md_all, ccci_util_lib, ccci_ccif and ccci_dpmaif. The DPMAIF
+gate passed with CONFIG_PAGE_POOL=n and, after candidate 0004, with y.
+Candidate 0004 updates page-pool includes and sysctl registration only.
+Separate composite inventories preserve hashes and dependencies for both
+variants. Compile-time bad-copy references disappear during code generation.
+This closes that intermediate question, not final module linkage or hardware
+readiness. Clang 21.1.8 and LLD 22.1.8 were used; CI equivalence is unproven.
+
+The exact r153 CI run has no saved Module.symvers/development-tree artifact.
+Actual configured exports and modpost remain required. The vendor page-pool
+CMA ownership, recycling and DMA lengths need runtime-oriented review before
+activation. No .ko, CI rebuild, firmware write or live modem probe was made.
+
+## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
 still only `Partial`. `Works` requires clean-install automatic initialization,
