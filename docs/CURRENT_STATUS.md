@@ -2,6 +2,26 @@
 
 Updated: 2026-09-11.
 
+## Latest bootloader observation
+
+CI 34583094081 passed for dd40c7d6420d25ecc9cd75ae608cd5b9d1a155d9.
+The manifest-checked LK artifact was installed only in lk_a, leaving lk_b,
+rootfs and calibration unchanged. Boot 043e6e88-b832-423c-a58d-50fdf3438684
+reports U-Boot 2026.07-rc1-gdd40c7d6420d and unchanged r153/kernel #154.
+The new tag-header-error is zero: the bounded eight-byte MediaTek header
+check passed. This does not validate the list or establish modem ownership.
+FDT diagnostics remain source/preservation/x2=-61, x0=-74 and
+no-fdt/invalid/not-checked. Next establish complete tag-list structure and
+the actual modem producer, not a relaxed FDT check or guessed power call.
+
+USB reattached with the Mac unlocked without a host reset. SSH initially
+returned connection refused during startup, then connected successfully.
+The 32 MiB transfer hash matches before/after; usb0 UP, Wi-Fi connected,
+Bluetooth powered, DRM connected, no failed units. No visual, audio,
+suspend or modem functional success is inferred from these checks.
+The prior GNSS milestone below belongs to the preceding boot; no GNSS
+download was performed on this new diagnostic boot.
+
 ## Latest GNSS milestone
 
 One supervised primary GNSS download/start/stop cycle now passes on r153,
@@ -10,7 +30,8 @@ RAM-code WORKING, then RESET_DONE after one FE05/4 stop, and normal OFF before
 the device finishes closing. No forced A-die off or abnormal FSM occurred
 in the bounded capture. USB 32 MiB hashes pass before/after, Wi-Fi remains
 connected, Bluetooth powered, no failed units and no GPS owners. The module
-is still loaded but its link is closed; no unload/reload was performed.
+was left loaded with its link closed until the next orderly diagnostic
+reboot; no unload/reload was performed.
 
 Status remains Partial: no coordinates/fix, three clean repetitions,
 suspend/resume or automatic GNSS service. GSM/SIM remains unverified. The
@@ -29,8 +50,9 @@ It carries the display dependency series and fixes 0096/0097, with kernel
 6.18-r154 and device 8-r10. It is not the installed full-integration r153
 image and does not include the later unrelated hardware experiments.
 All 72 kernel patches apply in package order; source/checksum and route
-tests pass. CI 34575901650 has passed validate-overlay and is still building
-the kernel. Main has not moved. Clean-install/regression and lifecycle
+tests pass. CI 34575901650 completed successfully and produced image,
+build-log and radio-live artifacts. They are not yet installed. Main has
+not moved. Clean-install/regression and lifecycle
 checks remain prerequisites; review the candidate's older unrelated
 userspace packaging before replacing the working r153 installation.
 
