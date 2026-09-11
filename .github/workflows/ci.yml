@@ -25,13 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache build-base coreutils findutils git shellcheck
+        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
       - name: Validate native display route
         run: ./scripts/check-mt6878-display-route.sh
+      - name: Test greeter rootfs gate
+        run: python3 ci/test-greetd-rootfs.py
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
@@ -371,22 +373,7 @@ jobs:
             'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
             "$rootfs/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf"
           # Check greeter dconf package ownership before any first-boot tmpfiles run.
-          test "$(awk -F: '$1 == "greetd" {print $3 ":" $4 ":" $6}' \
-            "$rootfs/etc/passwd")" = '113:113:/var/lib/greetd'
-          test "$(awk -F: '$1 == "greetd" {print $3}' "$rootfs/etc/group")" = 113
-          test -d "$rootfs/var/lib/greetd/.config/dconf"
-          test "$(stat -c '%a:%u:%g' "$rootfs/var/lib/greetd/.config/dconf")" = 700:113:113
-          for parent in /var /var/lib /var/lib/greetd /var/lib/greetd/.config; do
-            test -d "$rootfs$parent"
-            mode=$(stat -c %a "$rootfs$parent")
-            if test "$(stat -c %u "$rootfs$parent")" = 113; then
-              test "$((0$mode & 0100))" -ne 0
-            elif test "$(stat -c %g "$rootfs$parent")" = 113; then
-              test "$((0$mode & 0010))" -ne 0
-            else
-              test "$((0$mode & 0001))" -ne 0
-            fi
-          done
+          python3 /work/ci/check-greetd-rootfs.py "$rootfs"
           sh /work/pmaports/device/testing/device-nothing-tetris/validate-audio-ucm \
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb" \

@@ -53,7 +53,7 @@ only on a feature branch or mark a subsystem Works from command exit status.
 
 ## Scoped Audio/Greeter Follow-Up
 
-Starting from clean display-main-promotion `7d10744`, the unpublished device
+Starting from clean display-main-promotion `7d10744`, the published device
 8-r11 candidate carries these installed integration fixes. The seven payload
 files in `5f52b75` are copied byte-for-byte; the follow-up also restores the
 package directory creation from `0b8c4164`:
@@ -79,11 +79,21 @@ Packaging the child removes that first-start dependency; the tmpfiles rule is
 retained to restore its named ownership/mode on boot. No recursive chown of
 the greeter home or its shared configuration is added.
 
-The rootfs gate now checks the greetd passwd/group mapping (113:113, home
-`/var/lib/greetd`), the actual dconf directory's 0700/113:113 metadata, and
-search permission through each parent for that identity. Numeric IDs are the
-preserved package contract, not inferred from the host account database.
-A changed target account mapping must fail the gate before installation.
+CI 34587197925 at 7e8503e built the kernel, device package and image files,
+then failed the final rootfs gate. Its new check incorrectly required the
+greetd account to have matching UID/GID 113:113. The working phone actually
+reports UID113 and primary GID119, with home750:113:119, parent .config755:0:0
+and dconf700:113:113. Mode0700 grants access by owner, independently of that
+directory's group. No installable artifact was published by the failed job.
+
+The corrected gate resolves UID/GID from the target passwd/group, checks the
+home and each parent's search permission, and requires dconf mode0700 owned
+by that actual UID. A child chroots and drops credentials to verify real
+write/search access without writing files or executing target code. Missing,
+ambiguous, root or mismatched identities and wrong ownership still fail.
+Eleven Linux tests pass, including the observed split UID/GID and a real
+credential-drop fixture. Kernel/device sources remain unchanged. The first
+failure is not reclassified as a successful image check; a fresh CI is needed.
 The device greetd drop-in only overrides rendering and ExecStart; it does not
 explicitly order tmpfiles. The pinned Phosh drop-in also only overrides
 ExecStart. The target base greetd/tmpfiles units were not available for this
