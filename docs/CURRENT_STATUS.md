@@ -42,6 +42,10 @@ it does not import the new modem/GNSS/camera/GPU compile experiments.
 
 All 72 kernel patches apply in package order to the pinned upstream archive;
 source/checksum validation and the route connect/disconnect model pass.
+CI run 34575901650 targets 8f61a02d2e0d12584a11a111998c1adf4e89b040:
+validate-overlay passed and the kernel build remains in progress. This is
+not a completed image build. Review older unrelated userspace packaging
+against installed r153 before a replacement installation.
 Promotion is pending CI and installation/lifecycle checks. It has not yet
 been merged into main. Once gates pass, merge the
 implementation and this record together; do not leave confirmed changes
