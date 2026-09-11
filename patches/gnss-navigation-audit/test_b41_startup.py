@@ -85,6 +85,8 @@ def registration(lib):
         assert m.args()[0] == (0xffffffff if required else 0)
         # Even failure changes globals; a pure preflight must precede this call.
         assert struct.unpack("<Q", m.u.mem_read(m.global_at(0x6e6800), 8))[0] == values[1]
+        for slot, got in ((3, 0x6e6d30), (4, 0x6e6d28)):
+            assert struct.unpack("<Q", m.u.mem_read(m.global_at(got), 8))[0] == values[slot]
     m.run(0x52f9d0, args=(0,))
     assert m.args()[0] == 0xffffffff
     print("PASS: registration full/null/24 missing-slot cases; required mask0x3fb; nontransactional stores")
@@ -190,10 +192,139 @@ def nmea(lib):
     print("PASS: UseCallback route vs fd; borrowed pointer + w1 length; return values ignored in slice")
 
 
+def frame_callbacks(lib, mnld):
+    m = Machine(mnld, MNLD_SHA, [(0x7ba50, 0x7bbb0), (0x7bbc0, 0x7bd14)])
+    def string(p, bound=64):
+        raw = bytes(m.u.mem_read(p, bound))
+        assert b"\0" in raw
+        return raw.split(b"\0", 1)[0]
+    def format_call(a):
+        fmt = string(a[2])
+        v4 = m.u.reg_read(UC_ARM64_REG_X4)
+        if fmt == b"PMTK%d,%d":
+            out = fmt % (a[3], v4)
+        elif fmt == b"PMTK%d,0,0":
+            out = fmt % a[3]
+        else:
+            assert fmt == b"$%s*%02X\r\n"
+            out = fmt % (string(a[3]), v4)
+        assert len(out) < 64
+        m.u.mem_write(a[0], out + b"\0")
+        return len(out)
+    def copy(a):
+        assert a[2] <= a[3] == 64
+        m.u.mem_write(a[0], bytes(m.u.mem_read(a[1], a[2])))
+        return a[0]
+    sent = []
+    m.mock(0x7b9a0, format_call)  # Only the three pinned format strings above.
+    m.mock(0x853c0, lambda a: len(string(a[0], a[1])))
+    m.mock(0x85000, copy)
+    m.mock(0x84f30, lambda a: 0)
+    m.mock(0x5fa80, lambda a: sent.append((a[0], bytes(m.u.mem_read(a[2], a[1])))) or 0xffffffff)
+    vectors = []
+    for address, values in ((0x7ba50, list(range(256)) + [256, 257, 0xffffffff]),
+                            (0x7bbc0, [0, 1, 0xffffffff])):
+        for value in values:
+            sent.clear()
+            m.run(address, args=(value, DATA, 0x1234, 0x5678))
+            body = (f"PMTK738,{value & 255}" if address == 0x7ba50 else "PMTK736,0,0").encode()
+            checksum = 0
+            for byte in body:
+                checksum ^= byte
+            expected = b"$" + body + f"*{checksum:02X}\r".encode()
+            assert sent == [(0, expected)] and m.args()[0] == 0
+            vectors.append(expected.hex())
+    print("PASS: slots3/4 full mnld bodies; 262 cases; CR without LF; IPC failure masked by return0")
+    # Independently exercise the library veneers, including the overwritten x0
+    # on the no-argument slot4 route. No callback executes in this machine.
+    l = Machine(lib, LIB_SHA, [(0x50903c, 0x50904c), (0x509054, 0x509064)])
+    for start, got in ((0x509054, 0x6e6d30), (0x50903c, 0x6e6d28)):
+        observed = []
+        l.q(l.global_at(got), STOP + 4)
+        l.mock(STOP + 4, lambda a: observed.append(a[0]) or 0xfffffffe)
+        l.run(start, args=(257,))
+        assert observed == [257 if start == 0x509054 else STOP + 4]
+        assert l.args()[0] == 0xfffffffe
+    print("PASS: libmnl slot3 w0 preserved, slot4 x0 overwritten by target; return propagated")
+    print("FRAME_VECTOR_SHA256=" + hashlib.sha256("\n".join(vectors).encode()).hexdigest())
+
+
+def config_producer(mnld, lib):
+    base = 0xde590
+    m = Machine(mnld, MNLD_SHA, [(0x62b70, 0x62bac), (0x6352c, 0x6365c),
+                                (0x63694, 0x638a0), (0x6397c, 0x63a08),
+                                (0x63af4, 0x63b18)])
+    m.map(0xdd000, 0x4000)
+    m.mock(0x84f40, lambda a: m.u.mem_write(a[0], bytes([a[1]]) * a[2]) or a[0])
+    m.mock(0x84f30, lambda a: 0)
+    copies = []
+    def copy(a):
+        src_bound = m.u.reg_read(UC_ARM64_REG_X4)
+        raw = bytes(m.u.mem_read(a[1], src_bound))
+        assert b"\0" in raw and a[2] < a[3]
+        raw = raw.split(b"\0", 1)[0][:a[2]].ljust(a[2], b"\0")
+        m.u.mem_write(a[0], raw)
+        copies.append((a[0] - base, a[1], a[2]))
+        return a[0]
+    m.mock(0x85000, copy)
+    m.u.mem_write(base - 1, b"\xa5" * (0x444 + 2))
+    m.set(UC_ARM64_REG_X20, 0xde520)
+    m.set(UC_ARM64_REG_X29, STACK + 0xe000)
+    m.run(0x62b70, 0x62bac)
+    assert bytes(m.u.mem_read(base, 0x444)) == bytes(0x444)
+    # 62ba4 clears first-block +0x68..0x6f, ending immediately before base.
+    assert m.u.mem_read(base - 1, 1)[0] == 0
+    assert m.u.mem_read(base + 0x444, 1)[0] == 0xa5
+    m.run(0x6352c, 0x6365c)
+    assert (0x1cc, 0x88ac0, 29) in copies
+    assert bytes(m.u.mem_read(base + 0x1cc, 30)) == b"UseCallback" + bytes(19)
+    assert [c[0] for c in copies] == [0xd4, 0xf2, 0x1ea, 0x1cc, 0x190, 0x406, 0x424, 0x208]
+    # A non-default source proves producer copying, not a hard-coded marker.
+    m.u.mem_write(0x88ac0, b"CustomOutput\0")
+    m.run(0x6352c, 0x6365c)
+    assert bytes(m.u.mem_read(base + 0x1cc, 13)) == b"CustomOutput\0"
+    m.set(UC_ARM64_REG_X25, 0xde000)
+    m.run(0x63694, 0x638a0, args=(0x12345678,))
+    assert struct.unpack("<I", m.u.mem_read(base + 0xc8, 4))[0] == 0x12345678
+    assert [c[0] for c in copies[-12:]] == [0x110, 0x226, 0x256, 0x286, 0x2b6, 0x2e6, 0x316, 0x346, 0x376, 0x3a6, 0x3d6, 0x46]
+    m.mock(0x56c70, lambda a: 1)
+    m.run(0x6397c, 0x63a08)
+    assert bytes(m.u.mem_read(base + 0xcc, 8)) == struct.pack("<4H", 0xce, 6, 0xaa55, 0x102)
+    m.u.mem_write(0x88798, struct.pack("<2I", 37, 41))
+    for secondary in (1, 0):
+        m.mock(0x56ce0, lambda a, secondary=secondary: secondary)
+        m.u.mem_write(base + 0x14, struct.pack("<I", 0xffffffff))
+        m.set(UC_ARM64_REG_X25, base + 0x10)
+        m.run(0x63af4, 0x63b18)
+        assert bytes(m.u.mem_read(base + 0x10, 8)) == struct.pack("<2I", 37, 41 if secondary else 0xffffffff)
+    print("PASS: config zero extent/guards, paths, marker producer override, magic, conditional fd fields")
+    l = Machine(lib, LIB_SHA, [(0x52b638, 0x52b6a4)])
+    copied = []
+    def memcpy(a):
+        copied.append(a[:3])
+        l.u.mem_write(a[0], bytes(l.u.mem_read(a[1], a[2])))
+        return a[0]
+    l.mock(0x6e48e0, memcpy)
+    first = bytes(range(0x70))
+    second = bytes(m.u.mem_read(base, 0x444))
+    l.u.mem_write(DATA, first)
+    l.u.mem_write(DATA + 0x100, second)
+    destination = l.global_at(0x6e69d0)
+    l.u.mem_write(destination - 1, b"\xa5" * (0x444 + 2))
+    l.run(0x52b638, 0x52b6a4, args=(DATA, DATA + 0x100))
+    assert copied == [(destination, DATA + 0x100, 0x444)]
+    assert bytes(l.u.mem_read(destination, 0x444)) == second
+    assert bytes(l.u.mem_read(l.global_at(0x6e6710), 0x70)) == first
+    assert l.u.mem_read(destination - 1, 1)[0] == l.u.mem_read(destination + 0x444, 1)[0] == 0xa5
+    print("PASS: actual libmnl entry copies distinct 0x70/0x444 inputs without crossing guards; stops before init")
+
+
 if __name__ == "__main__":
     lib, mnld = map(Path, sys.argv[1:])
     registration(lib)
     agps(lib)
     postinit(lib, mnld)
     nmea(lib)
+    frame_callbacks(lib, mnld)
+    config_producer(mnld, lib)
     print("OFFLINE ONLY: mocked globals/endpoints, no complete init, firmware, receiver or solver")
