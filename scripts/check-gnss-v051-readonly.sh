@@ -18,6 +18,8 @@ patch -s -p1 -d "$tmp_dir" \
 	< "$kernel_pkg/1002-vendor-gnss-linux-6.18-compat.patch.vendor"
 patch -s -p1 -d "$tmp_dir" \
 	< "$kernel_pkg/1003-vendor-gnss-v051-readonly-uapi.patch.vendor"
+patch -s -F0 -p1 -d "$tmp_dir" \
+	< "$kernel_pkg/1004-vendor-gnss-finalize-fsm-records.patch.vendor"
 
 CC="${HOSTCC:-${CC:-cc}}" \
 	sh "$tmp_dir/connectivity/gps/data_link/tests/run_gpsdl_v051_abi_test.sh"

@@ -14,8 +14,13 @@ An isolated six-function trace on the next clean boot passed the full cycle.
 The stop handler completed in about 116 us; its FSM call took about 17 us.
 The corresponding journal record appeared roughly 277 ms later. This run
 does not reproduce the earlier multi-second delay or prove its cause.
-Vendor FSM messages lack a trailing newline; log finalization is now being
-checked before changing hardware timing or the eight-second test deadline.
+The source chain confirms that vendor FSM messages lack a trailing newline
+and can remain unreadable until another printk. Candidate patch 1004 adds
+only the two missing terminators; nine host tests reproduce the original
+quiet-log timeout and accept the fix. Targeted ARM64 object generation and
+package/ABI checks pass. Kernel package r155 carries the candidate, but its
+module is not installed or live-validated. Hardware timing and the
+eight-second test deadline are unchanged.
 USB 32 MiB hashes passed before/after, Wi-Fi remained connected, BT powered,
 no GPS owners or failed units remained, and the isolated tracer was removed
 with global tracing still nop. Raw evidence is retained locally under

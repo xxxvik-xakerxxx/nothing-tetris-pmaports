@@ -1,0 +1,32 @@
+From: Nothing Tetris port maintainers
+Subject: [PATCH] gps: finalize DSP state records without waiting for another log
+
+The status macros do not append a newline. Linux leaves a last unterminated
+printk record committed but unreadable until another record is reserved.
+A userspace observer waiting for RESET_DONE before close can consequently
+wait for unrelated kernel logging even after the hardware transition.
+
+Terminate the normal and abnormal FSM records. printk strips the newline
+from the stored body, preserving the existing observer format and severity.
+Do not change the hardware sequence, timeout or recovery behavior.
+
+Base: Nothing OS 4.1 connectivity e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.
+
+diff --git a/connectivity/gps/data_link/hal/gps_dsp_fsm.c b/connectivity/gps/data_link/hal/gps_dsp_fsm.c
+--- a/connectivity/gps/data_link/hal/gps_dsp_fsm.c
++++ b/connectivity/gps/data_link/hal/gps_dsp_fsm.c
+@@ -340,12 +340,12 @@ _last_check:
+ 	if (abnormal_flag) {
+-		GDL_LOGXW_STA(link_id, "gps_dsp_fsm: old_st=%s, evt=%s, new_st=%s, is_err=%d",
++		GDL_LOGXW_STA(link_id, "gps_dsp_fsm: old_st=%s, evt=%s, new_st=%s, is_err=%d\n",
+ 			gps_dl_dsp_state_name(last_state), gps_dl_dsp_event_name(evt),
+ 			gps_dl_dsp_state_name(gps_dsp_state_get(link_id)), abnormal_flag);
+ 	} else {
+-		GDL_LOGXI_STA(link_id, "gps_dsp_fsm: old_st=%s, evt=%s, new_st=%s",
++		GDL_LOGXI_STA(link_id, "gps_dsp_fsm: old_st=%s, evt=%s, new_st=%s\n",
+ 			gps_dl_dsp_state_name(last_state), gps_dl_dsp_event_name(evt),
+ 			gps_dl_dsp_state_name(gps_dsp_state_get(link_id)));
+ 	}
+ 	return;
+ #endif
+ }

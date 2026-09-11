@@ -70,6 +70,42 @@ manual executable and v051 module are present.
 
 ## Latest experiment and remaining gate (2026-09-11)
 
+### Candidate 1004: finalize the FSM log records
+
+The source diagnosis now confirms a publication dependency: the vendor FSM
+formats omit newline; Linux printk commits but need not finalize the newest
+such record. The /dev/kmsg reader cannot observe it until another printk
+finalizes it. The supervisor withholds close until that observation, making
+shutdown completion depend on unrelated logging. This is not a measured
+multi-second SMC delay. The failed repeat remains failed; other independent
+stall causes have not been excluded on that untraced boot.
+
+Patch 1004 changes exactly the two FSM format strings, normal and abnormal,
+to end with newline. No severity, state ordering, hardware action, deadline,
+retry or observer error handling changes. It is wired into r155 source,
+checksum and prepare order after 1003. Installed r153 remains unchanged.
+
+Nine pinned-source host tests pass, exercising the real observer with a
+sequential ringbuffer model, not Linux atomics. Original quiet-log state
+publication times out; the fixed phases need no subsequent printk; abnormal
+and unarmed resets still fail. The initial patch header was off by one and
+GNU patch reported relocation; the corrected hunk at line340 is checked
+independently, with negative offset/fuzz cases. The packaged diff body is
+byte-identical to this tested candidate. Audit/test commit: 56d50ac in
+codex/camera-clk-prereq, patches/gnss-navigation-audit/.
+
+Targeted hal/gps_dsp_fsm.o compilation against the prepared 6.18 tree passes,
+including LLVM-bitcode to ARM64 ELF generation with Clang21.1.8. The prepared
+kernel records Clang21.1.2, so this is not a matching live module build.
+The narrow source extraction also emitted a missing fw_log directory warning;
+no complete module, modpost or load was attempted. Source SHA256:
+ed0c133fe62dfd4899fe090e2595d753fe01ee183bb9c616815cd611ffbad1ac.
+ARM64 object SHA256:
+3563c9c8c3360711a866910e1fea3697ba97bdc6d272c437769c36e34515496a.
+Package overlay and GNSS UAPI/manual-diagnostic checks pass. Next gate is an
+exact-ABI module/image and unchanged supervised protocol on clean boots,
+with raw-kmsg/source-time capture as well as trace. Navigation remains absent.
+
 Subsequent c931695/r153 repetitions supersede the single-pass reliability
 claim below: repeat 1 passed, repeat 2 timed out waiting for phase 4 after
 STOP_WRITTEN. Its later normal OFF/CLOSED is retained but is not a pass.
