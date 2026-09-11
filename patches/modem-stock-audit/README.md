@@ -161,8 +161,8 @@ does not establish which boot stage lost it. No SIM or modem-running claim.
 From the workspace root (Python 3; existing Docker container with Capstone 5.0.6):
 
 ```sh
-python3 -B worktrees/nothing-tetris-scp-region/patches/modem-stock-audit/reproduce.py worktrees/hardware-integration/local/uboot-c931695-ci34584756418/stock-b41/lk.img
-python3 -B worktrees/nothing-tetris-scp-region/patches/modem-stock-audit/test_audit.py
+python3 -B patches/modem-stock-audit/reproduce.py local/uboot-c931695-ci34584756418/stock-b41/lk.img
+python3 -B patches/modem-stock-audit/test_audit.py
 ```
 
 The first command writes only `evidence.json` beside these scripts. Docker
