@@ -6,6 +6,7 @@ locator. It supersedes the fallback-table uncertainty and decoder next step belo
 The locator now passes on the real archived modem.img; see
 [REAL-CONTAINER.md](REAL-CONTAINER.md) for hashes, bounds checks and the strict
 zero-tail stock48 decoder patch candidate.
+Stock LK reuse as a stage before U-Boot is assessed in [BOOTCHAIN.md](BOOTCHAIN.md).
 
 Offline static audit, 2026-09-11. Modem/SIM runtime: **Untested by this audit**.
 No native modem implementation or runtime activation is delivered.
