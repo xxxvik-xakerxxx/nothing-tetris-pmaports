@@ -3,6 +3,11 @@
 Status: offline candidate; sensors remain Broken. No SCP startup or calibrated
 sample has been demonstrated by this work.
 
+The integration owner independently reran the pinned-source predicate suite
+after commit ce19497: all cases passed, with the same offline-only limits.
+Publication preserves the candidate for review; it must not trigger a full
+kernel build or be advertised as working sensors before startup is proven.
+
 ## Scope and existing progress
 
 This independent `codex/sensor-startup-contract` worktree starts at committed
