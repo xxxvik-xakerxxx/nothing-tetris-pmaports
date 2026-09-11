@@ -2,6 +2,24 @@
 
 Updated: 2026-09-11.
 
+## Latest GNSS milestone
+
+One supervised primary GNSS download/start/stop cycle now passes on r153,
+device8-r9, boot 3baa4f13-1c6d-4cf7-858a-6497d04f0de5. The real DSP reaches
+RAM-code WORKING, then RESET_DONE after one FE05/4 stop, and normal OFF before
+the device finishes closing. No forced A-die off or abnormal FSM occurred
+in the bounded capture. USB 32 MiB hashes pass before/after, Wi-Fi remains
+connected, Bluetooth powered, no failed units and no GPS owners. The module
+is still loaded but its link is closed; no unload/reload was performed.
+
+Status remains Partial: no coordinates/fix, three clean repetitions,
+suspend/resume or automatic GNSS service. GSM/SIM remains unverified. The
+verified research sequence is preserved locally as GNSS worktree commit
+f4db1b5; it is not merged into main or packaged as working GPS. Exact inputs,
+timestamps and retained prior failure are in GNSS_USERSPACE_BRIDGE_AUDIT.md
+and local/gnss-supervised-r153-v2/LIVE-PLAN.md. New boot recovery required
+Mac unlock plus the guarded host USB reset; that reconnection defect remains.
+
 ## Publication and radio follow-up
 
 The display-only promotion candidate is published as
@@ -18,15 +36,30 @@ userspace packaging before replacing the working r153 installation.
 
 U-Boot diagnostic 38192f202c8bc3009efbb1d357b97975768424af was explicitly
 approved and published. CI 34575135682 passed; downloaded artifact hashes
-match its manifest. It is not installed. Installed 60bcf22 still reports
-CCCI no-fdt; neither modem boot nor SIM/network functionality is established.
+match its manifest. A subsequent fastboot write installed it only in lk_a;
+lk_b retains 60bcf22. After unlocking the Mac, one identity-checked host USB
+reset restored en4 and SSH without rebooting the phone. Running loader is
+2026.07-rc1-g38192f202c8b, boot 6fca0ea2-9c15-4a05-8a9e-ee07fa8a76c6.
+The 32 MiB USB transfer hash passed; usb0 is UP, DRM is connected, no failed
+system units or matching Oops/panic/DRM timeout were found. CCCI reports
+source-error=-61, preservation-error=-61, x2-validation-error=-61 and
+x0-validation-error=-74, with no-fdt/invalid/not-checked. The x0 rejection
+is FDT header/full validation, not the range predicate; which of those two
+checks failed is not yet distinguished. Neither modem boot nor SIM/network
+functionality is established. This supersedes the installed-loader row in
+historical tables; locked-host USB reconnection remains an unresolved defect.
 See MODEM_SIM_EVIDENCE_PLAN.md for the bounded diagnostic and next gate.
+The installed container replaces its first `lk` payload with U-Boot while
+preserving a separate bl2_ext. Complete stock-LK modem preparation cannot
+be assumed from that packaging. Trace the actual argument producer before
+changing the FDT parser or attempting modem startup.
 
 The r153 GNSS experiment received one checksum-valid FE31 acknowledgement
 after BINFO, but closing this incomplete download failed the kernel off-done
 poll and forced A-die off. A clean reboot restored the baseline; the last
 verified boot is 3334a5ab-4658-4310-b07e-77b6fcaf0fa1, with USB/SSH available
-and GNSS inactive. A full-fragment research probe passes 29 mocked-I/O
+and GNSS inactive before the later bootloader test above. A full-fragment
+research probe passes 29 mocked-I/O
 scenarios but has not run on the phone. DSP readiness and safe shutdown
 remain unresolved; there is no position fix. See GNSS_BRINGUP.md.
 

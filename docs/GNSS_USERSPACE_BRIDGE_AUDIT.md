@@ -70,6 +70,51 @@ manual executable and v051 module are present.
 
 ## Latest experiment and remaining gate (2026-09-11)
 
+The corrected v2 experiment now PASSED one observed download/start/stop
+cycle after clean reboot and host USB recovery. On boot
+3baa4f13-1c6d-4cf7-858a-6497d04f0de5 (unchanged r153/device8-r9), the
+supervised child exited zero. Kernel events establish OFF -> ON -> RST ->
+WORK -> RST -> OFF, with reset confirmed before release and normal CLOSED
+state. History shows 107 reads and writes of 116/12 bytes, consistent with
+the complete validated boot exchange and one FE05/4 stop. There are no
+forced-off, off-done-failure or abnormal FSM matches in the bounded capture.
+USB 32 MiB hashes match before/after, Wi-Fi remains connected, Bluetooth
+powered, no failed units and no GPS owners. The module remains loaded,
+unused; no unload or repeat was performed. Exact hashes and timestamps are
+in local/gnss-supervised-r153-v2/LIVE-PLAN.md and kernel.log.
+
+This supersedes the earlier recovery blocker, not the incomplete port status:
+three clean repeats, navigation/fix, lifecycle and automatic integration are
+still unverified. The following failed-run record is retained intentionally.
+
+Latest supervised run: one full driver-assisted download reached the native
+DOWNLOAD_COMPLETE checkpoint and the real kernel later reported RST -> WORK
+on RAM_OKAY. This is the first observed DSP RAM-code readiness, not a GNSS
+fix. The supervisor had already rejected a routine periodic read-history
+warning in ROM state and terminated its child before any FE05 stop write.
+Read history contains 107 received frames, consistent with BINFO plus 106
+fragment ACKs. The WORKING transition occurred during cleanup, followed by
+off polling failure, forced A-die off and an abnormal WORK -> OFF transition.
+The supervised lifecycle FAILED; no repeat or module unload was performed.
+
+Full local identity, four exact uploaded hashes and kernel evidence are in
+local/gnss-supervised-r153/LIVE-PLAN.md and kernel.log. USB/SSH remained
+available immediately afterward. A post-test transfer was sandbox-denied,
+so its empty-stream hash is explicitly not transfer evidence. Clean reboot
+was requested; the host sees the postmarketOS USB device but is locked and
+has no en4. User unlock is requested; new boot/SSH recovery remains unverified.
+
+The source-pinned history recorder emits its normal warning every eight
+records, including during download. The local observer now accepts the
+strict numeric history shape in ROM/WORK/post-stop/OFF phases, still rejecting
+errors, unknown warnings, overflow and forced recovery. Its 23 tests pass.
+This correction is not uploaded or rerun; the original experiment bundle
+is retained unchanged. The separately hashed local candidate is under
+local/gnss-supervised-r153-v2. It changes only the observer; nine supervisor
+and five Linux ARM64 process tests pass again, and replay accepts periodic
+history while rejecting the original premature close at session record 39.
+A second experiment requires confirmed clean recovery.
+
 The pinned B4.1 callback/framing research has advanced beyond the earlier
 2060-case framing inventory below. A bounded native BINFO-only experiment
 on r153 received a checksum-valid FE31 index-zero ACK, but its incomplete
@@ -87,7 +132,51 @@ file-descriptor close do not by themselves prove DSP shutdown. The current
 source trace and exact binary hashes are in that worktree's CALLBACK_ABI.md;
 the live failure/recovery record is summarized in GNSS_BRINGUP.md.
 
+Further bounded execution now verifies primary FE05 argument 4 serialization
+and its real queue-flush/writer path to a substituted write syscall. Six
+serializer and nine flush/writer scenarios pass. Short writes continue from
+the remaining bytes, but repeated zero/error writes and invalid fd paths can
+loop without a whole-operation bound. These vendor retry paths must not be
+copied into the native probe. Mode/blocked/context guards can also suppress
+delivery, so a sender return is not a firmware acknowledgement.
+
+The exact-pinned FSM and MCUB handler are unchanged from e96f60dc081a:
+RAM_CODE_READY is required for RESET_DONE -> WORKING; a fresh reset event
+returns WORKING -> RESET_DONE before normal power-off. The next live probe
+must observe these transitions, not infer them from FE32 or a successful
+write. The primary stop packet is known, but its acceptance by this device
+and safe close remain unverified. GNSS stays inactive, USB/SSH healthy on
+the rechecked r153/38192f202c boot. No module load or device write followed
+these tests.
+
+An uninstalled read-only lifecycle observer now has 17 passing unit tests.
+It follows fresh /dev/kmsg records from a cursor opened before gpsdl0, rejects
+lost/stale/out-of-order records and primary warnings, and requires observed
+WORKING before an explicitly armed stop boundary. A separate supervised
+probe mode now waits for explicit readiness/reset tokens around a single
+FE05 stop write; 33 native mocked-I/O scenarios and nine supervisor tests
+pass. Cleanup is bounded and never retries or reloads the driver. A live
+read-only preflight confirms Python and independent /dev/kmsg cursor access,
+but no live readiness record has been seen and no new probe was installed.
+Five actual C-child/Python-supervisor pipe scenarios now pass on Linux ARM64
+with substituted GPS operations and synthetic log events. The observer has
+20 tests after allowing only source-confirmed, phase-scoped routine warning
+messages; a historical BINFO transcript is rejected at its premature close,
+not at its normal open notice. A reviewed, hashed experiment bundle and
+fresh hardware lifecycle evidence are the next gates. Legacy immediate-close/BINFO-only modes remain unsuitable for
+another live run. Any partial-start or teardown failure still requires a
+clean reboot; successful log observation alone is not a GNSS position fix.
+
 ## Earlier position-bridge audit
+
+Follow-up: exact B4.1 switch tables now connect thread-ID-3 stop handling to
+set_param(0,NULL), internal message 1001, and the run-loop sender arguments
+(5,3,1,4). A bounded ARM64 execution test passes this dispatch chain without
+executing the sender or any external call. This narrows the missing stop
+contract to FE05 with argument 4 and conditional link selection, but does
+not prove delivery or acceptance before RAM-code startup, nor safe close.
+The research CALLBACK_ABI.md records table addresses and mode/queue caveats.
+The full-download probe remains unexecuted; no new GPS hardware test ran.
 
 ### 2026-09-11 input provenance correction
 
