@@ -4,6 +4,17 @@ Updated: 2026-09-11.
 
 ## Latest bootloader observation
 
+The subsequent bounded header-list candidate c931695bb963efaa0dfdf928ea475440581838b4
+also passed CI 34584756418 and is now installed in lk_a. Current boot is
+3bcabc1f-8d6e-4c0c-8d97-977eae5affc2, loader c931695bb963, unchanged r153.
+tag-list-header-error=0, count=38, ID masks low=0x3b0c7fff,
+high=0x0026ff3b. Their combined population is 38, so this observed list has
+38 distinct IDs in the reported range. No tag payload was read or validated.
+FDT errors remain unchanged. USB 32 MiB passed, Wi-Fi connected, BT powered,
+DRM connected, no failed units or matching kernel/DRM critical errors.
+Initial SSH timed out; subsequent read succeeded without reset/reflash.
+Visual confirmation below applies to the preceding dd40 boot, not this one.
+
 CI 34583094081 passed for dd40c7d6420d25ecc9cd75ae608cd5b9d1a155d9.
 The manifest-checked LK artifact was installed only in lk_a, leaving lk_b,
 rootfs and calibration unchanged. Boot 043e6e88-b832-423c-a58d-50fdf3438684
@@ -17,10 +28,11 @@ the actual modem producer, not a relaxed FDT check or guessed power call.
 USB reattached with the Mac unlocked without a host reset. SSH initially
 returned connection refused during startup, then connected successfully.
 The 32 MiB transfer hash matches before/after; usb0 UP, Wi-Fi connected,
-Bluetooth powered, DRM connected, no failed units. No visual, audio,
-suspend or modem functional success is inferred from these checks.
+Bluetooth powered, DRM connected, no failed units. The user subsequently
+confirmed visually good display output. Touch, audio, suspend and modem
+functionality were not established by these checks.
 The prior GNSS milestone below belongs to the preceding boot; no GNSS
-download was performed on this new diagnostic boot.
+download was performed on either new diagnostic boot.
 
 ## Latest GNSS milestone
 

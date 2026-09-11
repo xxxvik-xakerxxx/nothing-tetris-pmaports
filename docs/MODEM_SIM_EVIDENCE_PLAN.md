@@ -211,6 +211,25 @@ configurations with Clang 21.1.8; checkpatch has zero errors/warnings/checks.
 This is static evidence only. Installed loader remains dd40c7d6420d;
 complete live list structure and IDs have not yet been observed.
 
+Subsequent live result: CI 34584756418 passed for exact
+c931695bb963efaa0dfdf928ea475440581838b4. Manifest, embedded payload,
+preserved non-fill tail and header checks passed; image size 3245472,
+SHA256 71e26f9f38947e08450f2558fdd13137b52b768d57b26f416cf92f6bc1bcb88c.
+After confirming dd40, nothing-tetris, slot a and 16 MiB capacity, only
+lk_a was written. New boot 3bcabc1f-8d6e-4c0c-8d97-977eae5affc2 reports
+exact c931695bb963. Header-list error=0, count=38,
+low mask=0x3b0c7fff, high mask=0x0026ff3b. Popcount equals count, proving
+38 distinct IDs within the bitmap range for this bounded observation.
+FDT errors remain source/preservation/x2=-61, x0=-74 and
+no-fdt/invalid/not-checked. No payload semantics or modem state established.
+
+USB/SSH returned without a host reset despite initial SSH timeout. Mac
+was unlocked and en4 active; three ICMP responses passed. Before/after
+32 MiB USB SHA256 matched 83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302.
+Wi-Fi connected, Bluetooth powered, DRM connected, no failed units or
+matching Oops/panic/BUG/refcount/watchdog/DRM timeout log. No GNSS download,
+modem operation, rootfs or calibration write. See local live plan.
+
 ### Earlier source-range audit
 
 The exact installed base and diagnostic candidate call reserve_prev_bl_fdt
