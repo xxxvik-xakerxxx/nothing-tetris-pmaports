@@ -92,7 +92,7 @@ and unarmed resets still fail. The initial patch header was off by one and
 GNU patch reported relocation; the corrected hunk at line340 is checked
 independently, with negative offset/fuzz cases. The packaged diff body is
 byte-identical to this tested candidate. Audit/test commit: 56d50ac in
-codex/camera-clk-prereq, patches/gnss-navigation-audit/.
+codex/camera-clk-prereq-v2, patches/gnss-navigation-audit/.
 
 Targeted hal/gps_dsp_fsm.o compilation against the prepared 6.18 tree passes,
 including LLVM-bitcode to ARM64 ELF generation with Clang21.1.8. The prepared

@@ -21,6 +21,12 @@ quiet-log timeout and accept the fix. Targeted ARM64 object generation and
 package/ABI checks pass. Kernel package r155 carries the candidate, but its
 module is not installed or live-validated. Hardware timing and the
 eight-second test deadline are unchanged.
+Commit 97ffa53915955c26e2181f32c7688e8cd277d338 is published on
+codex/hardware-integration; CI 34589225716 has passed the early overlay,
+shell, display-route and package-layout checks and is building the kernel.
+The prepared local tree lacks exact r153 build state/symvers and differs in
+configuration, so no unverified standalone module was substituted. A matching
+kernel/module image is required for the next live check.
 USB 32 MiB hashes passed before/after, Wi-Fi remained connected, BT powered,
 no GPS owners or failed units remained, and the isolated tracer was removed
 with global tracing still nop. Raw evidence is retained locally under
@@ -32,6 +38,25 @@ It preserves the installed audio and greeter configuration and creates the
 greeter dconf directory with checked ownership. CI 34587197925 is building;
 the image is not installed or merged. Its older unrelated GNSS package is
 not the v051 research environment. Main has not moved.
+
+## Modem and sensor prerequisites
+
+The modem producer audit and read-only C partition/member locator are saved
+in published commit 933ac98 on codex/scp-region-prereq. Exact B4.1 LK selects
+the modem platform table, then the active slot suffix; the md1img table is
+a bypassed fallback. Certificate, anti-rollback, header and payload checking
+order is established, but no authentication backend or modem memory/reset
+ownership is implemented. The locator passes 23 ASan/UBSan fixture cases;
+real modem-container validation remains pending. Existing U-Boot expects a
+32-byte CCCI summary while stock emits 48; this is another unresolved
+handoff compatibility boundary, not modem readiness.
+
+Sensor reply candidate ce19497 on codex/sensor-startup-contract rejects a
+wrong sequence, type OR command before using shared-memory write position.
+The original AND condition admitted stale replies. Eight predicate cases,
+65536 sequence pairs and two mutations pass. This is not a sensor startup
+fix: SCP loader/DVFS, firmware/calibration ownership and samples are still
+unproven. The candidate is outside APKBUILD. Camera capture remains unproven.
 
 ## Latest bootloader observation
 
