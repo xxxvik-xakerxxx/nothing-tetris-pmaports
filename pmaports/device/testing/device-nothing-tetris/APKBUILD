@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=10
+pkgrel=11
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
@@ -29,6 +29,8 @@ source="
 	89-nothing-tetris-user.preset
 	boot_image.its
 	deviceinfo
+	greetd-pulse-client.conf
+	greetd-pulseaudio.desktop
 	greetd-tetris-display.conf
 	HiFi.conf
 	modules-initfs
@@ -44,6 +46,7 @@ source="
 	nothing-tetris-connectivity-setup
 	nothing-tetris-gnss-transport
 	nothing-tetris-gnss-transport.service
+	nothing-tetris-greetd.conf
 	nothing-tetris-audio.conf
 	nothing-tetris-haptics.conf
 	nothing-tetris-usb-sleep
@@ -54,6 +57,7 @@ source="
 	phrog-greetd-config.toml
 	mt6878-mt6369.conf
 	tetris-phrog-greetd-session
+	validate-audio-ucm
 	wifi.cfg
 "
 
@@ -75,6 +79,7 @@ check() {
 	sh -n "$srcdir"/nothing-tetris-gnss-transport
 	sh -n "$srcdir"/nothing-tetris-usb-sleep
 	sh -n "$srcdir"/nothing-tetris-wifi-nvram-extract
+	sh "$srcdir"/validate-audio-ucm "$srcdir"/HiFi.conf
 
 	testdir=$(mktemp -d)
 	trap 'rm -rf "$testdir"' EXIT
@@ -172,6 +177,12 @@ package() {
 
 	install -Dm644 "$srcdir"/greetd-tetris-display.conf \
 		"$pkgdir"/etc/systemd/system/greetd.service.d/override.conf
+	install -Dm644 "$srcdir"/greetd-pulseaudio.desktop \
+		"$pkgdir"/var/lib/greetd/.config/autostart/pulseaudio.desktop
+	install -Dm644 "$srcdir"/greetd-pulse-client.conf \
+		"$pkgdir"/var/lib/greetd/.config/pulse/client.conf
+	install -Dm644 "$srcdir"/nothing-tetris-greetd.conf \
+		"$pkgdir"/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf
 	install -Dm644 "$srcdir"/phoc.ini \
 		"$pkgdir"/etc/phosh/phoc.ini
 	install -Dm644 "$srcdir"/phoc.ini \
@@ -240,6 +251,10 @@ package() {
 }
 
 sha512sums="
+7a5fee2f67d34246fcf2a2ca3a69d9fcc93c7206bf434216153952883e591d0e122bb3e2e98384724d06b08a7dd1b9861dfc5a250f950298cf5d7f2c35d33e81  greetd-pulse-client.conf
+de30cc66011addd6443b236855115692c7947717b71745d2a51155e7931dd61e969cbf39ef7e637ee0ccbd56196eb41bccac03b6e6f6261e6068abe5b9d80a5e  greetd-pulseaudio.desktop
+ddfbc0776faca5fc9468fccafe8ee559bdbc44ba84467eebcbb9e55ce3d0d31f03c85573b42edd6304add2cc8e3b69bcc1b55636996f4d2b3af44ec957bfc63b  nothing-tetris-greetd.conf
+b3258b90497b55ba21788a2cb038273b7c7b6a9510d25c051845e000dbf4ab8e553f6579cebd59ab41551ec633bd25df5e4d9766ee7037727e26ed319fb8afc6  validate-audio-ucm
 55535bfc5e918df3831df3d254a7bafa070db70bfc1bb733c046d0e0eec454eab6548be7bf016525fdab1fa4e030da74559b2914db0dcedd7b75fc5fd4bc8398  20-nothing-tetris-wifi-powersave.conf
 da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
@@ -248,11 +263,11 @@ f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486
 89efa7852253b57b63c6b52199e0f08700cf5960f25cd27dbe91e864f3cb9b50f4652a6fe5aa0db264db1270f01c5945a349c33f069d8cf3a3ca7d555a1529b2  boot_image.its
 5beb26b028a5e9c7ce1046055c497f837658012b18ffeafbdc14b99cc9241bca6a808732a70f50c0ec039b6a13c11839d3b90d8f654df1225a22f6d84ed38db4  deviceinfo
 0207e723cffe62744725aa3f1b1d1613d580fe7f14c45fe3c71acedf8a0e85de89f29787b6147968d46df12c9055cddc99b9a1c7e04f28c82ab524ac601cbf55  greetd-tetris-display.conf
-2f660c612ab20083e7c1ba0a3075fe670695dd7684c73f899f99fdbb75ef8e6a2f40b4aa4db0c81651dde01448ede4a21b39f28f624cef33d0c877891c57b263  HiFi.conf
+c541fae8352975ea0ca652db240dcac5eea0c39d2e3a9a40da656fd0cebf01aa25f00ea3e152341d753678822655cd6b3ee687204089fb6d1648d958b84f02e7  HiFi.conf
 88790459deb841a215b8e72d535d4618f600ffb5ca2ace61e296c36dda92085f64f4eae469788eb30a0cabdc52c1e5c818aec3a37f924abec350aee4b6a609e8  modules-initfs
-f44a37d0ea7d7ed8b6bdf8a0c835b7746b2f33b21223242580a8d69dace609390a7912d279f0899eb3be1651d51e9775cc7732a66679875dac22943dd3c69d1d  nothing-tetris-audio.pa
+81a415a8693e952800842095d8784b670cfd702c3eb6655b52d009f2257b167957decc769a5e8cc68532eb12486aaa5a228f7d0205236d8f65bd5ddec1712ff3  nothing-tetris-audio.pa
 40644a931cfdd04156516693d487129c069c9c8f85b4585bee41d9b5ef60ddb186beea9151f646da9140abbc4d2f63edf2e2a520b99282d16b4dccf895c88b73  nothing-tetris-audio-policy
-7620e5916a7fb530916446592a1d3e28782a8cefdd96fabd9b91c28a2985f92f78d6bfc502b81f8f505b7e75d0ff3a453f5061fe40041b2710f8bf0917822095  nothing-tetris-audio-policy.service
+2a78f22ebae0d6b7290cf331526a8f9565534cf08f2b6d5b408bc312962422f97dc47de811f9cf828bdbae3767ea931b6ff7559db72871b2033ff6dae3d66f2f  nothing-tetris-audio-policy.service
 18fe51bf25f196993e01d19476798029cddd9dadef4ffd250d3b6f41da3e97056dd17208d647ac6dfc2e152735eab14dfb69ccda078cbf49b115dde5c39ed491  nothing-tetris-bluetooth-address-extract
 c9f4a3ba904e46726effd8b4c47b00a6da50bf38ea1c85101ea0ee9f5178286999b10822c8ae2254bab112081b8ebd1ada7874f022b41b3a369302633e621a7e  nothing-tetris-bluetooth-address-extract.service
 c63fdb9c4213a2a35a4a867e41a6c6d7e97db5b08eb4840c625a2d47d9c598f5046ecf4a687772f4ab82a01214ba843e22e3cb48e0710aed4a61dcef1458b18f  nothing-tetris-bluetooth-address.c

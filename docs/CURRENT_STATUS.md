@@ -31,7 +31,7 @@ candidate starts at ee994e4236d69c9f3eb18e81614dd0dff9e60266 and carries the
 display implementation from aecf4f4: panel patch 0050, patches 0056 through
 0088, routing/IRQ patches 0096/0097, the framebuffer compatibility update,
 native kernel configuration, native DTB/FIT selection and route tests.
-Kernel revision 154 and device revision 10 identify this separate candidate;
+Kernel revision 154 and device revision 11 identify this separate candidate;
 it must not be confused with the installed full-integration r153 image.
 
 Patch 0057 has a context-only rebase removing the unrelated MFG-controller
@@ -42,14 +42,76 @@ it does not import the new modem/GNSS/camera/GPU compile experiments.
 
 All 72 kernel patches apply in package order to the pinned upstream archive;
 source/checksum validation and the route connect/disconnect model pass.
-CI run 34575901650 targets 8f61a02d2e0d12584a11a111998c1adf4e89b040:
-validate-overlay passed and the kernel build remains in progress. This is
-not a completed image build. Review older unrelated userspace packaging
-against installed r153 before a replacement installation.
-Promotion is pending CI and installation/lifecycle checks. It has not yet
+CI run 34575901650 for 8f61a02d2e0d12584a11a111998c1adf4e89b040 completed
+successfully with kernel r154 / device 8-r10, as reported in the offline
+handoff. Those images have not been installed. The audio/greeter follow-up
+below is device 8-r11 and is not covered by that successful image build.
+Promotion is pending a new artifact check and clean-install/lifecycle checks. It has not yet
 been merged into main. Once gates pass, merge the
 implementation and this record together; do not leave confirmed changes
 only on a feature branch or mark a subsystem Works from command exit status.
+
+## Scoped Audio/Greeter Follow-Up
+
+Starting from clean display-main-promotion `7d10744`, device 8-r11 carries
+only these installed integration fixes, with payloads copied byte-for-byte:
+
+- `384f155`: audio policy starts with the graphical session, excludes greetd,
+  and creates the mono remap after UCM publishes the master sink. The early
+  PulseAudio fragment only disables stream-device restoration.
+- `980c566`: greetd's PulseAudio desktop autostart is hidden and client
+  autospawn is disabled, leaving audio ownership to the login session.
+- `bcd3d93`: capture controls are scoped to the UCM Mic device. Speaker and
+  Earpiece sections remain unchanged; the imported validator enforces this.
+- `8c1ccf4`: tmpfiles creates the greeter dconf directory with mode 0700 and
+  greetd ownership to prevent the observed settings retry loop.
+
+Device sources, SHA512 checksums, install paths and the package UCM check are
+updated. Overlay checks and only the audio/greeter rootfs assertions in the
+workflow follow the new ownership. No workflow was dispatched. Kernel APKBUILD,
+configuration and every kernel patch remain identical to `7d10744`, including
+the main-based native display series. GNSS remains the existing main v050
+state: no v051, readonly helper, or unrelated hardware integration is imported.
+
+Offline validation passed:
+
+- `sh scripts/validate-pmaports-overlay.sh`, including all package checksums.
+- Independent source/checksum coverage: all 37 device sources; seven selected
+  payloads equal their source commits; six scoped mode-0644 install mappings
+  and the package UCM check are present.
+- UCM validator accepts the candidate and rejects the old global Mic scope
+  and a modified Speaker section.
+- Shell syntax and workflow YAML parsing pass. The scoped rootfs assertions
+  accept local staged files and reject early remap, enabled greeter autostart,
+  and a missing dconf rule. This does not execute target systemd or tmpfiles.
+- Kernel package, deviceinfo, initfs module list and GNSS payloads are unchanged;
+  `git diff --check` passes. Full package build/check and CI were not run.
+
+### Separate Initramfs USB Regression Gate
+
+The installed integration source `aecf4f4` carries initramfs 3.12.3 and the
+default-off stable-USB-identity patches plus their application helper. This
+display branch has neither. Its `deviceinfo` and `modules-initfs` match
+`aecf4f4`: NCM remains selected and no MAC seed is configured. Thus the source
+comparison does not imply removal of an enabled stable-MAC feature; both
+descriptions leave generated NCM addresses in use. It also does not establish
+equivalent initramfs behavior or inspect the installed binary initramfs.
+
+Keep that dependency difference explicit and outside this audio/greeter commit.
+Before replacing installed r153, inspect exact candidate initramfs package
+versions/content and check NCM module, gadget setup, USB identity and early
+DHCP behavior. Then require a separately authorized clean CI installation with
+recorded bootloader/kernel/DTB/rootfs hashes, rollback and one control session.
+Verify USB enumeration, DHCP/SSH, reconnect and a hash-checked transfer before
+audio tests; an SSH timeout alone is not evidence of kernel failure.
+
+Require greeter startup without PulseAudio ownership or dconf retry, session
+audio policy/preset activation, speaker and earpiece playback, and Mic capture
+enable/disable without changing playback controls. Repeat cold starts, warm
+reboot and lifecycle regression with USB retained before merging confirmed
+changes and this record into main. No phone access, installation, push or merge
+was performed for this follow-up. Display remains Partial; this package has no
+new clean-install evidence and is not a promotion to Works.
 
 ## GSM And GPS
 

@@ -177,6 +177,8 @@ validate_power_and_audio_config() {
 	audio_policy="$device_pkg/nothing-tetris-audio-policy"
 	audio_policy_unit="$device_pkg/nothing-tetris-audio-policy.service"
 	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
+	greetd_pulse_client="$device_pkg/greetd-pulse-client.conf"
+	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 
@@ -247,24 +249,40 @@ validate_power_and_audio_config() {
 	fi
 	grep -Fq 'unload-module module-stream-restore' "$audio_pulse"
 	grep -Fq 'load-module module-stream-restore restore_device=false' "$audio_pulse"
-	grep -Fq 'load-module module-remap-sink sink_name=tetris_mono_speaker' \
-		"$audio_pulse"
-	grep -Fq 'master=alsa_output.platform-sound.HiFi__Speaker__sink' \
-		"$audio_pulse"
-	grep -Fq 'channels=1 channel_map=mono master_channel_map=front-left' \
-		"$audio_pulse"
-	grep -Fq 'device.class=filter' "$audio_pulse"
-	grep -Fq 'device.class=sound' "$audio_pulse"
-	grep -Fq 'set-default-sink tetris_mono_speaker' "$audio_pulse"
+	if grep -Fq 'module-remap-sink' "$audio_pulse"; then
+		echo "audio remap must wait for the graphical-session policy" >&2
+		return 1
+	fi
 	sh -n "$audio_policy"
+	grep -Fq 'pactl load-module module-remap-sink' "$audio_policy"
+	grep -Fq 'master="$speaker_sink"' "$audio_policy"
+	grep -Fq 'channels=1 channel_map=mono' "$audio_policy"
 	grep -Fq 'pactl subscribe' "$audio_policy"
 	grep -Fq "Event 'new' on sink #" "$audio_policy"
 	grep -Fq 'pactl set-default-sink "$mono_sink"' "$audio_policy"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
-	grep -Fxq 'WantedBy=default.target' "$audio_policy_unit"
+	grep -Fxq 'After=graphical-session-pre.target' "$audio_policy_unit"
+	grep -Fxq 'PartOf=graphical-session.target' "$audio_policy_unit"
+	grep -Fxq 'ConditionUser=!greetd' "$audio_policy_unit"
+	grep -Fxq 'WantedBy=graphical-session.target' "$audio_policy_unit"
 	grep -Fxq 'enable nothing-tetris-audio-policy.service' \
 		"$audio_user_preset"
+	grep -Fxq 'autospawn = no' "$greetd_pulse_client"
+	grep -Fxq 'Hidden=true' "$greetd_pulse_autostart"
+	grep -Fq 'var/lib/greetd/.config/autostart/pulseaudio.desktop' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'var/lib/greetd/.config/pulse/client.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
+		"$device_pkg/APKBUILD"
+	grep -Fxq 'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
+		"$device_pkg/nothing-tetris-greetd.conf"
+	grep -Fq 'greeter dconf directory' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'greeter PulseAudio autostart disabled' \
+		"$repo_root/.github/workflows/ci.yml"
+	sh "$device_pkg/validate-audio-ucm" "$audio_ucm"
 	grep -Fq 'I2SOUT4_CH1 DL6_CH1' "$audio_ucm"
 	grep -Fq "name='RCV Mux' 'Voice Playback'" "$audio_ucm"
 	grep -Fq "name='PGA_L_Mux' AIN0" "$audio_ucm"
