@@ -1,0 +1,7 @@
+{
+  "archive_sha256": "2336875d0b1e7364f87690701706e0d8cd7149bcf8f05c6d295f6082cf949811",
+  "member": "modem.img",
+  "size": 90214400,
+  "sha256": "b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5",
+  "provenance": "local archive hash; no signature or slot validation"
+}

@@ -3,6 +3,9 @@
 Follow-up: [PRODUCER.md](PRODUCER.md) closes the actual modem descriptor and
 suffix lookup, traces authentication order, and provides a tested native member
 locator. It supersedes the fallback-table uncertainty and decoder next step below.
+The locator now passes on the real archived modem.img; see
+[REAL-CONTAINER.md](REAL-CONTAINER.md) for hashes, bounds checks and the strict
+zero-tail stock48 decoder patch candidate.
 
 Offline static audit, 2026-09-11. Modem/SIM runtime: **Untested by this audit**.
 No native modem implementation or runtime activation is delivered.

@@ -1,0 +1,177 @@
+{
+  "container_sha256": "b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5",
+  "unchanged": true,
+  "members": [
+    {
+      "name": "md1rom",
+      "result": 0,
+      "header_offset": 0,
+      "payload_offset": 512,
+      "payload_size": 55396432,
+      "truncated_result": -40,
+      "sha256": "35125c552b6ded899a057b2f2bd8147e7679c290ed2ac7f9a58098cc0c528b52"
+    },
+    {
+      "name": "md1dsp",
+      "result": 0,
+      "header_offset": 63888576,
+      "payload_offset": 63889088,
+      "payload_size": 5767168,
+      "truncated_result": -40,
+      "sha256": "9504eac494e6effd736b21bd1ce91e79e619e08c0e5b0449a4491907323b2574"
+    },
+    {
+      "name": "md1drdi",
+      "result": 0,
+      "header_offset": 55400768,
+      "payload_offset": 55401280,
+      "payload_size": 8483520,
+      "truncated_result": -40,
+      "sha256": "68856bbd061778fab21abfab0805d5e13dbef386cacb9ff585c570de0ac179c6"
+    }
+  ],
+  "authentication": "not performed",
+  "active_slot": "not inferred",
+  "header_walk": [
+    {
+      "offset": 0,
+      "name": "md1rom",
+      "size": 55396432,
+      "alignment": 16
+    },
+    {
+      "offset": 55396944,
+      "name": "cert1md",
+      "size": 1777,
+      "alignment": 16
+    },
+    {
+      "offset": 55399248,
+      "name": "cert2",
+      "size": 995,
+      "alignment": 16
+    },
+    {
+      "offset": 55400768,
+      "name": "md1drdi",
+      "size": 8483520,
+      "alignment": 16
+    },
+    {
+      "offset": 63884800,
+      "name": "cert1",
+      "size": 1733,
+      "alignment": 16
+    },
+    {
+      "offset": 63887056,
+      "name": "cert2",
+      "size": 995,
+      "alignment": 16
+    },
+    {
+      "offset": 63888576,
+      "name": "md1dsp",
+      "size": 5767168,
+      "alignment": 16
+    },
+    {
+      "offset": 69656256,
+      "name": "cert1",
+      "size": 1733,
+      "alignment": 16
+    },
+    {
+      "offset": 69658512,
+      "name": "cert2",
+      "size": 995,
+      "alignment": 16
+    },
+    {
+      "offset": 69660032,
+      "name": "md1_filter",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69660848,
+      "name": "md1_filter_1_Moderate",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69661664,
+      "name": "md1_filter_2_Standard",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69662480,
+      "name": "md1_filter_3_Slim",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69663296,
+      "name": "md1_filter_4_UltraSlim",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69664112,
+      "name": "md1_filter_PLS_PS_ONLY",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69664928,
+      "name": "md1_filter_LowPowerMonitor",
+      "size": 300,
+      "alignment": 16
+    },
+    {
+      "offset": 69665744,
+      "name": "md1_emfilter",
+      "size": 2264,
+      "alignment": 16
+    },
+    {
+      "offset": 69668528,
+      "name": "md1_dbginfodsp",
+      "size": 1882884,
+      "alignment": 16
+    },
+    {
+      "offset": 71551936,
+      "name": "md1_dbginfo",
+      "size": 1330012,
+      "alignment": 16
+    },
+    {
+      "offset": 72882464,
+      "name": "md1_mddbmetaodb",
+      "size": 575695,
+      "alignment": 16
+    },
+    {
+      "offset": 73458672,
+      "name": "md1_mddb",
+      "size": 8396124,
+      "alignment": 16
+    },
+    {
+      "offset": 81855312,
+      "name": "md1_mdmlayout",
+      "size": 8356847,
+      "alignment": 16
+    },
+    {
+      "offset": 90212672,
+      "name": "md1_file_map",
+      "size": 750,
+      "alignment": 16
+    }
+  ],
+  "walk_end": 90213936,
+  "remaining_bytes": 464
+}
