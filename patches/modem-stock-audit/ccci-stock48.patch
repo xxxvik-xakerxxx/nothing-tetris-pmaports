@@ -1,0 +1,45 @@
+Subject: [PATCH] mediatek: tetris: accept only zero-tail stock v3 CCCI descriptors
+
+The pinned B4.1 LK publishes 48 bytes, not the kernel consumer's 32-byte
+prefix. Do not accept arbitrary extensions: allow exactly version 3 and
+16 zero extension bytes, preserving every existing prefix and tag check.
+The extra bytes have no proven portable nonzero semantics. This candidate
+must reject those values rather than silently ignore possible error state.
+
+Base: U-Boot c931695bb963efaa0dfdf928ea475440581838b4.
+Offline candidate only; no boot path or modem activation changes.
+
+diff --git a/board/mediatek/mt6878/mt6878_tetris.c b/board/mediatek/mt6878/mt6878_tetris.c
+--- a/board/mediatek/mt6878/mt6878_tetris.c
++++ b/board/mediatek/mt6878/mt6878_tetris.c
+@@ -58,6 +58,7 @@
+ #define TETRIS_CCCI_MAX_INFO_SIZE	0x10000U
+ #define TETRIS_CCCI_V1_DESC_SIZE	16U
+ #define TETRIS_CCCI_V2_DESC_SIZE	32U
++#define TETRIS_CCCI_STOCK_V3_DESC_SIZE	48U
+ #define TETRIS_CCCI_V1_NAME_SIZE	16U
+ #define TETRIS_CCCI_V2_NAME_SIZE	64U
+ #define TETRIS_CCCI_V1_TAG_SIZE		28U
+@@ -458,7 +459,21 @@
+ 	} else {
+-		if (len != TETRIS_CCCI_V2_DESC_SIZE) {
++		if (len != TETRIS_CCCI_V2_DESC_SIZE &&
++		    len != TETRIS_CCCI_STOCK_V3_DESC_SIZE) {
+ 			result->failure = TETRIS_CCCI_BAD_DESCRIPTOR_SIZE;
+ 			return -EINVAL;
+ 		}
++		if (len == TETRIS_CCCI_STOCK_V3_DESC_SIZE) {
++			if (get_unaligned_le32(raw + 16) != 3) {
++				result->failure = TETRIS_CCCI_UNSUPPORTED_DESCRIPTOR_VERSION;
++				return -EPROTONOSUPPORT;
++			}
++			/* Unknown extension state must never hide a load error. */
++			for (int i = TETRIS_CCCI_V2_DESC_SIZE; i < len; i++) {
++				if (raw[i]) {
++					result->failure = TETRIS_CCCI_BAD_DESCRIPTOR_STATUS;
++					return -EPROTONOSUPPORT;
++				}
++			}
++		}
+ 		desc->base = get_unaligned_le64(raw);
+ 		desc->size = get_unaligned_le32(raw + 8);
