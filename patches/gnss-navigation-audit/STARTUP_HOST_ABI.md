@@ -3,6 +3,10 @@
 Status: Partial source/emulation audit; native loading and navigation Untested.
 No phone access, firmware operation, CI, full build or integration change.
 
+Follow-up: `FRAME_SYNC_CONFIG_ABI.md` resolves slots3/4 machine signatures and
+tests the second-config producer/copy slices; its remaining prerequisites
+supersede the corresponding next-audit items below, not the runtime cautions.
+
 ## Provenance and method
 
 Pinned Nothing B4.1 inputs, not the older source checkout:
