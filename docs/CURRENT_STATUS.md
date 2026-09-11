@@ -53,8 +53,10 @@ only on a feature branch or mark a subsystem Works from command exit status.
 
 ## Scoped Audio/Greeter Follow-Up
 
-Starting from clean display-main-promotion `7d10744`, device 8-r11 carries
-only these installed integration fixes, with payloads copied byte-for-byte:
+Starting from clean display-main-promotion `7d10744`, the unpublished device
+8-r11 candidate carries these installed integration fixes. The seven payload
+files in `5f52b75` are copied byte-for-byte; the follow-up also restores the
+package directory creation from `0b8c4164`:
 
 - `384f155`: audio policy starts with the graphical session, excludes greetd,
   and creates the mono remap after UCM publishes the master sink. The early
@@ -65,6 +67,30 @@ only these installed integration fixes, with payloads copied byte-for-byte:
   Earpiece sections remain unchanged; the imported validator enforces this.
 - `8c1ccf4`: tmpfiles creates the greeter dconf directory with mode 0700 and
   greetd ownership to prevent the observed settings retry loop.
+- `0b8c4164` (not `cb121c1`): package the dconf directory itself with mode
+  0700 and numeric owner/group 113:113, as present in installed r153's
+  `aecf4f4` source. This was missing from the initial `5f52b75` transfer.
+
+The initial candidate's tmpfiles-only configuration was not equivalent to
+the installed package contents. Before tmpfiles runs, the two mode-0644
+PulseAudio files create root-owned, searchable parent directories, but do not
+give greetd permission to create a missing dconf child inside `.config`.
+Packaging the child removes that first-start dependency; the tmpfiles rule is
+retained to restore its named ownership/mode on boot. No recursive chown of
+the greeter home or its shared configuration is added.
+
+The rootfs gate now checks the greetd passwd/group mapping (113:113, home
+`/var/lib/greetd`), the actual dconf directory's 0700/113:113 metadata, and
+search permission through each parent for that identity. Numeric IDs are the
+preserved package contract, not inferred from the host account database.
+A changed target account mapping must fail the gate before installation.
+The device greetd drop-in only overrides rendering and ExecStart; it does not
+explicitly order tmpfiles. The pinned Phosh drop-in also only overrides
+ExecStart. The target base greetd/tmpfiles units were not available for this
+offline audit, so no claim is made that their boot ordering was verified.
+The packaged directory and preboot metadata gate avoid relying on that
+unverified ordering. Candidate r11 still needs a clean boot proving no dconf
+retry; r10 CI success and installed integration r153 are distinct evidence.
 
 Device sources, SHA512 checksums, install paths and the package UCM check are
 updated. Overlay checks and only the audio/greeter rootfs assertions in the
@@ -84,6 +110,12 @@ Offline validation passed:
 - Shell syntax and workflow YAML parsing pass. The scoped rootfs assertions
   accept local staged files and reject early remap, enabled greeter autostart,
   and a missing dconf rule. This does not execute target systemd or tmpfiles.
+- The r11 directory follow-up executes the actual scoped APKBUILD install
+  sequence in a disposable, network-disabled Alpine 3.23 container with the
+  checkout mounted read-only. The artifact metadata gate passes and UID 113
+  can write the dconf database path before tmpfiles. Wrong directory mode,
+  owner, inaccessible parent and changed account mapping are rejected. These
+  are synthetic package fixtures, not a target rootfs build or handset test.
 - Kernel package, deviceinfo, initfs module list and GNSS payloads are unchanged;
   `git diff --check` passes. Full package build/check and CI were not run.
 

@@ -370,6 +370,23 @@ jobs:
           check_contains "greeter dconf directory" \
             'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
             "$rootfs/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf"
+          # Check greeter dconf package ownership before any first-boot tmpfiles run.
+          test "$(awk -F: '$1 == "greetd" {print $3 ":" $4 ":" $6}' \
+            "$rootfs/etc/passwd")" = '113:113:/var/lib/greetd'
+          test "$(awk -F: '$1 == "greetd" {print $3}' "$rootfs/etc/group")" = 113
+          test -d "$rootfs/var/lib/greetd/.config/dconf"
+          test "$(stat -c '%a:%u:%g' "$rootfs/var/lib/greetd/.config/dconf")" = 700:113:113
+          for parent in /var /var/lib /var/lib/greetd /var/lib/greetd/.config; do
+            test -d "$rootfs$parent"
+            mode=$(stat -c %a "$rootfs$parent")
+            if test "$(stat -c %u "$rootfs$parent")" = 113; then
+              test "$((0$mode & 0100))" -ne 0
+            elif test "$(stat -c %g "$rootfs$parent")" = 113; then
+              test "$((0$mode & 0010))" -ne 0
+            else
+              test "$((0$mode & 0001))" -ne 0
+            fi
+          done
           sh /work/pmaports/device/testing/device-nothing-tetris/validate-audio-ucm \
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
           test "$(fdtget "$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb" \

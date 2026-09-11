@@ -276,6 +276,9 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
 		"$device_pkg/APKBUILD"
+	grep -Fq 'install -d -o 113 -g 113 -m 0700' "$device_pkg/APKBUILD"
+	grep -Fxq '		"$pkgdir"/var/lib/greetd/.config/dconf' "$device_pkg/APKBUILD"
+	grep -Fq 'greeter dconf package ownership' "$repo_root/.github/workflows/ci.yml"
 	grep -Fxq 'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
 		"$device_pkg/nothing-tetris-greetd.conf"
 	grep -Fq 'greeter dconf directory' \

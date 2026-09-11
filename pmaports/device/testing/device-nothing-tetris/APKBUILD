@@ -181,6 +181,8 @@ package() {
 		"$pkgdir"/var/lib/greetd/.config/autostart/pulseaudio.desktop
 	install -Dm644 "$srcdir"/greetd-pulse-client.conf \
 		"$pkgdir"/var/lib/greetd/.config/pulse/client.conf
+	install -d -o 113 -g 113 -m 0700 \
+		"$pkgdir"/var/lib/greetd/.config/dconf
 	install -Dm644 "$srcdir"/nothing-tetris-greetd.conf \
 		"$pkgdir"/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf
 	install -Dm644 "$srcdir"/phoc.ini \
