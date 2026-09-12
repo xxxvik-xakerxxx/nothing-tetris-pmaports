@@ -1,12 +1,14 @@
 # Sensor enumeration reply prerequisite
 
-Status: offline candidate; sensors remain Broken. No SCP startup or calibrated
-sample has been demonstrated by this work.
+Status: packaged offline prerequisite; sensors remain Broken. No SCP startup
+or calibrated sample has been demonstrated by this work.
 
 The integration owner independently reran the pinned-source predicate suite
-after commit ce19497: all cases passed, with the same offline-only limits.
-Publication preserves the candidate for review; it must not trigger a full
-kernel build or be advertised as working sensors before startup is proven.
+after packaging the patch as
+`pmaports/device/testing/linux-postmarketos-mediatek-mt6878/1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor`:
+all cases passed, with the same offline-only limits. Publication preserves the
+candidate for CI and review; it must not be advertised as working sensors
+before startup is proven.
 
 ## Scope and existing progress
 
@@ -41,8 +43,9 @@ must match before the write-position access. The existing unlock,
 enumeration correctness prerequisite downstream of SCP readiness; it does
 not fix or bypass the first observed DVFS/loader startup blocker.
 
-The patch is deliberately under `patches/sensors`, outside APKBUILD. None of
-the current kernel patches changes sensor_list.c; the host check verifies
+The patch is packaged in APKBUILD as a compile/static prerequisite only. It
+adds no autoload rule, service, DT node, power/reset call or SCP startup. None
+of the other kernel patches changes sensor_list.c; the host check verifies
 that assumption before applying this candidate to the pinned source.
 
 ## Offline check

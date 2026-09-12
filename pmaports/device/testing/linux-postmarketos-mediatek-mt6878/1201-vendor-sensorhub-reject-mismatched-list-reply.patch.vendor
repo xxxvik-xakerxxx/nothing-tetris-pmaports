@@ -1,0 +1,27 @@
+From: Nothing Tetris port contributors
+Subject: [PATCH] sensorhub: reject any mismatched sensor list reply
+
+The Nothing OS 4.1 device-module source at
+ee2be53cb75670b548948636a0db1d1ff112bf12 accepts a list reply unless all
+three correlation fields differ. Notifications are dispatched by command,
+so a stale LIST reply with a different sequence normally passes this test.
+Its write position can then be used to read an unrelated sensor inventory.
+
+Require all correlation fields to match before consuming the write position.
+Keep the existing error, unlock and bounded retry behavior. This adds no
+firmware, power, reset, DT, module activation or autoload behavior.
+
+diff --git a/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_list.c b/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_list.c
+--- a/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_list.c
++++ b/drivers/misc/mediatek/sensor/2.0/sensorhub/sensor_list.c
+@@ -80,8 +80,8 @@ static int sensor_list_seq_get_list(struct sensor_info *list,
+ 	}
+ 
+ 	spin_lock_irqsave(&rx_notify_lock, flags);
+-	if (rx_notify.sequence != notify.sequence &&
+-	    rx_notify.sensor_type != notify.sensor_type &&
++	if (rx_notify.sequence != notify.sequence ||
++	    rx_notify.sensor_type != notify.sensor_type ||
+ 	    rx_notify.command != notify.command) {
+ 		pr_err("reply fail\n");
+ 		spin_unlock_irqrestore(&rx_notify_lock, flags);

@@ -121,7 +121,14 @@ The SCP DRAM recovery-span prerequisite is packaged on
 `codex/hardware-integration-next-scp`: `0094` validates the complete four-bank
 rounded recovery mapping before SCP setup. Its exact-source host gate
 reproduced the previous defect (18 DRAM cases, 10 failures) and the candidate
-passed all 18 cases under UBSan. SCP, DVFS and sensorhub remain disabled.
+passed all 18 cases under UBSan. The branch now also packages
+`1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor`, which
+changes the sensor-list reply correlation guard from all-fields-differ to
+any-field-differs. The pinned-source gate passed after packaging:
+the original source reproduced six false accepts, the packaged candidate
+rejects all mismatches across eight combinations, all 65536 sequence pairs
+including 255/0, and both single-operator mutations. SCP, DVFS and sensorhub
+remain disabled; no sensor sample or IIO publication is claimed.
 
 CI 34692383850 for `codex/hardware-integration-next-scp`
 3a016d36153d504f6b1002d29120bd84a8183533 completed successfully and published
@@ -151,13 +158,11 @@ GNSS transport files; the verifier rejects modem, CCCI, DPMAIF, WWAN and
 navigation userspace entries. This keeps the next-scp candidate's live radio
 bundle bounded while SCP, DVFS and sensorhub remain disabled.
 
-Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
-wrong sequence, type OR command before using shared-memory write position.
-The original AND condition admitted stale replies. Eight predicate cases,
-65536 sequence pairs and two mutations pass. `codex/hardware-integration`
-now carries and runs the same pinned-source gate in validate-overlay. This is not a sensor startup fix:
-SCP loader/DVFS, firmware/calibration ownership and samples are still unproven.
-The candidate remains outside APKBUILD. Camera capture remains unproven.
+Sensor reply candidate 67b481d on codex/sensor-startup-contract first proved
+the same wrong-sequence/type/command defect offline. The packaged next-SCP
+variant above supersedes that standalone candidate for integration tracking.
+This is not a sensor startup fix: SCP loader/DVFS, firmware/calibration
+ownership and samples are still unproven. Camera capture remains unproven.
 
 Camera/GNSS prereq branch codex/camera-clk-prereq-v2 is published through
 594dd75. It records the B4.1 GNSS startup/frame-sync/NMEA boundary and a
