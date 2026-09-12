@@ -298,12 +298,23 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/dconf' \
 		"$device_pkg/APKBUILD"
-	grep -Fq 'install -d -o 113 -g 113 -m 0700' \
-		"$device_pkg/APKBUILD"
+	grep -Fxq 'install="$pkgname.post-install"' "$device_pkg/APKBUILD"
+	grep -Fxq '	greetd' "$device_pkg/APKBUILD"
+	grep -Fq 'install -d -m 0700' "$device_pkg/APKBUILD"
+	if grep -Fq 'install -d -o 113 -g 113 -m 0700' \
+			"$device_pkg/APKBUILD"; then
+		echo "greeter dconf owner must be repaired from target passwd, not a baked UID" >&2
+		return 1
+	fi
 	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
 		"$device_pkg/APKBUILD"
 	grep -Fxq 'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
 		"$device_pkg/nothing-tetris-greetd.conf"
+	grep -Fq 'identity=$(awk -F:' \
+		"$device_pkg/device-nothing-tetris.post-install"
+	grep -Fq 'chown "$identity" "$dconf"' \
+		"$device_pkg/device-nothing-tetris.post-install"
+	sh -n "$device_pkg/device-nothing-tetris.post-install"
 	grep -Fq 'greeter dconf directory' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'greeter PulseAudio autostart disabled' \

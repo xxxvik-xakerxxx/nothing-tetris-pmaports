@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+root=${ROOT:-}
+passwd=$root/etc/passwd
+dconf=$root/var/lib/greetd/.config/dconf
+
+identity=$(awk -F: '$1 == "greetd" { print $3 ":" $4; found = 1 } END { exit found ? 0 : 1 }' "$passwd")
+install -d -m 0700 "$dconf"
+chown "$identity" "$dconf"
+chmod 0700 "$dconf"

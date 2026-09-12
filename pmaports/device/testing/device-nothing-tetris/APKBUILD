@@ -3,16 +3,18 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=9
+pkgrel=10
 url="https://postmarketos.org"
 license="MIT AND GPL-2.0-only"
 arch="aarch64"
 options="!archcheck"
+install="$pkgname.post-install"
 depends="
 	alsa-ucm-conf
 	dtc
 	e2fsprogs-extra
 	firmware-nothing-tetris
+	greetd
 	iproute2
 	kmod
 	linux-postmarketos-mediatek-mt6878
@@ -210,7 +212,7 @@ package() {
 		"$pkgdir"/var/lib/greetd/.config/autostart/pulseaudio.desktop
 	install -Dm644 "$srcdir"/greetd-pulse-client.conf \
 		"$pkgdir"/var/lib/greetd/.config/pulse/client.conf
-	install -d -o 113 -g 113 -m 0700 \
+	install -d -m 0700 \
 		"$pkgdir"/var/lib/greetd/.config/dconf
 	install -Dm644 "$srcdir"/nothing-tetris-greetd.conf \
 		"$pkgdir"/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf
