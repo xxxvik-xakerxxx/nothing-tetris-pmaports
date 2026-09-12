@@ -1006,6 +1006,17 @@ validate_connectivity_build() {
 	grep -Fq 'gzip -cd "$rootfs/boot/vmlinuz"' "$workflow"
 	grep -Fq 'nothing-tetris-radio-live.tar.zst' "$workflow"
 	grep -Fq 'name: nothing-tetris-radio-live' "$workflow"
+	grep -Fq 'python3 scripts/check-gnss-boot-protocol.py' "$workflow"
+	grep -Fq 'MAX_CHUNK = 512' "$repo_root/scripts/check-gnss-boot-protocol.py"
+	grep -Fq 'MAX_BODY = 508' "$repo_root/scripts/check-gnss-boot-protocol.py"
+	grep -Fq 'encode_frame(0xFE08, b"\x18\x00").hex()' \
+		"$repo_root/scripts/check-gnss-boot-protocol.py"
+	grep -Fq 'for count in (1, 106, 256):' \
+		"$repo_root/scripts/check-gnss-boot-protocol.py"
+	grep -Fq 'state.mark_submitted()' \
+		"$repo_root/scripts/check-gnss-boot-protocol.py"
+	grep -Fq 'frame checksum mismatch' \
+		"$repo_root/scripts/check-gnss-boot-protocol.py"
 	if grep -F 'clang version 21' "$workflow" | grep -Fq 'boot_image.itb'; then
 		echo "compiler identity cannot be searched in the compressed FIT image" >&2
 		return 1

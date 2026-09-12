@@ -69,6 +69,8 @@ jobs:
           sh patches/modem/check-ccmni.sh upstream/device-modules
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
+      - name: Validate GNSS boot protocol gate
+        run: python3 scripts/check-gnss-boot-protocol.py
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
