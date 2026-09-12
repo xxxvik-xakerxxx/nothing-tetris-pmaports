@@ -1,0 +1,63 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] drm/mediatek: prepare MT6878 POSTMASK relay lifecycle
+
+Candidate only: not referenced by APKBUILD or enabled by DT.
+The bounded r153 relay probe sustained frames but hit one abnormal EOF
+when switched mid-stream. Configure only before starting the native path.
+Adding a component to the existing interleaved config/start loop alone is
+not sufficient; pipeline ordering and DT/routing must be reviewed separately.
+
+Mask inherited local interrupts, establish shadow bypass, and use the B4.1
+no-round-corner relay configuration. Do not touch inherited DMA addresses
+or claim DMA quiescence from relay selection alone. Preserve other SoCs.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+
+diff --git a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+--- a/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
++++ b/drivers/gpu/drm/mediatek/mtk_ddp_comp.c
+@@ -54,6 +54,10 @@
+ #define POSTMASK_EN					BIT(0)
++#define DISP_REG_POSTMASK_INTEN			0x0008
+ #define DISP_REG_POSTMASK_CFG			0x0020
+ #define POSTMASK_RELAY_MODE				BIT(0)
++#define DISP_REG_POSTMASK_SHADOW_CTRL		0x0024
++#define POSTMASK_BYPASS_SHADOW			BIT(1)
++#define POSTMASK_MT6878_RELAY_CFG			(BIT(8) | BIT(6) | BIT(2) | BIT(1) | BIT(0))
+ #define DISP_REG_POSTMASK_SIZE			0x0030
+ 
+ #define DISP_REG_UFO_START			0x0000
+@@ -241,9 +245,21 @@ static void mtk_postmask_config(struct device *dev, unsigned int w,
+ {
+ 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
++	bool mt6878 = of_device_is_compatible(dev->of_node,
++					    "mediatek,mt6878-disp-postmask");
++	u32 cfg = mt6878 ? POSTMASK_MT6878_RELAY_CFG : POSTMASK_RELAY_MODE;
++
++	if (mt6878) {
++		/* No IRQ handler or rounded-corner DMA consumer is registered. */
++		mtk_ddp_write(cmdq_pkt, 0, &priv->cmdq_reg, priv->regs,
++			      DISP_REG_POSTMASK_INTEN);
++		mtk_ddp_write_mask(cmdq_pkt, POSTMASK_BYPASS_SHADOW,
++				   &priv->cmdq_reg, priv->regs,
++				   DISP_REG_POSTMASK_SHADOW_CTRL, POSTMASK_BYPASS_SHADOW);
++	}
+ 
+ 	mtk_ddp_write(cmdq_pkt, w << 16 | h, &priv->cmdq_reg, priv->regs,
+ 		      DISP_REG_POSTMASK_SIZE);
+-	mtk_ddp_write(cmdq_pkt, POSTMASK_RELAY_MODE, &priv->cmdq_reg,
++	mtk_ddp_write(cmdq_pkt, cfg, &priv->cmdq_reg,
+ 		      priv->regs, DISP_REG_POSTMASK_CFG);
+ }
+ 
+@@ -258,6 +274,9 @@ static void mtk_postmask_stop(struct device *dev)
+ {
+ 	struct mtk_ddp_comp_dev *priv = dev_get_drvdata(dev);
+ 
++	if (of_device_is_compatible(dev->of_node, "mediatek,mt6878-disp-postmask"))
++		writel(0, priv->regs + DISP_REG_POSTMASK_INTEN);
++
+ 	writel_relaxed(0x0, priv->regs + DISP_REG_POSTMASK_EN);
+ }
+ 

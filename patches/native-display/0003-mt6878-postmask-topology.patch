@@ -1,0 +1,132 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] drm/mediatek: describe MT6878 POSTMASK lifecycle component
+
+Candidate only, not in APKBUILD. Requires native-display candidates 0001
+and 0002, plus proven inherited-engine quiescence before activation.
+Describe B4.1 POSTMASK resources and split the retained route around its
+native component. Remaining PQ and DITHER initialization is still inherited.
+No DMA address, firmware or calibration data is added.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/Documentation/devicetree/bindings/display/mediatek/mediatek,postmask.yaml b/Documentation/devicetree/bindings/display/mediatek/mediatek,postmask.yaml
+index fb6fe47..6912ffe 100644
+--- a/Documentation/devicetree/bindings/display/mediatek/mediatek,postmask.yaml
++++ b/Documentation/devicetree/bindings/display/mediatek/mediatek,postmask.yaml
+@@ -22,6 +22,7 @@ properties:
+   compatible:
+     oneOf:
+       - enum:
++          - mediatek,mt6878-disp-postmask
+           - mediatek,mt8192-disp-postmask
+       - items:
+           - enum:
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+index a3f863f..2c66df8 100644
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+@@ -14,6 +14,7 @@
+ 		ovl-2l0 = &disp_ovl0_2l;
+ 		ovl-2l1 = &disp_ovl1_2l;
+ 		ovl-2l2 = &disp_ovl2_2l;
++		postmask0 = &disp_postmask0;
+ 		dsc0 = &disp_dsc0;
+ 		dsi0 = &dsi0;
+ 	};
+@@ -76,6 +77,15 @@
+ 		status = "okay";
+ 	};
+ 
++	disp_postmask0: postmask@14010000 {
++		compatible = "mediatek,mt6878-disp-postmask";
++		reg = <0x14010000 0x1000>;
++		interrupts = <GIC_SPI 317 IRQ_TYPE_LEVEL_HIGH 0>;
++		clocks = <&mmsys CLK_MM_DISP_POSTMASK0>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_DISP>;
++		status = "okay";
++	};
++
+ 	disp_dsc0: dsc@14019000 {
+ 		compatible = "mediatek,mt6878-disp-dsc";
+ 		reg = <0x14019000 0x1000>;
+diff --git a/drivers/gpu/drm/mediatek/mtk_drm_drv.c b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+index 0b6d972..eab3bd4 100644
+--- a/drivers/gpu/drm/mediatek/mtk_drm_drv.c
++++ b/drivers/gpu/drm/mediatek/mtk_drm_drv.c
+@@ -180,6 +180,7 @@ static const unsigned int mt6878_mtk_ddp_main[] = {
+ 	DDP_COMPONENT_OVL_2L0,
+ 	DDP_COMPONENT_OVL_2L1,
+ 	DDP_COMPONENT_OVL_2L2,
++	DDP_COMPONENT_POSTMASK0,
+ 	DDP_COMPONENT_DSC0,
+ 	DDP_COMPONENT_DSI0,
+ };
+@@ -818,6 +819,8 @@ static const struct of_device_id mtk_ddp_comp_dt_ids[] = {
+ 	  .data = (void *)MTK_DISP_OVL_2L },
+ 	{ .compatible = "mediatek,mt8192-disp-ovl-2l",
+ 	  .data = (void *)MTK_DISP_OVL_2L },
++	{ .compatible = "mediatek,mt6878-disp-postmask",
++	  .data = (void *)MTK_DISP_POSTMASK },
+ 	{ .compatible = "mediatek,mt8192-disp-postmask",
+ 	  .data = (void *)MTK_DISP_POSTMASK },
+ 	{ .compatible = "mediatek,mt2701-disp-pwm",
+diff --git a/drivers/soc/mediatek/mt6878-mmsys.h b/drivers/soc/mediatek/mt6878-mmsys.h
+index cdcf23b..ac1f0f0 100644
+--- a/drivers/soc/mediatek/mt6878-mmsys.h
++++ b/drivers/soc/mediatek/mt6878-mmsys.h
+@@ -54,38 +54,45 @@ static const struct mtk_mmsys_routes mt6878_mmsys_routing_table[] = {
+ 		DDP_COMPONENT_OVL_2L1, DDP_COMPONENT_OVL_2L2,
+ 		MT6878_OVL_BG_CROSSBAR1_MOUT_EN, BIT(2), BIT(2),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		MT6878_MMSYS_OVL_CON, BIT(6), BIT(6),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		MT6878_OVL_BLEND_CROSSBAR2_MOUT_EN, BIT(0), BIT(0),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		/* Exclusive RSZ0 path; do not fan out into the unused bypass. */
+ 		MT6878_PQ_IN_CROSSBAR0_MOUT_EN, ~0U, 0x00010001,
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		MT6878_PQ_OUT_CROSSBAR4_MOUT_EN, ~0U, 0,
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR2_MOUT_EN, ~0U, BIT(0),
+ 	},
+ 	/* Normalize the complete vendor DSC and crossbar shadow state. */
+ 	{
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		MT6878_DISPSYS_BYPASS_MUX_SHADOW, ~0U, BIT(0),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_POSTMASK0,
+ 		MT6878_MMSYS_CROSSBAR_CON, ~0U, GENMASK(23, 16),
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR0_SEL_IN, ~0U, 0x00020000,
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
+ 		MT6878_SPLIT_OUT_CROSSBAR2_SEL_IN, ~0U, 0,
+ 	}, {
+-		DDP_COMPONENT_OVL_2L2, DDP_COMPONENT_DSC0,
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
+ 		MT6878_COMP_OUT_CROSSBAR2_MOUT_EN, ~0U, 0,
++	}, {
++		/* DITHER remains an inherited relay between POSTMASK and DSC. */
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
++		MT6878_DISP_POSTMASK0_SOUT_SEL, BIT(0), 0,
++	}, {
++		DDP_COMPONENT_POSTMASK0, DDP_COMPONENT_DSC0,
++		MT6878_PQ_OUT_CROSSBAR0_MOUT_EN, BIT(1), BIT(1),
+ 	},
+ 	/* COLOR0 -> CCORR0 selects zero in both one-bit selectors. */
+ 	{

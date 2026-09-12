@@ -25,13 +25,32 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache build-base coreutils findutils git shellcheck
+        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
       - name: Validate MT6878 display route
         run: sh ./scripts/check-mt6878-display-route.sh
+      - name: Validate DRM sequence measurement
+        run: python3 ci/test-drm-sequence.py
+      - name: Fetch native display source
+        run: |
+          mkdir -p upstream/linux
+          git -C upstream/linux init
+          git -C upstream/linux remote add origin https://github.com/MT6878-mainline/linux.git
+          git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
+            d84b264a54a37611f2f46bc19363cb9b41606205
+          git -C upstream/linux checkout FETCH_HEAD -- \
+            arch/arm64/boot/dts/mediatek \
+            Documentation/devicetree/bindings/display/mediatek \
+            drivers/gpu/drm/mediatek \
+            drivers/soc/mediatek
+      - name: Validate native display prereq gates
+        run: |
+          sh patches/native-display/check-postmask.sh upstream/linux
+          sh patches/native-display/check-start-order.sh upstream/linux
+          sh patches/native-display/check-topology.sh upstream/linux
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD

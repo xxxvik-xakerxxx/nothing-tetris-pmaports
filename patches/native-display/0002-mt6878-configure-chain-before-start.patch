@@ -1,0 +1,50 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] drm/mediatek: configure MT6878 chain before component starts
+
+Candidate only, after the r153 patch series; not referenced by APKBUILD.
+The current interleaved loop starts OVL before configuring downstream
+components. Configure the complete MT6878 chain first so a future owned
+POSTMASK does not receive its relay configuration after OVL start.
+
+Keep other SoCs interleaved. This orders native callbacks, not inherited
+hardware state: quiescing the bootloader pipeline still needs validation.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/gpu/drm/mediatek/mtk_crtc.c b/drivers/gpu/drm/mediatek/mtk_crtc.c
+--- a/drivers/gpu/drm/mediatek/mtk_crtc.c
++++ b/drivers/gpu/drm/mediatek/mtk_crtc.c
+@@ -344,6 +344,8 @@ static int mtk_crtc_ddp_hw_init(struct mtk_crtc *mtk_crtc)
+ 	struct drm_encoder *encoder;
+ 	struct drm_connector_list_iter conn_iter;
+ 	const struct drm_dsc_config *dsc = NULL;
++	bool config_before_start = of_device_is_compatible(mtk_crtc->mmsys_dev->of_node,
++							 "mediatek,mt6878-mmsys0");
+ 	unsigned int width, height, vrefresh, bpc = MTK_MAX_BPC;
+ 	int ret;
+ 	int i;
+@@ -412,6 +414,7 @@ static int mtk_crtc_ddp_hw_init(struct mtk_crtc *mtk_crtc)
+ 		}
+ 	}
+ 
++	/* Configure the whole MT6878 chain before starting any component. */
+ 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
+ 		struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[i];
+ 
+@@ -420,9 +423,15 @@ static int mtk_crtc_ddp_hw_init(struct mtk_crtc *mtk_crtc)
+ 
+ 		mtk_ddp_comp_dsc_config(comp, dsc, NULL);
+ 		mtk_ddp_comp_config(comp, width, height, vrefresh, bpc, NULL);
+-		mtk_ddp_comp_start(comp);
++		if (!config_before_start)
++			mtk_ddp_comp_start(comp);
+ 	}
+ 
++	if (config_before_start) {
++		for (i = 0; i < mtk_crtc->ddp_comp_nr; i++)
++			mtk_ddp_comp_start(mtk_crtc->ddp_comp[i]);
++	}
++
+ 	/* Initially configure all planes */
+ 	for (i = 0; i < mtk_crtc->layer_nr; i++) {
+ 		struct drm_plane *plane = &mtk_crtc->planes[i];
