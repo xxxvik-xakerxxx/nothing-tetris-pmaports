@@ -1,43 +1,48 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-11.
+Updated: 2026-09-12.
 
 ## Latest GPS reliability result
 
-The unchanged supervised v2 protocol passed another clean boot on c931695,
-then failed its next repetition waiting for the post-stop RESET_DONE record.
-The late normal close does not turn that timeout into a pass. Recovery was
-an orderly reboot, never a module reload. Three repeatable starts are not
-established, and no position fix has been obtained.
+Kernel package r155 from pmaports commit
+97ffa53915955c26e2181f32c7688e8cd277d338 is now clean-installed from CI
+34589225716 on the test handset. The downloaded image artifact digest is
+57937ae30cfb2c5f762016838d66cbaab28ba2c711dae9525dbeeaaef2e33f4f; extracted
+files match SHA256SUMS: boot_image.itb
+bc3206f6e6207e06759f86ce6191067478ad5da420b43bfaa6a5e3df1dbbe859,
+super image 3a2c6902143d4994ff77878ba247414a27343799280cf1dfa5ce2f23ada8c29c,
+root sparse 866fbfc868ac428d8e8d74ae2cca3e154fa3e3a8d0e832dccaac348138c2f7cf.
+The rootfs contains device-nothing-tetris 8-r9 and
+linux-postmarketos-mediatek-mt6878 6.18-r155.
 
-An isolated six-function trace on the next clean boot passed the full cycle.
-The stop handler completed in about 116 us; its FSM call took about 17 us.
-The corresponding journal record appeared roughly 277 ms later. This run
-does not reproduce the earlier multi-second delay or prove its cause.
-The source chain confirms that vendor FSM messages lack a trailing newline
-and can remain unreadable until another printk. Candidate patch 1004 adds
-only the two missing terminators; nine host tests reproduce the original
-quiet-log timeout and accept the fix. Targeted ARM64 object generation and
-package/ABI checks pass. Kernel package r155 carries the candidate, but its
-module is not installed or live-validated. Hardware timing and the
-eight-second test deadline are unchanged.
-Commit 97ffa53915955c26e2181f32c7688e8cd277d338 is published on
-codex/hardware-integration; CI 34589225716 has passed the early overlay,
-shell, display-route and package-layout checks and is building the kernel.
-The prepared local tree lacks exact r153 build state/symvers and differs in
-configuration, so no unverified standalone module was substituted. A matching
-kernel/module image is required for the next live check.
-USB 32 MiB hashes passed before/after, Wi-Fi remained connected, BT powered,
-no GPS owners or failed units remained, and the isolated tracer was removed
-with global tracing still nop. Raw evidence is retained locally under
-gnss-supervised-c931-repeat-{1,2} and gnss-supervised-c931-stop-trace.
+Three fresh boots passed the unchanged supervised GNSS BINFO/download/stop
+cycle with no repeated module load on a single boot:
+9ab1397d-748d-460f-930e-fe15d6a1789c,
+bbba0f14-74d2-4231-b8f1-71c18d7e41dc and
+d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a. Each run started with no GPS module or
+gpsdl node, loaded gps_drv_dl_v051 once, completed DOWNLOAD_COMPLETE,
+STOP_WRITTEN, CLOSED and exited zero. The kernel published the complete
+OFF -> ON -> RST -> WORK -> RST -> OFF FSM sequence without the previous
+post-stop observation timeout. The last two boots had no matching forced
+A-die off, connsys reset, GNSS error, Oops, BUG or panic; the first boot had
+one early `emi_mng_get_gps_emi failed to find gps node` warning before the
+successful cycle. No gpsdl owner remained after any run, failed units were
+zero on the final boot, and the 32 MiB USB stream matched
+83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302 after
+each run.
 
-The display promotion candidate has advanced to
-7e8503e8371cb0394425ca0698b9acf8602aaf7a (kernel r154/device 8-r11).
-It preserves the installed audio and greeter configuration and creates the
-greeter dconf directory with checked ownership. CI 34587197925 is building;
-the image is not installed or merged. Its older unrelated GNSS package is
-not the v051 research environment. Main has not moved.
+This promotes the r155 GNSS transport/download/shutdown reliability gate, not
+end-user GPS. There is still no NMEA stream, GeoClue/gpsd integration,
+satellite acquisition, timed position fix, autostart service or suspend/resume
+result. The CI manifest still declares required U-Boot 60bcf22, while the
+test handset deliberately kept installed U-Boot c931695 to preserve the
+known-good boot baseline; that bootchain compatibility boundary remains open.
+
+The display promotion candidate at 2a2bcca03ce9168a8539bc9db8e0ad17c75b0429
+is not merged. CI 34592017396 passed overlay checks but failed the install
+image post-build greetd gate with `actual 700:113:113; expected 700 owner UID
+109`. This is a validation-helper/package identity issue to fix separately;
+the candidate image was not uploaded or installed.
 
 ## Modem and sensor prerequisites
 

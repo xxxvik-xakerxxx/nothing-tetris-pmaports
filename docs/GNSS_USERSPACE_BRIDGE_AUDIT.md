@@ -68,6 +68,35 @@ activation, and omission of the packaged diagnostic. The full kernel package
 build remains the module compile/modpost gate, and image CI checks that the
 manual executable and v051 module are present.
 
+## Clean r155 repeat result (2026-09-12)
+
+The r155 image from CI 34589225716 was clean-installed as the paired pmOS
+super and userdata images, leaving LK/U-Boot unchanged at c931695. The GitHub
+artifact digest and all extracted image SHA256 sums match the CI metadata; the
+rootfs package database contains device-nothing-tetris 8-r9 and
+linux-postmarketos-mediatek-mt6878 6.18-r155. A bounded sparse-image inspector
+also validated the root sparse stream before flashing.
+
+The unchanged supervised BINFO/download/stop protocol then passed on three
+separate boots: 9ab1397d-748d-460f-930e-fe15d6a1789c,
+bbba0f14-74d2-4231-b8f1-71c18d7e41dc and
+d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a. Each boot started with no GPS module or
+gpsdl node, loaded gps_drv_dl_v051 once, completed the native FE08/FE31/FE32
+download path, accepted one FE05/4 stop, closed cleanly and left no gpsdl
+owner. The kernel published the expected OFF -> ON -> RST -> WORK -> RST ->
+OFF sequence without the earlier supervisor timeout waiting for the post-stop
+RESET_DONE record. USB survived each run with the exact 32 MiB SHA256
+83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302, and the
+final boot had zero failed system units.
+
+This closes only the r155 transport/download/shutdown repeat gate. It does not
+claim a satellite fix, NMEA/GeoClue integration, automatic service startup,
+restart stress, coexistence or suspend/resume. One first-boot warning,
+`emi_mng_get_gps_emi failed to find gps node`, remains to triage even though
+the subsequent cycle passed. The clean image manifest still names U-Boot
+60bcf22 as required, while the live repeat intentionally kept c931695; the
+bootloader-contract validation is therefore not complete.
+
 ## Latest experiment and remaining gate (2026-09-11)
 
 ### Candidate 1004: finalize the FSM log records

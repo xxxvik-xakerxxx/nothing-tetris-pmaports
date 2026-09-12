@@ -2,12 +2,27 @@
 
 ## Current boundary
 
-The currently verified kernel package `6.18-r153` uses the stock-derived Tetris
+The currently verified kernel package `6.18-r155` uses the stock-derived Tetris
 v051 data-link module from Nothing OS 4.1 commit
 `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`. Patch `0020` publishes its DT
 platform device. The firmware package installs the exact
 MT6878/MT6631 GNSS payload as
 `connsys_gnss_mt6878_mt6631.bin`.
+
+Clean r155 validation on 2026-09-12 flashed the CI 34589225716 super and
+userdata artifacts and repeated the supervised BINFO/download/stop sequence on
+three separate boots. All three runs completed DOWNLOAD_COMPLETE,
+STOP_WRITTEN and CLOSED, published OFF -> ON -> RST -> WORK -> RST -> OFF, left
+no gpsdl owner and preserved the exact 32 MiB USB hash. This proves the manual
+transport/download/shutdown repeat gate for the r155 package. It is still not
+a position fix: no navigation command, NMEA output, GeoClue/gpsd bridge,
+autostart, restart stress, coexistence or suspend/resume has passed.
+
+The image manifest still declares U-Boot 60bcf22 as required. The live repeat
+kept the installed c931695 bootloader to preserve the known-good baseline, so
+bootchain portability remains an explicit open gate. The first clean r155 boot
+also logged `emi_mng_get_gps_emi failed to find gps node`; the later supervised
+cycle passed, but the DT/EMI warning still needs source-level cleanup.
 
 Pre-experiment read-only runtime check: boot ID
 `3c9afcd9-04a0-4bed-8333-1f7c5ab4a7f5`, runtime `6.18.0 #154`, device

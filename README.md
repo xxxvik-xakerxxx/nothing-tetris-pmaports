@@ -57,18 +57,21 @@ contract are documented in
 The installed image is pmaports commit
 `a03529f61a46cdcead0b986d0b03d695a4f538e6`. CI run `34470405429` passed and the
 paired `super`/`userdata` image boots kernel package `6.18-r151` with device
-package `device-nothing-tetris-8-r8`. U-Boot `60bcf22` remains installed in
-both `lk_a` and `lk_b`. Native DRM registers `card0`, the connected 1080x2400
+package `device-nothing-tetris-8-r8`. The current test handset has the
+diagnostic U-Boot `c931695` installed in `lk_a`; CI image manifests still name
+`60bcf22` as the required bootloader contract, so that portability boundary is
+not closed. Native DRM registers `card0`, the connected 1080x2400
 DSI connector, Phoc, backlight and touch while USB SSH remains available.
 Patch `0088` confirms the vendor default `DSC_MODE=0x00000001`, but the first
 native frame still does not complete: live probing reports `DSC_INTSTA=0x8`,
 zero `FRAME_DONE` and DSI input stuck at `0x00010001`. Clean r132 artifacts
 remain the fastboot rollback.
-GNSS v051 is installed manual-only. After correcting the installed U-Boot from
-`8aa048f` to `b76e47e`, live DT carries GPS EMI `0x86a00000/0x100000`; bounded
-transport and boot-info ioctl 23 pass with link0 returning to `CLOSED` and
-USB/Wi-Fi/Bluetooth intact. No position fix is claimed. Camera, GPU and CCCI
-additions remain compile/static-only.
+GNSS v051 is installed manual-only. Clean CI 34589225716 with kernel package
+`6.18-r155` passed three fresh supervised BINFO/download/stop cycles: the
+driver reached WORK, accepted one stop, closed cleanly, left no gpsdl owner
+and preserved USB. No position fix, NMEA bridge, autostart, coexistence or
+suspend/resume is claimed. Camera, GPU and CCCI additions remain
+compile/static-only.
 
 Per-device data remains outside the image. The live phone exposes separate
 `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
@@ -80,7 +83,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Boot | U-Boot boot flow | Works | U-Boot `60bcf22` from CI `33954506650` is installed in the 16 MiB `lk_a` and `lk_b` partitions; live Linux reports the exact revision. Normal boot and USB recovery pass. The U-Boot fastboot implementation reports slot A but does not support `set_active`. |
+| Boot | U-Boot boot flow | Partial | U-Boot `c931695` from CI `34584756418` is installed in `lk_a` and boots the current r155 test image; `lk_b` is not the validated recovery path. CI manifests still require `60bcf22`, so the bootloader contract and cross-slot recovery need reconciliation before this is promoted as a stable main baseline. |
 | Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
 | Display | Native DDP/DSC/DSI | Partial | CI r153 is clean-installed with patches `0096`/`0097`; the user confirms visible output without diagnostic modules and USB transfer passes. A controlled, readiness-synchronized ten-cycle DPMS test passes; the earlier unsynchronized EINVAL failure is retained in the audit. Fixed 60 Hz mode, software rendering; 120 Hz, cold repeat, native PQ ownership and full lifecycle remain open. See `docs/DISPLAY_FIRST_FRAME_AUDIT.md`. |
@@ -105,7 +108,7 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
 | Connectivity | Wi-Fi | Partial | Clean #130 automatically associates with DHCP/default route/DNS/HTTPS and completes an exact 64 MiB Wi-Fi SSH stream while USB and Bluetooth remain active. The r151 Wi-Fi gate now fails unless `wlan0` is associated, has IPv4/default route and passes traffic; the current boot has `wlan0` present but not associated. Cold reconnect, suspend/resume and sustained bidirectional stress remain. |
 | Connectivity | Bluetooth | Partial | Native BlueZ `hci0` completed a bounded eight-second discovery with 23 devices and returned to `Discovering: no` while USB/Wi-Fi survived. Pair/reconnect, audio/data profiles and suspend lifecycle remain. |
-| Connectivity | GPS/GNSS | Partial | Installed #130 manual v051 receives the validated GPS EMI handoff, creates both `gpsdl` nodes and completes bounded link0 open, ATF boot-info ioctl 23 and close. No owner remains and USB/Wi-Fi/Bluetooth survive. The next candidate adds only an explicit, deadline-bounded read-only ioctl diagnostic and remains default-off. MNL/MVCD protocol evidence, satellite acquisition and a timed position fix remain absent. |
+| Connectivity | GPS/GNSS | Partial | Clean r155 from CI `34589225716` passed three fresh supervised v051 BINFO/download/stop cycles on separate boots. Each run loaded the GPS module once, reached DSP WORK, stopped and closed cleanly, left no gpsdl owner, kept failed units at zero on the final boot and preserved the exact 32 MiB USB hash. MNL/MVCD navigation, NMEA/GeoClue, satellite acquisition, timed position fix, autostart, coexistence and suspend/resume remain absent. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
 | Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. Object-only LLVM 21 gates cover CCCI core, CCIF, modem common and the vendor FSM/port/non-page-pool-DPMAIF groups; CI forbids ECCCI/DPMAIF modules and autoload. Trusted-firmware semantics, handoff memory, DT, link/modpost and runtime remain unproven. |
 | Sensors | Rotation/accelerometer | Broken | Stock identifies SCP-owned ICM4N607 accel/gyro, LTR569 light/proximity and HX9031AS SAR endpoints. The vendor SCP probe still stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A manual-only inventory mask remains false until the full SCP handshake succeeds; no publication, DVFS or sensorhub is enabled. |
