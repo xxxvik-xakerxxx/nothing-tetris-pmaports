@@ -65,11 +65,11 @@ removes one handoff parser mismatch, but no authentication backend, modem
 memory/reset ownership, DT runtime, CCCI/DPMAIF module, SIM or network
 functionality is implemented.
 
-The SCP DRAM recovery-span prerequisite in codex/scp-region-prereq commit
-44e233c validates the complete four-bank rounded recovery mapping before SCP
-setup. Its exact-source host gate reproduced the previous defect
-(18 DRAM cases, 10 failures) and the candidate passed all 18 cases under
-UBSan. SCP, DVFS and sensorhub remain disabled.
+The SCP DRAM recovery-span prerequisite is packaged on
+`codex/hardware-integration-next-scp`: `0094` validates the complete four-bank
+rounded recovery mapping before SCP setup. Its exact-source host gate
+reproduced the previous defect (18 DRAM cases, 10 failures) and the candidate
+passed all 18 cases under UBSan. SCP, DVFS and sensorhub remain disabled.
 
 Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.

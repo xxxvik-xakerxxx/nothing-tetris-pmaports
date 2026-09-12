@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=6.18
-pkgrel=155
+pkgrel=156
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -82,6 +82,7 @@ source="
 	0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 	0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	0093-vendor-scp-validate-region-info.patch.vendor
+	0094-vendor-scp-validate-dram-recovery-span.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
@@ -210,6 +211,8 @@ prepare() {
 		< "$srcdir"/0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0093-vendor-scp-validate-region-info.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0094-vendor-scp-validate-dram-recovery-span.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -937,6 +940,7 @@ aad94b1a8afcc80d2c449f14c76f4b0d5a50dd9b2fd9ff1006fdfa671c71ecfe239a593a93f0f356
 affc00703ff0d42be49fea7ca9d95591db82065f5f0089087541bb946568d797262510cb62eb5bdd5f91b95a7b64e3675a9ac23f4ba95e962e50a6fc09b600f1  0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor
 f7dd6031ca8f739eb5e58bc798784d7b7bfef41f8e6ca2ee75584b4beac4d02ecf692089477afb85f554633b8cc2e112e5a16726818cd0d191148065d19a9b55  0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor
 3586e5d6f5ed448df03694966e7df5db33f8a728b6aacbff0a87e142079927f737102fe3e2f8c1fbc5f44b995b4b9e55e7486eebc0fdc9b65117cc15612629b4  0093-vendor-scp-validate-region-info.patch.vendor
+b3386f9da6173348ce38d513784c9a5ab600b77fd84c8ce0b28a1d02abe925541e9901aaf058ad21863bb457a99179e8b1d23066f098dbc8e50e0e1864a4fb2f  0094-vendor-scp-validate-dram-recovery-span.patch.vendor
 45ad1eae22344ed1640e5f57b97410175c5b9c8021c88c3ed4a4f370b687a82f173ca49c56a40de09e1a9d898c358f98e0cda20964095afe6c13db2c4fca26bb  0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 c9552862347ae31a43dfd5aba938bae0a9ef8bf18ef779964454cd1b42658cce9c26aa08a7d064a1df26d16a3a55a11109b22593cf24db24ff4dd78fb74f6e1b  0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 4589759c9818a361edff0392b23ee96fb77b2a728f0ce763a4ed2f8a423cf979263f085d05e2e19384f222894a27f8f05fe5d3d91321015b89ed57f14e7654a0  0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
