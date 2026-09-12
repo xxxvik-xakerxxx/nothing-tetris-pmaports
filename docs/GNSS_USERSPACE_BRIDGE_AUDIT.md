@@ -314,17 +314,18 @@ pending vendor reconstruction are historical, not remaining acquisition work.
 The research callback audit now traces the two direct fd fields, 512-byte
 reads into mtk_gps_data_input/data_input2, and a bounded byte-framing handler.
 2060 isolated ARM64 cases establish AA F0/AA 0F markers, DE escape handling,
-and state/ring transitions. This is not yet a complete framing/parser audit:
-checksum, length validation, overflow/reset, multi-byte stream behavior and
-command semantics remain unverified. Direct thread-local stack-guard reads
-also demonstrate ABI dependence beyond the dynamic import table.
+and state/ring transitions. The integrated host gate
+`scripts/check-gnss-boot-protocol.py` adds strict FE08/FE31/FE32 wire encoding,
+checksum, length, split-read, truncation, overflow and 1/106/256-fragment
+state-machine coverage. Direct thread-local stack-guard reads still demonstrate
+ABI dependence beyond the dynamic import table.
 
 Consequently this change does not send fragments, read raw payloads, start
 `gpsd`, expose GeoClue, autostart GNSS, or claim satellite acquisition or a
-fix. The next userspace step is to validate the remaining frame/parser and
-startup contracts against these exact inputs or a bounded known-good Android
-trace. A separate research clock-query patch reproduces and fixes silent
-regmap-read error conversion to the valid 26 MHz enum in host tests; it is
-not packaged or installed. Live metadata confirms MT6685 parent binding and
+fix. The next userspace step is to validate startup command ownership and
+navigation payload semantics against these exact inputs or a bounded known-good
+Android trace. A separate research clock-query patch reproduces and fixes
+silent regmap-read error conversion to the valid 26 MHz enum in host tests; it
+is not packaged or installed. Live metadata confirms MT6685 parent binding and
 an existing unbound GPS child while the GPS transport is absent; no duplicate
 DT child is required. Neither fact closes the hardware lifecycle gate.
