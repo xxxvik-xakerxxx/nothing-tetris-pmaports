@@ -2,6 +2,53 @@
 
 Updated: 2026-09-12.
 
+## Latest clean next-SCP installation
+
+Clean-installed `codex/hardware-integration-next-scp` CI artifact
+`10297439743` from run `34692383850` and commit
+`3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP
+SHA256 is
+`a97f7dd37950e92279a27168fcdf667b607baec91cc00c34194865fccb86bf71`; local
+artifact verification passed for `boot_image.itb`, `nothing-tetris-boot.img`
+and `nothing-tetris-root.sparse.img`. The manifest reports kernel `6.18.0`,
+required U-Boot `60bcf22fdc0a94526424db59fc7640298ea8f0dd`, and fastboot
+mapping `nothing-tetris-boot.img -> super`, `nothing-tetris-root.sparse.img ->
+userdata`.
+
+The phone was in `tetris-uboot` fastboot on slot `a`; `super` and `userdata`
+were flashed from the verified artifact. After reboot, USB NCM returned as
+`usb0` at `172.16.42.1`, SSH answered, boot ID
+`d597ba7f-f3f5-437b-bd0e-58a350ae7f3e`, kernel
+`Linux nothing-tetris 6.18.0 #157-postmarketos-mediatek-mt6878`, installed
+packages `device-nothing-tetris-8-r10` and
+`linux-postmarketos-mediatek-mt6878-6.18-r156`, and zero failed systemd units.
+`scripts/check-live-regression-gate.sh 172.16.42.1 user 147147 transfer`
+passed and saved
+`local/live-logs/20260912T170559Z-172.16.42.1-regression-gate`; the full audit
+is in `local/live-logs/20260912T170639Z-172.16.42.1-audit`. The user visually
+confirmed good display output on this clean image.
+
+The clean node check shows touch as `fts_ts` on `/dev/input/event0`, keys and
+RT6010 haptics in `/proc/bus/input/devices`, Wi-Fi as `wlan0`, powered BlueZ
+`hci0`, and USB Type-C/gauge telemetry. It also shows the remaining blockers:
+IIO contains only PMIC ADC devices, not accel/gyro/proximity/light; `/dev/dri`
+has `card0` only and no render node; no `/dev/video*` or `/dev/media*` camera
+nodes exist; ModemManager reports no modem. Wi-Fi is present but not associated
+on this audit, and package index refresh produced transient DNS errors, so
+routed Wi-Fi/DNS is not confirmed on this clean image.
+
+One explicit manual GNSS transport start was then run on the same clean boot,
+with the module not previously loaded. `nothing-tetris-gnss-transport.service`
+loaded `gps_drv_dl_v051`, created `/dev/gps_emi`, `/dev/gpsdl0` and
+`/dev/gpsdl1`, and exited successfully with zero failed units. The kernel
+reported the LK GPS EMI handoff as `0x86a00000/0x100000`. The read-only
+diagnostic with `--probe-link0` returned `status=0`, `code_size=42505`,
+`fragment_count=106`, `boot_time_ns=570266810187` and
+`arch_counter=7545944623`, redacted the cipher key, left no `/dev/gpsdl*`
+owners and preserved `usb0`. This confirms clean next-SCP GNSS transport and
+read-only boot-info access only; it is still not NMEA, GeoClue, satellite
+acquisition or a position fix.
+
 ## Latest GPS reliability result
 
 Kernel package r155 from pmaports commit

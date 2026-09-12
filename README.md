@@ -37,8 +37,8 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed CI `34492172863`, `pkgrel=153`, kernel `6.18.0 #154`; persistent route and frame-end updates, lifecycle testing incomplete) |
-| Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
+| Kernel version | `6.18` (clean-installed CI `34692383850`, `pkgrel=156`, kernel `6.18.0 #157`; display route/frame-end updates and next SCP prerequisites, lifecycle testing incomplete) |
+| Kernel source commit | `3a016d36153d504f6b1002d29120bd84a8183533` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
@@ -54,24 +54,24 @@ The measured charging path, source-classification blocker and idle-drain test
 contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
-The installed image is pmaports commit
-`a03529f61a46cdcead0b986d0b03d695a4f538e6`. CI run `34470405429` passed and the
-paired `super`/`userdata` image boots kernel package `6.18-r151` with device
-package `device-nothing-tetris-8-r8`. The current test handset has the
-diagnostic U-Boot `c931695` installed in `lk_a`; CI image manifests still name
-`60bcf22` as the required bootloader contract, so that portability boundary is
-not closed. Native DRM registers `card0`, the connected 1080x2400
-DSI connector, Phoc, backlight and touch while USB SSH remains available.
-Patch `0088` confirms the vendor default `DSC_MODE=0x00000001`, but the first
-native frame still does not complete: live probing reports `DSC_INTSTA=0x8`,
-zero `FRAME_DONE` and DSI input stuck at `0x00010001`. Clean r132 artifacts
-remain the fastboot rollback.
-GNSS v051 is installed manual-only. Clean CI 34589225716 with kernel package
-`6.18-r155` passed three fresh supervised BINFO/download/stop cycles: the
-driver reached WORK, accepted one stop, closed cleanly, left no gpsdl owner
-and preserved USB. No position fix, NMEA bridge, autostart, coexistence or
-suspend/resume is claimed. Camera, GPU and CCCI additions remain
-compile/static-only.
+The installed image is the `codex/hardware-integration-next-scp` CI artifact
+from pmaports commit `3a016d36153d504f6b1002d29120bd84a8183533`. CI run
+`34692383850` passed and its downloaded `nothing-tetris-images` artifact
+`10297439743` was verified locally before flashing. The clean flash on
+2026-09-12 booted kernel `6.18.0 #157` with `device-nothing-tetris-8-r10` and
+`linux-postmarketos-mediatek-mt6878-6.18-r156`; USB NCM/SSH returned
+automatically, zero systemd units were failed, the transfer regression gate
+passed, and the user confirmed visually good native display output.
+
+Native DRM still exposes only `/dev/dri/card0`; there is no render node. Touch
+is bound as `fts_ts` on `/dev/input/event0`. Wi-Fi and Bluetooth initialize
+automatically (`wlan0` and powered BlueZ `hci0`), but Wi-Fi is not associated
+on the clean audit. One explicit manual GNSS transport/read-only probe on this
+clean boot returned `status=0` and `fragment_count=106` while preserving USB,
+but no position fix, NMEA bridge, autostart, coexistence or suspend/resume is
+claimed. Camera, GPU and CCCI additions remain compile/static-only;
+ModemManager reports no modem; sensor IIO contains only PMIC ADC devices, not
+accelerometer, gyro, proximity or light.
 
 Per-device data remains outside the image. The live phone exposes separate
 `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
