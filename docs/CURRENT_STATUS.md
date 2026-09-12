@@ -38,23 +38,32 @@ result. The CI manifest still declares required U-Boot 60bcf22, while the
 test handset deliberately kept installed U-Boot c931695 to preserve the
 known-good boot baseline; that bootchain compatibility boundary remains open.
 
-The display promotion candidate at 2a2bcca03ce9168a8539bc9db8e0ad17c75b0429
-is not merged. CI 34592017396 passed overlay checks but failed the install
-image post-build greetd gate with `actual 700:113:113; expected 700 owner UID
-109`. This is a validation-helper/package identity issue to fix separately;
-the candidate image was not uploaded or installed.
+The display promotion candidate at 509e26bccec21f60744e06a3f80a463931bccb6a
+fixes the greetd dconf ownership mismatch by resolving the packaged `greetd`
+UID/GID at install time instead of baking one builder-local numeric owner.
+Local overlay validation, the greeter rootfs unit tests and `git diff --check`
+passed; CI 34685961629 has passed overlay checks and is still building the
+install image. No r12 image artifact has been uploaded or installed yet.
 
 ## Modem and sensor prerequisites
 
 The modem producer audit and read-only C partition/member locator are saved
-in published commit 933ac98 on codex/scp-region-prereq. Exact B4.1 LK selects
-the modem platform table, then the active slot suffix; the md1img table is
-a bypassed fallback. Certificate, anti-rollback, header and payload checking
-order is established, but no authentication backend or modem memory/reset
-ownership is implemented. The locator passes 23 ASan/UBSan fixture cases;
-real modem-container validation remains pending. Existing U-Boot expects a
-32-byte CCCI summary while stock emits 48; this is another unresolved
-handoff compatibility boundary, not modem readiness.
+on codex/scp-region-prereq through 44e233c. Exact B4.1 LK selects the modem
+platform table, then the active slot suffix; the md1img table is a bypassed
+fallback. Real B4.1 `modem.img` container validation is recorded, and the
+locator passes its ASan/UBSan fixture set. U-Boot CCCI diagnostic branch
+codex/ccci-prev-fdt-diagnostic at 1b8c954dba accepts the stock 48-byte v3
+descriptor only when the 16-byte extension tail is zero; CI 34686210064
+passed and the downloaded LK artifact's SHA256SUMS verified locally. This
+removes one handoff parser mismatch, but no authentication backend, modem
+memory/reset ownership, DT runtime, CCCI/DPMAIF module, SIM or network
+functionality is implemented.
+
+The SCP DRAM recovery-span prerequisite in codex/scp-region-prereq commit
+44e233c validates the complete four-bank rounded recovery mapping before SCP
+setup. Its exact-source host gate reproduced the previous defect
+(18 DRAM cases, 10 failures) and the candidate passed all 18 cases under
+UBSan. SCP, DVFS and sensorhub remain disabled.
 
 Sensor reply candidate ce19497 on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
@@ -62,6 +71,23 @@ The original AND condition admitted stale replies. Eight predicate cases,
 65536 sequence pairs and two mutations pass. This is not a sensor startup
 fix: SCP loader/DVFS, firmware/calibration ownership and samples are still
 unproven. The candidate is outside APKBUILD. Camera capture remains unproven.
+
+Camera/GNSS prereq branch codex/camera-clk-prereq-v2 is published through
+8dfa88d. It records the B4.1 GNSS startup/frame-sync/NMEA boundary and a
+host-tested IMX882 active-low reset prerequisite. The reset test proves the
+patched future identity probe keeps GPIO25 physically low while rails settle
+and during shutdown, and rejects the unmodified inverted baseline. No camera
+node, sensor power-on, I2C transaction, SENINF/ISP or media pipeline is
+enabled.
+
+GPU/Panthor prereq branch codex/panthor-compile-prereq is published through
+a03a515. The VGPU readback gate executes the vendor and mainline voltage
+callbacks with read-only fake regmap access and proves the source mismatch:
+vendor reads enabled VBUCK2 from DBG0 while mainline reads ELR2. The broader
+Panthor compile-only gate could not be rerun locally because the prepared
+kernel tree resides under a path with spaces that Linux Kbuild rejects; CI
+34686561580 has passed overlay checks and is still building. No GPU runtime
+node, rail consumer, firmware, render node or acceleration is claimed.
 
 ## Latest bootloader observation
 
@@ -342,12 +368,12 @@ still open. A compile-only patch does not improve the end-user status.
 | Thermal | Partial | All 24 MT6878 zones return plausible polling-mode values without USB loss. | IRQ/trip routing and sustained load remain disabled/unverified. |
 | Charging | Partial | Clean #128 uses AICR/ICHG 500000 uA when TCPM publishes no current limit. A later real PD session published 5 V / 2 A and drove the policy to 2 A. On installed r151, the source-aware power gate passed: this PD-capable computer attachment reports 5 V but `CURRENT_MAX=0`, so the conservative 500 mA fallback remains correct. These are contract/taper snapshots, not a full charge-rate result. Native BC1.2 SDP/CDP/DCP classification is absent. | Repeat PD from a partially discharged battery while logging battery/connector temperatures, rate, taper, termination and detach. Separately observe a USB 2.0 host, known Rp source and known 5 V BC1.2 DCP. Preserve USB2 DP/DM ownership; explicit PPS setpoints, higher voltages and OTG remain disabled. |
 | Idle battery drain | Broken | Roughly half the battery was reported lost overnight. A live r147 capture found `dconf-service` at 5.1 GiB RSS plus 596 MiB swap and persistent CPU use because `/var/lib/greetd/.config/dconf` did not exist; Calls and Chatty retried failed writes continuously. A soft restart reclaimed the memory, but growth resumed until the directory was created. Device package r9 now ships the private dconf directory directly and the overlay validator rejects regressions. Wi-Fi and USB suspend costs remain unisolated. | Build and clean-install r9, validate flat dconf RSS/CPU across reboot, then run physically unplugged screen-off A/B intervals with Wi-Fi associated and disabled. Record coulomb, suspend and wake/IRQ deltas. |
-| GNSS | Partial | Fastboot proved the previous executable loader was `8aa048f`; after `b76e47e` was installed in `lk_a/b`, live DT exposed GPS EMI `0x86a00000/0x100000`. Clean #130 manual v051 then created both nodes and completed bounded link0 open, ATF boot-info ioctl 23 and close. No owner/modem module remained; Wi-Fi, Bluetooth and exact 32 MiB USB survived. The `pkgrel=150` candidate now extracts the three proven read-only ioctls and packages an explicit, deadline-bounded link0 diagnostic with no autostart. | Run the manual diagnostic regression gate. A position bridge remains blocked on locally absent MNL/MVCD/navigation protocol evidence; after that is obtained, prove a timed/accurate fix, cold starts, restart and suspend/resume. |
-| Modem / SIM | Broken | No ModemManager modem, CCCI/DPMAIF/WWAN device or SIM state. U-Boot validates the LK CCCI payload. The combined 64-object CCCI/util/CCMNI/RPS/ADC/UDC/non-page-pool-DPMAIF inventory classifies 242 remaining references; optional MRDUMP dependency is guarded and checked in both configurations. No ECCCI/DPMAIF module is linked, shipped, autoloaded or run. | Validate actual configured-kernel exports, module ownership and final LTO/modpost; then cover page-pool and UDC provider lifecycle. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT and runtime remain later gates. |
-| Sensors | Broken | SCP/mailbox/IPI/HF/sensorhub remain manual-only; no accelerometer, gyro, proximity or light sensor is exposed. Patch `0093` structurally rejects malformed TCM region-info before SCP recovery. U-Boot candidate `5e450af73a` passes host-only slot/identity/carveout/region-info agreement tests but deliberately returns `-EOPNOTSUPP` on the board because its live adapters are absent. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
-| GPU | Broken | Panthor is configured and has a pinned LLVM 21 compile/source-trace gate, but no Mali platform device or render node exists. The shipped DT has no GPU node; MFG RPC remains disabled inventory, with no GPU regulator consumer or autoload. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. |
-| Rear/front cameras | Broken | No camera media pipeline or preview/capture. Torch channels work independently. | The source candidate records the main IMX882 I2C8/CAMTG2/reset/four-rail topology with the sensor and every provider disabled. Compile-only gates still ship no camera module or live client. Final-DTB CI, observation-only clean boots, sensor identity, SENINF/ISP, CCU and the media graph remain. |
-| Display | Broken | Installed r151 boots without framebuffer fallback and retains USB SSH, touch, Phoc and backlight. MMSYS routing matches Nothing OS and `DSC_MODE=0x00000001` now matches the Tetris vendor configuration, but OVL/DSC still do not complete the first native frame: `DSC_INTSTA=0x00000008`, `FRAME_DONE=0` and DSI input remains `0x00010001`. | Continue from the remaining first-frame stall; require `FRAME_DONE`, advancing counters, clean pixels and stable USB before promotion, then test DPMS, brightness, warm reboot and suspend/resume. |
+| GNSS | Partial | Clean r155 from CI 34589225716 passed three fresh supervised BINFO/download/stop cycles on separate boots and preserved the exact 32 MiB USB hash. The read-only diagnostic lifecycle hardening is published at 3537bd8 with 19 isolated host scenarios; CI 34686365955 has passed overlay checks and is still building. Current live r155 inventory shows `gps_drv_dl_v051` loaded with `/dev/gpsdl0` and `/dev/gpsdl1`, failed units zero, and no modem device. | Do not retry GNSS on the current boot with the module already loaded. Next reboot, then advance from read-only/download reliability to a bounded navigation/NMEA bridge only after the remaining MNL/MVCD protocol evidence is packaged and tested. |
+| Modem / SIM | Broken | Current live r155 inventory still reports no ModemManager modem and no CCCI/DPMAIF/WWAN device. U-Boot CCCI branch 1b8c954dba accepts the real stock48 descriptor form and CI passed, but this only publishes diagnostic handoff status. The combined compile-only modem inventory classifies remaining references and still ships no ECCCI/DPMAIF module or autoload. | Validate actual configured-kernel exports, module ownership and final LTO/modpost; then cover page-pool and UDC provider lifecycle. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT, SIM detect and runtime remain later gates. |
+| Sensors | Broken | Current live r155 inventory exposes only PMIC ADC IIO devices (`mt6369-auxadc`, `mt6375-auxadc`, `mt6375-adc`); no accelerometer, gyro, proximity or light sensor is exposed. Sensor reply correlation and SCP DRAM span validation are host-proven prerequisites, but SCP/mailbox/IPI/HF/sensorhub remain disabled. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
+| GPU | Broken | Current live r155 inventory has `/dev/dri/card0` only and no render node. Panthor compile/source prerequisites exist, and the VGPU readback gate proves a vendor/mainline enabled-rail source mismatch; shipped DT still has no GPU node, MFG RPC remains disabled, and there is no GPU regulator consumer or autoload. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. First live gate must be read-only rail/register observation, not a GPU probe. |
+| Rear/front cameras | Broken | Current live r155 inventory has no `/dev/video*` or `/dev/media*`. Torch channels work independently. The IMX882 reset-polarity prerequisite is host-proven, but no camera node, sensor power-on, I2C transaction, SENINF/ISP, CCU or media pipeline is enabled. | Complete final DT/clock/rail ownership, observation-only clean boots, then one bounded sensor identity probe before SENINF/ISP or preview/capture work. |
+| Display | Partial | Installed r155 continues to expose native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output. The r12 display promotion candidate fixes the CI greetd ownership blocker and is building in CI 34685961629. The panel still exposes only a fixed 60 Hz mode and the session has no render node, so perceived slowness is likely outside the display scanout fix. | Wait for r12 image artifact, verify hashes, clean-flash it, then retest visual output, touch, USB transfer, DPMS/brightness, warm reboot and suspend/resume before main promotion. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
