@@ -53,6 +53,14 @@ the same install-time owner repair as device r10.
 
 ## Modem and sensor prerequisites
 
+Fresh pre-install live audit `local/live-logs/20260912T120443Z-172.16.42.1-audit`
+on boot d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a still reports
+device-nothing-tetris 8-r9 and linux-postmarketos-mediatek-mt6878 6.18-r155,
+zero failed systemd units, USB NCM up at 172.16.42.1, wlan0 present but
+disconnected, `/dev/dri/card0` only, no ModemManager modem, no camera/media
+nodes and no sensor IIO devices beyond the existing PMIC ADC path. This is the
+baseline for the next CI clean-install candidate, not a new functional claim.
+
 The modem producer audit, read-only C partition/member locator and bounded
 stock-LK kernel-chain feasibility audit are now integrated on
 `codex/hardware-integration-next-scp` through ccef88b. Exact B4.1 LK selects
