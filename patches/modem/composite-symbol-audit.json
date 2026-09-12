@@ -1,0 +1,1324 @@
+{
+  "config_sha256": "4f7980f8386b3a737f40a75fb0ec08994f32c195a0374503cff45c8f683e038d",
+  "module_export_and_crc_compatibility_verified": false,
+  "multiple_definitions": {
+    "ccci_debug_enable": [
+      {
+        "kind": "D",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      },
+      {
+        "kind": "D",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      },
+      {
+        "kind": "D",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      }
+    ],
+    "cleanup_module": [
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      },
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      },
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      }
+    ],
+    "init_module": [
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      },
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      },
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      },
+      {
+        "kind": "T",
+        "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+      }
+    ]
+  },
+  "nm_version": "llvm-nm, compatible with GNU nm\nLLVM (http://llvm.org/):\n  LLVM version 22.1.8\n  Optimized build.",
+  "object_count": 4,
+  "objects": [
+    {
+      "path": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "sha256": "2f898c26780cdeebc7bee261db322e0dfd1926df7e341ddd96b629b0fc47a157"
+    },
+    {
+      "path": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "sha256": "61740a1eba3b37b0123a754cc7716377a625bbe4e5a52849df7dad2349aacd92"
+    },
+    {
+      "path": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "sha256": "68c7a6be157115d648db8f872061ad4c6826d18ac9e15859779d6a4a5b5c9fa4"
+    },
+    {
+      "path": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o",
+      "sha256": "4743839016806f73072631b9fc3c9402274016ec0d75e9d98255d28f837de82d"
+    }
+  ],
+  "resolved_within_set": {
+    "ccci_alloc_skb": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_dump_write": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_event_log": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_free_skb": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_fsm_get_md_state": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_get_md_check_hdr_inf": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_get_md_info_str": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_get_per_md_data": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_hif_register": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_md_add_log_history": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_md_dump_log_history": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_md_force_assert": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_md_get_smem_by_user_id": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_port_dump_status": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_port_get_dev_name": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_port_queue_status_notify": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_port_recv_skb": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_set_dpmaif_debug_cb": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "ccci_sysfs_add_modem": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_util_cmpt_mem_dump": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "ccci_util_mem_dump": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "check_rat_at_md_img": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "check_rat_at_rt_setting": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_bin_capability": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_img_type": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_resv_csmem_info": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_resv_mem_info": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_resv_phy_cap_size": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_resv_sib_size": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_resv_udc_info": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_sib_mem_info": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_md_smem_cachable_offset": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_modem_is_enabled": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_mtee_is_enabled": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_smem_amms_pos_size": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_soc_md_rt_rat": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "get_soc_md_rt_rat_idx": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "inject_md_status_event": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "inject_pin_status_event": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "md_fsm_exp_info": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+        }
+      ]
+    },
+    "mtk_ccci_get_md_c_smem_inf": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "mtk_ccci_get_md_nc_smem_inf": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "mtk_ccci_get_smem_by_id": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "set_soc_md_rt_rat_by_idx": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    },
+    "set_soc_md_rt_rat_str": {
+      "consumers": [
+        "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+      ],
+      "providers": [
+        {
+          "kind": "T",
+          "object": "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+        }
+      ]
+    }
+  },
+  "scope": "Object-set dependency inventory; not a linked module",
+  "unresolved": {
+    "___ratelimit": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__arch_copy_from_user": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__arch_copy_to_user": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__arm_smccc_smc": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__const_udelay": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__cpu_possible_mask": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__dma_sync_single_for_cpu": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__dynamic_pr_debug": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__folio_put": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__init_waitqueue_head": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__irq_apply_affinity_hint": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__kmalloc_cache_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__kmalloc_large_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "__kmalloc_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__kvmalloc_node_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__mutex_init": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__netdev_alloc_frag_align": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__netdev_alloc_skb": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__platform_driver_register": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__pm_relax": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__pm_runtime_idle": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__pm_runtime_resume": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__pm_stay_awake": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__stack_chk_fail": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__tasklet_hi_schedule": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "__this_module": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__trace_set_current_state": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__tracepoint_sched_set_state_tp": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__udelay": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__vma_start_write": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__wake_up": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "__wake_up_locked": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "__warn_printk": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "_find_last_bit": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "_find_next_bit": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "_printk": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "_raw_spin_lock": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "_raw_spin_lock_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "_raw_spin_lock_irqsave": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "_raw_spin_unlock": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "_raw_spin_unlock_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "_raw_spin_unlock_irqrestore": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "alloc_chrdev_region": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "alloc_workqueue_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "alt_cb_patch_nops": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "arch_timer_read_counter": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "arm64_use_ng_mappings": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "autoremove_wake_function": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "ccci_get_adc_mV": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "ccci_get_adc_num": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "ccci_get_adc_val": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "ccmni_clr_flush_timer": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "ccmni_ops": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "ccmni_set_cur_speed": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "ccmni_set_init_rps": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "cdev_add": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "cdev_del": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "cdev_init": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "class_create": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "clk_disable": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "clk_enable": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "clk_prepare": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "clk_unprepare": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "cpufreq_cpu_get": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "delayed_work_timer_fn": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "dev_driver_string": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "dev_get_regmap": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "dev_kfree_skb_any_reason": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "device_create": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "devm_clk_get": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "devm_kmalloc": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "devm_regulator_get_optional": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "disable_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "disable_irq_nosync": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "dma_alloc_attrs": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "dma_map_page_attrs": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "dma_unmap_page_attrs": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "do_wait_intr_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "enable_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "finish_wait": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "flush_work": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "free_reserved_page": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "freq_qos_add_request": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "freq_qos_update_request": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "get_random_bytes": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "get_random_u32": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "gpio_to_desc": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "gpiod_get_raw_value": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "gpiod_set_debounce": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "hrtimer_active": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "hrtimer_cancel": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "hrtimer_setup": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "hrtimer_start_range_ns": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "icc_set_bw": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "init_wait_entry": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "ioremap_prot": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "iounmap": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "irq_of_parse_and_map": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "irq_set_irq_type": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "irq_set_irq_wake": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "irq_set_irqchip_state": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "is_vmalloc_addr": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "jiffies": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "jiffies_to_msecs": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "kasprintf": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "kernel_kobj": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "kfree": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "kfree_skb_partial": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "kmalloc_caches": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "kobject_init_and_add": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "kobject_put": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "kobject_uevent_env": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "kstrtouint": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "kthread_create_on_node": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "kthread_should_stop": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "kthread_stop": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "ktime_get_real_ts64": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "ktime_get_ts64": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "memcpy": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "memcpy_fromio": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "memcpy_toio": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "memset": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "memset_io": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "memstart_addr": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "mod_timer": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "msleep": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "nonseekable_open": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "nr_cpu_ids": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "of_find_compatible_node": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "of_find_device_by_node": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_find_matching_node_and_match": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_find_node_by_name": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_find_node_opts_by_path": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_get_named_gpio": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_get_property": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "of_icc_get": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "of_iomap": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "of_property_read_u32_index": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "of_property_read_variable_u32_array": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "of_reserved_mem_lookup": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "pfn_is_map_memory": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "pm_runtime_enable": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "pm_system_wakeup": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "pm_wakeup_ws_event": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "power_supply_get_by_name": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "power_supply_get_property": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "preempt_schedule": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "prepare_to_wait_event": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "proc_create": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "queue_delayed_work_on": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "queue_work_on": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "register_chrdev_region": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "register_syscore_ops": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "regmap_read": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "regmap_write": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "regulator_get_voltage": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "regulator_is_enabled": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "regulator_set_voltage": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "regulator_sync_voltage": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "remap_pfn_range": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "request_threaded_irq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "rtc_time64_to_tm": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "sched_clock": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "schedule": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "schedule_timeout": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "scnprintf": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "set_ccmni_rps": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "set_cpus_allowed_ptr": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "skb_add_rx_frag_netmem": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "skb_pull": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "skb_push": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "skb_put": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "skb_queue_tail": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "skb_trim": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "snprintf": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "strchr": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "strcmp": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "strlen": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "strncmp": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "strncpy": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "strstr": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "sys_tz": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "syscon_regmap_lookup_by_phandle": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "sysfs_create_file_ns": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ],
+    "system_percpu_wq": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o"
+    ],
+    "tasklet_init": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "timer_delete": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "timer_init_key": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_ccif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "unregister_chrdev_region": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "vfree": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "vmalloc_noprof": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "vmap": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "vsnprintf": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/ccci_util/ccci_util_lib.o"
+    ],
+    "wake_up_process": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o",
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/hif/ccci_dpmaif.o"
+    ],
+    "wakeup_source_register": [
+      "/tmp/nothing-devmods-0095-final/drivers/misc/mediatek/eccci/ccci_md_all.o"
+    ]
+  },
+  "unresolved_count": 195,
+  "unresolved_weak": {}
+}

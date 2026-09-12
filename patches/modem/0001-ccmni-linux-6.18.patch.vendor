@@ -1,0 +1,68 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] net: ccmni: adapt sysctl and GRO access to Linux 6.18
+
+Compile-only candidate against Nothing B4.1 ee2be53cb75670b548948636a0db1d1ff112bf12.
+Use size-aware sysctl registration without a sentinel and preserve the public
+receive-list API while accessing the new GRO node. gro_flush_normal() calls
+an unexported receive-list helper and cannot replace this in a module.
+No DT, module loading, modem power, firmware or radio state change.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/misc/mediatek/ccmni/ccmni.c b/drivers/misc/mediatek/ccmni/ccmni.c
+index 98d2073..c89ec3e 100644
+--- a/drivers/misc/mediatek/ccmni/ccmni.c
++++ b/drivers/misc/mediatek/ccmni/ccmni.c
+@@ -29,6 +29,7 @@
+ #include <linux/if_arp.h>
+ #include <linux/ipv6.h>
+ #include <net/ipv6.h>
++#include <net/gro.h>
+ #include <net/sch_generic.h>
+ #include <linux/skbuff.h>
+ #include <linux/module.h>
+@@ -77,21 +78,12 @@ static struct ctl_table tcp_pacing_table[] = {
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_dointvec_minmax,
+ 	},
+-	{}
+-};
+-static struct ctl_table tcp_pacing_sysctl_root[] = {
+-	{
+-		.procname	= "net",
+-		.mode		= 0555,
+-		.child		= tcp_pacing_table,
+-	},
+-	{}
+ };
+ 
+ static struct ctl_table_header *sysctl_header;
+ static int register_tcp_pacing_sysctl(void)
+ {
+-	sysctl_header = register_sysctl_table(tcp_pacing_sysctl_root);
++	sysctl_header = register_sysctl("net", tcp_pacing_table);
+ 	if (sysctl_header == NULL) {
+ 		pr_info("CCCI:CCMNI:register tcp_pacing failed\n");
+ 		return -1;
+@@ -237,14 +229,13 @@ EXPORT_SYMBOL(ccmni_clr_flush_timer);
+ 
+ static inline void napi_gro_list_flush(struct ccmni_instance *ccmni)
+ {
+-	struct napi_struct *napi;
+-
+-	napi = ccmni->napi;
+-	napi_gro_flush(napi, false);
+-	if (napi->rx_count) {
+-		netif_receive_skb_list(&napi->rx_list);
+-		INIT_LIST_HEAD(&napi->rx_list);
+-		napi->rx_count = 0;
++	struct gro_node *gro = &ccmni->napi->gro;
++
++	napi_gro_flush(ccmni->napi, false);
++	if (gro->rx_count) {
++		netif_receive_skb_list(&gro->rx_list);
++		INIT_LIST_HEAD(&gro->rx_list);
++		gro->rx_count = 0;
+ 	}
+ }
+ 
