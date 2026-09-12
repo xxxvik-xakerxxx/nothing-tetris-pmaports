@@ -25,11 +25,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache coreutils findutils git shellcheck
+        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
+      - name: Fetch GNSS source
+        run: |
+          mkdir -p upstream/android_kernel_modules_nothing_mt6878
+          git -C upstream/android_kernel_modules_nothing_mt6878 init
+          git -C upstream/android_kernel_modules_nothing_mt6878 remote add origin \
+            https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git
+          git -C upstream/android_kernel_modules_nothing_mt6878 fetch --depth=1 origin \
+            e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+      - name: Validate GNSS read-only gate
+        run: GNSS_SOURCE_TREE=upstream/android_kernel_modules_nothing_mt6878 sh scripts/check-gnss-v051-readonly.sh
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
