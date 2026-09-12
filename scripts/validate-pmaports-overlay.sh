@@ -277,6 +277,7 @@ validate_power_and_audio_config() {
 	grep -Fq 'usr/lib/tmpfiles.d/nothing-tetris-greetd.conf' \
 		"$device_pkg/APKBUILD"
 	grep -Fxq 'install="$pkgname.post-install"' "$device_pkg/APKBUILD"
+	grep -Fxq '	greetd' "$device_pkg/APKBUILD"
 	grep -Fq 'install -d -m 0700' "$device_pkg/APKBUILD"
 	grep -Fxq '		"$pkgdir"/var/lib/greetd/.config/dconf' "$device_pkg/APKBUILD"
 	grep -Fq 'identity=$(awk -F:' "$device_pkg/device-nothing-tetris.post-install"
