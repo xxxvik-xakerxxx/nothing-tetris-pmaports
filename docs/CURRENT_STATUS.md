@@ -65,28 +65,31 @@ setup. Its exact-source host gate reproduced the previous defect
 (18 DRAM cases, 10 failures) and the candidate passed all 18 cases under
 UBSan. SCP, DVFS and sensorhub remain disabled.
 
-Sensor reply candidate ce19497 on codex/sensor-startup-contract rejects a
+Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
 The original AND condition admitted stale replies. Eight predicate cases,
-65536 sequence pairs and two mutations pass. This is not a sensor startup
-fix: SCP loader/DVFS, firmware/calibration ownership and samples are still
-unproven. The candidate is outside APKBUILD. Camera capture remains unproven.
+65536 sequence pairs and two mutations pass. CI 34687187668 now runs this
+gate in validate-overlay and passed it. This is not a sensor startup fix:
+SCP loader/DVFS, firmware/calibration ownership and samples are still unproven.
+The candidate is outside APKBUILD. Camera capture remains unproven.
 
 Camera/GNSS prereq branch codex/camera-clk-prereq-v2 is published through
-8dfa88d. It records the B4.1 GNSS startup/frame-sync/NMEA boundary and a
+594dd75. It records the B4.1 GNSS startup/frame-sync/NMEA boundary and a
 host-tested IMX882 active-low reset prerequisite. The reset test proves the
 patched future identity probe keeps GPIO25 physically low while rails settle
-and during shutdown, and rejects the unmodified inverted baseline. No camera
+and during shutdown, and rejects the unmodified inverted baseline. CI
+34687402501 now runs this gate in validate-overlay and passed it. No camera
 node, sensor power-on, I2C transaction, SENINF/ISP or media pipeline is
 enabled.
 
 GPU/Panthor prereq branch codex/panthor-compile-prereq is published through
-a03a515. The VGPU readback gate executes the vendor and mainline voltage
+8e9fbbb. The VGPU readback gate executes the vendor and mainline voltage
 callbacks with read-only fake regmap access and proves the source mismatch:
-vendor reads enabled VBUCK2 from DBG0 while mainline reads ELR2. The broader
+vendor reads enabled VBUCK2 from DBG0 while mainline reads ELR2. CI
+34687330355 now runs this gate in validate-overlay and passed it. The broader
 Panthor compile-only gate could not be rerun locally because the prepared
-kernel tree resides under a path with spaces that Linux Kbuild rejects; CI
-34686561580 has passed overlay checks and is still building. No GPU runtime
+kernel tree resides under a path with spaces that Linux Kbuild rejects; the
+new CI image build is still running. No GPU runtime
 node, rail consumer, firmware, render node or acceleration is claimed.
 
 ## Latest bootloader observation
