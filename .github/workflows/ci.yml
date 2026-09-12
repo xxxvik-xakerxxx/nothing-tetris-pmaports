@@ -25,11 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache coreutils findutils git shellcheck
+        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
+      - name: Validate IMX882 reset gate
+        run: python3 patches/camera-identity/check-reset.py
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
