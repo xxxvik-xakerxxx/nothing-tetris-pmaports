@@ -6,7 +6,11 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Source identity
 
-- Port branch at review time: `codex/scp-thermal`, commit `cd8fbdf`.
+- Current port branch: `codex/hardware-integration`, current candidate recorded in
+  `docs/CURRENT_STATUS.md`.
+- The original source audit was performed on historical branch
+  `codex/scp-thermal` at `cd8fbdf`; its vendor-source conclusions remain the
+  input to the current compile-only work.
 - Mainline kernel package source: Linux 6.18 at the commit pinned by the
   package.
 - Authoritative vendor device modules:
@@ -22,27 +26,377 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Boot-chain trace
 
-The current boot path does not reproduce the Nothing OS modem handoff:
+### Current r153 observation
 
-1. The MediaTek early boot stages and stock LK execute before the replacement
-   U-Boot container. Trusted firmware remains resident and may implement the
+A fresh read-only check on the running r153 phone reports kernel
+6.18.0 #154-postmarketos and U-Boot 2026.07-rc1-g60bcf22fdc0a. The published
+/chosen/nothing,ccci-handoff-status values are failure=no-fdt,
+observation-status=invalid, payload-status=not-checked. USB usb0 is UP before
+and after collection. No SMC, modem module, NV access, reboot or power action
+was performed. The phone SSH ED25519 fingerprint matched the previously
+recorded r153 identity; a separate temporary known-host file was used rather
+than changing the user's stale entry.
+
+This is an earlier live failure than the descriptor/payload gates discussed
+below. Do not interpret presence of the validator in U-Boot as a successful
+handoff on this boot. At installed commit 60bcf22fdc0a94526424db59fc7640298ea8f0dd,
+tetris_observe_ccci_handoff() starts with TETRIS_CCCI_NO_FDT. A failed
+get_preserved_prev_bl_fdt() or map operation leaves that generic result;
+tetris_ccci_read_descriptor() also uses it for a null/invalid FDT. Therefore
+the current status cannot distinguish absent early input from a rejected or
+damaged preserved copy. The exact errno and early preservation failure must
+be surfaced before designing a handoff fix; neither register addresses nor
+raw LK/calibration payloads need to be published for that diagnosis.
+
+The installed arch/arm/lib/save_prev_bl_data.c keeps preserved_fdt_error for
+console diagnostics but get_preserved_prev_bl_fdt() returns generic ENODATA
+when the saved address/size are absent. It revalidates the copy on access.
+The selection path prefers x2 only when its FDT contains devinfo, otherwise
+tries x0. This is code to inspect, not proof that changing register preference
+or relaxing range/FDT validation will fix the live failure.
+
+### Source-diagnostic candidate
+
+The local follow-up candidate is U-Boot commit 38192f202c on
+codex/ccci-prev-fdt-diagnostic, based exactly on installed 60bcf22fdc0a.
+Its working tree is ../uboot-ccci-prev-fdt. It records bounded x0/x2 FDT
+validation errors during early preservation and publishes four diagnostics
+alongside the existing sanitized CCCI status:
+
+- source-error: access/revalidation/map result for the preserved source;
+- preservation-error: saved early preservation result;
+- x0-validation-error and x2-validation-error: bounded validation results for
+  the original inputs, without their addresses or content.
+
+These FDT cells encode signed 32-bit errno values in big-endian two's
+complement. Absence means the diagnostic was not recorded, not success.
+Zero means that specific check passed, never modem-runtime readiness. An
+early preservation error distinguishes a failed copy from a later source
+revalidation failure; valid inputs with preservation ENODATA direct the next
+inspection toward source-selection rules. No range check, x2-devinfo selection
+rule, firmware loader, memory handoff or power/SMC behavior is relaxed.
+
+The existing CCCI host suite passes with five new diagnostic scenarios and
+an omission/stale-property test. Checkpatch reports zero errors/warnings.
+The three changed/relevant ARM64 objects compile in normal and initramfs-only
+configurations with Clang 21.1.8. After the initial publication rejection,
+the user explicitly approved this exact push. Commit
+38192f202c8bc3009efbb1d357b97975768424af is now published on that branch in
+xxxvik-xakerxxx/u-boot. CI run 34575135682 passed the full GCC build,
+initramfs-only compilation, tests, boot-contract checks and LK packaging.
+The downloaded u-boot.bin, u-boot-nodtb.bin and u-boot-tetris-lk.img all
+match the artifact SHA256SUMS manifest. This is build/artifact evidence only:
+these checks alone do not establish handset execution.
+
+Subsequent controlled installation: on r153, USB/SSH and boot
+3334a5ab-4658-4310-b07e-77b6fcaf0fa1 were verified before reboot-to-fastboot.
+Fastboot confirmed executable 60bcf22, slot a, product nothing-tetris and
+16 MiB LK partitions. The previously proven 60bcf22 recovery artifact was
+downloaded and hash-checked; candidate and recovery preserve identical LK
+header fields (except payload size) and non-fill template tails. The new
+image SHA256 is 359ac6bf4022c3768ec0d794b8b0899282613cbdae248eabadac845d59aa3cf1.
+Only lk_a was written, with send/write both OKAY; lk_b, rootfs, trusted
+firmware and calibration were unchanged. Reboot lost its USB status reply.
+The host subsequently enumerated the postmarketOS USB device, but no USB
+network interface appeared while the macOS console was locked. The user
+was asked to unlock the host; the outstanding SSH attempt was terminated.
+At that stage running loader, boot ID, diagnostic values and healthy SSH
+were unverified. Full local record: the artifact directory's LIVE-PLAN.md.
+
+After the user unlocked macOS, one VID/PID/serial-guarded host USB reset
+returned success; en4 appeared and SSH returned without another phone
+reboot. Boot 6fca0ea2-9c15-4a05-8a9e-ee07fa8a76c6 reports exact U-Boot
+2026.07-rc1-g38192f202c8b and unchanged kernel #154/r153. The signed cells
+are source=-61, preservation=-61, x2=-61, x0=-74. Failure remains no-fdt,
+observation invalid, payload not-checked. USB 32 MiB SHA256 is
+83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302;
+usb0 stays UP, DRM is connected, no failed units or matching kernel
+Oops/panic/DRM timeout found. This is recovery evidence, not seamless
+locked-host reconnection or modem functionality.
+
+At this revision, x2 ENODATA means saved x2 is zero. x0 EBADMSG means
+either fdt_check_header or fdt_check_full rejected its input; its header
+address passed the normal-memory predicate and mapping. It does not
+distinguish wrong-format input from a damaged FDT. Do not extend memory
+ranges or change source preference on this result. Next establish the
+previous-stage input format and validation stage without dumping addresses
+or arbitrary memory. No modem SMC, firmware/power or DMA operation ran.
+
+### Bounded tag-header follow-up (local, not installed)
+
+The follow-up working tree on top of 38192f202c preserves x4/x5 at the
+original ARM64 entry alongside x0/x2. The offline ATF argument-builder
+evidence below motivates checking x0 == x4 and treating x5 as a candidate
+byte count; neither relationship has yet been observed on the handset.
+The observer rejects missing/mismatched inputs, lengths below eight bytes
+or above 2 MiB, and ranges outside the existing normal-DRAM predicate.
+It then reads only the first eight bytes, checks a little-endian byte length
+within the supplied bound and a tag ID in the 0x8861 namespace. It neither
+walks the tag list nor copies tag payloads, and does not alter FDT selection.
+
+The additional signed errno cell `tag-header-error` reports this limited
+classification. Zero means a plausible first header, NOT a validated list,
+reserved-memory handoff, firmware load, secure-world state or working modem.
+No input address, length, ID or payload is published. Existing CCCI status
+remains authoritative about its separately checked FDT source.
+
+Host tests extract and compile the actual observer: 17 cases cover early
+rejection without mapping, mapping failure, eight-byte-only access,
+unmapping, malformed lengths, namespace mismatch and boundary success,
+including unchanged input bytes. The existing status suite now checks the
+fifth diagnostic and its omission when unobserved; its runner includes the
+new test for CI. The actual normal-memory predicate still passes its separate
+17 boundary cases. ARM64 normal and initramfs-only object compilation passed
+with Clang 21.1.8; disassembly saves x0/x2/x4/x5 and branches back without stack
+access. These tests do not prove the live tag format or bootability of this
+uninstalled follow-up. The installed device remains on 38192f202c/r153;
+USB/SSH and no failed systemd units were rechecked on the same boot.
+
+### Live tag-header result
+
+Follow-up dd40c7d6420d25ecc9cd75ae608cd5b9d1a155d9 was published to
+xxxvik-xakerxxx/u-boot/codex/ccci-prev-fdt-diagnostic. CI 34583094081
+passed normal build, initramfs-only compilation, parser tests, boot
+contract and LK packaging. Downloaded manifest checks passed. The LK
+image is 3244336 bytes, SHA256
+d82d190ed868f996735bda25b879cdb4fe5f078426e3b9438d48932d0e22da4f.
+Exact embedded payload, unchanged header except length and preserved
+non-fill tail were checked against the installed 38192f2 artifact.
+
+Only lk_a was written after fastboot confirmed nothing-tetris, slot a and
+16 MiB capacity; send/write both returned OKAY. Reboot lost its USB reply.
+With the Mac unlocked, USB networking reattached without host reset and
+SSH returned after initial service-startup connection refusal. New boot
+043e6e88-b832-423c-a58d-50fdf3438684 reports exact dd40c7d6420d, unchanged
+r153/kernel #154. The new tag-header-error is 0; FDT source/preservation/x2
+remain -61, x0 -74, no-fdt/invalid/not-checked. Therefore the first bounded
+MediaTek header is plausible. Full-list validity, tag meaning, producer
+execution and modem readiness remain unproven.
+
+Before/after USB 32 MiB SHA256 matched
+83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302.
+usb0 UP, Wi-Fi connected, Bluetooth powered, DRM connected, no failed
+system units. No GNSS download, modem module, SMC, DMA, calibration or
+rootfs write occurred. This is one boot, not complete lifecycle validation.
+The detailed local procedure and recovery boundary are retained in
+local/uboot-dd40c7d-ci34583094081/LIVE-PLAN.md.
+
+### Bounded list diagnostic candidate
+
+The next uninstalled diagnostic is c931695bb9 on the same U-Boot branch.
+It walks at most 256 headers only after the existing whole-input normal
+memory/header gate passes. Each read is four bytes, never a tag payload.
+Sizes must be at least eight and fit the remaining input; a zero-size word
+within the supplied bound is required for success. Unknown namespaces fail.
+Only a successful walk publishes count and two bitmaps for header IDs
+0x88610000..0x8861003f; other IDs in the namespace count but have no bitmap
+bit. No addresses, payload sizes, calibration or modem readiness are exposed.
+Failure clears summaries. No preservation/source selection rules change.
+
+The byte-stride and zero-size conventions were checked by executing only
+the pinned ATF parser 0xb234..0xb4c8 with synthetic inputs and stub consumers.
+patches/modem/test-atf-tag-walk.py passes ten cases, including unknown IDs,
+unaligned byte strides, payload pointer +8 and the ATF ten-consumer cap.
+ATF accepts unknown namespaces and does not establish the boundedness needed
+by U-Boot; those behaviors are not copied. The 256-header limit is a
+defensive diagnostic policy, not an inferred firmware ABI maximum.
+
+The actual new C walker passes 22 host cases with a fixture that rejects
+payload access and checks input immutability, map/unmap balance, truncation,
+mapping errors, missing terminator, masks and the 256/257 boundary.
+Status tests check summary omission after failure/unobserved input and no
+promotion of payload validity. Existing CCCI and 17 first-header tests pass.
+The three relevant ARM64 objects compile in normal and initramfs-only
+configurations with Clang 21.1.8; checkpatch has zero errors/warnings/checks.
+This is static evidence only. Installed loader remains dd40c7d6420d;
+complete live list structure and IDs have not yet been observed.
+
+Subsequent live result: CI 34584756418 passed for exact
+c931695bb963efaa0dfdf928ea475440581838b4. Manifest, embedded payload,
+preserved non-fill tail and header checks passed; image size 3245472,
+SHA256 71e26f9f38947e08450f2558fdd13137b52b768d57b26f416cf92f6bc1bcb88c.
+After confirming dd40, nothing-tetris, slot a and 16 MiB capacity, only
+lk_a was written. New boot 3bcabc1f-8d6e-4c0c-8d97-977eae5affc2 reports
+exact c931695bb963. Header-list error=0, count=38,
+low mask=0x3b0c7fff, high mask=0x0026ff3b. Popcount equals count, proving
+38 distinct IDs within the bitmap range for this bounded observation.
+FDT errors remain source/preservation/x2=-61, x0=-74 and
+no-fdt/invalid/not-checked. No payload semantics or modem state established.
+
+USB/SSH returned without a host reset despite initial SSH timeout. Mac
+was unlocked and en4 active; three ICMP responses passed. Before/after
+32 MiB USB SHA256 matched 83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302.
+Wi-Fi connected, Bluetooth powered, DRM connected, no failed units or
+matching Oops/panic/BUG/refcount/watchdog/DRM timeout log. No GNSS download,
+modem operation, rootfs or calibration write. See local live plan.
+
+### Earlier source-range audit
+
+The exact installed base and diagnostic candidate call reserve_prev_bl_fdt
+after dram_init/setup_dest_addr/reserve_malloc and before reserve_board,
+reserve_global_data, reserve_fdt and stack reservation. The reservation
+advances start_addr_sp below its copied FDT on success. Thus the source trace
+does not support a simple claim that the copy was never reserved in the
+normal enabled configuration.
+
+arch/arm/mach-mediatek/mt6878/init.c caps the probed gd->ram_size at 2 GiB.
+The previous-FDT predicate requires BOTH membership in that DRAM interval
+and containment in one MT_NORMAL map entry. The board memory map extends
+beyond the capped interval; membership in that wider map alone is not enough.
+With a synthetic base of 0x40000000 and size 0x80000000, a 40-byte header
+ending exactly at 0xc0000000 is accepted and one crossing that end is rejected.
+An input beginning at 0xc0000000 is rejected despite a normal-memory mapping.
+This is not evidence of the actual x0/x2 input addresses or the live failure.
+
+`patches/modem/check-prev-fdt-range.py ../uboot-ccci-prev-fdt` extracts the
+actual predicate and board map, compiles them with a host-only fixture, and
+passes 17 boundary/overflow/zero-size/reserved-hole cases. The fixture uses
+synthetic memory attribute encodings and never accesses physical memory.
+It does not test FDT validity, copying, relocation, MMU behavior or LK inputs.
+No memory limit/check was relaxed. An EFAULT diagnostic would still require
+distinguishing a capped-range rejection from a reserved/non-normal range;
+it would not authorize extending the accessible range by itself.
+
+### Container-stage correction (2026-09-11)
+
+The earlier statement that the complete stock LK necessarily executes
+before replacement U-Boot is not established. The exact installed LK
+container was walked sequentially using MediaTek header lengths and
+16-byte alignment, not an unconstrained magic scan. Its first named `lk`
+payload is the byte-verified U-Boot binary. Preserved later entries are
+certificates, `bl2_ext`, `aee`, `lk_main_dtb` and `lk_dtbo`. Keeping these
+entries is not proof that the replaced stock `lk` implementation's modem
+loader or final kernel-FDT hooks have run.
+
+The preserved `bl2_ext` is 711336 bytes, SHA256
+170583094d4e4388d8e269cbcc8b14c17df0d4e248dcef57f1d112fba84c004b.
+Its strings reference app_load_bl33, platform_load_device_tree, display
+initialization, BL31 DTB preparation and PL2LK boot arguments. These are
+leads for disassembly, not proof of argument layout, successful modem
+authentication or the function reached on the live boot. Template firmware
+release provenance must be established separately; no B4.1 label is inferred
+from these strings. The upstream lplk utility edits multiple LK components
+and is a different packaging path, not evidence that this U-Boot image
+executes stock lk first:
+https://github.com/MT6878-Mainline/lplk/blob/main/lplk.py
+
+Next trace the actual bl2_ext-to-next-stage argument producer, and distinguish
+header from full-FDT validation failure. Do not search arbitrary RAM or
+weaken FDT/range checks to manufacture a descriptor. If the modem producer
+belongs to replaced LK, native support needs that authenticated loading and
+memory-ownership contract, not merely a parser for nonexistent inherited
+tags. No production code or bootloader behavior was changed in this audit.
+
+### Bounded bl2_ext disassembly follow-up
+
+The pinned preserved binary was disassembled offline with Capstone 5.0.6;
+`patches/modem/inspect-bl2-handoff.py` rejects other bl2_ext hashes, validates
+container lengths and bounds requested disassembly to 8 KiB. Its string
+xref search emits candidates only; register clobbers/control flow require
+manual validation. All offsets below are within the file, not live addresses.
+
+The load sequence around 0x8350 loads the named lk/BL33 image and later
+looks up BL31-reserved at 0x8724. At 0x875c..0x8774 it passes the reserved
+BL31 base, three saved values and the translated 0x8344 trampoline to
+0xd648. The trampoline contains SMC #0. The final helper 0xd3e4 permutes
+arguments, disables the EL1 MMU and branches to that trampoline. This
+is a secure-monitor handoff, not evidence of a direct Linux-boot-protocol
+call into U-Boot. The nearby direct-call helper at 0x8310 must not be
+mistaken for the executed path solely because it clears x2/x3.
+
+The entry sequence also stores four original registers at 0x98670 after
+its early setup calls. The later load sequence reads a different saved
+structure through the pointer slot at 0xad8d0. Their relationship, and
+BL31's eventual BL33 register assignment, remain to be traced. Neither the
+presence of a DTB loader nor these static calls proves that x0 is an FDT.
+The live x0 EBADMSG remains the governing observation. Do not change
+source selection or guess a boot-argument struct before closing this gap.
+
+No binary was executed, no new U-Boot image was built, and no hardware
+operation followed this disassembly. Template release provenance remains
+separate from the measured hash and must not be labeled B4.1 without proof.
+
+### Exact ATF input and parameter-builder trace
+
+On boot 6fca0ea2-9c15-4a05-8a9e-ee07fa8a76c6, the active tee_a header
+identifies an `atf` payload of 900240 bytes. Only its 512-byte header and
+declared payload were read, not the remaining TEE partition. Local file
+SHA256: ee71f42fe4fa6b3e671ead5ca9c57995ba0631ebdb7b32509d0df3cda7f08287;
+payload SHA256: 05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e.
+The binary remains ignored/local. USB stayed UP and SSH returned after the
+read; no write, SMC or modem operation occurred. This is exact installed
+firmware identity, not independently authenticated release provenance.
+
+In bl2_ext, 0x8084 stores four incoming arguments into the structure used
+by its later secure handoff. Consumers map its first pointer as a 4 KiB
+`vm-bl-reserved` BL parameter region; one writes offset 0x10, another
+offset 0x18. This is not the layout of a flattened device tree.
+
+In the read-back ATF, 0x2761c builds a non-secure entry-point descriptor:
+it copies parameter+0x10 to the entry PC, parameter+0 to argument 0 and
+argument 4, and parameter+8 to argument 5. Getter results populate
+arguments 3, 6 and 7. These offsets follow the descriptor's 0x18 start of
+64-bit argument storage. The setup caller is at 0x276d0. A separate ATF
+parser at 0xb234 dereferences parameter+0 as a list with byte length at
+offset 0, tag ID at offset 4 and payload at offset 8, including
+0x88610001..0x88610025 tags. Thus the static producer strongly supports
+a tag-list interpretation of U-Boot x0, consistent with live EBADMSG;
+the actual live tag header has not yet been observed.
+
+Do not substitute x3 as FDT: its getter 0x118ac returns a value populated
+by handler 0x193a8 for tag 0x88610025 (init_gz_plat), not a proven FDT
+handoff. Next close the entry-descriptor-to-live-register trace and add
+bounded tag-header/length validation before preserving any such input.
+Do not copy a whole boot-argument area, publish addresses or infer CCCI
+runtime readiness from the existence of non-modem platform tags.
+
+`inspect-bl2-handoff.py --component atf` pins this payload hash for bounded
+offline disassembly. No change to U-Boot source selection has been made.
+
+`patches/modem/test-atf-bl33-args.py` now executes the actual 0x2761c builder
+in ARM64 Unicorn with synthetic parameters. Six cases cover both selected
+exception-level states, zero and wide values, the complete descriptor and
+surrounding guards, unchanged input, preserved stack and exact getter-call
+order. They confirm PC=parameter[2], arg0=arg4=parameter[0] and
+arg5=parameter[1]. Arguments 1/2 are untouched by this builder, not actively
+cleared; any zero-value claim also depends on descriptor initialization.
+The three getter results map to args 3/6/7, with arg6 zero-extended from
+32 bits. Unexpected execution stops the emulator. No SMC or firmware entry
+executes, and no synthetic pointer is used on hardware.
+
+U-Boot's ARM64 reset branches to save_boot_params before PIE relocation,
+so retaining additional incoming registers is technically possible there.
+The current implementation records only x0/x2. A follow-up diagnostic must
+retain the producer's pointer/length pair, check agreement and normal-memory
+bounds, and classify only bounded headers before any tag preservation or
+parser integration. The emulator result does not validate the live list,
+its length, tag meanings, lifetime, or modem firmware/memory ownership.
+
+### Historical validator results
+
+The installed boot path does not reproduce the Nothing OS modem handoff. A
+newer installed U-Boot validates its structure but deliberately does not start
+the modem:
+
+1. MediaTek early boot stages precede U-Boot; execution of the complete stock
+   LK is not proven and must not be assumed (see container correction above).
+   Trusted firmware remains resident and may implement the
    MediaTek SiP ABI, but support for each CCCI request has not been measured.
-2. The verified U-Boot commit
-   `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef` captures a valid prior-stage FDT
-   passed in `x0`, validates and copies its bounded `atag,devinfo` payload, and
-   separately prepares conninfra EMI mappings. It does not copy, validate or
-   regenerate CCCI modem tags or their referenced buffer.
-3. The newer local U-Boot commit
-   `5fcc080a1908470e31d303dce7f3493ef56e4459` can select an LK FDT from `x2`
-   when it contains `atag,devinfo`. This commit is not the verified live
-   bootloader baseline and still has no CCCI-specific merge or validation.
+2. Previous rollback U-Boot `8aa048f93bb7569e4107ef85aa994c630f85de48`
+   preserves the prior LK/FDT and conninfra handoff work.
+3. Installed U-Boot `b76e47e774304ab550a6354f3286860b7caffb3a`
+   validates the bounded B4.1 descriptor, required payload tags, modem/check
+   headers, image and shared-memory layouts. It publishes sanitized status and
+   sizes only: no physical addresses, SMC call, power/reset, firmware load or
+   `runtime-ready` claim. CI run `33492618726`, normal boot and Linux-to-fastboot
+   reboot pass with this revision installed in both boot slots.
 4. The postmarketOS FIT embeds its own `mt6878-nothing-tetris.dtb` and loads it
    at `0x47000000`. The FIT configuration selects that FDT explicitly. No code
    in the current boot path copies `ccci,modem_info_v2`,
    `ccci,modem_info`, or the referenced LK tag buffer into this DT.
-5. Linux therefore receives the maintained pmOS DT, not a proven LK modem
-   handoff. Adding disabled modem inventory does not restore the missing
-   firmware and memory contract.
+5. Linux therefore still lacks an enabled modem consumer and a proven runtime
+   memory/power/secure-world contract. Adding disabled inventory or parsing a
+   valid descriptor does not make the modem usable.
 
 The B4.1 kernel expects `ccci,modem_info_v2` on the `mediatek,mddriver` node.
 That property points to a physical LK tag buffer containing at least the modem
@@ -70,6 +424,39 @@ one of two explicitly designed owners:
 
 Silently depending on whatever stock LK left in RAM is not an acceptable cold
 boot contract.
+
+## Partition and calibration ownership
+
+The live phone exposes 200 MiB `modem_a`/`modem_b` slot firmware partitions,
+an 8 MiB `md_sec` partition, ext4 `nvdata`/`nvcfg`, and a separate raw `nvram`
+device. The exact B4.1 modem image is 90214400 bytes, but Linux's vendor FSM
+explicitly bypasses image loading and expects the authenticated LK handoff.
+The owner and format of `md_sec` are not yet proven. CCCI also defines an
+`SMEM_USER_MD_NVRAM_CACHE` region without identifying the userspace component
+which fills it from persistent storage.
+
+Never copy IMEI, SIM-lock/provisioning, radio calibration, anti-clone data,
+whole NV partitions, `md_sec`, LK tag buffers or physical addresses between
+handsets. Any future extractor must read a bounded, versioned record from the
+same device and fail closed on absence or mismatch.
+
+## Stock userspace contract
+
+The stock-derived Tetris device tree confirms a dual-SIM DSDS configuration
+with `ro.vendor.mtk_ril_mode=c6m_1rild`. Its proprietary manifest requires
+`ccci_mdinit`, `ccci_rpcd`, `mtkfusionrild`, `libccci_util.so` and the MediaTek
+RIL libraries. The product enables Android Radio AIDL v2 services for data,
+messaging, modem, network, SIM and voice, plus MediaTek extension interfaces.
+This is evidence for the expected control plane, not permission to copy the
+Android blobs into pmOS.
+
+The preferred maintainable path is a bounded native bridge from documented
+CCCI control/port messages to a standard Linux telephony API. A compatibility
+fallback could retain the matching Android `IRadio` service behind an
+oFono/Binder adapter, but that imports a much larger proprietary Android ABI
+and must be evaluated separately. ModemManager has no generic MediaTek CCCI
+plugin; a CCMNI interface or `/dev/ccci*` node alone is not calls/SMS/SIM
+support.
 
 ## Status of draft 0031
 
@@ -135,6 +522,7 @@ The B4.1 ECCCI stack is not a single driver. Its minimum path is:
 6. Trusted firmware support for `MTK_SIP_KERNEL_CCCI_CONTROL`. Vendor code uses
    this SMC for power configuration, boot release, flight mode, clock requests,
    boot status, SCP synchronization and debug operations.
+
 7. A legitimate, version-matched modem firmware image and modem memory layout.
 8. A Linux userspace integration that exposes standard WWAN/ModemManager
    behavior without depending silently on Android daemons or userdata.
@@ -144,6 +532,20 @@ groundwork and PMIC register definitions, but does not have a validated MD power
 domain sequence, the required infracfg modem clocks, the bootloader/ATF modem
 handoff, modem reserved memory, firmware provenance, or a standard userspace
 control path.
+
+## Current compile boundary
+
+The active LLVM 21 gates cover CCCI util, core, CCIF, modem common, and the
+complete vendor FSM/port/non-page-pool-DPMAIF object groups from pinned Linux
+`d84b264a` and Nothing OS 4.1 device modules `ee2be53c`. Patch `0095` adds the
+last Linux 6.18 source compatibility needed for 39 new individual objects.
+No ECCCI or DPMAIF module is linked, packaged, autoloaded or run.
+
+The selected objects still leave 241 external references after internal
+resolution. The numeric CCCI command fallback allows compilation against the
+mainline SiP header but is not evidence that installed trusted firmware accepts
+the command or implements its semantics. That firmware contract remains a hard
+runtime blocker.
 
 ### Memory and isolation trace
 
@@ -294,6 +696,52 @@ rollback. Stop at the first error or any USB/Wi-Fi regression and recover by a
 clean reboot; do not unload/reload modem, SCP or connectivity modules.
 
 ## Definition of modem progress
+
+### 2026-09-11 network object continuation
+
+Two offline candidates in `patches/modem/` now adapt CCMNI sysctl/GRO access
+and RPS header ownership to Linux 6.18. Both ARM64 objects compile against
+the prepared diagnostic tree. The exact-source host flush harness passes
+48 cases and rejects a stale queue-count mutant. The first compile failures
+and an initially unexported GRO helper dependency are recorded in that
+directory's README; the final CCMNI object uses the public receive-list API.
+This advances the previously missing CCMNI dependency, not modem boot or
+the earlier 241-reference full-stack closure. No loadable modem module,
+package activation or phone state change was made.
+
+The read-only phone check found USB UP, ModemManager active, an empty WWAN
+class, no CCCI/GPS device nodes and inactive GNSS transport service. A running
+ModemManager daemon is not a detected modem. Installed r153 was preserved.
+
+### 2026-09-11 combined object dependency audit
+
+The earlier 241-reference partial count is superseded by the reproducible
+64-object inventory in `patches/modem/object-symbol-audit.json`, not by a
+module-link result. Additional core/CCIF/util objects and the unmodified
+ADC/UDC wrappers compile with clang 21.1.8. Candidate 0003 conditionally
+registers the MDSS crash dump only when the Android AEE provider is configured;
+both enabled and absent-provider object variants were checked. No memory or
+modem-power semantics changed. The final 242 references are classified in
+`patches/modem/README.md`; configured exports, module boundaries and final LTO
+remain unverified. No installed artifact, modem state or SIM result changed.
+
+### 2026-09-11 composite code generation
+
+The vendor Kbuild compositions now produce actual ELF64/AArch64 relocatable
+objects for ccci_md_all, ccci_util_lib, ccci_ccif and ccci_dpmaif. The DPMAIF
+gate passed with CONFIG_PAGE_POOL=n and, after candidate 0004, with y.
+Candidate 0004 updates page-pool includes and sysctl registration only.
+Separate composite inventories preserve hashes and dependencies for both
+variants. Compile-time bad-copy references disappear during code generation.
+This closes that intermediate question, not final module linkage or hardware
+readiness. Clang 21.1.8 and LLD 22.1.8 were used; CI equivalence is unproven.
+
+The exact r153 CI run has no saved Module.symvers/development-tree artifact.
+Actual configured exports and modpost remain required. The vendor page-pool
+CMA ownership, recycling and DMA lengths need runtime-oriented review before
+activation. No .ko, CI rebuild, firmware write or live modem probe was made.
+
+## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
 still only `Partial`. `Works` requires clean-install automatic initialization,

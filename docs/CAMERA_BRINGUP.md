@@ -1,7 +1,17 @@
 # Nothing Tetris camera bring-up
 
-Status: inventory only. No camera rail, clock, reset, SENINF, CAMSYS, CCU,
-sensor, EEPROM, actuator, or flash node is approved for automatic probing.
+Status: inventory plus compile-only prerequisites. No camera rail, clock,
+reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
+for automatic probing.
+
+Candidate patch `0049-media-i2c-imx882-identity.patch` adds the first bounded
+native identification boundary for the main camera. It reads only physical ID
+registers `0x0016/0x0017` and expects raw silicon ID `0x8202`; the TXD module's
+vendor ID `0x8203` is derived by the vendor stack from the same raw silicon ID
+plus EEPROM module ID `0x07`, so this probe intentionally does not guess the
+module vendor. Its Kconfig remains disabled, CI compiles only the object, no
+module is shipped, and no camera DT client or GPIO-backed rail is added. This
+is not camera detection on the phone and not preview support.
 
 ## Authoritative source baseline
 
@@ -29,6 +39,13 @@ The names and addresses above are source inventory, not detected hardware
 identity. The alternate IDs show that module-vendor selection is required and
 must not be hard-coded from one handset. EEPROM contents and calibration are
 per-device data and must never be committed.
+
+The live phone also has 4 MiB `ccu_a` and `ccu_b` partitions. Vendor sources
+name secure and non-secure CCU firmware as `lib3a.ccu_dummy` and `lib3a.ccu`,
+but do not prove that Linux should read those partitions directly. Main/front
+AWB, LSC, PDAF and module identity remain owned by each camera's EEPROM at
+7-bit address `0x50`; neither CCU partition nor an EEPROM dump may be copied
+into the image.
 
 The vendor DTS also describes a dual LM3644 flash controller on I2C6 at
 `0x63`. Flash bring-up remains a separate bounded power experiment; it is not a
@@ -113,6 +130,32 @@ no matching DT bindings. Copying the vendor nodes would create unowned clocks,
 power domains, DMA and firmware interfaces, so no pipeline node belongs in the
 first camera patch set.
 
+## CAMSYS_MAIN compile-only prerequisite
+
+Patches `0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch` and
+`0092-clk-mediatek-mt6878-camera-main.patch` add the MT6878 camera-main clock
+binding and provider without adding a DT node. The provider retains the 20
+gate IDs already published in `mediatek,mt6878-clock.h` and matches the pinned
+Nothing OS 4.1 register table: M0 uses status/set/clear offsets
+`0x0/0x4/0x8`, while M1 uses `0x4c/0x50/0x54`.
+
+Vendor parents `top_cam_ck`, `top_camtm_ck` and `top_ccusys_ck` map to the
+existing mainline `cam_sel`, `camtm_sel` and `ccusys_sel` clocks. The compatible
+is normalized from vendor `mediatek,mt6878-camsys_main` to the mainline-style
+`mediatek,mt6878-camsys` ABI.
+
+This prerequisite remains dormant in the shipped kernel:
+
+- `CONFIG_COMMON_CLK_MT6878_CAM` is explicitly not set;
+- package preparation enables it only in a disposable `O=` build directory
+  and compiles `drivers/clk/mediatek/clk-mt6878-cam.o`;
+- package and rootfs CI gates reject `clk-mt6878-cam.ko`;
+- no DT node, power domain, consumer, module autoload or runtime service is
+  added.
+
+Passing the object gate proves source compatibility only. It does not approve
+register access or establish camera function.
+
 ## Calibration trace
 
 Main and front have explicit EEPROM clients at 7-bit address `0x50` (vendor
@@ -133,8 +176,9 @@ unredacted logs.
 Do not enable any inventory node until all owners below have a validated
 probe-off and stream-off path:
 
-1. MT6878 CSI_RX, CAM_VCORE, CAM_MAIN, CAM_SUBA/B and CAM_CCU/AO power-domain
-   support, complete camera clocks, runtime PM, SMI/MMQoS and IOMMU ownership.
+1. Complete the still-missing MT6878 CSI_RX, CAM_VCORE, CAM_MAIN, CAM_SUBA/B
+   and CAM_CCU/AO power domains, remaining camera clocks, runtime PM,
+   SMI/MMQoS and IOMMU ownership. CAMSYS_MAIN remains compile-only.
 2. MT6878 SENINF receiver and a complete media graph for CSI ports 0, 1, and
    2A.
 3. Sensor drivers for both supplier variants of each camera, built against the
@@ -173,6 +217,11 @@ new module autoloading:
 ## First live gate
 
 The first device experiment is observation-only.
+
+The `pkgrel=131` source candidate adds only a disabled main-IMX882 fixture.
+Its I2C client and all four power providers must remain disabled in the final
+DTB, and it must not modify the already-present I2C8 controller status or bus
+frequency. This is topology validation, not an identity probe.
 
 - Record the exact CI artifact, bootloader, kernel, DTB, modules, boot slot,
   board/SKU identity, baseline `usb0`, SSH, I2C adapters, media devices, and

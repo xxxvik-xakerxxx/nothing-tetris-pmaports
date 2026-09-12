@@ -25,9 +25,10 @@ tracked in `docs/NOTHINGOSS_SOURCES.md`.
 
 The current baseline is intentionally conservative:
 
-- display uses the inherited framebuffer through `simpledrm`;
-- native MediaTek DSI/DSC/panel support is not part of the active baseline;
-- charger and PMIC telemetry is read-only where possible;
+- installed r132 uses the inherited framebuffer through `simpledrm`;
+- native builds select only the MediaTek DSI/DSC/panel DTB;
+- charger and PMIC telemetry uses a conservative 500 mA USB-debug policy until
+  the source current is classified through BC1.2, Type-C Rp or PD;
 - risky Android vendor stacks stay disabled until they are split into small,
   reviewable Linux-facing patches;
 - NFC is not tracked because CMF Phone 1 / `nothing-tetris` has no NFC
@@ -35,7 +36,29 @@ The current baseline is intentionally conservative:
 
 ## Kernel package versioning
 
-The kernel package currently uses `pkgver=6.18` and `pkgrel=118`.
+Prepared r153 additionally includes
+`0097-drm-mediatek-update-MT6878-planes-at-frame-end.patch`. The live change
+from frame-start to frame-completion vblank removes user-visible redraw
+flicker in the bounded test. The complete OVL patch chain applies with the
+packaging patch tool and its translation unit compiles; CI installation and
+hardware lifecycle gates remain open. r152 below is the route-only candidate.
+
+Latest: installed native CI `34470405429` uses `6.18-r151`. Prepared `6.18-r152`
+adds `0096-soc-mediatek-retain-verified-MT6878-display-route.patch`, the exact
+three-register route verified by a live native-image test. It is a partial
+bring-up candidate, not completed display support: flicker and inherited PQ
+ownership remain unresolved. The route model test reconstructs the packaged
+header in source order and exercises connect/disconnect; hardware lifecycle
+and CI installation remain separate gates. Earlier image history follows.
+
+The installed CI image uses `pkgver=6.18` and `pkgrel=127` at pmaports commit
+`fdeeda042144e5ff1d2159f1590dbc5fb6b9392c`. CI run `33502390335` passed overlay
+validation, the full kernel and device packages, install-image construction and
+artifact upload. The downloaded image ZIP has SHA-256 `c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`, and all
+three payload hashes match its manifest. The previous
+`pkgrel=126` CI run `33495661863` completed the main kernel build but stopped on
+a brittle disabled-Kconfig text check before compile-only IMX882 validation;
+it produced no image.
 
 `pkgrel` is high because this port had many hardware-test rebuilds before being
 cleaned up for publication. Do not reset it while devices may already have
@@ -57,11 +80,35 @@ normal Alpine/postmarketOS practice.
 | `0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch` | Board peripheral inventory plus the hardware-tested MT6631 conninfra reserved-memory/PMIC contract. Wi-Fi and Bluetooth are enabled; unvalidated clients remain disabled. |
 | `0006-pinctrl-mediatek-mt6878-eint.patch` | EINT table fix needed by board interrupts. |
 
-### Stable framebuffer display path
+### Display paths
 
 | Patch | Purpose |
 | --- | --- |
-| `0005-drm-sysfb-tetris-framebuffer.patch` | Stable inherited U-Boot framebuffer path for Tetris: full-frame updates, cache flushes, damage-limited cleaning and MMIO-safe copy. |
+| `0005-drm-sysfb-tetris-framebuffer.patch` | Historical inherited framebuffer definition. It remains in the common DTS source, but the shipped native DTB deletes its node and the FIT does not select the legacy DTB. |
+| `0056`-`0073` native display series | Adds MT6878 MMSYS clocks/routing, DISP/MM power, OVL frame-start handling, DSC, DSI host, MIPI PHY, bounded larb0/IOMMU DMA, the native Tetris DTB and the vendor-confirmed 1140 Mbps DSI lane rate. |
+| `0062-drm-mediatek-program-MT6878-DSC.patch` | Programs MT6878 DSC geometry and PPS. The paired working r132/LK reference matched r144 for every captured DSC data register except `DSC_MODE`: LK retained `0x10001`, while r144 wrote `0x1`. Clean r145 sets that parameter-load bit during initial configuration but still stalls, proving it is necessary vendor parity rather than the complete fix. |
+| `0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch` | Continues the bounded MM_INFRA hardware vote when this firmware rejects only the optional HWCCF hint with `-EPERM`, matching the MT6878 vendor contract. Other firmware errors remain fatal. |
+| `0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch` | Points larb0 and native display consumers at the DISP index of the registered SPM onecell provider. Live function-graph tracing proved the old nested-node phandle failed in `dev_pm_domain_attach()` before the SMI driver ran. |
+| `0076-drm-mediatek-publish-DSI-state-before-host-register.patch` | Publishes DSI drvdata and bridge metadata before host registration. The child panel probes synchronously and can trigger aggregate bind inside `mipi_dsi_host_register()`; installed r135 otherwise passed a NULL-derived encoder address `0x40` to DRM and Oopsed while holding the component mutex. |
+| `0077-drm-mediatek-wait-for-display-mutex-probe.patch` | Defers DRM aggregate bind until the display-mutex platform driver has published drvdata. Installed r136 proves the DSI ordering fix and then reaches this later race; manual binding proves the MT6878 mutex resources themselves are valid. |
+| `0078-drm-mediatek-reset-MT6878-DSI-to-command-mode.patch` | Resets MT6878 DSI to command mode during power-on before panel prepare. Installed r137 registers native DRM without Oops but inherits U-Boot video mode and waits forever for VM_DONE before the new pipeline has emitted a frame. Atomic enable still selects and starts the requested video mode afterward. |
+| `0079-drm-panel-set-maximum-return-packet-size.patch` | Requests a three-byte MIPI DSI return packet before reading the S6E8FC3X02 display ID. Installed r138 proves command-mode IRQ completion but receives only the panel's default one-byte response; the official Nothing OS 4.1 MT6878 host sends the equivalent size command before every read. |
+| `0080-drm-panel-accept-S6E8FC3X02-revisions.patch` | Removes the unsupported `40 21 01` single-revision allowlist from the early compile-only port while retaining the complete three-byte transfer check. Installed r139 reads `40 41 02`; the official Nothing OS 4.1 driver treats ID as revision information and selects this panel through the board DT compatible. |
+| `0081-drm-mediatek-frame-MT6878-DSC-pixel-stream.patch` | Programs the DSI host for compressed DSC output: stream type 5, word count from two 540-byte chunks and MT6878 DSI buffer width 360. Installed r140 proves panel lifecycle but shows stripes with the previous uncompressed RGB888 framing. |
+| `0082-drm-mediatek-fix-MT6878-DSC-RC-thresholds.patch` | Writes DRM's already scaled RC threshold bytes directly into MT6878 PPS8-PPS11. Installed r141 proves correct DSI framing removes moving noise, but the prior second `>> 6` leaves a pale frame with one blue vertical line. |
+| `0083-drm-mediatek-use-full-MT6878-OVL-chain.patch` | Adds OVL1_2L and OVL2_2L to the native path and mutex, and programs the exact NothingOSS `OVL0 -> OVL1 -> OVL2 -> PQ bypass -> DSC0 -> DSI0` crossbars. Installed r143 preserves USB, touch, panel ID and backlight but the first frame still times out: all three OVL blocks remain downstream-blocked and DSC input stays at `1x1`. This rules out the previously incomplete route as the only remaining cause. |
+| `0084-drm-mediatek-bypass-MT6878-OVL-shadow.patch` | Adds the MT6878 `need_bypass_shadow` behavior from NothingOSS to mainline OVL data. CI `34179197562` and installed r144 prove bit 22 is present and the physical artifact changes, but DSC still reports only abnormal EOF and the native frame does not complete. The patch is necessary vendor parity, not a display fix by itself. |
+| `0085-drm-mediatek-program-MT6878-DSC-version.patch` | Programs the separate MT6878 DSC-version field at `0x200[6:5]` to DSC 1.1, matching NothingOS B4.1. The earlier start-before-mutex candidate was withdrawn before installation after direct source review showed that video mode enables the mutex before component configuration. Clean r145 left this version field unowned while reporting repeated `ABN_EOF` and DSI input `1x1`; the single-variable r146 CI was cancelled before installation in favor of the integrated r147 candidate. |
+| `0086-drm-mediatek-match-MT6878-native-display-state.patch` | Collects the remaining measured B4.1/LK display parity for the r149 integration candidate: vendor commands use generic packets, N4 PHY and horizontal word counts are exact, video TXRX/PSCTRL/HSTX state is preserved, DSI FIFO thresholds are owned, DSC SPR is disabled, and one atomic OVL start hunk performs reset/INTSTA clear, clears only `PQ_LOOP_CON[0]` at `0x2e0`, enables OVL, then applies force-relay. It intentionally excludes speculative DSC reset-on-DSI-IRQ behavior because vendor performs that operation from CMDQ EOF. |
+| `0087-drm-mediatek-complete-MT6878-DSC-handoff.patch` | Fully writes the five registers from `mtk_ddp_insert_dsc_prim_mt6878()` and `C00/C0C` when the DRM route connects after DISP power/clock enable, clearing stale LK branches. Live tracing on installed r147 proved that late selector or relay writes cannot recover an already stalled graph; r149 tests the authoritative cold-start/DPMS lifecycle. |
+| `0088-drm-mediatek-use-MT6878-default-DSC-parameter-flow.patch` | Clears the forced DSC parameter-load mode used by the port. The authoritative Tetris panel leaves `dsc_param_load_mode=0`, so the vendor path programs `DSC_MODE=0x00000001`; installed r151 confirms that value while preserving USB, touch, Phoc and backlight. It is necessary vendor parity but not the complete display fix: DSC still reports `ABN_EOF`, `FRAME_DONE=0` and DSI input stuck at `0x00010001`. |
+
+### Modem compile boundaries
+
+| Patch | Purpose |
+| --- | --- |
+| `0089-vendor-eccci-modem-common-compile-only.patch.vendor` | Adds the explicit Linux 6.18 scheduler-clock include needed by the common HIF translation unit. The package builds only `ccci_modem.o`, `ccci_hif.o` and `ap_md_mem.o`, checks representative symbols and rejects any ECCCI `.ko`. It adds no runtime module, DT, autoload, SMC or DMA behavior. |
+| `0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor` | Adapts the exact B4.1 FSM, port and non-page-pool DPMAIF Makefile groups to Linux 6.18. The package builds 39 individual objects, checks group counts and representative symbols, and rejects every ECCCI/DPMAIF module from build output, packaging and autoload. Existing modem boot, SMC, power, IRQ and DMA paths are never linked or run. |
 
 ### PMIC, keys and power telemetry
 
@@ -70,6 +117,8 @@ normal Alpine/postmarketOS practice.
 | `0003-mfd-mt6363-keys-mt6375-telemetry.patch` | MT6363 PMIC core, hardware-tested power/volume-up press and release IRQ handling, and MT6375 telemetry foundation. |
 | `0007-power-supply-mt6375-monitor.patch` | Read-only battery/USB power monitor and platform registration. |
 | `0027-power-supply-nothing-tetris-charging-policy.patch` | Conservative board charging policy: 500 mA USB-debug limit, Nothing OS 4.1 battery CV, temperature cutoffs with hysteresis, fail-closed sensor handling and suspend inhibition. |
+| `0054-power-supply-mt6375-bc12-compile-only.patch` | Compile-only MT6375 BC1.2 status decoder with fail-closed USB type/current mapping. It has no Kconfig, Makefile, hardware access, module or runtime path. |
+| `0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch` | Compile-only BC1.2 lifecycle model and host tests covering bounded DP/DM release, retryable partial cleanup, role-granted ownership and current attach-state reconciliation. CI rejects DT, IRQ, PHY, regmap, module, packaging and autoload wiring; production USB behavior remains unchanged. |
 | `0028-dt-bindings-watchdog-mediatek-mt6878-reboot-mode.patch` | Describes the MT6878 watchdog syscon and named reboot-mode child. |
 | `0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch` | Populates the reboot-mode child so `reboot bootloader` can reach U-Boot fastboot without physical buttons. |
 | `0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch` | Removes the stale argument from the packaged DTB. The verified U-Boot revision currently injects it again at `bootm`, so this patch alone does not change runtime clock policy. A one-shot boot without the argument failed and reset; keep unused-clock cleanup gated until the missing clock ownership is identified. |
@@ -87,12 +136,19 @@ normal Alpine/postmarketOS practice.
 | `0013-iio-nvmem-mt6369-calibration.patch` | MT6369 AUXADC and efuse DT providers required by codec calibration and PMIC telemetry. |
 | `0014-mmc-mt6878-tetris-sdcard.patch` | Native MT6878 MSDC1 host support and the Tetris microSD slot wiring. |
 | `0015-leds-flash-lm3644-tetris.patch` | Native dual-channel LM3644 Linux LED flash-class driver and Tetris I2C/GPIO wiring. Both torch channels work live; timed strobe and V4L2 integration remain gated. |
+| `0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch` | Binding for the dormant MT6878 CAMSYS_MAIN clock provider. It adds no DT node. |
+| `0092-clk-mediatek-mt6878-camera-main.patch` | Compile-only MT6878 CAMSYS_MAIN provider. The package checks it in a temporary output tree while the shipped config keeps it disabled. |
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 | `0018-pmdomain-mediatek-mt6878-audio.patch` | MT6878 audio power-domain wiring required by the staged ASoC card. |
 | `0019-arm64-dts-mt6878-shallow-cpuidle.patch` | Corrects CPU0-3 to Cortex-A55 and CPU4-7 to Cortex-A78 from live MIDR evidence, and limits the first PSCI cpuidle rollout to per-CPU power-off. Cluster, MCU and system states remain gated behind live USB/SSH validation. |
-| `0020-arm64-dts-mt6878-gnss.patch` | Publishes the MT6878 GNSS transport after live DT boot, probe, IRQ and power-cycle validation. `nothing-tetris-gnss-transport.service` loads it manually and verifies both vendor devnodes without opening or powering the GNSS links. |
+| `0020-arm64-dts-mt6878-gnss.patch` | Publishes the manual MT6878 GNSS transport and exact Tetris LNA pinctrl states. The service verifies both vendor devnodes without opening the links. A position fix is not yet proven. |
 | `0021-usb-mtu3-native-role-switch.patch` | Connects the MT6375 Type-C graph to MTU3 and selects kernel dual-role support while keeping peripheral mode as the safe default. Host mode remains unsupported until OTG VBUS ownership is implemented and validated. |
+| `0030-regulator-mediatek-mt6878-gpu-rails.patch` | Adds compile-only MT6363 VSRAM_CPUM inventory and enables the existing MT6319-compatible regulator provider config. No GPU rail DT consumer or Mali node is enabled. |
+| `0047-media-i2c-pd9302a-vcm.patch` | Stages the PD9302A VCM driver with the corrected revision-specific initialization and a bounded suspend park path. It remains compile-only and is not autoloaded. |
+| `0049-media-i2c-imx882-identity.patch` | Adds a compile-only IMX882 physical-ID probe using the exact B4.1 `0x0016/0x0017` ID registers and bounded board power sequence. The shipped config remains off, the build produces no module, and no camera DT client is added. `pkgrel=127` also removes stale DTS text that patch tooling previously ignored outside any valid hunk. |
+| `0050-drm-panel-samsung-s6e8fc3x02.patch` | Adds the native S6E8FC3X02 binding and panel source behind a disabled Kconfig symbol. The package builds only its object for compatibility evidence and rejects any shipped module; no DSI graph, autoload or framebuffer change is included. |
+| `0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch` | Records the reviewed stock main-camera I2C8 address, CAMTG2/CMMCLK1, reset and four switched rails. The sensor and every new regulator are disabled; shared I2C8 status/frequency, EEPROM, actuator, media graph and runtime behavior remain unchanged. |
 
 ### NothingOSS module adaptations
 
@@ -100,7 +156,8 @@ normal Alpine/postmarketOS practice.
 | --- | --- |
 | `1000-vendor-connectivity-adapter-linux-6.18.patch.vendor` | Adapts the official MediaTek connectivity adapter from Nothing OS 4.1 to the Linux 6.18 kernel ABI used by this package. |
 | `1001-vendor-connectivity-linux-6.18-compat.patch.vendor` | Adapts the official MT6878/MT6631 conninfra, Wi-Fi and Bluetooth modules to Linux 6.18 and exposes Bluetooth through native Linux HCI. |
-| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v050 external module to Linux 6.18 without selecting unrelated v060/v061 profiles. |
+| `1002-vendor-gnss-linux-6.18-compat.patch.vendor` | Adapts the official Nothing OS 4.1 MT6878 GNSS v051 external module selected by stock-derived Tetris product configuration to Linux 6.18. |
+| `1003-vendor-gnss-v051-readonly-uapi.patch.vendor` | Extracts only the source-audited v051 status, DSP boot-info and boot-time userspace ABI, with compile-time layouts and a host test. It adds no raw protocol, service or autoload behavior. |
 | `1101-vendor-audio-optional-calibration.patch.vendor` | Keeps optional PMIC calibration failures explicit while allowing the MT6369 codec to probe when a provider is unavailable. |
 | `1102-vendor-audio-linux-6.18-api.patch.vendor` | Adapts the official MT6878/MT6369 ASoC stack to Linux 6.18 APIs and the Tetris composite I2S4 pinctrl state. |
 | `1103-vendor-audio-mt6685-clock.patch.vendor` | Adds the official MT6685 BBCK5 supplier and selects the MT6878 MTKAIF clock pin. Live tests prove this clock is required by the earpiece and both built-in microphones. |
@@ -108,15 +165,17 @@ normal Alpine/postmarketOS practice.
 | `0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor` | Adapts the sensorhub transport to Linux 6.18, removes automatic SCP reset recovery and fails closed when shared memory or IPI setup is unavailable. |
 | `0036-vendor-scp-linux-6.18-api.patch.vendor` | Adapts the official SCP provider to Linux 6.18 timer, platform remove, bin-attribute and MT6397 APIs. |
 | `0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor` | Adapts the MediaTek mailbox, RPMSG and IPI transport to Linux 6.18 headers, tracepoints and string APIs. |
-| `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. This fixes failure containment only; it does not provide the missing SCP handoff. |
+| `0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor` | Bounds the vendor SCP DVFS probe wait at three seconds, unregisters the DVFS driver and returns `-ETIMEDOUT` instead of flooding WARN forever. A `ba02998` manual probe returned after 3.09 seconds with one diagnostic, no retained `scp` module, no WARN/Oops and no USB loss. Contract validation confirms the immediate cause is no matching `mediatek,scp-dvfs` platform device; adding that node alone is rejected until firmware, TCM and carveout handoff is proven. This patch fixes failure containment only. |
+| `0093-vendor-scp-validate-region-info.patch.vendor` | Adds a compile-only, fail-closed structural gate before SCP recovery: the known region-info layout must fit in mapped TCM, its reported size must cover every consumed field, loader/firmware ranges must be non-empty and non-wrapping, the loader must fit in declared SCP TCM, and a requested DRAM range must be valid. Errors leave `scp.ko` unloaded. This does not authenticate or select `scp_a`/`scp_b`, prove carveout ownership, or enable runtime DT. |
 
-The `pkgrel=118` package stages Nothing OS 4.1 MT6878 connectivity modules from the
+The next `pkgrel=128` source package stages Nothing OS 4.1 MT6878 connectivity modules from the
 official Nothing kernel module releases. Connectivity firmware is isolated in
 `firmware-nothing-tetris`, and connectivity/audio modules are built and shipped
 inside the matching kernel package. The official `connadp` bridge is built and
 loaded before `conninfra`; it provides the WMT, CONAP/SCP diagnostic,
 stack-dump, and connectivity power-throttling interfaces consumed by Wi-Fi and
-Bluetooth and the staged GNSS v050 transport.
+Bluetooth and the manual GNSS v051 transport. Installed `pkgrel=127` still
+uses the previously validated v050 transport.
 The boot service loads the bridge, WLAN and native-HCI Bluetooth modules in the
 hardware-tested order. It extracts the 6146-byte per-device Wi-Fi calibration
 from `nvdata`, performs one WMT NVRAM write, completes joint pre-calibration and
@@ -176,19 +235,33 @@ not a confirmed external RT1711H controller.
   should use normal commit-style patches with subject, rationale and sign-off.
 - Patch numbering is contiguous and grouped by hardware/function. Keep future
   additions in that style: one patch file per maintained hardware block.
-- Native DSI/display patches are intentionally not in this active series.
+- Native display binds, starts Phoc and preserves USB/touch, but physical pixels
+  remain incorrect. Do not mark it `Works` until clean pixels and display
+  lifecycle pass on a CI artifact while USB stays available.
 
 ## Next clean patch targets
 
-1. Validate MT6375 attach/orientation/role handling after correcting the TCPCI
-   register window. The r63 live regmap confirms vendor ID `0x29cf` and product
-   ID `0x6375` in the main bank; the old `0xf200` mapping read only zeros.
-2. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
-   native Bluetooth discovery and factory Bluetooth address provisioning.
-3. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
+1. Replace configfs-random NCM host/device addresses with a stable per-device
+   identity derived through a one-way hash of the bootloader-provided devinfo.
+   Clean r132 proved the descriptor and Apple NCM driver are valid, but locked
+   macOS ignored the newly randomized host MAC and withheld the BSD interface.
+2. Observe MT6375 source classification with a USB 2.0 host, a known Type-C Rp
+   1.5 A source and a known 5 V BC1.2 DCP. The r151 source-aware live gate
+   passes for a PD-capable source with `CURRENT_MAX=0` by requiring the 500 mA
+   fallback, but native BC1.2 SDP/CDP/DCP publication is still missing.
+   Preserve USB NCM while validating DP/DM ownership; leave PD/OTG off.
+3. Validate the clean CI U-Boot and postmarketOS images, Wi-Fi association/DHCP,
+   native Bluetooth discovery and factory Bluetooth address provisioning. The
+   Wi-Fi gate now rejects mere `wlan0` presence without association, IPv4,
+   default route and traffic.
+4. Validate LM3644 timed strobe and add the V4L2 flash bridge with the camera
    stack; both torch channels already pass bounded live tests.
-4. GNSS/FM clients after Wi-Fi/BT connectivity is stable.
-5. Validate the packaged audio stack from a clean CI image, then repeat both
+5. Validate the GNSS EMI handoff and LNA states, then obtain a position fix
+   while Wi-Fi, Bluetooth and USB remain stable.
+6. Build and clean-install the device r9 greetd dconf-directory fix, then
+   validate the packaged audio stack from that CI image and repeat both
    speaker/microphone paths and suspend/resume lifecycle tests.
-6. Sensorhub/IIO for rotation, proximity and ambient light.
-7. Modem/SIM and cameras as later large projects.
+7. Sensorhub/IIO for rotation, proximity and ambient light.
+8. Continue compile-only modem/CCIF/DPMAIF and camera sensor boundaries in
+   parallel; activate each only after its power, memory and firmware contract
+   is complete.

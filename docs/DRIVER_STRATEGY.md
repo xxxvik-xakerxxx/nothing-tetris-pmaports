@@ -13,6 +13,13 @@ The port has two goals that must remain separate:
 | `firmware-nothing-tetris` | Proprietary MT6631 Wi-Fi, Bluetooth and GNSS firmware with the names requested by the drivers. |
 | `device-nothing-tetris` | Device metadata, boot layout, UCM/UI configuration, udev rules and temporary module loading policy. |
 
+Firmware partitions and calibration stores are separate inputs. This unit
+exposes `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2`
+and `md_sec`, plus A/B modem, connsys, SCP, CCU and GPUEB firmware partitions.
+Only bounded, versioned records may be extracted at runtime. Never package a
+whole calibration partition, IMEI, MAC, serial, security material or a raw dump
+from one handset as a model-wide default.
+
 External modules are built together with the kernel and depend on its exact
 package release. Linux has no stable in-kernel module ABI, so a module built for
 another release must never be reused.
@@ -27,7 +34,8 @@ another release must never be reused.
 - Keep every vendor group independently packageable under `extra/mediatek-*`.
 - Package modules before enabling their DT consumers.
 - Do not autoload experimental display, GPU, camera, modem or sensorhub stacks.
-- Preserve the inherited framebuffer until native KMS is proven on hardware.
+- Keep the inherited-framebuffer source only as an external rollback reference;
+  shipped native builds must not select or expose it.
 - Keep the GNSS transport service manual until position data, repeated power
   cycles and suspend/resume pass while Wi-Fi, Bluetooth and USB remain healthy.
   The vendor `gpsdl0`/`gpsdl1` ABI is not an NMEA stream for `gpsd`.
@@ -67,19 +75,28 @@ device. Keep their DT nodes disabled and use NothingOSS as a hardware reference:
 | Audio calibration | MT6369 AUXADC plus PMIC efuse | Vendor providers in the kernel package, patch `0013`. |
 | Rear flash | Dual-channel LM3644 at I2C6 address `0x63`, enable GPIO155 | Small native LED/V4L2 driver; do not import Android flashlight-core. |
 | Fingerprint | Goodix SPI1, IRQ GPIO18, reset GPIO73, MT6369 VFP | Experimental vendor bridge also requires the TEE userspace contract. |
-| Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires SCP firmware, SCP core, HF manager and sensorhub as one group. |
+| Rotation/ALS/proximity | MediaTek SCP sensorhub | Requires validated bootloader publication of SCP firmware identity, TCM region-info and both carveouts before SCP DVFS, core, HF manager or sensorhub can be enabled. |
 | Cameras | IMX882, GC16B3C and SC202CS through MT6878 seninf/ISP | Experimental camera group after clocks, power domains and IOMMU. |
 | Modem/SIM | CCCI/DPMAIF, SIM detect GPIO46/GPIO47 | Experimental modem group plus userspace daemon and firmware. |
 | SoC thermal | MT6878 LVTS, 24 sensors in MCU/AP/GPU domains, four efuse cells | Port the official B4.1 calibration/controller data to Linux thermal; start with read-only zones and conservative critical trips. |
+| Charging | MT6375 charger plus MT6375 TCPM and USB2 PHY BC1.2 routing | Keep the measured 500 mA fallback. Observe known host/Rp/DCP sources, then add only native BC1.2 detection/publication after DP/DM ownership is proven; leave PD/PPS and OTG disabled for this gate. |
 | USB-C data role | MT6375 TCPM graph plus MTU3 dual-role controller and MT6375 OTG VBUS regulator | Preserve peripheral/NCM as the default; enable host role only after the VBUS regulator and role-switch ownership are complete. |
-| Display | Samsung S6E8FC3X02 through MT6878 DSI/DSC | Keep inherited framebuffer until native DRM survives suspend/resume. |
+| Display | Samsung S6E8FC3X02 through MT6878 OVL0/1/2, DSC and DSI | Ship only the native DTB. Promote after clean pixels, repeated boots and suspend/resume while USB/touch remain stable. |
 
-The live hardware audits confirmed a 108 GiB root partition with about 97 GiB
-free and all eight CPUs. `lscpu` correctly decodes four Cortex-A55 and four
-Cortex-A78 cores. The blank processor row in GNOME 50.3 is a userspace parser
-limitation, not missing kernel topology. The running kernel has no thermal
-class, so thermal support remains a blocker before sustained GPU/modem/camera
-loads.
+The native S6E8FC3X02 pipeline binds on hardware. Installed r147 reads panel ID
+`40 41 02`, starts Phoc and preserves USB/touch, but its first atomic frame
+stalls after OVL2: DSC sees `1x1`, raises `ABN_EOF` and never completes a frame.
+Late live writes proved that the remaining DSC selector and OVL force-relay are
+not standalone recovery mechanisms once the graph is wedged. Candidate r149
+ports both into the authoritative connect/reset/start lifecycle; runtime pixel
+and lifecycle gates remain.
+
+The live hardware audits confirmed a 108 GiB root partition and all eight CPUs.
+`lscpu` correctly decodes four Cortex-A55 and four Cortex-A78 cores. The blank
+processor row in GNOME 50.3 is a userspace parser limitation, not missing kernel
+topology. The installed baseline exposes all 24 LVTS sensors in polling mode;
+thermal IRQs/trips and sustained-load lifecycle validation remain blockers
+before GPU, modem or camera loads are enabled.
 
 ## Promotion gate
 
