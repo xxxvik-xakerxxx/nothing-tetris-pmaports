@@ -35,6 +35,8 @@ jobs:
         run: sh ./scripts/check-mt6878-display-route.sh
       - name: Validate DRM sequence measurement
         run: python3 ci/test-drm-sequence.py
+      - name: Test greeter rootfs gate
+        run: python3 ci/test-greetd-rootfs.py
       - name: Fetch native display source
         run: |
           mkdir -p upstream/linux
@@ -447,6 +449,7 @@ jobs:
           check_contains "greeter dconf directory" \
             'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
             "$rootfs/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf"
+          python3 /work/ci/check-greetd-rootfs.py "$rootfs"
           native_dtb="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
           test -e "$native_dtb"
           if fdtget -l "$native_dtb" /chosen | grep -Fxq simplefb@fe0d0000; then

@@ -666,6 +666,8 @@ validate_ci_rootfs_module_checks() {
 	grep -Fq 'sh patches/modem/check-candidates.sh upstream/device-modules' "$workflow"
 	grep -Fq 'sh patches/modem/check-ccmni.sh upstream/device-modules' "$workflow"
 	grep -Fq 'python3 scripts/check-sensor-list-reply.py upstream/device-modules' "$workflow"
+	grep -Fq 'python3 ci/test-greetd-rootfs.py' "$workflow"
+	grep -Fq 'python3 /work/ci/check-greetd-rootfs.py "$rootfs"' "$workflow"
 	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
 		grep -Fq 'if modinfo -F' "$workflow"; then
 		echo "CI must resolve target modules through the target rootfs/release" >&2
