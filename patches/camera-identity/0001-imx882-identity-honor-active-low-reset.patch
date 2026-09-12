@@ -1,0 +1,50 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: i2c: imx882-identity: honor logical reset polarity
+
+The disabled Tetris fixture declares reset GPIO25 active-low. Descriptor
+values are logical: one asserts reset (physical low), zero releases it.
+The vendor B4.1 sequence holds physical reset low during power-up, releases
+it before identification, and must leave it asserted during shutdown.
+
+Acquire reset asserted and use logical values throughout. This candidate
+is deliberately outside APKBUILD: apply after 0049 for host validation only.
+
+--- a/drivers/media/i2c/imx882-identity.c
++++ b/drivers/media/i2c/imx882-identity.c
+@@ -112,7 +112,8 @@
+ static void imx882_power_off(struct imx882_identity *imx882,
+ 			     unsigned long enabled_supplies, bool clock_enabled)
+ {
+-	gpiod_set_value_cansleep(imx882->reset, 0);
++	/* Descriptor values are logical; assert reset before removing power. */
++	gpiod_set_value_cansleep(imx882->reset, 1);
+ 
+ 	if (clock_enabled)
+ 		clk_disable_unprepare(imx882->xclk);
+@@ -139,7 +140,7 @@
+ 	if (ret)
+ 		return ret;
+ 
+-	gpiod_set_value_cansleep(imx882->reset, 0);
++	gpiod_set_value_cansleep(imx882->reset, 1);
+ 
+ 	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AFVDD);
+ 	if (ret)
+@@ -172,7 +173,7 @@
+ 	*clock_enabled = true;
+ 	usleep_range(5000, 5100);
+ 
+-	gpiod_set_value_cansleep(imx882->reset, 1);
++	gpiod_set_value_cansleep(imx882->reset, 0);
+ 	usleep_range(1000, 1100);
+ 
+ 	return 0;
+@@ -210,7 +211,7 @@
+ 		return dev_err_probe(dev, PTR_ERR(imx882->xclk),
+ 				     "failed to get xclk\n");
+ 
+-	imx882->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
++	imx882->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+ 	if (IS_ERR(imx882->reset))
+ 		return dev_err_probe(dev, PTR_ERR(imx882->reset),
+ 				     "failed to get reset GPIO\n");
