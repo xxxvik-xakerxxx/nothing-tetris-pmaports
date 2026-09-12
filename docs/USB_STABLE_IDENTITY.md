@@ -29,6 +29,14 @@ through relocation. The packaged bootloader remains pinned to
 `b76e47e774304ab550a6354f3286860b7caffb3a`; live evidence does not prove that
 this path publishes the property on the current boot chain.
 
+The live r155/r9 boot `d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a` was rechecked on
+2026-09-12 with USB SSH healthy. `/chosen` still exposes no files, so the
+existing allowlisted seed path remains unavailable. The root device tree does
+expose a 13-byte `serial-number`, a `mediatek,mt6878-devinfo` provider, and
+`consys@18000000/adie-sku = 0000000000000001`; the serial value itself was not
+printed into the log. These are candidates for a reviewed identity source, not
+an enabled seed.
+
 Therefore Tetris does not set `deviceinfo_usb_network_mac_seed_path`. This is a
 deliberate fail-open gate: existing random NCM addresses and enumeration remain
 unchanged.
@@ -44,7 +52,9 @@ untested.
    line, and source commits with USB NCM and one SSH control session healthy.
 2. Prove the candidate property exists, is structurally valid, contains no
    secrets that must not be hashed, and is stable across three cold boots and
-   warm reboots.
+   warm reboots. If root `serial-number` is used instead of a `/chosen`
+   property, first extend the initramfs allowlist and tests deliberately rather
+   than widening path access generically.
 3. Confirm the property differs on a second handset or justify its device-level
    uniqueness from an authoritative source.
 4. Build artifacts in CI, then test repeated enumeration, DHCP/SSH, sustained
