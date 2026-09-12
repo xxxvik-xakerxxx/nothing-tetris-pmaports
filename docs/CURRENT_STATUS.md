@@ -53,6 +53,18 @@ the same install-time owner repair as device r10.
 
 ## Modem and sensor prerequisites
 
+Fresh pre-install live audit `local/live-logs/20260912T122321Z-172.16.42.1-audit`
+on boot d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a still reports
+device-nothing-tetris 8-r9 and linux-postmarketos-mediatek-mt6878 6.18-r155
+running kernel build #156, zero failed systemd units, USB NCM up at
+172.16.42.1, wlan0 present but disconnected, Bluetooth powered, the GNSS v051
+module already loaded, `/dev/dri/card0` only, no ModemManager modem, no
+camera/media nodes and no sensor IIO devices beyond the existing PMIC ADC path.
+PipeWire currently exposes no hardware sink/source, and the connected USB-C
+source still reports 5 V with current_max=0 so the charger remains on the
+conservative 500 mA fallback. This is the baseline for the next CI clean-install
+candidate, not a new functional claim.
+
 The modem producer audit, read-only C partition/member locator and bounded
 stock-LK kernel-chain feasibility audit are now integrated on
 `codex/hardware-integration-next-scp` through ccef88b. Exact B4.1 LK selects
@@ -73,6 +85,21 @@ The SCP DRAM recovery-span prerequisite is packaged on
 rounded recovery mapping before SCP setup. Its exact-source host gate
 reproduced the previous defect (18 DRAM cases, 10 failures) and the candidate
 passed all 18 cases under UBSan. SCP, DVFS and sensorhub remain disabled.
+
+CI 34692383850 for `codex/hardware-integration-next-scp`
+3a016d36153d504f6b1002d29120bd84a8183533 completed successfully and published
+`nothing-tetris-images` artifact 10297439743. The downloaded ZIP SHA256 is
+a97f7dd37950e92279a27168fcdf667b607baec91cc00c34194865fccb86bf71.
+`scripts/verify-ci-install-artifacts.sh` verified the extracted artifact
+against the expected GitHub SHA: `boot_image.itb`, `nothing-tetris-boot.img`
+and `nothing-tetris-root.sparse.img` all match SHA256SUMS; the manifest reports
+kernel `6.18.0`, required U-Boot
+60bcf22fdc0a94526424db59fc7640298ea8f0dd, and fastboot mapping
+`nothing-tetris-boot.img -> super`, `nothing-tetris-root.sparse.img ->
+userdata`. Sizes are boot 536870912, root sparse 2114363112 and FIT 26578735
+bytes. This passes the CI artifact gate for a future clean flash, not the
+runtime gate: SCP, DVFS, sensorhub and phone-side regression checks remain
+unproven.
 
 Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
@@ -347,6 +374,14 @@ and the Android sparse root image
 (`eecee1976a12e0a75a427fc78b627aca79a6fcfe6fe004a121ccc979f5626dda`).
 The package contract maps the boot image to `super` and the sparse root image
 to `userdata`; `boot_image.itb` is evidence, not a third fastboot partition.
+Before any future clean flash, run
+`scripts/verify-ci-install-artifacts.sh` against the downloaded GitHub Actions
+artifact directory and pass the expected `github_sha`. The verifier requires
+exactly one `BUILD-MANIFEST`, `SHA256SUMS`, `boot_image.itb`,
+`nothing-tetris-boot.img` and `nothing-tetris-root.sparse.img`, checks every
+SHA256 entry, checks the manifest keys and records the only allowed fastboot
+mapping: `nothing-tetris-boot.img` to `super` and
+`nothing-tetris-root.sparse.img` to `userdata`.
 
 The previous rollback `nothing-tetris-images` ZIP is SHA-256
 `c47230ff07ebefe86faf54cf216bf7901279afbef482647389c91cd4a56bc996`.
@@ -387,7 +422,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Idle battery drain | Broken | Roughly half the battery was reported lost overnight. A live r147 capture found `dconf-service` at 5.1 GiB RSS plus 596 MiB swap and persistent CPU use because `/var/lib/greetd/.config/dconf` did not exist; Calls and Chatty retried failed writes continuously. A soft restart reclaimed the memory, but growth resumed until the directory was created. Device package r10 now ships the private dconf directory directly, repairs ownership from target `/etc/passwd`, and the overlay validator rejects regressions. Wi-Fi and USB suspend costs remain unisolated. | Build and clean-install r10, validate flat dconf RSS/CPU across reboot, then run physically unplugged screen-off A/B intervals with Wi-Fi associated and disabled. Record coulomb, suspend and wake/IRQ deltas. |
 | GNSS | Partial | Clean r155 from CI 34589225716 passed three fresh supervised BINFO/download/stop cycles on separate boots and preserved the exact 32 MiB USB hash. The read-only diagnostic lifecycle hardening is published at 14a7a2f with 19 isolated host scenarios; CI 34687644038 now runs this gate in validate-overlay and passed it. The integrated GNSS boot-protocol gate covers FE08/FE31/FE32 framing, checksums, split reads, truncation/overflow rejection and 1/106/256-fragment state. Current live r155 inventory shows `gps_drv_dl_v051` loaded with `/dev/gpsdl0` and `/dev/gpsdl1`, failed units zero, and no modem device. | Do not retry GNSS on the current boot with the module already loaded. Next reboot, then advance from read-only/download reliability to bounded startup command ownership and navigation/NMEA semantics before exposing gpsd/GeoClue. |
 | Modem / SIM | Broken | Current live r155 inventory still reports no ModemManager modem and no CCCI/DPMAIF/WWAN device. U-Boot CCCI branch 1b8c954dba accepts the real stock48 descriptor form and CI passed, but this only publishes diagnostic handoff status. The combined compile-only modem inventory classifies remaining references and still ships no ECCCI/DPMAIF module or autoload. `codex/hardware-integration` now has CI-passing pinned B4.1 modem prereq gates for the CCMNI Linux 6.18 adaptation and DPMAIF page-pool DMA sizing candidates. | Validate actual configured-kernel exports, module ownership and final LTO/modpost; then cover page-pool and UDC provider lifecycle. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT, SIM detect and runtime remain later gates. |
-| Sensors | Broken | Current live r155 inventory exposes only PMIC ADC IIO devices (`mt6369-auxadc`, `mt6375-auxadc`, `mt6375-adc`); no accelerometer, gyro, proximity or light sensor is exposed. Sensor reply correlation and SCP DRAM span validation are host-proven prerequisites, but SCP/mailbox/IPI/HF/sensorhub remain disabled. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
+| Sensors | Broken | Current live r155 inventory exposes only PMIC ADC IIO devices (`mt6369-auxadc`, `mt6375-auxadc`, `mt6375-adc`); no accelerometer, gyro, proximity or light sensor is exposed. Sensor reply correlation and SCP DRAM span validation are host-proven prerequisites, but SCP/mailbox/IPI/HF/sensorhub remain disabled. CI 34692383850 has a verified next-scp install artifact carrying the packaged DRAM recovery-span guard, but it has not been flashed. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Current live r155 inventory has `/dev/dri/card0` only and no render node. Panthor compile/source prerequisites exist, and the VGPU readback gate proves a vendor/mainline enabled-rail source mismatch; shipped DT still has no GPU node, MFG RPC remains disabled, and there is no GPU regulator consumer or autoload. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. First live gate must be read-only rail/register observation, not a GPU probe. |
 | Rear/front cameras | Broken | Current live r155 inventory has no `/dev/video*` or `/dev/media*`. Torch channels work independently. The IMX882 reset-polarity prerequisite is host-proven, but no camera node, sensor power-on, I2C transaction, SENINF/ISP, CCU or media pipeline is enabled. | Complete final DT/clock/rail ownership, observation-only clean boots, then one bounded sensor identity probe before SENINF/ISP or preview/capture work. |
 | Display | Partial | Installed r155 continues to expose native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output, and the frame-end synchronized buffer update removed the visible redraw flicker in live testing. The display promotion candidate fixes the CI greetd ownership blocker by requiring `greetd` before the post-install owner repair; the integrated branch carries the same device r10 packaging fix. The panel still exposes only a fixed 60 Hz mode and the session has no render node, so perceived slowness is likely outside the display scanout fix. | Wait for new image artifacts, verify hashes, clean-flash them, then retest visual output, touch, USB transfer, DPMS/brightness, warm reboot and suspend/resume before main promotion. |
