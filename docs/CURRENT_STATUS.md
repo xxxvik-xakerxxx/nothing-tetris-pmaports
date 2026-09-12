@@ -31,7 +31,7 @@ candidate starts at ee994e4236d69c9f3eb18e81614dd0dff9e60266 and carries the
 display implementation from aecf4f4: panel patch 0050, patches 0056 through
 0088, routing/IRQ patches 0096/0097, the framebuffer compatibility update,
 native kernel configuration, native DTB/FIT selection and route tests.
-Kernel revision 154 and device revision 11 identify this separate candidate;
+Kernel revision 154 and device revision 12 identify this separate candidate;
 it must not be confused with the installed full-integration r153 image.
 
 Patch 0057 has a context-only rebase removing the unrelated MFG-controller
@@ -54,7 +54,7 @@ only on a feature branch or mark a subsystem Works from command exit status.
 ## Scoped Audio/Greeter Follow-Up
 
 Starting from clean display-main-promotion `7d10744`, the published device
-8-r11 candidate carries these installed integration fixes. The seven payload
+8-r12 candidate carries these installed integration fixes. The seven payload
 files in `5f52b75` are copied byte-for-byte; the follow-up also restores the
 package directory creation from `0b8c4164`:
 
@@ -68,8 +68,9 @@ package directory creation from `0b8c4164`:
 - `8c1ccf4`: tmpfiles creates the greeter dconf directory with mode 0700 and
   greetd ownership to prevent the observed settings retry loop.
 - `0b8c4164` (not `cb121c1`): package the dconf directory itself with mode
-  0700 and numeric owner/group 113:113, as present in installed r153's
-  `aecf4f4` source. This was missing from the initial `5f52b75` transfer.
+  0700, as present in installed r153's `aecf4f4` source. The r12 follow-up
+  adds a post-install ownership repair using the target rootfs greetd passwd
+  entry, because the numeric owner from one image is not portable.
 
 The initial candidate's tmpfiles-only configuration was not equivalent to
 the installed package contents. Before tmpfiles runs, the two mode-0644
@@ -80,11 +81,9 @@ retained to restore its named ownership/mode on boot. No recursive chown of
 the greeter home or its shared configuration is added.
 
 CI 34587197925 at 7e8503e built the kernel, device package and image files,
-then failed the final rootfs gate. Its new check incorrectly required the
-greetd account to have matching UID/GID 113:113. The working phone actually
-reports UID113 and primary GID119, with home750:113:119, parent .config755:0:0
-and dconf700:113:113. Mode0700 grants access by owner, independently of that
-directory's group. No installable artifact was published by the failed job.
+then failed the final rootfs gate. The first failure was a real missing-image
+artifact caused by the post-build validation step, not a successful image
+check. No installable artifact was published by the failed job.
 
 The corrected gate resolves UID/GID from the target passwd/group, checks the
 home and each parent's search permission, and requires dconf mode0700 owned
@@ -92,14 +91,20 @@ by that actual UID. A child chroots and drops credentials to verify real
 write/search access without writing files or executing target code. Missing,
 ambiguous, root or mismatched identities and wrong ownership still fail.
 Eleven Linux tests pass, including the observed split UID/GID and a real
-credential-drop fixture. Kernel/device sources remain unchanged. The first
-failure is not reclassified as a successful image check; a fresh CI is needed.
+credential-drop fixture. CI 34592017396 then proved the next boundary: the
+fresh rootfs assigned greetd UID 109 while the packaged dconf directory still
+had owner 113. That was a real package-owner mismatch. Candidate r12 keeps the
+directory packaged but adds `device-nothing-tetris.post-install` to chown it
+from the target `/etc/passwd` before the rootfs gate; tmpfiles remains the
+boot-time repair path. The first failures are not reclassified as successful
+image checks; a fresh CI is needed.
 The device greetd drop-in only overrides rendering and ExecStart; it does not
 explicitly order tmpfiles. The pinned Phosh drop-in also only overrides
 ExecStart. The target base greetd/tmpfiles units were not available for this
 offline audit, so no claim is made that their boot ordering was verified.
-The packaged directory and preboot metadata gate avoid relying on that
-unverified ordering. Candidate r11 still needs a clean boot proving no dconf
+The packaged directory, post-install owner repair and preboot metadata gate
+avoid relying on that unverified ordering. Candidate r12 still needs a clean
+boot proving no dconf
 retry; r10 CI success and installed integration r153 are distinct evidence.
 
 Device sources, SHA512 checksums, install paths and the package UCM check are
