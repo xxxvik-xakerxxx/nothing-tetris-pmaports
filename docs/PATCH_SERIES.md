@@ -220,12 +220,14 @@ not a confirmed external RT1711H controller.
   should use normal commit-style patches with subject, rationale and sign-off.
 - Patch numbering is contiguous and grouped by hardware/function. Keep future
   additions in that style: one patch file per maintained hardware block.
-- Native display binds, starts Phoc and preserves USB/touch. Clean r155 visual
-  output was confirmed by the user after the frame-completion update removed
-  redraw flicker, but greeter idle blanking later left the panel showing a stale
-  fastboot frame while Linux and SSH were still running. Device r11 adds a
-  greetd-only display policy service so bring-up images keep the greeter display
-  awake for artifact debugging. A two-cycle DPMS live gate still fails after the
+- Native display binds, starts Phoc and preserves USB/touch on the last clean
+  r10 baseline. Clean r155 visual output was confirmed by the user after the
+  frame-completion update removed redraw flicker, but greeter idle blanking
+  later left the panel showing a stale fastboot frame while Linux and SSH were
+  still running. Device r11 added a greetd-only display policy service, but the
+  r11 clean flash did not return as fastboot or USB NCM after reboot. r12
+  therefore removes that service from the recovery image until the boot
+  regression is explained. A two-cycle DPMS live gate still fails after the
   first off/on transition with a DRM sequence discontinuity and a disabled
   connector post-state, so blank/unblank lifecycle remains a separate display
   bug. Do not mark it `Works` until display lifecycle passes on a CI artifact
