@@ -50,8 +50,9 @@ read-only boot-info access only; it is still not NMEA, GeoClue, satellite
 acquisition or a position fix.
 
 A later host check while the user reported fastboot found no fastboot device;
-the handset was still in Linux with USB NCM on `en4` and `172.16.42.1` SSH
-available. The baseline regression gate passed at
+the handset still exposed USB NCM on `en4`, but the last SSH password probe
+was rejected and fastboot continued waiting for a device. The baseline
+regression gate from the earlier controlled SSH session passed at
 `local/live-logs/20260912T175322Z-172.16.42.1-regression-gate`, and a full
 audit at `local/live-logs/20260912T175403Z-172.16.42.1-audit` still showed
 `device-nothing-tetris-8-r10`, kernel package `6.18-r156`, no failed units,
@@ -60,6 +61,17 @@ audit at `local/live-logs/20260912T175403Z-172.16.42.1-audit` still showed
 `/dev/gpsdl*` owners, and no CCCI/DPMAIF/modem modules. Do not repeat GNSS
 module load/unload on this boot; reboot before the next GNSS protocol or
 navigation experiment.
+
+`scripts/check-live-hardware-frontier-gate.sh` is prepared for the next clean
+install. In baseline mode it preserves the hard regression checks for USB,
+display, touch, Wi-Fi and Bluetooth while explicitly failing if GPU render,
+modem, camera or user sensor nodes appear without a subsystem-specific gate.
+This keeps GPS/GSM/sensor/camera/GPU promotion tied to evidence rather than to
+accidental module packaging. The same read-only gate passed on the current r10
+install at `local/live-logs/20260912T191835Z-172.16.42.1-hardware-frontier`:
+USB/display/touch/Wi-Fi-device/Bluetooth-device stayed present, while GPU
+render, ModemManager modem, camera/media and user sensor IIO nodes remained
+absent.
 
 ## Latest GPS reliability result
 

@@ -39,6 +39,13 @@ no GPU render node, no camera/media nodes, no GNSS device on the clean baseline
 and no ModemManager modem. Keep the next hardware experiments single-variable
 and reversible, with USB/SSH as the stop condition.
 
+The next clean-install cycle must also run
+`scripts/check-live-hardware-frontier-gate.sh 172.16.42.1 user 147147
+baseline` after the regression and greeter-display gates. It records one
+frontier snapshot for display/touch, radio, GNSS, modem/SIM, sensors, camera,
+GPU and audio, and it rejects accidental runtime publication of unvalidated
+GPU, modem, camera or sensor nodes until their own functional gates exist.
+
 ## Installed milestone (2026-09-10)
 
 Installed: integration commit aecf4f4, CI 34492172863, kernel 6.18-r153,

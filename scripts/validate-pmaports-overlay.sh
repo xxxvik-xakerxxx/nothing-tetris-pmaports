@@ -1087,13 +1087,16 @@ validate_live_gate_scripts() {
 	regression_gate="$repo_root/scripts/check-live-regression-gate.sh"
 	audio_gate="$repo_root/scripts/check-live-audio-gate.sh"
 	greeter_display_gate="$repo_root/scripts/check-live-greeter-display-gate.sh"
+	hardware_frontier_gate="$repo_root/scripts/check-live-hardware-frontier-gate.sh"
 
 	test -x "$regression_gate"
 	test -x "$audio_gate"
 	test -x "$greeter_display_gate"
+	test -x "$hardware_frontier_gate"
 	sh -n "$regression_gate"
 	sh -n "$audio_gate"
 	sh -n "$greeter_display_gate"
+	sh -n "$hardware_frontier_gate"
 	grep -Fq 'wlan0-operstate=' "$regression_gate"
 	grep -Fq 'wlan0-default-route' "$regression_gate"
 	grep -Fq 'ping -I wlan0' "$regression_gate"
@@ -1107,6 +1110,14 @@ validate_live_gate_scripts() {
 	grep -Fq 'greetd-config-write-ok' "$greeter_display_gate"
 	grep -Fq 'greeter idle-delay is not disabled' "$greeter_display_gate"
 	grep -Fq 'DSI connector is not enabled' "$greeter_display_gate"
+	grep -Fq 'run a GPU-specific gate before promotion' \
+		"$hardware_frontier_gate"
+	grep -Fq 'run a modem-specific gate before promotion' \
+		"$hardware_frontier_gate"
+	grep -Fq 'run a camera-specific gate before promotion' \
+		"$hardware_frontier_gate"
+	grep -Fq 'run a sensor-specific gate before promotion' \
+		"$hardware_frontier_gate"
 }
 
 validate_sums "$kernel_pkg"
