@@ -643,6 +643,7 @@ validate_ci_rootfs_module_checks() {
 	grep -Fq 'NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12' "$workflow"
 	grep -Fq 'sh patches/modem/check-candidates.sh upstream/device-modules' "$workflow"
 	grep -Fq 'sh patches/modem/check-ccmni.sh upstream/device-modules' "$workflow"
+	grep -Fq 'python3 scripts/check-sensor-list-reply.py upstream/device-modules' "$workflow"
 	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
 		grep -Fq 'if modinfo -F' "$workflow"; then
 		echo "CI must resolve target modules through the target rootfs/release" >&2

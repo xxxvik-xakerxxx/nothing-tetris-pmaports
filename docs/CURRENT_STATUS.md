@@ -73,10 +73,10 @@ UBSan. SCP, DVFS and sensorhub remain disabled.
 Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
 The original AND condition admitted stale replies. Eight predicate cases,
-65536 sequence pairs and two mutations pass. CI 34687187668 now runs this
-gate in validate-overlay and passed it. This is not a sensor startup fix:
+65536 sequence pairs and two mutations pass. `codex/hardware-integration`
+now carries and runs the same pinned-source gate in validate-overlay. This is not a sensor startup fix:
 SCP loader/DVFS, firmware/calibration ownership and samples are still unproven.
-The candidate is outside APKBUILD. Camera capture remains unproven.
+The candidate remains outside APKBUILD. Camera capture remains unproven.
 
 Camera/GNSS prereq branch codex/camera-clk-prereq-v2 is published through
 594dd75. It records the B4.1 GNSS startup/frame-sync/NMEA boundary and a

@@ -67,6 +67,8 @@ jobs:
         run: |
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
+      - name: Validate sensor reply gate
+        run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
