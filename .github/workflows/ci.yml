@@ -25,13 +25,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache build-base coreutils findutils git shellcheck
+        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
       - name: Validate MT6878 display route
         run: sh ./scripts/check-mt6878-display-route.sh
+      - name: Fetch sensor source
+        run: |
+          mkdir -p upstream/android_kernel_device_modules_6.1_nothing_mt6878
+          git -C upstream/android_kernel_device_modules_6.1_nothing_mt6878 init
+          git -C upstream/android_kernel_device_modules_6.1_nothing_mt6878 remote add origin \
+            https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git
+          git -C upstream/android_kernel_device_modules_6.1_nothing_mt6878 fetch --depth=1 origin \
+            ee2be53cb75670b548948636a0db1d1ff112bf12
+      - name: Validate sensor reply gate
+        run: python3 scripts/check-sensor-list-reply.py upstream/android_kernel_device_modules_6.1_nothing_mt6878
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
