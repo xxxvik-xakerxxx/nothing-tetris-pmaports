@@ -101,6 +101,19 @@ bytes. This passes the CI artifact gate for a future clean flash, not the
 runtime gate: SCP, DVFS, sensorhub and phone-side regression checks remain
 unproven.
 
+The same run published `nothing-tetris-radio-live` artifact 10299131075. The
+downloaded ZIP SHA256 is
+ca99ac7a545805b108ae2f6469986fd0c58cdedf8cc5f57a80313092a9e3353a.
+`scripts/verify-radio-live-artifact.sh` verified the payload SHA256
+52b64cb76040de8a649367704e9d6bd0e0d33b6db0c58d395a554141260bb6b1, manifest
+GitHub SHA, kernel `6.18.0`, connectivity source
+e96f60dc081ae3525ef43d4bcf0ee5ee97e53835, device-modules source
+ee2be53cb75670b548948636a0db1d1ff112bf12 and required U-Boot 60bcf22. The
+payload has 24 entries and is intentionally limited to Wi-Fi, Bluetooth and
+GNSS transport files; the verifier rejects modem, CCCI, DPMAIF, WWAN and
+navigation userspace entries. This keeps the next-scp candidate's live radio
+bundle bounded while SCP, DVFS and sensorhub remain disabled.
+
 Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
 The original AND condition admitted stale replies. Eight predicate cases,
