@@ -1,0 +1,21 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] net: mediatek: include RPS and RX queue definitions
+
+Compile-only candidate for Nothing B4.1 ee2be53cb75670b548948636a0db1d1ff112bf12.
+Linux 6.18 no longer provides these structures through netdevice.h.
+This does not validate RPS map update serialization or enable modem runtime.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/misc/mediatek/rps/rps_perf.c b/drivers/misc/mediatek/rps/rps_perf.c
+--- a/drivers/misc/mediatek/rps/rps_perf.c
++++ b/drivers/misc/mediatek/rps/rps_perf.c
+@@ -27,6 +27,8 @@
+ #include <linux/tcp.h>
+ #include <linux/ipv6.h>
+ #include <net/ipv6.h>
++#include <net/netdev_rx_queue.h>
++#include <net/rps.h>
+ #include <net/sch_generic.h>
+ #include <linux/skbuff.h>
+ #include <linux/module.h>

@@ -1,0 +1,24 @@
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c
+@@ -114,9 +114,19 @@ int skb_alloc_from_pool(
+ 
+ 	skb_reserve(*ppskb, NET_SKB_PAD);
+ 	skb_mark_for_recycle(*ppskb);
++	if (unlikely(pkt_buf_sz > skb_data_size(*ppskb))) {
++		CCCI_ERROR_LOG(-1, TAG,
++			"[%s] error: packet buffer exceeds page capacity (%u)\n",
++			__func__, pkt_buf_sz);
++		dev_kfree_skb_any(*ppskb);
++		(*ppskb) = NULL;
++		return LOW_MEMORY_SKB;
++	}
++
++	/* BAT uses this same capacity when unmapping at completion or teardown. */
+ 	(*p_base_addr) = dma_map_single(
+ 		dpmaif_ctl->dev, (*ppskb)->data,
+-		1500, DMA_FROM_DEVICE);
++		skb_data_size(*ppskb), DMA_FROM_DEVICE);
+ 
+ 	if (dma_mapping_error(dpmaif_ctl->dev, (*p_base_addr))) {
+ 		CCCI_ERROR_LOG(-1, TAG,
