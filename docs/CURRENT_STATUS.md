@@ -253,20 +253,25 @@ the native lifecycle; interrupt/DMA quiescence and pixel proof remain open.
 USB/SSH survived and the temporary module was removed.
 
 An unreferenced native POSTMASK helper candidate now exists under
-`patches/native-display/`. Eight host configurations and a negative mutation
-pass; its translation unit compiles for ARM64 against the prepared 6.18
-diagnostic tree. It adds MT6878-specific interrupt masking, shadow bypass
-and relay configuration, preserving generic behavior. It is not packaged
-or enabled. CRTC currently interleaves config/start, so activation also
-requires a reviewed configure-before-start order, DT/clock/mutex/routing
-integration and stopped-path live evidence. See the candidate README.
+`patches/native-display/` and is published in codex/hardware-integration
+commit 5d86361. Eight host configurations and a negative mutation pass; its
+translation unit compiles for ARM64 against the prepared 6.18 diagnostic tree.
+It adds MT6878-specific interrupt masking, shadow bypass and relay
+configuration, preserving generic behavior. It is not packaged or enabled.
+CRTC currently interleaves config/start, so activation also requires a reviewed
+configure-before-start order, DT/clock/mutex/routing integration and
+stopped-path live evidence. See the candidate README.
 
 Candidate 0002 now supplies the MT6878-only configure-all-before-start
 callback order. Reconstructed APKBUILD-order source passes 24 host traces,
 a negative interleaving mutation and ARM64 object compilation with local
 patched headers. It remains unreferenced; inherited engine quiescence,
 POSTMASK DT/routing/clock ownership and live lifecycle are not proven by
-the callback order test. Installed r153 is unchanged.
+the callback order test. Candidate 0003 adds the host-checked POSTMASK
+topology and rejects the incorrect PQ route mutation across 768 route-state
+comparisons. CI 34687864782 runs the DRM sequence unit test plus all three
+native-display prereq gates in validate-overlay and passed them. Installed
+r153 is unchanged.
 
 Current performance observation: the running Phoc session uses Pixman after
 EGL/Vulkan initialization failure, and only card0 exists (no render node).
