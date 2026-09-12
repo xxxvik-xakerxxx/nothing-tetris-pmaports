@@ -42,6 +42,8 @@ jobs:
             ee2be53cb75670b548948636a0db1d1ff112bf12
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/android_kernel_device_modules_6.1_nothing_mt6878
+      - name: Validate SCP region gate
+        run: python3 scripts/check-scp-region-host.py upstream/android_kernel_device_modules_6.1_nothing_mt6878
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD

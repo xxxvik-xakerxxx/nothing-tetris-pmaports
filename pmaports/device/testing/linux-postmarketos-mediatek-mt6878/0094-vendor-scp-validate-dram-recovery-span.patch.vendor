@@ -1,0 +1,62 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] soc: mediatek: scp: bound the complete DRAM recovery mapping
+
+In Nothing OS 4.1 device modules ee2be53cb75670b548948636a0db1d1ff112bf12,
+scp_recovery_init() maps ROUNDUP(ap_dram_size, 1024) * 4 whenever the
+signed DRAM size is positive, independently of scp_dram_region. Checking
+only the unrounded single region when that DT flag is set leaves both
+an unchecked mapping path and arithmetic/address wrap in the backup span.
+
+Validate every advertised DRAM range, including the four rounded banks,
+before recovery setup. Use checked u32 arithmetic to match the existing
+consumer and reject sizes that could also change its signed predicate.
+An absent DRAM range remains allowed only when DT does not require it.
+
+This is structural validation, not proof of carveout ownership or firmware
+authentication. Keep SCP/DVFS disabled. Apply after 0093; this candidate is
+deliberately not wired into APKBUILD pending integration review.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -2158,6 +2158,21 @@ static bool scp_region_range_valid(u32 start, u32 size)
+ 	return start && size && !check_add_overflow(start, size, &end);
+ }
+ 
++static bool scp_region_dram_valid(u32 start, u32 size)
++{
++	u32 rounded, span;
++
++	if (!size || check_add_overflow(size, 1023U, &rounded))
++		return false;
++	rounded &= ~1023U;
++
++	/* Recovery maps four 1 KiB-aligned banks, including backups. */
++	if (check_mul_overflow(rounded, 4U, &span))
++		return false;
++
++	return scp_region_range_valid(start, span);
++}
++
+ static int scp_region_info_validate(void)
+ {
+ 	if (scp_region_info_copy.struct_size < sizeof(scp_region_info_copy)) {
+@@ -2183,10 +2198,12 @@ static int scp_region_info_validate(void)
+ 		return -EINVAL;
+ 	}
+ 
+-	if (scpreg.scp_dram_region == 1 &&
+-	    !scp_region_range_valid(scp_region_info_copy.ap_dram_start,
+-				    scp_region_info_copy.ap_dram_size)) {
+-		pr_err("[SCP] invalid DRAM region-info\n");
++	if ((scpreg.scp_dram_region == 1 ||
++	     scp_region_info_copy.ap_dram_start ||
++	     scp_region_info_copy.ap_dram_size) &&
++	    !scp_region_dram_valid(scp_region_info_copy.ap_dram_start,
++				   scp_region_info_copy.ap_dram_size)) {
++		pr_err("[SCP] invalid DRAM recovery span in region-info\n");
+ 		return -EINVAL;
+ 	}
+ 

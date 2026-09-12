@@ -539,6 +539,7 @@ validate_sensor_transport() {
 	inventory_patch="$kernel_pkg/0045-vendor-sensorhub-runtime-inventory.patch.vendor"
 	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
 	region_patch="$kernel_pkg/0093-vendor-scp-validate-region-info.patch.vendor"
+	dram_region_patch="$kernel_pkg/0094-vendor-scp-validate-dram-recovery-span.patch.vendor"
 	workflow="$repo_root/.github/workflows/ci.yml"
 
 	for patch in \
@@ -588,6 +589,15 @@ validate_sensor_transport() {
 	grep -Fq 'platform_driver_unregister(&mtk_scpsys_device);' "$region_patch"
 	grep -Fq 'platform_driver_unregister(&mtk_scp_device);' "$region_patch"
 	grep -Fq 'return ret;' "$region_patch"
+	grep -Fq 'static bool scp_region_dram_valid(u32 start, u32 size)' \
+		"$dram_region_patch"
+	grep -Fq 'check_add_overflow(size, 1023U, &rounded)' \
+		"$dram_region_patch"
+	grep -Fq 'check_mul_overflow(rounded, 4U, &span)' \
+		"$dram_region_patch"
+	grep -Fq 'scp_region_info_copy.ap_dram_start ||' "$dram_region_patch"
+	grep -Fq 'invalid DRAM recovery span in region-info' \
+		"$dram_region_patch"
 
 	if grep -E '^[+]([[:space:]]*)compatible = "mediatek,scp(-dvfs)?"' \
 		"$kernel_pkg"/*.patch* >/dev/null 2>&1; then
@@ -640,6 +650,8 @@ validate_ci_rootfs_module_checks() {
 	grep -Fq 'if rootfs_modinfo -F depends "$radio_module"' "$workflow"
 	grep -Fq "'*dpmaif*.ko*'" "$workflow"
 	grep -Fq '|dpmaif|' "$workflow"
+	grep -Fq 'python3 scripts/check-scp-region-host.py upstream/android_kernel_device_modules_6.1_nothing_mt6878' \
+		"$workflow"
 	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
 		grep -Fq 'if modinfo -F' "$workflow"; then
 		echo "CI must resolve target modules through the target rootfs/release" >&2
