@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Host-only regression test. No device access or kernel tree mutations."""
 import os
+import hashlib
 from pathlib import Path
 import shlex
 import subprocess
@@ -13,6 +14,8 @@ PACKAGE = Path("pmaports/device/testing/linux-postmarketos-mediatek-mt6878")
 BASE = PACKAGE / "0049-media-i2c-imx882-identity.patch"
 FIXTURE = PACKAGE / "0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch"
 DRIVER = "drivers/media/i2c/imx882-identity.c"
+BASE_SHA256 = "855de12c6af5dd5f9abd8c4489ff15a91f98a7033b88a8cf90ecdb7979d45db1"
+FIXTURE_SHA256 = "1e8ef39635510e2164eceaf107308bb6d53066af9f3789d06e43fa4b5f2e759e"
 
 
 def run(*args, **kwargs):
@@ -22,6 +25,11 @@ def run(*args, **kwargs):
 def added_file(patch, path):
     section = patch.split(f"+++ b/{path}\n", 1)[1].split("\ndiff --git ", 1)[0]
     return "".join(line[1:] + "\n" for line in section.splitlines() if line.startswith("+"))
+
+
+def require_sha256(path, expected):
+    actual = hashlib.sha256((REPO / path).read_bytes()).hexdigest()
+    assert actual == expected, f"baseline drift: {path}"
 
 
 def power_source(source):
@@ -35,10 +43,8 @@ def power_source(source):
 
 
 def main():
-    for path in (BASE, FIXTURE):
-        authoritative = subprocess.check_output(
-            ["git", "show", f"aecf4f4:{path}"], cwd=REPO)
-        assert (REPO / path).read_bytes() == authoritative, f"baseline drift: {path}"
+    require_sha256(BASE, BASE_SHA256)
+    require_sha256(FIXTURE, FIXTURE_SHA256)
     fixture = (REPO / FIXTURE).read_text()
     assert "reset-gpios = <&pio 25 GPIO_ACTIVE_LOW>;" in fixture
     original = added_file((REPO / BASE).read_text(), DRIVER)
