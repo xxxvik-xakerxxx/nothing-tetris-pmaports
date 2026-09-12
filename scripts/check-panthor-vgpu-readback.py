@@ -12,6 +12,7 @@ import tempfile
 
 
 VENDOR_COMMIT = "ee2be53cb75670b548948636a0db1d1ff112bf12"
+KERNEL_COMMIT = "d84b264a54a37611f2f46bc19363cb9b41606205"
 DRIVER = "drivers/regulator/mt6315-regulator.c"
 HEADER = "include/linux/regulator/mt6315-regulator.h"
 
@@ -36,6 +37,14 @@ def register(source, name):
     return int(matches[0], 16)
 
 
+def file_text(tree, commit, path):
+    candidate = tree / path
+    if candidate.is_file():
+        return candidate.read_text()
+    return subprocess.check_output(
+        ["git", "-C", str(tree), "show", f"{commit}:{path}"], text=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kernel_tree", type=Path,
@@ -50,9 +59,10 @@ def main():
             ["git", "-C", str(args.device_modules), "show", f"{VENDOR_COMMIT}:{path}"],
             text=True)
 
-    upstream = (args.kernel_tree / DRIVER).read_text()
-    upstream_header = (args.kernel_tree / HEADER).read_text()
-    helpers = (args.kernel_tree / "drivers/regulator/helpers.c").read_text()
+    upstream = file_text(args.kernel_tree, KERNEL_COMMIT, DRIVER)
+    upstream_header = file_text(args.kernel_tree, KERNEL_COMMIT, HEADER)
+    helpers = file_text(args.kernel_tree, KERNEL_COMMIT,
+                        "drivers/regulator/helpers.c")
     downstream = vendor(DRIVER)
     downstream_header = vendor(HEADER)
     # Ensure the functions under test are the callbacks actually selected by each driver.
