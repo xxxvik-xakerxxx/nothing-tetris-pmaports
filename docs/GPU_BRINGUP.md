@@ -15,6 +15,13 @@ NothingOSS hardware inventory, and rejects any shipped GPU DT node or autoload
 rule. Full package CI builds and inspects `panthor.ko`. This adds no runtime
 integration.
 
+The VGPU readback prerequisite is enforced by
+`scripts/check-panthor-vgpu-readback.py`. It compiles the pinned Nothing OS 4.1
+MT6315 callback and the pinned mainline regulator helper into a host-only fake
+regmap test, then proves that an enabled VBUCK2 rail is read from DBG0 by the
+vendor path and ELR2 by mainline. This is source evidence for a blocker, not a
+runtime rail measurement or permission to register the GPU regulator provider.
+
 Candidate `c8f02ca` additionally stages a compile-only MT6363 VSRAM_CPUM
 descriptor and enables the existing MT6319-compatible regulator provider
 config. There is still no VSRAM/VGPU DT child or GPU consumer, so the candidate

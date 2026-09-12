@@ -69,6 +69,11 @@ jobs:
         run: |
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
+      - name: Validate Panthor VGPU readback gate
+        run: |
+          python3 scripts/check-panthor-vgpu-readback.py \
+            upstream/linux \
+            upstream/device-modules
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
       - name: Validate GNSS boot protocol gate

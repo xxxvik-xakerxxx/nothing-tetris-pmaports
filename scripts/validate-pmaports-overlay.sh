@@ -717,6 +717,7 @@ validate_compile_only_boundaries() {
 	mfg_rpc_patch="$repo_root/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch"
 	bc12_lifecycle_patch="$kernel_pkg/0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch"
 	panthor_gate="$repo_root/scripts/check-panthor-compile-only.sh"
+	panthor_vgpu_gate="$repo_root/scripts/check-panthor-vgpu-readback.py"
 	panthor_doc="$repo_root/docs/PANTHOR_COMPILE_ONLY.md"
 
 	for source in \
@@ -775,11 +776,20 @@ validate_compile_only_boundaries() {
 		"$panthor_gate"
 	grep -Fq 'the shipped patch series must not add an MT6878 GPU DT node' \
 		"$panthor_gate"
+	test -x "$panthor_vgpu_gate"
+	grep -Fq 'Host-only executable source comparison; success does NOT authorize GPU probe.' \
+		"$panthor_vgpu_gate"
+	grep -Fq 'BLOCKER: enabled-rail ELR2/DBG0 equivalence is unproven; no runtime approval.' \
+		"$panthor_vgpu_gate"
 	grep -Fq 'This adds no runtime' "$repo_root/docs/GPU_BRINGUP.md"
+	grep -Fq 'VGPU readback prerequisite is enforced by' \
+		"$repo_root/docs/GPU_BRINGUP.md"
 	grep -Fq 'The prerequisite deliberately adds no kernel patch or device-tree node.' \
 		"$panthor_doc"
 	grep -Fq 'missing compile-only Panthor module' "$workflow"
 	grep -Fq 'compile-only Panthor boundary gained a runtime GPU node' "$workflow"
+	grep -Fq 'Validate Panthor VGPU readback gate' "$workflow"
+	grep -Fq 'python3 scripts/check-panthor-vgpu-readback.py' "$workflow"
 
 	awk '
 		/patch -p1 -d "\$_connmods_dir"/ { target = "connmods"; next }
