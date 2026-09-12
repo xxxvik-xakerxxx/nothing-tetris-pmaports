@@ -1,6 +1,6 @@
 # Current Port Status
 
-Updated: 2026-09-11.
+Updated: 2026-09-12.
 
 ## Confirmed Display Work
 
@@ -19,6 +19,29 @@ five; a separate readiness-aware test completed ten cycles, with 30 DRM
 sequence steps per cycle and USB/SSH retained. Physical inspection following
 that latter test is still pending. Do not erase the initial failure or count
 DPMS as system suspend/resume.
+
+CI 34689206699 for `codex/display-main-promotion`
+63a21acf5161707b2c24d30bec93324b15d025be built a display-promotion image set.
+The install ZIP
+SHA256 was 18b54f76ee5457ec270303671cfba8dfa187189a685542fb3632bd144037785c.
+`scripts/verify-ci-install-artifacts.sh` verified the artifact manifest,
+`boot_image.itb`, `nothing-tetris-boot.img` and
+`nothing-tetris-root.sparse.img`, including the required U-Boot commit
+60bcf22fdc0a94526424db59fc7640298ea8f0dd and the fastboot mapping
+`nothing-tetris-boot.img -> super`, `nothing-tetris-root.sparse.img ->
+userdata`.
+
+The test phone was in U-Boot fastboot on slot `a`, but carried a newer local
+loader (`U-Boot 2026.07-rc1-gc931695bb963`). `lk_a` was restored to the
+verified 60bcf22 recovery build before flashing. `super` and `userdata` were
+then flashed from the CI artifact without partition-size errors. After reboot,
+fastboot disappeared and the host enumerated a postmarketOS USB gadget
+(`18d1:d001`, serial `postmarketOS`) with CDC-NCM descriptors. macOS did not
+create the NCM network interface while `IOConsoleLocked = Yes`; SSH to
+172.16.42.1 therefore remains pending and this clean-install cycle is not yet
+accepted as a runtime pass. Do not reclassify this as a kernel boot failure:
+USB descriptor evidence proves the device is past fastboot and exposing the
+expected gadget, but the host attach gate is still blocked.
 
 Status: **Partial**, not universal or complete display support. Cold repeats,
 full power lifecycle, alternate panels/SKUs, 120 Hz and accelerated rendering
@@ -46,9 +69,12 @@ CI run 34575901650 for 8f61a02d2e0d12584a11a111998c1adf4e89b040 completed
 successfully with kernel r154 / device 8-r10, as reported in the offline
 handoff. Those images have not been installed. The audio/greeter follow-up
 below is device 8-r11 and is not covered by that successful image build.
-Promotion is pending a new artifact check and clean-install/lifecycle checks. It has not yet
-been merged into main. Once gates pass, merge the
-implementation and this record together; do not leave confirmed changes
+CI run 34689206699 for 63a21acf5161707b2c24d30bec93324b15d025be
+completed and its image artifact was hash-verified and flashed as described
+above. Promotion is still pending post-boot SSH, USB regression transfer,
+visual/touch confirmation on that exact clean install, cold-repeat and
+lifecycle checks. It has not yet been merged into main. Once gates pass, merge
+the implementation and this record together; do not leave confirmed changes
 only on a feature branch or mark a subsystem Works from command exit status.
 
 ## Scoped Audio/Greeter Follow-Up
