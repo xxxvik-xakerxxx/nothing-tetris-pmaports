@@ -49,6 +49,18 @@ owners and preserved `usb0`. This confirms clean next-SCP GNSS transport and
 read-only boot-info access only; it is still not NMEA, GeoClue, satellite
 acquisition or a position fix.
 
+A later host check while the user reported fastboot found no fastboot device;
+the handset was still in Linux with USB NCM on `en4` and `172.16.42.1` SSH
+available. The baseline regression gate passed at
+`local/live-logs/20260912T175322Z-172.16.42.1-regression-gate`, and a full
+audit at `local/live-logs/20260912T175403Z-172.16.42.1-audit` still showed
+`device-nothing-tetris-8-r10`, kernel package `6.18-r156`, no failed units,
+`/dev/dri/card0` only, no camera/media/modem nodes, GNSS transport
+`active (exited)`, `/dev/gps_emi`, `/dev/gpsdl0` and `/dev/gpsdl1` present, no
+`/dev/gpsdl*` owners, and no CCCI/DPMAIF/modem modules. Do not repeat GNSS
+module load/unload on this boot; reboot before the next GNSS protocol or
+navigation experiment.
+
 ## Latest GPS reliability result
 
 Kernel package r155 from pmaports commit

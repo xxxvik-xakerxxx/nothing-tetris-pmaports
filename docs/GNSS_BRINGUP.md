@@ -20,6 +20,16 @@ This confirms the clean next-SCP transport/read-only boot-info path only. It
 does not submit the DSP RAM-code fragments, start MNL, emit NMEA, integrate
 GeoClue, acquire satellites or produce a timed position fix.
 
+Later on the same installed image, a host-side check during an apparent
+fastboot report found no fastboot device; Linux USB NCM and SSH were still
+alive. The regression gate passed at
+`local/live-logs/20260912T175322Z-172.16.42.1-regression-gate`. The follow-up
+audit at `local/live-logs/20260912T175403Z-172.16.42.1-audit` showed GNSS
+transport `active (exited)`, `/dev/gps_emi`, `/dev/gpsdl0` and `/dev/gpsdl1`
+present, no `/dev/gpsdl*` owners and no CCCI/DPMAIF/modem modules. Treat this
+as a no-change state check only; the next GNSS protocol or navigation
+experiment requires a reboot rather than a module reload on this boot.
+
 ## Current boundary
 
 The currently verified kernel package `6.18-r155` uses the stock-derived Tetris
