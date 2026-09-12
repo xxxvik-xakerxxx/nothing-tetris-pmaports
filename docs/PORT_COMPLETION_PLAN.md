@@ -24,6 +24,12 @@ the subsystem evidence documents track the exact boundaries.
 
 ## Clean next-SCP baseline (2026-09-12)
 
+The next r11 clean image from CI run `34709738785` verified locally and both
+fastboot writes completed, but the phone did not return as fastboot or USB NCM
+after reboot. Treat r11 as a boot-regression candidate until physical recovery
+and first-failure capture prove otherwise. Keep the previously installed r10
+result below as the last clean baseline.
+
 The test handset was clean-flashed from verified CI run `34692383850`,
 artifact `10297439743`, commit
 `3a016d36153d504f6b1002d29120bd84a8183533`. `super` and `userdata` were

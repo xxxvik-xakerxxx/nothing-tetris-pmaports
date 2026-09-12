@@ -4,6 +4,26 @@ Updated: 2026-09-12.
 
 ## Latest clean next-SCP installation
 
+CI run `34709738785` for commit
+`2e4f53a7da958df422dea4fadb4955ef7ee47eae` completed successfully on
+2026-09-12 and published `nothing-tetris-images` artifact `10304481221`.
+The downloaded ZIP SHA256 matched GitHub's artifact digest:
+`7a2ec183a41f2540e65441e16b7a8f1535f5b5cd1ccd940fa55ab7c7a124f586`.
+`scripts/verify-ci-install-artifacts.sh` passed for `boot_image.itb`,
+`nothing-tetris-boot.img` and `nothing-tetris-root.sparse.img`; the manifest
+reports kernel `6.18.0`, required U-Boot
+`60bcf22fdc0a94526424db59fc7640298ea8f0dd`, and fastboot mapping
+`nothing-tetris-boot.img -> super`, `nothing-tetris-root.sparse.img ->
+userdata`.
+
+The phone entered `tetris-uboot` fastboot on slot `a`. `super` flashed
+successfully from the verified boot image and `userdata` flashed successfully
+from the verified root sparse image. `fastboot reboot` then dropped USB while
+reading final status, and after repeated waits the host saw neither fastboot nor
+USB NCM/SSH. This is a clean-install boot regression for the r11 candidate until
+the handset is physically recovered and the first boot failure is captured. Do
+not promote this r11 candidate to `main`.
+
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
 `3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP
