@@ -58,10 +58,12 @@ objects:
 
 The validator checks all three package pins, vendor MMIO/IRQ/supply evidence,
 the module config, absence of a shipped GPU DT node and autoload rule, and a
-targeted linked `panthor.o` build. This avoids requiring a full-kernel
-`Module.symvers` for the cheap gate. The package CI independently builds and
-checks `panthor.ko`, the shipped DTB, MFG RPC disabled state, and loader
-absence.
+targeted linked `panthor.o` build. It also rejects drift that would remove the
+MFG0/MFG RPC `KEEP_DEFAULT_OFF` boundary, enable the dormant MFG RPC provider,
+or add a runtime `vsram-cpum` DT child before a read-only rail observation gate
+exists. This avoids requiring a full-kernel `Module.symvers` for the cheap
+gate. The package CI independently builds and checks `panthor.ko`, the shipped
+DTB, MFG RPC disabled state, and loader absence.
 
 ## Next gate
 

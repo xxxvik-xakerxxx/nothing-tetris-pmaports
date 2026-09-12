@@ -16,6 +16,9 @@ repo_dir=$(dirname "$script_dir")
 kernel_pkg="$repo_dir/pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
 kernel_config="$kernel_pkg/config-postmarketos-mediatek-mt6878.aarch64"
 device_pkg="$repo_dir/pmaports/device/testing/device-nothing-tetris"
+mfg0_patch="$kernel_pkg/0035-pmdomain-mediatek-mt6878-mfg0-data.patch"
+mfg_rpc_patch="$kernel_pkg/0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch"
+gpu_rails_patch="$kernel_pkg/0030-regulator-mediatek-mt6878-gpu-rails.patch"
 kernel_commit=d84b264a54a37611f2f46bc19363cb9b41606205
 devmods_commit=ee2be53cb75670b548948636a0db1d1ff112bf12
 modules_commit=e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
@@ -57,7 +60,22 @@ if grep -REl '^\+[[:space:]]*(gpu|mali):?[[:space:]]+[^[:space:]]*@13000000[[:sp
 	exit 1
 fi
 
-make -C "$kernel_tree" ARCH=arm64 LLVM=1 \
+grep -Fq '[MT6878_POWER_DOMAIN_MFG0_SHUTDOWN]' "$mfg0_patch"
+grep -Fq 'MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_SRAM_ISO |' "$mfg0_patch"
+grep -Fq 'MT6878_MFG_DOMAIN("mfg1", 0x1070)' "$mfg_rpc_patch"
+grep -Fq 'MTK_SCPD_KEEP_DEFAULT_OFF | MTK_SCPD_STATUS_IN_CTL' "$mfg_rpc_patch"
+grep -Fq '+			status = "disabled";' "$mfg_rpc_patch"
+grep -Fq '+				status = "disabled";' "$mfg_rpc_patch"
+grep -Fq 'of_get_child_by_name(pdev->dev.of_node,' "$gpu_rails_patch"
+grep -Fq 'continue;' "$gpu_rails_patch"
+
+if grep -REl '^\+[[:space:]]*(mt6363_)?vsram_cpum:[[:space:]]+vsram-cpum[[:space:]]*\{' \
+	"$kernel_pkg"/*.patch >/dev/null 2>&1; then
+	echo "VSRAM_CPUM must not gain a runtime DT regulator child yet" >&2
+	exit 1
+fi
+
+"${MAKE:-make}" -C "$kernel_tree" ARCH=arm64 LLVM=1 \
 	M=drivers/gpu/drm/panthor panthor.o
 test -s "$kernel_tree/drivers/gpu/drm/panthor/panthor.o"
 
