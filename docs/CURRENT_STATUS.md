@@ -24,6 +24,16 @@ USB NCM/SSH. This is a clean-install boot regression for the r11 candidate until
 the handset is physically recovered and the first boot failure is captured. Do
 not promote this r11 candidate to `main`.
 
+Recovery candidate r12 is prepared after the r11 failure. It keeps the current
+display route and read-only frontier gates, but removes the new greeter display
+user-service from packaging/autostart and demotes the sensor-list predicate
+patch back to a host-validated candidate outside the kernel package. Kernel
+`pkgrel=158` therefore rebuilds the r10 runtime sensor inputs without packaged
+`1201`, and device `pkgrel=12` keeps the greetd ownership repair without
+shipping `nothing-tetris-greeter-display-policy`. Local overlay validation and
+the host sensor predicate gate pass; phone-side proof still requires physical
+recovery and a clean flash.
+
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
 `3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP
@@ -175,14 +185,15 @@ The SCP DRAM recovery-span prerequisite is packaged on
 `codex/hardware-integration-next-scp`: `0094` validates the complete four-bank
 rounded recovery mapping before SCP setup. Its exact-source host gate
 reproduced the previous defect (18 DRAM cases, 10 failures) and the candidate
-passed all 18 cases under UBSan. The branch now also packages
-`1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor`, which
-changes the sensor-list reply correlation guard from all-fields-differ to
-any-field-differs. The pinned-source gate passed after packaging:
+passed all 18 cases under UBSan. The branch also carries the demoted
+host-side sensor-list candidate in `patches/sensors/`, which changes the
+reply correlation guard from all-fields-differ to any-field-differs. The
+pinned-source gate passed:
 the original source reproduced six false accepts, the packaged candidate
 rejects all mismatches across eight combinations, all 65536 sequence pairs
-including 255/0, and both single-operator mutations. SCP, DVFS and sensorhub
-remain disabled; no sensor sample or IIO publication is claimed.
+including 255/0, and both single-operator mutations. After the r11 clean-boot
+regression it is not packaged as `1201`; SCP, DVFS and sensorhub remain
+disabled, and no sensor sample or IIO publication is claimed.
 
 CI 34692383850 for `codex/hardware-integration-next-scp`
 3a016d36153d504f6b1002d29120bd84a8183533 completed successfully and published

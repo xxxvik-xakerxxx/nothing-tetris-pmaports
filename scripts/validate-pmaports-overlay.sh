@@ -190,8 +190,6 @@ validate_power_and_audio_config() {
 	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
 	greetd_pulse_client="$device_pkg/greetd-pulse-client.conf"
 	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
-	greeter_display_policy="$device_pkg/nothing-tetris-greeter-display-policy"
-	greeter_display_policy_unit="$device_pkg/nothing-tetris-greeter-display-policy.service"
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 	audio_ucm_validator="$device_pkg/validate-audio-ucm"
@@ -284,13 +282,7 @@ validate_power_and_audio_config() {
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'check_contains "deferred mono speaker remap"' \
 		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'check_contains "greeter display policy user preset"' \
-		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'check_contains "greeter display policy user guard"' \
-		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'check_contains "greeter idle disabled"' \
-		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'check_contains "greeter sleep disabled"' \
+	grep -Fq 'demoted greeter display policy must not ship in recovery image' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
@@ -308,21 +300,11 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/dconf' \
 		"$device_pkg/APKBUILD"
-	grep -Fq 'usr/libexec/nothing-tetris-greeter-display-policy' \
-		"$device_pkg/APKBUILD"
-	grep -Fq 'usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service' \
-		"$device_pkg/APKBUILD"
-	grep -Fxq 'enable nothing-tetris-greeter-display-policy.service' \
-		"$audio_user_preset"
-	grep -Fxq 'ConditionUser=greetd' "$greeter_display_policy_unit"
-	grep -Fxq 'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
-		"$greeter_display_policy_unit"
-	grep -Fq 'gsettings set org.gnome.desktop.session idle-delay 0' \
-		"$greeter_display_policy"
-	grep -Fq 'gsettings set org.gnome.settings-daemon.plugins.power idle-dim false' \
-		"$greeter_display_policy"
-	grep -Fq 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing' \
-		"$greeter_display_policy"
+	if grep -Fq 'nothing-tetris-greeter-display-policy' \
+			"$device_pkg/APKBUILD" "$audio_user_preset"; then
+		echo "greeter display policy must stay out of the recovery image until r11 boot regression is explained" >&2
+		return 1
+	fi
 	grep -Fxq 'install="$pkgname.post-install"' "$device_pkg/APKBUILD"
 	grep -Fxq '	greetd' "$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config' "$device_pkg/APKBUILD"
@@ -351,8 +333,6 @@ validate_power_and_audio_config() {
 	}
 	sh -n "$device_pkg/device-nothing-tetris.post-install"
 	grep -Fq 'greeter dconf directory' \
-		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'greeter display policy user preset' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'greeter PulseAudio autostart disabled' \
 		"$repo_root/.github/workflows/ci.yml"
@@ -705,6 +685,10 @@ validate_ci_rootfs_module_checks() {
 	grep -Fq 'python3 scripts/check-sensor-list-reply.py upstream/device-modules' "$workflow"
 	grep -Fq 'python3 ci/test-greetd-rootfs.py' "$workflow"
 	grep -Fq 'python3 /work/ci/check-greetd-rootfs.py "$rootfs"' "$workflow"
+	if grep -Fq '1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor' "$kernel_apkbuild"; then
+		echo "sensor-list runtime packaging is demoted until r11 clean-boot regression is explained" >&2
+		return 1
+	fi
 	if grep -Fq 'test "$(modinfo -F' "$workflow" ||
 		grep -Fq 'if modinfo -F' "$workflow"; then
 		echo "CI must resolve target modules through the target rootfs/release" >&2

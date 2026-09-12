@@ -44,8 +44,8 @@ The source and package dependency chain is:
 All six modules are built and installed under
 `extra/mediatek-sensors/` by the kernel package.  None is in `modules-initfs`,
 a modules-load file, a device preset or an automatic service.  The packaged
-`1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor` only tightens
-sensor-list reply correlation before any inventory write-position is consumed;
+`patches/sensors/0001-sensor-list-reject-mismatched-reply.patch.vendor` only
+tightens sensor-list reply correlation before any inventory write-position is consumed;
 it does not start SCP or publish sensors.  The normal kernel also builds
 `inv-icm42600-i2c.ko` and `ltr501.ko`, but they have no matching DT devices and
 are only historical candidates, not the active Tetris chain.  No model-specific
@@ -137,7 +137,8 @@ The integrated Linux-side SCP region gate on
 `codex/hardware-integration-next-scp` packages `0094` after `0093`. Its
 exact-source host harness reproduces the pre-fix defect across 18 DRAM cases
 with 10 failures, then passes all 18 cases under UBSan after the patch. The
-same branch now packages the sensor-list reply predicate fix as `1201`; the
+same branch keeps the sensor-list reply predicate fix as a demoted host-tested
+candidate after the r11 clean-boot regression; the
 host gate proves the old source accepts six mismatched correlation cases while
 the packaged patch rejects all eight match/mismatch combinations correctly,
 checks all 65536 sequence pairs and rejects both single-operator regressions.

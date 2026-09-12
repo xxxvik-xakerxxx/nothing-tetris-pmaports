@@ -30,6 +30,12 @@ after reboot. Treat r11 as a boot-regression candidate until physical recovery
 and first-failure capture prove otherwise. Keep the previously installed r10
 result below as the last clean baseline.
 
+r12 is the recovery candidate: it removes r11's automatic greeter display
+policy from the device package and removes the packaged sensor-list `1201`
+kernel patch while keeping both as documented, host-tested candidates. Its job
+is to regain the r10 clean-boot/USB baseline first; only after that can display
+idle policy and sensor-list packaging be reintroduced one at a time.
+
 The test handset was clean-flashed from verified CI run `34692383850`,
 artifact `10297439743`, commit
 `3a016d36153d504f6b1002d29120bd84a8183533`. `super` and `userdata` were

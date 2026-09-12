@@ -53,16 +53,12 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     kernel = root / "pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
-    candidate = kernel / "1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor"
+    candidate = root / "patches/sensors/0001-sensor-list-reject-mismatched-reply.patch.vendor"
     original = subprocess.check_output(
         ["git", "-C", str(args.vendor_repo), "show", f"{COMMIT}:{SOURCE}"], text=True)
     require(f'_devmods_commit="{COMMIT}"' in (kernel / "APKBUILD").read_text(),
             "package vendor pin changed")
-    require("1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor" in
-            (kernel / "APKBUILD").read_text(), "sensor-list patch is not packaged")
     for path in kernel.glob("*.patch*"):
-        if path == candidate:
-            continue
         require(f"+++ b/{SOURCE}".encode() not in path.read_bytes(),
                 f"existing patch now changes sensor_list.c: {path.name}")
 
