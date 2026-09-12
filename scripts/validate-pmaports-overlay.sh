@@ -1086,11 +1086,14 @@ validate_connectivity_build() {
 validate_live_gate_scripts() {
 	regression_gate="$repo_root/scripts/check-live-regression-gate.sh"
 	audio_gate="$repo_root/scripts/check-live-audio-gate.sh"
+	greeter_display_gate="$repo_root/scripts/check-live-greeter-display-gate.sh"
 
 	test -x "$regression_gate"
 	test -x "$audio_gate"
+	test -x "$greeter_display_gate"
 	sh -n "$regression_gate"
 	sh -n "$audio_gate"
+	sh -n "$greeter_display_gate"
 	grep -Fq 'wlan0-operstate=' "$regression_gate"
 	grep -Fq 'wlan0-default-route' "$regression_gate"
 	grep -Fq 'ping -I wlan0' "$regression_gate"
@@ -1099,6 +1102,11 @@ validate_live_gate_scripts() {
 	grep -Fq 'arecord -D hw:0,13' "$audio_gate"
 	grep -Fq 'greetd owns a PulseAudio process' "$audio_gate"
 	grep -Fq '/var/lib/greetd/.config/dconf' "$audio_gate"
+	grep -Fq 'nothing-tetris-greeter-display-policy.service' \
+		"$greeter_display_gate"
+	grep -Fq 'greetd-config-write-ok' "$greeter_display_gate"
+	grep -Fq 'greeter idle-delay is not disabled' "$greeter_display_gate"
+	grep -Fq 'DSI connector is not enabled' "$greeter_display_gate"
 }
 
 validate_sums "$kernel_pkg"
