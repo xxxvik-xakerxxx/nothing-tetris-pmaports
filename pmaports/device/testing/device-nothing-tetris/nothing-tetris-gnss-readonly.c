@@ -71,8 +71,10 @@ int main(int argc, char **argv)
 
 	alarm(GPSDL_DEADLINE_SECONDS);
 	fd = open(GPSDL_DEVICE, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-	if (fd < 0)
+	if (fd < 0) {
+		alarm(0);
 		return fail_errno("open " GPSDL_DEVICE);
+	}
 
 	status = ioctl(fd, GPSDL_V051_IOC_QUERY_STATUS, 0UL);
 	if (status < 0) {
@@ -83,17 +85,27 @@ int main(int argc, char **argv)
 		fail_errno("get DSP boot-info ioctl");
 		goto fail;
 	}
+	if (bootup.frag_num > GPSDL_MAX_FRAGMENTS) {
+		fprintf(stderr,
+			"nothing-tetris-gnss-readonly: invalid fragment count\n");
+		goto fail;
+	}
 	if (ioctl(fd, GPSDL_V051_IOC_GET_BOOT_TIME, &boot_time) != 0) {
 		fail_errno("get boot-time ioctl");
 		goto fail;
 	}
 
-	if (bootup.frag_num > GPSDL_MAX_FRAGMENTS ||
-		boot_time.now_time <= 0 || boot_time.arch_counter <= 0) {
+	if (boot_time.now_time <= 0 || boot_time.arch_counter <= 0) {
 		fprintf(stderr,
 			"nothing-tetris-gnss-readonly: invalid read-only response\n");
 		goto fail;
 	}
+
+	if (close(fd) != 0) {
+		alarm(0);
+		return fail_errno("close " GPSDL_DEVICE);
+	}
+	alarm(0);
 
 	printf("status=%d\n", status);
 	printf("code_size=%u\n", bootup.code_size);
@@ -102,13 +114,11 @@ int main(int argc, char **argv)
 	printf("arch_counter=%lld\n", (long long)boot_time.arch_counter);
 	printf("cipher_key=redacted\n");
 
-	if (close(fd) != 0)
-		return fail_errno("close " GPSDL_DEVICE);
-	alarm(0);
 	return EXIT_SUCCESS;
 
 fail:
 	if (close(fd) != 0)
 		fail_errno("close " GPSDL_DEVICE);
+	alarm(0);
 	return EXIT_FAILURE;
 }

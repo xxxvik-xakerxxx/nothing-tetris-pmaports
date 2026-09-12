@@ -61,6 +61,13 @@ clean reboot; do not unload conninfra or retry in the same boot.
 archives the exact B4.1 GNSS tree, applies compatibility patch `1002` followed
 by UAPI patch `1003`, compiles and runs the ABI test, compares the kernel and
 device-package UAPI byte for byte, and host-compiles the manual diagnostic.
+The gate also links the diagnostic into a mocked syscall harness with no route
+to the real device node. Nineteen scenarios cover the valid path, zero
+fragments, argument rejection, missing/non-character/symlink nodes,
+open/ioctl/close failures, excessive fragment counts and invalid boot clocks.
+After an alarm is armed, every exit path cancels it; on the successful path
+the descriptor is closed before any diagnostic output is printed. The harness
+also fails if the raw cipher-key value reaches stdout or stderr.
 
 The repository validator additionally rejects extra UAPI commands, link1,
 device reads/writes, write-capable opens, missing deadlines, service/preset
