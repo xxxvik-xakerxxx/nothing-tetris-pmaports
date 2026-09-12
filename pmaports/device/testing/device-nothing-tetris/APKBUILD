@@ -89,12 +89,23 @@ check() {
 		"$srcdir"/nothing-tetris-gnss-readonly.c; then
 		return 1
 	fi
+	if grep -Eq 'gpsdl1|O_RDWR|O_WRONLY' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c; then
+		return 1
+	fi
 	test "$(grep -c 'ioctl(fd, GPSDL_V051_IOC_' \
 		"$srcdir"/nothing-tetris-gnss-readonly.c)" -eq 3
 	grep -Fq '#define GPSDL_DEVICE "/dev/gpsdl0"' \
 		"$srcdir"/nothing-tetris-gnss-readonly.c
 	grep -Fq '#define GPSDL_DEADLINE_SECONDS 8U' \
 		"$srcdir"/nothing-tetris-gnss-readonly.c
+	grep -Fq 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW' \
+		"$srcdir"/nothing-tetris-gnss-readonly.c
+	if grep -Fl 'nothing-tetris-gnss-readonly' \
+			"$srcdir"/*.service "$srcdir"/*.preset \
+			"$srcdir"/*.conf 2>/dev/null | grep -q .; then
+		return 1
+	fi
 	sh -n "$srcdir"/nothing-tetris-usb-sleep
 	sh -n "$srcdir"/nothing-tetris-wifi-nvram-extract
 
