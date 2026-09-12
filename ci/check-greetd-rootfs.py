@@ -6,7 +6,8 @@ import stat
 import sys
 
 HOME = '/var/lib/greetd'
-DCONF = HOME + '/.config/dconf'
+CONFIG = HOME + '/.config'
+DCONF = CONFIG + '/dconf'
 
 
 def identity(passwd, group):
@@ -29,7 +30,7 @@ def check_metadata(root, uid, gid):
         if not stat.S_ISDIR(info.st_mode):
             raise ValueError(f'{path}: expected real directory, not symlink')
         mode = stat.S_IMODE(info.st_mode)
-        if path == DCONF:
+        if path in (CONFIG, DCONF):
             if info.st_uid != uid or mode != 0o700:
                 raise ValueError(f'{path}: actual {mode:o}:{info.st_uid}:{info.st_gid}; '
                                  f'expected 700 owner UID {uid}; do not rely on tmpfiles repair')
@@ -50,7 +51,8 @@ def check_access(root, uid, gid):
             os.setgroups([gid])
             os.setgid(gid)
             os.setuid(uid)
-            os._exit(0 if os.access(DCONF, os.W_OK | os.X_OK) else 1)
+            ok = os.access(CONFIG, os.W_OK | os.X_OK) and os.access(DCONF, os.W_OK | os.X_OK)
+            os._exit(0 if ok else 1)
         except OSError as error:
             os.write(2, f'greetd access probe: {error}\n'.encode())
             os._exit(2)
@@ -63,7 +65,7 @@ def check(root):
     uid, gid = identity((root / 'etc/passwd').read_text(), (root / 'etc/group').read_text())
     check_metadata(root, uid, gid)
     check_access(root, uid, gid)
-    print(f'PASS: pre-tmpfiles dconf owner/write/search access for greetd {uid}:{gid}; '
+    print(f'PASS: pre-tmpfiles .config/dconf owner/write/search access for greetd {uid}:{gid}; '
           'directory GID is immaterial at mode 0700')
 
 

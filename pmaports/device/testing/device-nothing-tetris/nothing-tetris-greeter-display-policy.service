@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep the Nothing Tetris greeter display awake during bring-up
+ConditionUser=greetd
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy
+
+[Install]
+WantedBy=default.target

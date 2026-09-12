@@ -29,10 +29,13 @@ class GateTests(unittest.TestCase):
             with self.subTest(passwd=passwd), self.assertRaises(ValueError):
                 gate.identity(passwd, group)
 
-    def metadata(self, uid=113, owner=113, group=113, mode=0o700, parent=(0o750, 113, 119)):
+    def metadata(self, uid=113, owner=113, group=113, mode=0o700,
+                 config=(0o700, 113, 113), parent=(0o750, 113, 119)):
         def info(path):
             if str(path).endswith('/dconf'):
                 values = mode, owner, group
+            elif str(path).endswith('/.config'):
+                values = config
             elif str(path).endswith('/greetd'):
                 values = parent
             else:
@@ -48,16 +51,20 @@ class GateTests(unittest.TestCase):
         self.metadata(group=119)
 
     def test_dynamic_owner_usable(self):
-        self.metadata(uid=117, owner=117, parent=(0o750, 117, 119))
+        self.metadata(uid=117, owner=117, config=(0o700, 117, 113), parent=(0o750, 117, 119))
 
     def test_wrong_owner_rejected(self):
         with self.assertRaisesRegex(ValueError, 'owner UID 117'):
             self.metadata(uid=117)
+        with self.assertRaisesRegex(ValueError, 'owner UID 117'):
+            self.metadata(uid=117, owner=117)
 
     def test_modes_rejected(self):
         for mode in (0o500, 0o600, 0o750, 0o770, 0o777):
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 self.metadata(mode=mode)
+            with self.subTest(config_mode=mode), self.assertRaises(ValueError):
+                self.metadata(config=(mode, 113, 113))
 
     def test_unsearchable_parent(self):
         with self.assertRaisesRegex(ValueError, 'not searchable'):
@@ -75,6 +82,8 @@ class GateTests(unittest.TestCase):
             target.mkdir(parents=True)
             os.chown(root / 'var/lib/greetd', 113, 119)
             (root / 'var/lib/greetd').chmod(0o750)
+            os.chown(root / 'var/lib/greetd/.config', 113, 113)
+            (root / 'var/lib/greetd/.config').chmod(0o700)
             os.chown(target, 113, 113)
             target.chmod(0o700)
             gate.check_metadata(root, 113, 119)

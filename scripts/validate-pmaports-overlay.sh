@@ -190,6 +190,8 @@ validate_power_and_audio_config() {
 	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
 	greetd_pulse_client="$device_pkg/greetd-pulse-client.conf"
 	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
+	greeter_display_policy="$device_pkg/nothing-tetris-greeter-display-policy"
+	greeter_display_policy_unit="$device_pkg/nothing-tetris-greeter-display-policy.service"
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 	audio_ucm_validator="$device_pkg/validate-audio-ucm"
@@ -282,6 +284,14 @@ validate_power_and_audio_config() {
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'check_contains "deferred mono speaker remap"' \
 		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "greeter display policy user preset"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "greeter display policy user guard"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "greeter idle disabled"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "greeter sleep disabled"' \
+		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
 	grep -Fxq 'After=graphical-session-pre.target' "$audio_policy_unit"
@@ -298,8 +308,24 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/dconf' \
 		"$device_pkg/APKBUILD"
+	grep -Fq 'usr/libexec/nothing-tetris-greeter-display-policy' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service' \
+		"$device_pkg/APKBUILD"
+	grep -Fxq 'enable nothing-tetris-greeter-display-policy.service' \
+		"$audio_user_preset"
+	grep -Fxq 'ConditionUser=greetd' "$greeter_display_policy_unit"
+	grep -Fxq 'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
+		"$greeter_display_policy_unit"
+	grep -Fq 'gsettings set org.gnome.desktop.session idle-delay 0' \
+		"$greeter_display_policy"
+	grep -Fq 'gsettings set org.gnome.settings-daemon.plugins.power idle-dim false' \
+		"$greeter_display_policy"
+	grep -Fq 'gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type nothing' \
+		"$greeter_display_policy"
 	grep -Fxq 'install="$pkgname.post-install"' "$device_pkg/APKBUILD"
 	grep -Fxq '	greetd' "$device_pkg/APKBUILD"
+	grep -Fq 'var/lib/greetd/.config' "$device_pkg/APKBUILD"
 	grep -Fq 'install -d -m 0700' "$device_pkg/APKBUILD"
 	if grep -Fq 'install -d -o 113 -g 113 -m 0700' \
 			"$device_pkg/APKBUILD"; then
@@ -312,10 +338,21 @@ validate_power_and_audio_config() {
 		"$device_pkg/nothing-tetris-greetd.conf"
 	grep -Fq 'identity=$(awk -F:' \
 		"$device_pkg/device-nothing-tetris.post-install"
-	grep -Fq 'chown "$identity" "$dconf"' \
+	grep -Fq 'config=$root/var/lib/greetd/.config' \
 		"$device_pkg/device-nothing-tetris.post-install"
+	grep -Fq 'install -d -m 0700 "$config" "$dconf"' \
+		"$device_pkg/device-nothing-tetris.post-install"
+	grep -Fq 'chown -R "$identity" "$config"' \
+		"$device_pkg/device-nothing-tetris.post-install"
+	grep -Eq 'chown "\$identity" "\$(config|dconf)"|chown "\$identity" "\$config" "\$dconf"|chown "\$identity" "\$dconf"' \
+		"$device_pkg/device-nothing-tetris.post-install" && {
+		echo "greeter config owner repair must cover .config and dconf together" >&2
+		return 1
+	}
 	sh -n "$device_pkg/device-nothing-tetris.post-install"
 	grep -Fq 'greeter dconf directory' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'greeter display policy user preset' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'greeter PulseAudio autostart disabled' \
 		"$repo_root/.github/workflows/ci.yml"
