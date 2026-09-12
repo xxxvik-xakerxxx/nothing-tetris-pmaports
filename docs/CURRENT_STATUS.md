@@ -53,23 +53,26 @@ the same install-time owner repair as device r10.
 
 ## Modem and sensor prerequisites
 
-The modem producer audit and read-only C partition/member locator are saved
-on codex/scp-region-prereq through 44e233c. Exact B4.1 LK selects the modem
-platform table, then the active slot suffix; the md1img table is a bypassed
-fallback. Real B4.1 `modem.img` container validation is recorded, and the
-locator passes its ASan/UBSan fixture set. U-Boot CCCI diagnostic branch
+The modem producer audit, read-only C partition/member locator and bounded
+stock-LK kernel-chain feasibility audit are now integrated on
+`codex/hardware-integration-next-scp` through ccef88b. Exact B4.1 LK selects
+the modem platform table, then the active slot suffix; the md1img table is a
+bypassed fallback. Real B4.1 `modem.img` container validation finds md1rom,
+md1dsp and md1drdi with unchanged-input ASan/UBSan coverage. The bootchain
+audit passes two LK input hashes, 11 bounded instruction windows, 15
+instruction checks and negative mutations. U-Boot CCCI diagnostic branch
 codex/ccci-prev-fdt-diagnostic at 1b8c954dba accepts the stock 48-byte v3
 descriptor only when the 16-byte extension tail is zero; CI 34686210064
 passed and the downloaded LK artifact's SHA256SUMS verified locally. This
-removes one handoff parser mismatch, but no authentication backend, modem
-memory/reset ownership, DT runtime, CCCI/DPMAIF module, SIM or network
-functionality is implemented.
+removes one handoff parser mismatch and records stock LK feasibility limits,
+but no authentication backend, modem memory/reset ownership, DT runtime,
+CCCI/DPMAIF module, SIM or network functionality is implemented.
 
-The SCP DRAM recovery-span prerequisite in codex/scp-region-prereq commit
-44e233c validates the complete four-bank rounded recovery mapping before SCP
-setup. Its exact-source host gate reproduced the previous defect
-(18 DRAM cases, 10 failures) and the candidate passed all 18 cases under
-UBSan. SCP, DVFS and sensorhub remain disabled.
+The SCP DRAM recovery-span prerequisite is packaged on
+`codex/hardware-integration-next-scp`: `0094` validates the complete four-bank
+rounded recovery mapping before SCP setup. Its exact-source host gate
+reproduced the previous defect (18 DRAM cases, 10 failures) and the candidate
+passed all 18 cases under UBSan. SCP, DVFS and sensorhub remain disabled.
 
 Sensor reply candidate 67b481d on codex/sensor-startup-contract rejects a
 wrong sequence, type OR command before using shared-memory write position.
