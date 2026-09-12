@@ -13,6 +13,7 @@ env:
   PMAPORTS_COMMIT: 7ea600ada6d4716b500bda0d6a17ba396be05b5c
   TETRIS_UBOOT_COMMIT: 60bcf22fdc0a94526424db59fc7640298ea8f0dd
   TETRIS_UBOOT_SHA256: 2c5d1d868dac176044d1d7ffc69760e0f2b576553bd892e5e2ace245c65e6760
+  NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,6 +52,21 @@ jobs:
           sh patches/native-display/check-postmask.sh upstream/linux
           sh patches/native-display/check-start-order.sh upstream/linux
           sh patches/native-display/check-topology.sh upstream/linux
+      - name: Fetch modem source
+        run: |
+          mkdir -p upstream/device-modules
+          git -C upstream/device-modules init
+          git -C upstream/device-modules remote add origin \
+            https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git
+          git -C upstream/device-modules fetch --filter=blob:none --depth=1 origin \
+            "$NOTHING_DEVICE_MODULES_COMMIT"
+          git -C upstream/device-modules checkout --detach FETCH_HEAD
+          test "$(git -C upstream/device-modules rev-parse HEAD)" = \
+            "$NOTHING_DEVICE_MODULES_COMMIT"
+      - name: Validate modem prereq gates
+        run: |
+          sh patches/modem/check-candidates.sh upstream/device-modules
+          sh patches/modem/check-ccmni.sh upstream/device-modules
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
