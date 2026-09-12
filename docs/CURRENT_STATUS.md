@@ -13,7 +13,12 @@ bc3206f6e6207e06759f86ce6191067478ad5da420b43bfaa6a5e3df1dbbe859,
 super image 3a2c6902143d4994ff77878ba247414a27343799280cf1dfa5ce2f23ada8c29c,
 root sparse 866fbfc868ac428d8e8d74ae2cca3e154fa3e3a8d0e832dccaac348138c2f7cf.
 The rootfs contains device-nothing-tetris 8-r9 and
-linux-postmarketos-mediatek-mt6878 6.18-r155.
+linux-postmarketos-mediatek-mt6878 6.18-r155. A later live baseline on boot
+d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a still had `usb0` UP, zero failed
+systemd units and a passing 32 MiB USB/SSH regression gate at
+20260912T100523Z. APK index refreshes reported transient DNS failures on
+that clean configuration, so routed Wi-Fi/DNS is not currently confirmed on
+the live handset.
 
 Three fresh boots passed the unchanged supervised GNSS BINFO/download/stop
 cycle with no repeated module load on a single boot:
@@ -362,8 +367,8 @@ still open. A compile-only patch does not improve the end-user status.
 | Subsystem | Current status | Confirmed evidence | Candidate / next gate |
 | --- | --- | --- | --- |
 | Boot and root filesystem | Works | Clean flash boots pmOS; root is writable and expanded. | Recheck after every candidate installation. |
-| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and an exact 32 MiB transfer passed after the clean #130 install. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. Clean r132 presents a valid CDC-NCM control/data pair; after the macOS session was unlocked, a host-side reset created `en4`, assigned `172.16.42.2` and restored SSH without rebooting the phone. The random host MAC remains a locked-host reliability defect. | Package a stable per-device hashed gadget identity, then repeat clean install, locked-host reconnect, reboot, 32 MiB transfer and suspend/resume. |
-| Wi-Fi | Partial | Clean #130 automatically reassociates with DHCP/default route/DNS/HTTPS and completed an exact 64 MiB SSH stream at `192.168.22.64` while USB and Bluetooth remained active. The r151 regression gate now distinguishes `wlan0` presence from usable Wi-Fi; the current boot fails the new Wi-Fi mode because `wlan0` is present but not associated. | Cold reconnect, suspend/resume, sustained bidirectional transfer and second-unit checks. |
+| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and exact 32 MiB transfers passed after the clean #130 install and again on live r155 boot d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a at 20260912T100523Z. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. Clean r132 presents a valid CDC-NCM control/data pair; after the macOS session was unlocked, a host-side reset created `en4`, assigned `172.16.42.2` and restored SSH without rebooting the phone. The random host MAC remains a locked-host reliability defect. | Package a stable per-device hashed gadget identity, then repeat clean install, locked-host reconnect, reboot, 32 MiB transfer and suspend/resume. |
+| Wi-Fi | Partial | Clean #130 automatically reassociated with DHCP/default route/DNS/HTTPS and completed an exact 64 MiB SSH stream at `192.168.22.64` while USB and Bluetooth remained active. The r151 regression gate now distinguishes `wlan0` presence from usable Wi-Fi; the current clean r155 configuration has no user Wi-Fi association and `apk info` reports transient DNS failures while refreshing indexes. | Restore normal Wi-Fi config on the clean image, then repeat cold reconnect, DHCP/DNS/HTTPS, suspend/resume, sustained bidirectional transfer and second-unit checks. |
 | Bluetooth | Partial | Clean #130 registers powered BlueZ `hci0`; `bluetoothctl --timeout 8 scan on` found 23 devices and exited with `Discovering: no` while USB and Wi-Fi remained active. The earlier stuck-discovery result came from an unbounded client invocation rather than the bounded lifecycle. | Pair/reconnect and test audio/data profiles across suspend. |
 | Touch and keys | Works | Installed r132 binds `fts_ts` at I2C `2-0038` and exposes `/dev/input/event0`; the reported graphical failure is not a missing touch device. The current fbcon intentionally has no touch interaction. Balanced power/volume events passed previously. | Recheck sustained touch after the graphical display path is restored. |
 | Haptics | Partial | The user physically confirmed the bounded RT6010 effect on clean #128; USB remained healthy. | Cold-boot repetition and suspend/resume. |
