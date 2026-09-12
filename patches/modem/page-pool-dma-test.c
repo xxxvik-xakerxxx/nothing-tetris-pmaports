@@ -6,7 +6,9 @@
 #include <stdio.h>
 
 #define POOL_NUMBER 2
+#ifndef PAGE_SIZE
 #define PAGE_SIZE 4096
+#endif
 #define NET_SKB_PAD 64
 #define PP_SIGNATURE 0x1234
 #define GFP_ATOMIC 0
