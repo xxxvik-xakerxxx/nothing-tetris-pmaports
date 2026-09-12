@@ -84,14 +84,16 @@ touches ULPOSC, frequency measurement and clock providers before the port has
 proved the active SCP firmware, TCM region-info, secure reset contract or
 shared-memory ownership.
 
-Patch `0093` adds the next fail-closed kernel boundary without changing that
-runtime state. If a later disabled-DVFS experiment reaches SCP core probe, the
-driver now rejects a TCM resource smaller than the DT declaration and rejects
-region-info whose known layout, loader, firmware or requested DRAM ranges are
-structurally invalid. It returns the error before recovery workqueues,
-loader/DRAM recovery mappings or reset startup. These checks are necessary
-memory-safety conditions; they are not proof that LK authenticated the active
-slot or that the addresses belong to the published carveouts.
+Patches `0093` and `0094` add the next fail-closed kernel boundary without
+changing that runtime state. If a later disabled-DVFS experiment reaches SCP
+core probe, the driver now rejects a TCM resource smaller than the DT
+declaration, rejects region-info whose known layout, loader, firmware or
+requested DRAM ranges are structurally invalid, and validates the complete
+four-bank DRAM recovery span with bounded 32-bit arithmetic. It returns the
+error before recovery workqueues, loader/DRAM recovery mappings or reset
+startup. These checks are necessary memory-safety conditions; they are not
+proof that LK authenticated the active slot or that the addresses belong to the
+published carveouts.
 
 ## Required ownership chain
 
@@ -127,6 +129,13 @@ identity, region-info agreement and byte-for-byte FDT immutability. The board
 call still returns `-EOPNOTSUPP`; no live adapter supplies authoritative
 boot-control, authenticated image or decoded LK region-info observations, and
 nothing is published to Linux.
+
+The integrated Linux-side SCP region gate on
+`codex/hardware-integration-next-scp` packages `0094` after `0093`. Its
+exact-source host harness reproduces the pre-fix defect across 18 DRAM cases
+with 10 failures, then passes all 18 cases under UBSan after the patch. SCP,
+DVFS and sensorhub remain disabled; this is a prerequisite for safe handoff
+experiments, not a sensor runtime claim.
 
 ## Next patch boundary
 
