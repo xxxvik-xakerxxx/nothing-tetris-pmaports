@@ -1,0 +1,330 @@
+# GNSS v051 userspace bridge audit
+
+## Scope and source identity
+
+This audit used local sources only. The authoritative connectivity source is
+Nothing OS 4.1 Tetris commit
+`e96f60dc081ae3525ef43d4bcf0ee5ee97e53835` from the local
+`upstream/android_kernel_modules_nothing_mt6878` object store. The pmaports
+baseline is `1f8aef10668c62284ac4824eb334a67a14f6c1df` on the isolated
+`codex/gnss-userspace-bridge` branch.
+
+The source exposes a private character-device ABI, not NMEA or the Linux GNSS
+subsystem. Opening `/dev/gpsdl0` powers link0. Closing the final descriptor
+drives its normal close sequence. The exact v051 source proves these bounded
+userspace operations:
+
+| Operation | Command/layout | Boundary |
+| --- | --- | --- |
+| Query status | integer ioctl `13`, argument `0` | Returns link state without requesting the reason `2`/`4` debug events. |
+| Get DSP boot information | integer ioctl `23`, five 32-bit fields, 20 bytes | Calls the v051 ATF boot-info backend already exercised on the phone. |
+| Get boot time | integer ioctl `28`, two signed 64-bit fields, 16 bytes | Copies boot-time and architectural-counter values to userspace. |
+
+The kernel patch moves only those constants and layouts into a versioned UAPI
+header. Kernel static assertions and a host C11 test lock every exported value,
+size and offset. Assert/reset, suspend/resume, link1/CW-DSP, firmware control,
+MVCD fragment submission and raw payload formats remain private.
+
+## Manual diagnostic
+
+`nothing-tetris-gnss-readonly` is a manual diagnostic, not a daemon or a
+position provider. It accepts only `--probe-link0`, opens only
+`/dev/gpsdl0` with `O_RDONLY | O_CLOEXEC | O_NOFOLLOW`, installs an eight-second
+process deadline, executes the three allowlisted ioctls, validates the observed
+fragment-count and clock bounds, redacts `cipher_key`, and closes the descriptor.
+It contains no `read(2)` or `write(2)` call and has no service, preset, udev rule
+or module-load entry.
+
+Opening the node still changes GNSS power state. Therefore the diagnostic stays
+manual until the complete lifecycle gate passes. On a clean boot with the
+correct LK and current image:
+
+```sh
+sudo systemctl start nothing-tetris-gnss-transport.service
+scripts/check-live-regression-gate.sh 172.16.42.1 user '<password>' baseline
+sudo /usr/libexec/nothing-tetris-gnss-readonly --probe-link0
+sudo find /proc/[0-9]*/fd -lname '/dev/gpsdl*' -print
+nmcli dev wifi list --rescan yes
+scripts/check-live-regression-gate.sh 172.16.42.1 user '<password>' transfer
+```
+
+The first live run must use one SSH control session and capture the boot ID,
+kernel/package identities, pre/post `dmesg`, `/sys/module/gps_drv_dl_v051`, both
+device nodes, Wi-Fi association/routing, Bluetooth power, and the exact USB
+transfer hash. Stop after a timeout, firmware assert, remote-processor reset,
+owner left on either node, Wi-Fi/BT regression, or USB/SSH loss. Recover by a
+clean reboot; do not unload conninfra or retry in the same boot.
+
+## Validation
+
+`scripts/check-gnss-v051-readonly.sh` performs the local authoritative gate. It
+archives the exact B4.1 GNSS tree, applies compatibility patch `1002` followed
+by UAPI patch `1003`, compiles and runs the ABI test, compares the kernel and
+device-package UAPI byte for byte, and host-compiles the manual diagnostic.
+
+The repository validator additionally rejects extra UAPI commands, link1,
+device reads/writes, write-capable opens, missing deadlines, service/preset
+activation, and omission of the packaged diagnostic. The full kernel package
+build remains the module compile/modpost gate, and image CI checks that the
+manual executable and v051 module are present.
+
+## Clean r155 repeat result (2026-09-12)
+
+The r155 image from CI 34589225716 was clean-installed as the paired pmOS
+super and userdata images, leaving LK/U-Boot unchanged at c931695. The GitHub
+artifact digest and all extracted image SHA256 sums match the CI metadata; the
+rootfs package database contains device-nothing-tetris 8-r9 and
+linux-postmarketos-mediatek-mt6878 6.18-r155. A bounded sparse-image inspector
+also validated the root sparse stream before flashing.
+
+The unchanged supervised BINFO/download/stop protocol then passed on three
+separate boots: 9ab1397d-748d-460f-930e-fe15d6a1789c,
+bbba0f14-74d2-4231-b8f1-71c18d7e41dc and
+d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a. Each boot started with no GPS module or
+gpsdl node, loaded gps_drv_dl_v051 once, completed the native FE08/FE31/FE32
+download path, accepted one FE05/4 stop, closed cleanly and left no gpsdl
+owner. The kernel published the expected OFF -> ON -> RST -> WORK -> RST ->
+OFF sequence without the earlier supervisor timeout waiting for the post-stop
+RESET_DONE record. USB survived each run with the exact 32 MiB SHA256
+83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302, and the
+final boot had zero failed system units.
+
+This closes only the r155 transport/download/shutdown repeat gate. It does not
+claim a satellite fix, NMEA/GeoClue integration, automatic service startup,
+restart stress, coexistence or suspend/resume. One first-boot warning,
+`emi_mng_get_gps_emi failed to find gps node`, remains to triage even though
+the subsequent cycle passed. The clean image manifest still names U-Boot
+60bcf22 as required, while the live repeat intentionally kept c931695; the
+bootloader-contract validation is therefore not complete.
+
+## Latest experiment and remaining gate (2026-09-11)
+
+### Candidate 1004: finalize the FSM log records
+
+The source diagnosis now confirms a publication dependency: the vendor FSM
+formats omit newline; Linux printk commits but need not finalize the newest
+such record. The /dev/kmsg reader cannot observe it until another printk
+finalizes it. The supervisor withholds close until that observation, making
+shutdown completion depend on unrelated logging. This is not a measured
+multi-second SMC delay. The failed repeat remains failed; other independent
+stall causes have not been excluded on that untraced boot.
+
+Patch 1004 changes exactly the two FSM format strings, normal and abnormal,
+to end with newline. No severity, state ordering, hardware action, deadline,
+retry or observer error handling changes. It is wired into r155 source,
+checksum and prepare order after 1003. Installed r153 remains unchanged.
+
+Nine pinned-source host tests pass, exercising the real observer with a
+sequential ringbuffer model, not Linux atomics. Original quiet-log state
+publication times out; the fixed phases need no subsequent printk; abnormal
+and unarmed resets still fail. The initial patch header was off by one and
+GNU patch reported relocation; the corrected hunk at line340 is checked
+independently, with negative offset/fuzz cases. The packaged diff body is
+byte-identical to this tested candidate. Audit/test commit: 56d50ac in
+codex/camera-clk-prereq-v2, patches/gnss-navigation-audit/.
+
+Targeted hal/gps_dsp_fsm.o compilation against the prepared 6.18 tree passes,
+including LLVM-bitcode to ARM64 ELF generation with Clang21.1.8. The prepared
+kernel records Clang21.1.2, so this is not a matching live module build.
+The narrow source extraction also emitted a missing fw_log directory warning;
+no complete module, modpost or load was attempted. Source SHA256:
+ed0c133fe62dfd4899fe090e2595d753fe01ee183bb9c616815cd611ffbad1ac.
+ARM64 object SHA256:
+3563c9c8c3360711a866910e1fea3697ba97bdc6d272c437769c36e34515496a.
+Package overlay and GNSS UAPI/manual-diagnostic checks pass. Next gate is an
+exact-ABI module/image and unchanged supervised protocol on clean boots,
+with raw-kmsg/source-time capture as well as trace. Navigation remains absent.
+
+Subsequent c931695/r153 repetitions supersede the single-pass reliability
+claim below: repeat 1 passed, repeat 2 timed out waiting for phase 4 after
+STOP_WRITTEN. Its later normal OFF/CLOSED is retained but is not a pass.
+The eight-second deadline and protocol were unchanged. No unload/retry was
+performed; the phone was rebooted cleanly.
+
+An isolated function-graph observation on the next clean boot passed. All
+six function filters were verified, a no-op setup/cleanup passed before GPS
+was opened, all CPU trace-loss counters stayed zero, and cleanup restored
+nop with no remaining instance. At stop, MCUB handler duration was 115.693 us,
+clear flag 4.923 us, FSM 16.615 us and state change 4.923 us. The FSM returned
+at monotonic 767.019633, while the journal displayed its record at 767.296379.
+This is an observation discrepancy, not proof of a slow SMC or driver lock.
+The missing trailing newline in vendor FSM logs is a candidate explanation
+under investigation. Tracing can perturb timing; the earlier timeout remains
+unresolved. USB transfer and post-test ownership checks passed. No navigation
+configuration or position request was sent.
+
+Local evidence: gnss-supervised-c931-repeat-1/kernel.log,
+gnss-supervised-c931-repeat-2/kernel.log, and
+gnss-supervised-c931-stop-trace/{result.txt,kernel-active.log,LIVE-PLAN.md}.
+
+The corrected v2 experiment now PASSED one observed download/start/stop
+cycle after clean reboot and host USB recovery. On boot
+3baa4f13-1c6d-4cf7-858a-6497d04f0de5 (unchanged r153/device8-r9), the
+supervised child exited zero. Kernel events establish OFF -> ON -> RST ->
+WORK -> RST -> OFF, with reset confirmed before release and normal CLOSED
+state. History shows 107 reads and writes of 116/12 bytes, consistent with
+the complete validated boot exchange and one FE05/4 stop. There are no
+forced-off, off-done-failure or abnormal FSM matches in the bounded capture.
+USB 32 MiB hashes match before/after, Wi-Fi remains connected, Bluetooth
+powered, no failed units and no GPS owners. The module remains loaded,
+unused; no unload or repeat was performed. Exact hashes and timestamps are
+in local/gnss-supervised-r153-v2/LIVE-PLAN.md and kernel.log.
+
+This supersedes the earlier recovery blocker, not the incomplete port status:
+three clean repeats, navigation/fix, lifecycle and automatic integration are
+still unverified. The following failed-run record is retained intentionally.
+
+Latest supervised run: one full driver-assisted download reached the native
+DOWNLOAD_COMPLETE checkpoint and the real kernel later reported RST -> WORK
+on RAM_OKAY. This is the first observed DSP RAM-code readiness, not a GNSS
+fix. The supervisor had already rejected a routine periodic read-history
+warning in ROM state and terminated its child before any FE05 stop write.
+Read history contains 107 received frames, consistent with BINFO plus 106
+fragment ACKs. The WORKING transition occurred during cleanup, followed by
+off polling failure, forced A-die off and an abnormal WORK -> OFF transition.
+The supervised lifecycle FAILED; no repeat or module unload was performed.
+
+Full local identity, four exact uploaded hashes and kernel evidence are in
+local/gnss-supervised-r153/LIVE-PLAN.md and kernel.log. USB/SSH remained
+available immediately afterward. A post-test transfer was sandbox-denied,
+so its empty-stream hash is explicitly not transfer evidence. Clean reboot
+was requested; the host sees the postmarketOS USB device but is locked and
+has no en4. User unlock is requested; new boot/SSH recovery remains unverified.
+
+The source-pinned history recorder emits its normal warning every eight
+records, including during download. The local observer now accepts the
+strict numeric history shape in ROM/WORK/post-stop/OFF phases, still rejecting
+errors, unknown warnings, overflow and forced recovery. Its 23 tests pass.
+This correction is not uploaded or rerun; the original experiment bundle
+is retained unchanged. The separately hashed local candidate is under
+local/gnss-supervised-r153-v2. It changes only the observer; nine supervisor
+and five Linux ARM64 process tests pass again, and replay accepts periodic
+history while rejecting the original premature close at session record 39.
+A second experiment requires confirmed clean recovery.
+
+The pinned B4.1 callback/framing research has advanced beyond the earlier
+2060-case framing inventory below. A bounded native BINFO-only experiment
+on r153 received a checksum-valid FE31 index-zero ACK, but its incomplete
+download teardown timed out and forced A-die off. The phone was cleanly
+rebooted; GNSS is inactive on the last verified baseline. No fragments or
+navigation commands were submitted, and no position was obtained.
+
+The separate `research/gnss-b41-inputs/` worktree now contains a native
+full-fragment candidate with 29 passing mocked-I/O scenarios. It uses
+ordered scalar ioctl-25 fragment indices and checks FE32 acknowledgements;
+it is not installed, packaged or hardware-validated. The remaining blocker
+is not another OTA download: it is proving DSP RAM-code readiness and safe
+shutdown before allowing this probe to run. Vendor thread wake/join and
+file-descriptor close do not by themselves prove DSP shutdown. The current
+source trace and exact binary hashes are in that worktree's CALLBACK_ABI.md;
+the live failure/recovery record is summarized in GNSS_BRINGUP.md.
+
+Further bounded execution now verifies primary FE05 argument 4 serialization
+and its real queue-flush/writer path to a substituted write syscall. Six
+serializer and nine flush/writer scenarios pass. Short writes continue from
+the remaining bytes, but repeated zero/error writes and invalid fd paths can
+loop without a whole-operation bound. These vendor retry paths must not be
+copied into the native probe. Mode/blocked/context guards can also suppress
+delivery, so a sender return is not a firmware acknowledgement.
+
+The exact-pinned FSM and MCUB handler are unchanged from e96f60dc081a:
+RAM_CODE_READY is required for RESET_DONE -> WORKING; a fresh reset event
+returns WORKING -> RESET_DONE before normal power-off. The next live probe
+must observe these transitions, not infer them from FE32 or a successful
+write. The primary stop packet is known, but its acceptance by this device
+and safe close remain unverified. GNSS stays inactive, USB/SSH healthy on
+the rechecked r153/38192f202c boot. No module load or device write followed
+these tests.
+
+An uninstalled read-only lifecycle observer now has 17 passing unit tests.
+It follows fresh /dev/kmsg records from a cursor opened before gpsdl0, rejects
+lost/stale/out-of-order records and primary warnings, and requires observed
+WORKING before an explicitly armed stop boundary. A separate supervised
+probe mode now waits for explicit readiness/reset tokens around a single
+FE05 stop write; 33 native mocked-I/O scenarios and nine supervisor tests
+pass. Cleanup is bounded and never retries or reloads the driver. A live
+read-only preflight confirms Python and independent /dev/kmsg cursor access,
+but no live readiness record has been seen and no new probe was installed.
+Five actual C-child/Python-supervisor pipe scenarios now pass on Linux ARM64
+with substituted GPS operations and synthetic log events. The observer has
+20 tests after allowing only source-confirmed, phase-scoped routine warning
+messages; a historical BINFO transcript is rejected at its premature close,
+not at its normal open notice. A reviewed, hashed experiment bundle and
+fresh hardware lifecycle evidence are the next gates. Legacy immediate-close/BINFO-only modes remain unsuitable for
+another live run. Any partial-start or teardown failure still requires a
+clean reboot; successful log observation alone is not a GNSS position fix.
+
+## Earlier position-bridge audit
+
+Follow-up: exact B4.1 switch tables now connect thread-ID-3 stop handling to
+set_param(0,NULL), internal message 1001, and the run-loop sender arguments
+(5,3,1,4). A bounded ARM64 execution test passes this dispatch chain without
+executing the sender or any external call. This narrows the missing stop
+contract to FE05 with argument 4 and conditional link selection, but does
+not prove delivery or acceptance before RAM-code startup, nor safe close.
+The research CALLBACK_ABI.md records table addresses and mode/queue caveats.
+The full-download probe remains unexecuted; no new GPS hardware test ran.
+
+### 2026-09-11 input provenance correction
+
+**Later same-day update:** the matching vendor image has now been obtained
+and its exact size/SHA-256 matched to the official OTA target manifest.
+The former missing-binaries acquisition blocker below is superseded, not the
+runtime protocol/ABI gap. See the isolated research report and
+elf-summary.json for the measured files. mnld has 25 direct dependencies,
+while the MT6878 libmnl has four (libc++, libc, libm, libdl). The upper-level
+libmnl path is a symlink in this release. Next trace the actual callback
+table and mnld initialization before deciding between a library-level Linux
+adapter and a larger Android compatibility stack. No binary was run or
+installed on the phone; signature authentication is not claimed.
+
+The locally named stock-b41 proprietary-file inventory actually identifies
+B4.0-260225-1904. Its mnld/libmnl paths are extraction candidates, not proven
+B4.1 userspace dependencies. The local B4.1 firmware archive does contain
+connsys_gnss.img, and its declared payload matches the packaged firmware
+byte for byte; obtaining another firmware copy does not close the userspace
+gap.
+
+The parallel input audit verified metadata directly from Google OTA CDN for
+incremental 2602251904 -> 2604151709. It identifies a concrete matching input:
+`https://android.googleapis.com/packages/ota-api/package/a8b9fdc18fdcd81355f9c3dfa8b7c61a584b51f0.zip`.
+Only bounded metadata was inspected, not the complete OTA, its signature or
+partition operation manifest. Next inspect that manifest to determine the
+required B4.0 base blocks before reconstructing target vendor userspace.
+Do not assume an incremental OTA alone supplies a complete vendor image.
+
+The exact-source audit also rejects two misleading shortcuts: ioctl 25
+passes a fragment number, not a firmware payload, and the source's NMEA
+channel belongs to MCUDL, disabled in the v051 build. Neither establishes
+the missing MVCD or navigation framing. Preserve both candidate libmnl.so
+paths and inspect ELF/linker dependencies offline before running anything.
+
+Full provenance, hashes, source paths and extraction set are recorded in
+the isolated worktree's `research/gnss-b41-inputs/README.md` under
+`worktrees/gnss-userspace-bridge`. No phone or GNSS runtime state was changed.
+
+The matching mnld/libmnl binaries and selected init files are now local,
+with provenance recorded in the research report. The dependency closure,
+redistribution notices and complete startup configuration remain unresolved.
+No complete source implementation of the MVCD payload-container algorithm,
+DSP RAM-code download sequence, navigation protocol or standard GNSS/NMEA
+bridge is available. The older statements above about missing binaries and
+pending vendor reconstruction are historical, not remaining acquisition work.
+
+The research callback audit now traces the two direct fd fields, 512-byte
+reads into mtk_gps_data_input/data_input2, and a bounded byte-framing handler.
+2060 isolated ARM64 cases establish AA F0/AA 0F markers, DE escape handling,
+and state/ring transitions. This is not yet a complete framing/parser audit:
+checksum, length validation, overflow/reset, multi-byte stream behavior and
+command semantics remain unverified. Direct thread-local stack-guard reads
+also demonstrate ABI dependence beyond the dynamic import table.
+
+Consequently this change does not send fragments, read raw payloads, start
+`gpsd`, expose GeoClue, autostart GNSS, or claim satellite acquisition or a
+fix. The next userspace step is to validate the remaining frame/parser and
+startup contracts against these exact inputs or a bounded known-good Android
+trace. A separate research clock-query patch reproduces and fixes silent
+regmap-read error conversion to the valid 26 MHz enum in host tests; it is
+not packaged or installed. Live metadata confirms MT6685 parent binding and
+an existing unbound GPS child while the GPS transport is absent; no duplicate
+DT child is required. Neither fact closes the hardware lifecycle gate.

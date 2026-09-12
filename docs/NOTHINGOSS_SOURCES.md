@@ -42,12 +42,13 @@ does not contain reusable Linux drivers and is not shipped by this repository.
 | Block | Source | Expected approach | Notes |
 | --- | --- | --- | --- |
 | Wi-Fi / Bluetooth | `android_kernel_modules_nothing_mt6878/connectivity` | Staged as B4.1 vendor modules with native cfg80211/HCI integration and reproducible boot services. | Includes `conninfra`, `connfem`, WMT, WLAN and BT pieces; per-device calibration/address data is read-only extracted from `nvdata`. |
-| GNSS / FM | `android_kernel_modules_nothing_mt6878/connectivity/gps`, `fmradio` | MT6878 GNSS v050 is staged through a manual pmOS transport service after live boot, probe, IRQ and power-cycle validation; FM remains inventory-only. | The service loads the transport and verifies `gpsdl0`/`gpsdl1` without opening or powering them. GNSS still needs a compatible MNL bridge, position-data and suspend validation. |
+| GNSS / FM | `android_kernel_modules_nothing_mt6878/connectivity/gps`, `fmradio` | Installed v050 proved the transport boundary but lacks the ATF boot-info backend. The next manual pmOS package uses stock-derived Tetris profile v051; FM remains inventory-only. | The service loads only v051 and verifies `gpsdl0`/`gpsdl1` without opening them. Clean-boot boot-info, a compatible MNL bridge, position data and suspend remain unvalidated. |
+| Modem / SIM | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/misc/mediatek/eccci`, `dpmaif`, `ccmni` | Validate LK handoff and compile transport boundaries before any runtime module. | Stock-derived userspace is dual-SIM `c6m_1rild` with CCCI daemons and Android Radio AIDL v2; native pmOS still needs a standard telephony bridge. |
 | Speaker / microphones | `android_kernel_device_modules_6.1_nothing_mt6878/sound/soc`, `drivers/mfd/mt6685-*` | Stage official MT6878 AFE, MT6369 codec, MT6685 BBCK5 and MT6878-MT6369 machine driver modules with board DT and UCM. | Both speakers and AIN0/AIN2 microphones work live; clean CI installation remains. |
 | PMIC ADC / efuse | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/iio`, `drivers/nvmem` | Stage vendor PMIC ADC/efuse modules or port the small parts natively. | Needed to remove temporary optional audio calibration fallback. |
 | Flashlight / LEDs | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/leds` | Prefer vendor modules first, then expose LED/V4L2 flash class cleanly. | Likely a better near-term target than full camera. |
 | Thermal / hwinfo | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/thermal`, `drivers/chino-e` | Stage small modules where dependencies are limited. | Useful for status page and device diagnostics. |
-| Native display | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/gpu/drm` | Keep the working framebuffer path in the stable build. Test the official DRM v2 stack as a separate experiment. | Tetris uses `samsung,s6e8fc3x02`; Nothing builds `panel-samsung-s6e8fc3x02.ko` together with `mediatek_v2/mediatek-drm.ko` and helper modules. |
+| Native display | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/gpu/drm` | Use the official DRM v2 graph and registers as the authority for the maintainable mainline implementation. | Tetris uses `samsung,s6e8fc3x02`; Nothing's bypass path is `OVL0_2L -> OVL1_2L -> OVL2_2L -> PQ0_IN_CB0 -> PQ0_OUT_CB4 -> SPLIT_OUT_CB2 -> DSC0 -> DSI0`. |
 | Camera | `android_kernel_modules_nothing_mt6878/mtkcam` plus `device_modules/drivers/media` and camera misc drivers | Treat as a large staged stack, not one giant patch. Start with sensor inventory, cam_cal, VCM/OIS/flash, then ISP/media graph. | Kernel probe alone will not make a usable camera without DT, media pipeline and userspace stack. |
 | GPU | `android_kernel_modules_nothing_mt6878/gpu` and `device_modules/drivers/gpu` | Large staged stack. Requires power domains, clocks, firmware/userspace and careful ABI work. | Do after core phone features unless CI capacity is available. |
 
@@ -81,10 +82,14 @@ The official native display implementation exists, but it is not only a panel
 driver. The Tetris device tree uses `compatible = "samsung,s6e8fc3x02"`, and
 Nothing builds `drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko`. That panel
 depends on MediaTek DRM v2 helpers such as `mtk_panel_ext`, DDP/DSI, MML and
-display notifier modules. Because the framebuffer handoff is currently the
-known-good display path, native DRM should be developed as a separate patch set
-or branch and only merged into the stable build after it shows a real userspace
-KMS framebuffer on hardware.
+display notifier modules. The shipped native DTB no longer exposes the inherited
+framebuffer. Installed r143 proves panel ID, backlight, touch, Phoc and USB
+survival, but its first native frame stalls with all three OVL blocks waiting
+downstream and DSC input stuck at `1x1`. Read-only and reversible tests ruled
+out the inherited mutex mask and omitted DSC selectors as standalone causes.
+The official MT6878 OVL data sets `need_bypass_shadow=true`; live r143 starts
+OVL0/1/2 with bit 22 clear. Candidate r144 adds that missing start behavior;
+clean pixels and lifecycle are still required before promotion.
 
 ## Maintenance rule
 
