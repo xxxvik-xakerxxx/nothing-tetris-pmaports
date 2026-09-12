@@ -22,6 +22,23 @@ only and must wait for a proven DSP readiness/shutdown contract. These
 results do not establish SIM service or a GPS fix. CURRENT_STATUS.md and
 the subsystem evidence documents track the exact boundaries.
 
+## Clean next-SCP baseline (2026-09-12)
+
+The test handset was clean-flashed from verified CI run `34692383850`,
+artifact `10297439743`, commit
+`3a016d36153d504f6b1002d29120bd84a8183533`. `super` and `userdata` were
+written from the manifest-mapped files and the phone booted kernel
+`6.18.0 #157` with device package `8-r10`. USB NCM/SSH returned automatically,
+zero systemd units failed, and the transfer regression gate passed at
+`local/live-logs/20260912T170559Z-172.16.42.1-regression-gate`. The user
+confirmed visually good display output on this clean image.
+
+This baseline is good enough to continue subsystem bring-up, but it is not a
+daily-phone claim. Current live evidence still shows no user sensor IIO nodes,
+no GPU render node, no camera/media nodes, no GNSS device on the clean baseline
+and no ModemManager modem. Keep the next hardware experiments single-variable
+and reversible, with USB/SSH as the stop condition.
+
 ## Installed milestone (2026-09-10)
 
 Installed: integration commit aecf4f4, CI 34492172863, kernel 6.18-r153,

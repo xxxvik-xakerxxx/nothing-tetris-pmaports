@@ -37,8 +37,8 @@ logs, and device backups are not committed.
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (installed CI `34492172863`, `pkgrel=153`, kernel `6.18.0 #154`; persistent route and frame-end updates, lifecycle testing incomplete) |
-| Kernel source commit | `d84b264a54a37611f2f46bc19363cb9b41606205` |
+| Kernel version | `6.18` (clean-installed CI `34692383850`, `pkgrel=156`, kernel `6.18.0 #157`; display route/frame-end updates and next SCP prerequisites, lifecycle testing incomplete) |
+| Kernel source commit | `3a016d36153d504f6b1002d29120bd84a8183533` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
@@ -54,24 +54,29 @@ The measured charging path, source-classification blocker and idle-drain test
 contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
-The installed image is pmaports commit
-`a03529f61a46cdcead0b986d0b03d695a4f538e6`. CI run `34470405429` passed and the
-paired `super`/`userdata` image boots kernel package `6.18-r151` with device
-package `device-nothing-tetris-8-r8`. The current test handset has the
-diagnostic U-Boot `c931695` installed in `lk_a`; CI image manifests still name
-`60bcf22` as the required bootloader contract, so that portability boundary is
-not closed. Native DRM registers `card0`, the connected 1080x2400
-DSI connector, Phoc, backlight and touch while USB SSH remains available.
-Patch `0088` confirms the vendor default `DSC_MODE=0x00000001`, but the first
-native frame still does not complete: live probing reports `DSC_INTSTA=0x8`,
-zero `FRAME_DONE` and DSI input stuck at `0x00010001`. Clean r132 artifacts
-remain the fastboot rollback.
-GNSS v051 is installed manual-only. Clean CI 34589225716 with kernel package
-`6.18-r155` passed three fresh supervised BINFO/download/stop cycles: the
-driver reached WORK, accepted one stop, closed cleanly, left no gpsdl owner
-and preserved USB. No position fix, NMEA bridge, autostart, coexistence or
-suspend/resume is claimed. Camera, GPU and CCCI additions remain
-compile/static-only.
+The installed image is the `codex/hardware-integration-next-scp` CI artifact
+from pmaports commit `3a016d36153d504f6b1002d29120bd84a8183533`. CI run
+`34692383850` passed and its downloaded `nothing-tetris-images` artifact
+`10297439743` was verified locally before flashing. The ZIP SHA256 is
+`a97f7dd37950e92279a27168fcdf667b607baec91cc00c34194865fccb86bf71`; the
+manifest maps `nothing-tetris-boot.img` to `super` and
+`nothing-tetris-root.sparse.img` to `userdata`, requires U-Boot
+`60bcf22fdc0a94526424db59fc7640298ea8f0dd`, and reports kernel `6.18.0`.
+The clean flash on 2026-09-12 booted kernel `6.18.0 #157` with
+`device-nothing-tetris-8-r10` and `linux-postmarketos-mediatek-mt6878-6.18-r156`;
+USB NCM/SSH returned automatically, zero systemd units were failed, and the
+transfer regression gate passed at
+`local/live-logs/20260912T170559Z-172.16.42.1-regression-gate`. The user
+confirmed visually good native display output after the clean boot.
+
+Native DRM still exposes only `/dev/dri/card0`; there is no render node. Touch
+is bound as `fts_ts` on `/dev/input/event0`. Wi-Fi and Bluetooth initialize
+automatically (`wlan0` and powered BlueZ `hci0`), but Wi-Fi is not associated
+on this clean audit. GNSS v051 remains manual/transport-only and no `/dev/gps*`
+node is present on the clean next-SCP baseline. No position fix, NMEA bridge,
+autostart, coexistence or suspend/resume is claimed. Camera, GPU and CCCI
+additions remain compile/static-only; ModemManager reports no modem; sensor
+IIO contains only PMIC ADC devices, not accelerometer, gyro, proximity or light.
 
 Per-device data remains outside the image. The live phone exposes separate
 `nvcfg`, `nvdata`, `nvram`, `persist`, `proinfo`, `protect1`, `protect2` and
@@ -83,11 +88,11 @@ its exact calibration records without committing whole dumps or unique IDs.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Boot | U-Boot boot flow | Partial | U-Boot `c931695` from CI `34584756418` is installed in `lk_a` and boots the current r155 test image; `lk_b` is not the validated recovery path. CI manifests still require `60bcf22`, so the bootloader contract and cross-slot recovery need reconciliation before this is promoted as a stable main baseline. |
-| Boot | Kernel boot | Works | Clean CI image `c2b19a9` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r132` and `device-nothing-tetris-8-r6`; valid CDC-NCM recovered. The image is usable with U-Boot `60bcf22`, but remains off `main` pending full regression and native-display work. |
+| Boot | U-Boot boot flow | Partial | The clean next-SCP image manifest requires U-Boot `60bcf22fdc0a94526424db59fc7640298ea8f0dd` and the handset entered `tetris-uboot` fastboot on slot `a` before flashing. Cross-slot recovery, exact runtime loader reporting and second-unit portability remain open. |
+| Boot | Kernel boot | Works | Clean CI image `3a016d3` from run `34692383850` reaches userspace with `linux-postmarketos-mediatek-mt6878-6.18-r156`, `device-nothing-tetris-8-r10`, zero failed units and working USB NCM/SSH. |
 | Display | Legacy framebuffer | Retired | U-Boot `60bcf22` proved that the r132 artifacts were a bootloader framebuffer-handoff fault, not Phoc or touch corruption. Native builds no longer select the simplefb DTB. The clean r132 CI image is retained only as an external fastboot rollback. |
-| Display | Native DDP/DSC/DSI | Partial | CI r153 is clean-installed with patches `0096`/`0097`; the user confirms visible output without diagnostic modules and USB transfer passes. A controlled, readiness-synchronized ten-cycle DPMS test passes; the earlier unsynchronized EINVAL failure is retained in the audit. Fixed 60 Hz mode, software rendering; 120 Hz, cold repeat, native PQ ownership and full lifecycle remain open. See `docs/DISPLAY_FIRST_FRAME_AUDIT.md`. |
-| Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on clean `980c566`. A text console has no touch UI; graphical regression resumes with the display candidate. |
+| Display | Native DDP/DSC/DSI | Partial | Clean next-SCP CI `3a016d3` is installed; USB transfer passes and the user confirms visually good output. The frame-end update removed the redraw flicker during live testing. Fixed 60 Hz mode and software rendering remain; 120 Hz, brightness/blank lifecycle, suspend/resume, repeated cold boots, native PQ ownership and render acceleration remain open. See `docs/DISPLAY_FIRST_FRAME_AUDIT.md`. |
+| Input | Touchscreen | Works | FT3519 remains bound as `fts_ts` on I2C `2-0038` and exposes `/dev/input/event0` on the clean next-SCP image. |
 | Input | Hardware keys | Works | Power, volume-up and GPIO volume-down are hardware-tested; MT6363 uses distinct press/release IRQ handlers. |
 | Power | Battery/USB telemetry | Partial | MT6375 charger, gauge and TCPM telemetry work. The r151 source-aware power gate passed on a PD-capable computer attachment that reports 5 V with `CURRENT_MAX=0`, so the safe 500 mA fallback remains; an earlier real PD contract drove AICR/ICHG to 2 A. Charge rate, taper and thermals from a partially discharged battery remain unproven, and native BC1.2 SDP/CDP/DCP classification is absent. |
 | Power | CPU idle | Partial | Per-CPU PSCI power-off is enabled. Cluster/system idle states remain disabled until USB/SSH and radio suspend tests pass. |
@@ -101,18 +106,18 @@ its exact calibration records without committing whole dumps or unique IDs.
 | Audio | Lower main speaker | Partial | A bounded PulseAudio 440 Hz test plays physically through AW88261 on clean kernel #128 and the sink returns to `SUSPENDED`. System sounds remain inconsistent; measured microphone capture passes separately. |
 | Audio | Built-in microphones | Partial | A clean #130 five-second stereo capture contains 387856 samples, 386262 nonzero, zero clipping and 193359 pairs with distinct channels. Physical per-input mapping, suspend/resume and cold-boot repetition remain. |
 | Audio | Desktop integration | Partial | PulseAudio exposes speaker and internal-microphone endpoints, but clean #130 proves device r5 only fixes the policy layer. A reversible r6 live overlay followed by a normal reboot produced zero `greetd` PulseAudio owners and no fresh ALSA/BlueZ ownership errors while USB/Wi-Fi/BT returned normally. The new audio audit gate passed on r151 after the r9 dconf-directory fix was applied live. Clean install, one real-user owner, login/relogin and physical audio regression remain. |
-| GPU | 3D acceleration | Broken | MFG clock groundwork and `panthor.ko` exist, but no Mali platform device or render node is present; `card0` is the inherited simple framebuffer. A disabled MFG RPC topology inventory is under static validation and performs no register access. |
-| Camera | Front/rear cameras | Broken | No V4L2/media pipeline is present. The source candidate adds a fully disabled main-IMX882 DT fixture matching the reviewed stock I2C8, CAMTG2, reset and four-rail topology. Compile-only gates inventory six sensor variants, four EEPROM layouts and the disabled identity probe; no camera component is enabled, packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, power domains, IOMMU, CCU and userspace remain. |
+| GPU | 3D acceleration | Broken | The clean next-SCP audit exposes `/dev/dri/card0` only and no `/dev/dri/renderD*`. MFG clock groundwork and `panthor.ko` exist, but no Mali platform device, rail consumer, firmware path or render acceleration is enabled. |
+| Camera | Front/rear cameras | Broken | The clean next-SCP audit exposes no `/dev/video*` or `/dev/media*` nodes. The source candidate adds a fully disabled main-IMX882 DT fixture matching the reviewed stock I2C8, CAMTG2, reset and four-rail topology. Compile-only gates inventory six sensor variants, four EEPROM layouts and the disabled identity probe; no camera component is enabled, packaged or autoloaded and no sensor has been powered on Linux. SENINF/ISP, power domains, IOMMU, CCU and userspace remain. |
 | Camera | Torch | Partial | Both LM3644 rear LED channels accept bounded brightness effects, illuminate physically and return to off. Clean-install and lifecycle tests remain. |
 | Camera | Flash strobe | Untested | The Linux flash class exposes both channels; timed strobe, fault reporting and the V4L2 bridge are not validated. |
 | Connectivity | Connsys foundation | Partial | `connadp`, `conninfra` and `connfem` probe reliably at boot; vendor `conninfra` cannot be safely unloaded. |
-| Connectivity | Wi-Fi | Partial | Clean #130 automatically associates with DHCP/default route/DNS/HTTPS and completes an exact 64 MiB Wi-Fi SSH stream while USB and Bluetooth remain active. The r151 Wi-Fi gate now fails unless `wlan0` is associated, has IPv4/default route and passes traffic; the current boot has `wlan0` present but not associated. Cold reconnect, suspend/resume and sustained bidirectional stress remain. |
-| Connectivity | Bluetooth | Partial | Native BlueZ `hci0` completed a bounded eight-second discovery with 23 devices and returned to `Discovering: no` while USB/Wi-Fi survived. Pair/reconnect, audio/data profiles and suspend lifecycle remain. |
-| Connectivity | GPS/GNSS | Partial | Clean r155 from CI `34589225716` passed three fresh supervised v051 BINFO/download/stop cycles on separate boots. Each run loaded the GPS module once, reached DSP WORK, stopped and closed cleanly, left no gpsdl owner, kept failed units at zero on the final boot and preserved the exact 32 MiB USB hash. MNL/MVCD navigation, NMEA/GeoClue, satellite acquisition, timed position fix, autostart, coexistence and suspend/resume remain absent. |
+| Connectivity | Wi-Fi | Partial | The clean next-SCP audit starts the bounded connectivity service successfully and exposes `wlan0`; NetworkManager sees it as disconnected. Earlier clean images proved association/DHCP/DNS/traffic, but the current clean image still needs association, route and stress validation. |
+| Connectivity | Bluetooth | Partial | The clean next-SCP audit powers BlueZ `hci0` with the factory Bluetooth address configured. Earlier discovery testing passed; pair/reconnect, audio/data profiles and suspend lifecycle remain. |
+| Connectivity | GPS/GNSS | Partial | Earlier clean r155 from CI `34589225716` passed three fresh supervised v051 BINFO/download/stop cycles. On the clean next-SCP baseline no `/dev/gps*` node is present because GNSS remains manual/transport-only and was not opened. MNL/MVCD navigation, NMEA/GeoClue, satellite acquisition, timed position fix, autostart, coexistence and suspend/resume remain absent. |
 | Connectivity | NFC | Not present | CMF Phone 1 / `nothing-tetris` has no NFC hardware; do not port shared Nothing NFC modules. |
-| Modem | Calls/SMS/mobile data | Broken | ModemManager reports no modem and there are no CCCI/DPMAIF/WWAN devices. Object-only LLVM 21 gates cover CCCI core, CCIF, modem common and the vendor FSM/port/non-page-pool-DPMAIF groups; CI forbids ECCCI/DPMAIF modules and autoload. Integrated B4.1 offline gates validate modem member lookup, stock48 descriptor bounds and bounded LK bootchain feasibility. Trusted-firmware semantics, handoff memory, DT, link/modpost and runtime remain unproven. |
-| Sensors | Rotation/accelerometer | Broken | Stock identifies SCP-owned ICM4N607 accel/gyro, LTR569 light/proximity and HX9031AS SAR endpoints. The vendor SCP probe still stops at `wait_scp_dvfs_init_done()` because the target DT intentionally has no `mediatek,scp-dvfs` device. A manual-only inventory mask remains false until the full SCP handshake succeeds; no publication, DVFS or sensorhub is enabled. |
-| Sensors | Ambient light/proximity | Broken | Shares the blocked SCP sensorhub path. Adding only the vendor DVFS node is rejected because it would touch ULPOSC, fmeter and clocks before firmware handoff is proven. |
+| Modem | Calls/SMS/mobile data | Broken | The clean next-SCP audit still reports no ModemManager modem and no CCCI/DPMAIF/WWAN devices. Object-only LLVM 21 gates cover CCCI core, CCIF, modem common and the vendor FSM/port/non-page-pool-DPMAIF groups; CI forbids ECCCI/DPMAIF modules and autoload. Integrated B4.1 offline gates validate modem member lookup, stock48 descriptor bounds and bounded LK bootchain feasibility. Trusted-firmware semantics, handoff memory, DT, link/modpost and runtime remain unproven. |
+| Sensors | Rotation/accelerometer | Broken | The clean next-SCP audit exposes only PMIC ADC IIO devices, not accel/gyro. Stock identifies SCP-owned ICM4N607 accel/gyro, LTR569 light/proximity and HX9031AS SAR endpoints. The vendor SCP probe remains gated before DVFS/sensorhub publication; no user sensor device is enabled. |
+| Sensors | Ambient light/proximity | Broken | The clean next-SCP audit exposes no light/proximity IIO device. This shares the blocked SCP sensorhub path. Adding only the vendor DVFS node is rejected because it would touch ULPOSC, fmeter and clocks before firmware handoff is proven. |
 | Storage | microSD | Partial | Native MSDC1 probes as `mmc0`; no card was present for insertion and I/O validation. |
 | Storage | UFS/root I/O | Works | UFS is stable and `/dev/sdc82` mounts read-write as ext4. |
 | Storage | Automatic root grow | Works | The clean sparse-image flash ran the standard pmOS initramfs path and mounted a writable 104.6 GiB root filesystem without a device-specific resize service. |
