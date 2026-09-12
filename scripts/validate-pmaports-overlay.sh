@@ -755,7 +755,7 @@ validate_compile_only_boundaries() {
 		"$kernel_pkg/0086-drm-mediatek-match-MT6878-native-display-state.patch"
 	grep -Fq 'compile-only pd9302a module must not be packaged' "$workflow"
 	grep -Fq 'compile-only Tetris camera audit must not be packaged' "$workflow"
-	grep -Fq 'compile-only CCCI modules must not be packaged' "$workflow"
+	grep -Fq 'compile-only CCCI/DPMAIF modules must not be packaged' "$workflow"
 	grep -Fq -- "-name 'ccci*.ko*'" "$workflow"
 	grep -Fq -- "-name 'tetris-camera-audit.*'" "$workflow"
 	grep -Fq 'compile-only hardware code has a runtime loader' \
