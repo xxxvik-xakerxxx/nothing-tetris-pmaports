@@ -1,5 +1,25 @@
 # Nothing Tetris GNSS bring-up
 
+## Clean next-SCP read-only result (2026-09-12)
+
+After clean-flashing CI run `34692383850`, artifact `10297439743`, commit
+`3a016d36153d504f6b1002d29120bd84a8183533`, the phone booted kernel
+`6.18.0 #157` with USB NCM/SSH and zero failed systemd units. The clean
+baseline had no loaded `gps_drv_dl_v051` module and no `/dev/gps*` nodes.
+
+One explicit manual start of `nothing-tetris-gnss-transport.service` loaded
+`gps_drv_dl_v051`, created `/dev/gps_emi`, `/dev/gpsdl0` and `/dev/gpsdl1`,
+and exited successfully. The kernel reported the LK GPS EMI handoff as
+`0x86a00000/0x100000`. The packaged read-only diagnostic was then run with
+`--probe-link0`; it returned `status=0`, `code_size=42505`,
+`fragment_count=106`, `boot_time_ns=570266810187` and
+`arch_counter=7545944623`, redacted the cipher key, left no `/dev/gpsdl*`
+owners and preserved `usb0`.
+
+This confirms the clean next-SCP transport/read-only boot-info path only. It
+does not submit the DSP RAM-code fragments, start MNL, emit NMEA, integrate
+GeoClue, acquire satellites or produce a timed position fix.
+
 ## Current boundary
 
 The currently verified kernel package `6.18-r155` uses the stock-derived Tetris

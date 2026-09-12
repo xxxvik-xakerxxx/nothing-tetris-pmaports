@@ -33,11 +33,21 @@ haptics in `/proc/bus/input/devices`, Wi-Fi as `wlan0`, powered BlueZ `hci0`,
 and USB Type-C/gauge telemetry. It also shows the next remaining blockers
 plainly: IIO contains only PMIC ADC devices, not accel/gyro/proximity/light;
 `/dev/dri` has `card0` only and no render node; no `/dev/video*` or
-`/dev/media*` camera nodes exist; no `/dev/gps*` node exists on the clean
-baseline because GNSS remains manual/transport-only; ModemManager reports no
-modem. Wi-Fi is present but not associated on this audit, and package index
-refresh produced transient DNS errors, so routed Wi-Fi/DNS is not confirmed on
-this clean image.
+`/dev/media*` camera nodes exist; ModemManager reports no modem. Wi-Fi is
+present but not associated on this audit, and package index refresh produced
+transient DNS errors, so routed Wi-Fi/DNS is not confirmed on this clean image.
+
+One explicit manual GNSS transport start was then run on the same clean boot,
+with the module not previously loaded. `nothing-tetris-gnss-transport.service`
+loaded `gps_drv_dl_v051`, created `/dev/gps_emi`, `/dev/gpsdl0` and
+`/dev/gpsdl1`, and exited successfully with zero failed units. The kernel
+reported the LK GPS EMI handoff as `0x86a00000/0x100000`. The read-only
+diagnostic with `--probe-link0` returned `status=0`, `code_size=42505`,
+`fragment_count=106`, `boot_time_ns=570266810187` and
+`arch_counter=7545944623`, redacted the cipher key, left no `/dev/gpsdl*`
+owners and preserved `usb0`. This confirms clean next-SCP GNSS transport and
+read-only boot-info access only; it is still not NMEA, GeoClue, satellite
+acquisition or a position fix.
 
 ## Latest GPS reliability result
 
