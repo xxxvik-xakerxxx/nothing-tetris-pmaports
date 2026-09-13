@@ -20,6 +20,15 @@ This confirms the clean next-SCP transport/read-only boot-info path only. It
 does not submit the DSP RAM-code fragments, start MNL, emit NMEA, integrate
 GeoClue, acquire satellites or produce a timed position fix.
 
+The next repository gate is `scripts/check-live-gnss-gate.sh`. It is intended
+for the first clean r14 boot: it starts only the manual transport service,
+runs the packaged read-only link0 diagnostic, verifies redacted boot metadata
+and validated fragment-count bounds, confirms no `/dev/gpsdl*` owner remains,
+rejects accidental modem/CCCI/DPMAIF publication, and finishes with the 32 MiB
+USB transfer check. Passing this gate is still not end-user GPS; it only makes
+the GNSS transport/read-only boundary repeatable on the current image before a
+separate NMEA/navigation protocol probe.
+
 Later on the same installed image, a host-side check during an apparent
 fastboot report found no fastboot device; Linux USB NCM and SSH were still
 alive. The regression gate passed at

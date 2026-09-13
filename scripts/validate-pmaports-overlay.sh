@@ -1095,15 +1095,18 @@ validate_connectivity_build() {
 validate_live_gate_scripts() {
 	regression_gate="$repo_root/scripts/check-live-regression-gate.sh"
 	audio_gate="$repo_root/scripts/check-live-audio-gate.sh"
+	gnss_gate="$repo_root/scripts/check-live-gnss-gate.sh"
 	greeter_display_gate="$repo_root/scripts/check-live-greeter-display-gate.sh"
 	hardware_frontier_gate="$repo_root/scripts/check-live-hardware-frontier-gate.sh"
 
 	test -x "$regression_gate"
 	test -x "$audio_gate"
+	test -x "$gnss_gate"
 	test -x "$greeter_display_gate"
 	test -x "$hardware_frontier_gate"
 	sh -n "$regression_gate"
 	sh -n "$audio_gate"
+	sh -n "$gnss_gate"
 	sh -n "$greeter_display_gate"
 	sh -n "$hardware_frontier_gate"
 	grep -Fq 'wlan0-operstate=' "$regression_gate"
@@ -1114,6 +1117,11 @@ validate_live_gate_scripts() {
 	grep -Fq 'arecord -D hw:0,13' "$audio_gate"
 	grep -Fq 'greetd owns a PulseAudio process' "$audio_gate"
 	grep -Fq '/var/lib/greetd/.config/dconf' "$audio_gate"
+	grep -Fq 'nothing-tetris-gnss-readonly --probe-link0' "$gnss_gate"
+	grep -Fq 'fragment_count=' "$gnss_gate"
+	grep -Fq 'cipher_key=redacted' "$gnss_gate"
+	grep -Fq 'modem runtime appeared during GNSS gate' "$gnss_gate"
+	grep -Fq 'post-GNSS 32 MiB SSH transfer' "$gnss_gate"
 	grep -Fq 'nothing-tetris-greeter-display-policy.service' \
 		"$greeter_display_gate"
 	grep -Fq 'nothing-tetris-display-unblank.service' \
