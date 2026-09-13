@@ -232,9 +232,14 @@ not a confirmed external RT1711H controller.
   `34752524434`, but the first clean boot still left `fb0/blank=4` while DSI
   stayed connected/enabled. A reversible live unblank changed `fb0/blank` to
   `0`; greeter-display and hardware-frontier gates then passed. Device r14
-  packages that unblank as a root oneshot after `greetd.service` and also runs
-  the idle policy directly in the greetd session wrapper. A two-cycle DPMS live
-  gate still fails after the first off/on
+  packaged that unblank as a root oneshot after `greetd.service` and also ran
+  the idle policy directly in the greetd session wrapper. Its CI artifact
+  clean-flashed and passed USB transfer, but systemd skipped the oneshot
+  because `ConditionPathExists=/sys/class/graphics/fb0/blank` was evaluated
+  before fb0 existed; manually starting the same service then changed
+  `fb0/blank` from `4` to `0`. Device r15 removes that premature condition and
+  relies on the helper's bounded wait for fb0. A two-cycle DPMS live gate still
+  fails after the first off/on
   transition with a DRM sequence discontinuity and a disabled connector
   post-state, so blank/unblank lifecycle remains a separate display bug. Do not
   mark it `Works` until display lifecycle passes on a CI artifact while USB

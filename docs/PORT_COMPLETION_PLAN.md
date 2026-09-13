@@ -60,12 +60,17 @@ passed at `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate`
 and the hardware frontier gate passed at
 `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`.
 
-r14 is the next single-variable display packaging candidate. It applies the
-greeter idle policy from the greetd session wrapper and adds a root systemd
-oneshot that safely writes `0` to `fb0/blank` after `greetd.service`. It still
-does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS autostart or
-any new high-risk module. Retest clean boot and visual output before touching
-sensors or GPU runtime.
+r14 applied the greeter idle policy from the greetd session wrapper and added a
+root systemd oneshot intended to safely write `0` to `fb0/blank` after
+`greetd.service`. CI run `34766698142` passed, the artifact was hash-verified
+and clean-flashed, and USB/SSH plus the transfer regression gate returned. The
+display service was installed and enabled, but systemd skipped it because
+`ConditionPathExists=/sys/class/graphics/fb0/blank` was evaluated before fb0
+existed; a manual start of the same service changed `fb0/blank` from `4` to
+`0`. r15 removes that premature condition and keeps the helper's bounded wait
+for fb0. It still does not enable SCP/sensorhub, GPU runtime, modem, camera,
+GNSS autostart or any new high-risk module. Retest clean boot and visual output
+before touching sensors or GPU runtime.
 
 The first r13 CI run `34739853869` passed validation and built both kernel and
 device packages, but failed in install-image generation because apk preferred

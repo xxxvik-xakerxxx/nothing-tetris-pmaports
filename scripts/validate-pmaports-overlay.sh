@@ -313,6 +313,8 @@ validate_power_and_audio_config() {
 		"$device_pkg/nothing-tetris-greeter-display-policy.service"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-display-unblank' \
 		"$device_pkg/nothing-tetris-display-unblank.service"
+	! grep -Fq 'ConditionPathExists=/sys/class/graphics/fb0/blank' \
+		"$device_pkg/nothing-tetris-display-unblank.service"
 	grep -Fxq 'enable nothing-tetris-display-unblank.service' \
 		"$system_preset"
 	grep -Fq 'check_contains "greeter display policy exec"' \

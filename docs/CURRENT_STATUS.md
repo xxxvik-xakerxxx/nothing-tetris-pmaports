@@ -33,13 +33,31 @@ greeter-display gate then passed at
 hardware frontier gate passed at
 `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`.
 
-Device candidate r14 is the next display packaging fix. It keeps the same
-runtime hardware boundary as r13, applies the greeter idle policy from the
-greetd session wrapper, and adds a small system service that safely unblanks
-`fb0` after `greetd.service`. It does not enable SCP/sensorhub, GPU runtime,
-modem, camera, GNSS autostart or any new high-risk module. Its gate is a new CI
-artifact, clean flash, automatic `fb0/blank=0`, visual confirmation,
-USB/transfer regression and hardware frontier.
+Device candidate r14 kept the same runtime hardware boundary as r13, applied
+the greeter idle policy from the greetd session wrapper, and added a small
+system service intended to safely unblank `fb0` after `greetd.service`. CI run
+`34766698142` for commit `b8bfbdefcc8d904fbe8292a319498d9f66504747` passed and
+published `nothing-tetris-images` artifact `10321339423`; the downloaded ZIP
+SHA256 matched GitHub's digest
+`60c1c792cd1110f92af2d6fb9fd124afb860a3e4d39b800d275d0dc29ee2d8db`.
+`scripts/verify-ci-install-artifacts.sh` passed for the extracted boot, super
+and userdata images. The phone was flashed from the verified r14 artifact,
+booted kernel `6.18.0 #159-postmarketos-mediatek-mt6878` with
+`device-nothing-tetris-8-r14`, restored USB NCM/SSH and passed the transfer
+regression gate at
+`local/live-logs/20260913T184902Z-172.16.42.1-regression-gate`.
+
+The first r14 boot still left `fb0/blank=4`: systemd skipped
+`nothing-tetris-display-unblank.service` because its
+`ConditionPathExists=/sys/class/graphics/fb0/blank` was evaluated before fb0
+appeared. A later manual start of the same installed service changed
+`fb0/blank` from `4` to `0` and exited successfully, proving the helper is
+correct but the unit condition is too early. Device candidate r15 removes that
+condition and relies on the helper's existing bounded wait for the writable
+fb0 node. It does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS
+autostart or any new high-risk module. Its gate is a new CI artifact, clean
+flash, automatic `fb0/blank=0`, visual confirmation, USB/transfer regression
+and hardware frontier.
 
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
@@ -554,7 +572,7 @@ still open. A compile-only patch does not improve the end-user status.
 | Sensors | Broken | Current live r155 inventory exposes only PMIC ADC IIO devices (`mt6369-auxadc`, `mt6375-auxadc`, `mt6375-adc`); no accelerometer, gyro, proximity or light sensor is exposed. Sensor reply correlation and SCP DRAM span validation are host-proven prerequisites, but SCP/mailbox/IPI/HF/sensorhub remain disabled. CI 34692383850 has a verified next-scp install artifact carrying the packaged DRAM recovery-span guard, but it has not been flashed. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Current live r12 inventory has `/dev/dri/card0` only and no render node. Panthor compile/source prerequisites exist, and the VGPU readback gate proves a vendor/mainline enabled-rail source mismatch; shipped DT still has no GPU node, MFG RPC remains disabled, and there is no GPU regulator consumer or autoload. Commit `8db0d6e` hardens the Panthor default-off gate so MFG0/MFG RPC `KEEP_DEFAULT_OFF`, disabled MFG RPC providers and absent `vsram-cpum` runtime DT child remain enforced. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. First live gate must be read-only rail/register observation, not a GPU probe. |
 | Rear/front cameras | Broken | Current live r155 inventory has no `/dev/video*` or `/dev/media*`. Torch channels work independently. The IMX882 reset-polarity prerequisite is host-proven, but no camera node, sensor power-on, I2C transaction, SENINF/ISP, CCU or media pipeline is enabled. | Complete final DT/clock/rail ownership, observation-only clean boots, then one bounded sensor identity probe before SENINF/ISP or preview/capture work. |
-| Display | Partial | Installed r13 exposes native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output, and the frame-end synchronized buffer update removed visible redraw flicker in live testing. r13 clean boot preserved DSI as `connected`/`enabled` with brightness `1024`, but `fb0/blank=4` kept the greeter-display gate failed until a reversible live write of `0` to `/sys/class/graphics/fb0/blank`. After that, the greeter-display gate passed at `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate` and hardware frontier passed at `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`. r14 packages this as an automatic boot unblank plus greetd session idle policy. The bounded DPMS lifecycle failure (`QUEUE_SEQUENCE EINVAL` after off/on), fixed 60 Hz mode and missing render node remain open. | Build and clean-flash r14, require automatic `fb0/blank=0`, visual output, touch, USB transfer, warm reboot and suspend/resume before further main promotion. |
+| Display | Partial | Installed r13 exposes native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output, and the frame-end synchronized buffer update removed visible redraw flicker in live testing. r13 clean boot preserved DSI as `connected`/`enabled` with brightness `1024`, but `fb0/blank=4` kept the greeter-display gate failed until a reversible live write of `0` to `/sys/class/graphics/fb0/blank`. After that, the greeter-display gate passed at `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate` and hardware frontier passed at `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`. r14 clean-flashed from CI `34766698142` booted and passed USB transfer, but its display-unblank service was skipped because `ConditionPathExists=/sys/class/graphics/fb0/blank` fired before fb0 existed; manually starting the same service changed `fb0/blank` from `4` to `0`. r15 removes that premature condition while keeping the helper's bounded wait. The bounded DPMS lifecycle failure (`QUEUE_SEQUENCE EINVAL` after off/on), fixed 60 Hz mode and missing render node remain open. | Build and clean-flash r15, require automatic `fb0/blank=0`, visual output, touch, USB transfer, warm reboot and suspend/resume before further main promotion. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
