@@ -226,12 +226,14 @@ not a confirmed external RT1711H controller.
   later left the panel showing a stale fastboot frame while Linux and SSH were
   still running. Device r11 added a greetd-only display policy service, but the
   r11 clean flash did not return as fastboot or USB NCM after reboot. r12
-  therefore removes that service from the recovery image until the boot
-  regression is explained. A two-cycle DPMS live gate still fails after the
-  first off/on transition with a DRM sequence discontinuity and a disabled
-  connector post-state, so blank/unblank lifecycle remains a separate display
-  bug. Do not mark it `Works` until display lifecycle passes on a CI artifact
-  while USB stays available.
+  removed that service and recovered the clean boot/USB baseline; applying the
+  same policy live then restored DSI and passed the hardware frontier gate.
+  Device r13 packages only that policy as the next single-variable display
+  candidate. A two-cycle DPMS live gate still fails after the first off/on
+  transition with a DRM sequence discontinuity and a disabled connector
+  post-state, so blank/unblank lifecycle remains a separate display bug. Do not
+  mark it `Works` until display lifecycle passes on a CI artifact while USB
+  stays available.
 
 ## Next clean patch targets
 

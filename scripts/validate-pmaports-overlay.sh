@@ -282,8 +282,6 @@ validate_power_and_audio_config() {
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'check_contains "deferred mono speaker remap"' \
 		"$repo_root/.github/workflows/ci.yml"
-	grep -Fq 'demoted greeter display policy must not ship in recovery image' \
-		"$repo_root/.github/workflows/ci.yml"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-audio-policy' \
 		"$audio_policy_unit"
 	grep -Fxq 'After=graphical-session-pre.target' "$audio_policy_unit"
@@ -292,6 +290,19 @@ validate_power_and_audio_config() {
 	grep -Fxq 'WantedBy=graphical-session.target' "$audio_policy_unit"
 	grep -Fxq 'enable nothing-tetris-audio-policy.service' \
 		"$audio_user_preset"
+	grep -Fxq 'enable nothing-tetris-greeter-display-policy.service' \
+		"$audio_user_preset"
+	grep -Fq 'nothing-tetris-greeter-display-policy' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'nothing-tetris-greeter-display-policy.service' \
+		"$device_pkg/APKBUILD"
+	sh -n "$device_pkg/nothing-tetris-greeter-display-policy"
+	grep -Fq 'sleep-inactive-battery-type nothing' \
+		"$device_pkg/nothing-tetris-greeter-display-policy"
+	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
+		"$device_pkg/nothing-tetris-greeter-display-policy.service"
+	grep -Fq 'check_contains "greeter display policy exec"' \
+		"$repo_root/.github/workflows/ci.yml"
 	grep -Fxq 'autospawn = no' "$greetd_pulse_client"
 	grep -Fxq 'Hidden=true' "$greetd_pulse_autostart"
 	grep -Fq 'var/lib/greetd/.config/autostart/pulseaudio.desktop' \
@@ -300,11 +311,6 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config/dconf' \
 		"$device_pkg/APKBUILD"
-	if grep -Fq 'nothing-tetris-greeter-display-policy' \
-			"$device_pkg/APKBUILD" "$audio_user_preset"; then
-		echo "greeter display policy must stay out of the recovery image until r11 boot regression is explained" >&2
-		return 1
-	fi
 	grep -Fxq 'install="$pkgname.post-install"' "$device_pkg/APKBUILD"
 	grep -Fxq '	greetd' "$device_pkg/APKBUILD"
 	grep -Fq 'var/lib/greetd/.config' "$device_pkg/APKBUILD"

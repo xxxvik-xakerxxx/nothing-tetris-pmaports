@@ -22,7 +22,7 @@ only and must wait for a proven DSP readiness/shutdown contract. These
 results do not establish SIM service or a GPS fix. CURRENT_STATUS.md and
 the subsystem evidence documents track the exact boundaries.
 
-## Clean next-SCP baseline (2026-09-12)
+## Clean next-SCP baseline (2026-09-13)
 
 The next r11 clean image from CI run `34709738785` verified locally and both
 fastboot writes completed, but the phone did not return as fastboot or USB NCM
@@ -30,11 +30,29 @@ after reboot. Treat r11 as a boot-regression candidate until physical recovery
 and first-failure capture prove otherwise. Keep the previously installed r10
 result below as the last clean baseline.
 
-r12 is the recovery candidate: it removes r11's automatic greeter display
-policy from the device package and removes the packaged sensor-list `1201`
-kernel patch while keeping both as documented, host-tested candidates. Its job
-is to regain the r10 clean-boot/USB baseline first; only after that can display
-idle policy and sensor-list packaging be reintroduced one at a time.
+r12 recovered the clean-boot/USB baseline. CI run `34716528686` for commit
+`8db0d6ef3d217b1d27b33e4297e0d80034542296` passed validation and build, and
+artifact `10305003418` (`nothing-tetris-images`) downloaded with GitHub digest
+`sha256:b8f8ef00c5da73fd2cf0ff6376a965ba20591e58f234fb76ddb6e9468a3fce15`.
+The local verifier accepted the manifest and all payload hashes. The image was
+clean-flashed to `super` and `userdata`; the first `fastboot reboot` returned
+the usual USB status-read error, but the phone booted kernel `6.18.0 #159`,
+device package `8-r12`, restored USB NCM/SSH, reported zero failed systemd
+units and passed the transfer regression gate at
+`local/live-logs/20260913T050249Z-172.16.42.1-regression-gate`.
+
+r12 intentionally removed r11's automatic greeter display policy from the
+device package and removed the packaged sensor-list `1201` kernel patch while
+keeping both as documented, host-tested candidates. On the first clean r12 boot,
+the graphical session and Phoc started, but DSI was blanked
+(`DSI-1 enabled=disabled`, `fb0/blank=4`, `bl_power=4`). Reapplying the already
+tested greetd idle policy live and restarting only `greetd` restored
+`DSI-1 enabled=enabled` and `bl_power=0`; the hardware frontier gate then
+passed at `local/live-logs/20260913T050604Z-172.16.42.1-hardware-frontier`.
+r13 packages that greeter idle fix again as the next single-variable candidate.
+It still does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS
+autostart or any new high-risk module. Retest clean boot and visual output
+before touching sensors or GPU runtime.
 
 The test handset was clean-flashed from verified CI run `34692383850`,
 artifact `10297439743`, commit
@@ -51,13 +69,14 @@ no GPU render node, no camera/media nodes, no GNSS device on the clean baseline
 and no ModemManager modem. Keep the next hardware experiments single-variable
 and reversible, with USB/SSH as the stop condition.
 
-The next clean-install cycle must also run
+Each clean-install cycle must run
 `scripts/check-live-hardware-frontier-gate.sh 172.16.42.1 user 147147
-baseline` after the regression gate. The r11-specific greeter-display gate is
-held until the recovery image boots and the policy is reintroduced. It records one
-frontier snapshot for display/touch, radio, GNSS, modem/SIM, sensors, camera,
-GPU and audio, and it rejects accidental runtime publication of unvalidated
-GPU, modem, camera or sensor nodes until their own functional gates exist.
+baseline` after the regression gate. The greeter-display gate must be run
+against the r13 package before the display policy is promoted. It
+records one frontier snapshot for display/touch, radio, GNSS, modem/SIM,
+sensors, camera, GPU and audio, and it rejects accidental runtime publication
+of unvalidated GPU, modem, camera or sensor nodes until their own functional
+gates exist.
 
 ## Installed milestone (2026-09-10)
 

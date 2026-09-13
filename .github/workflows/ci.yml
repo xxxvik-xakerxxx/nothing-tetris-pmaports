@@ -445,14 +445,15 @@ jobs:
           check_contains "audio policy user preset" \
             'enable nothing-tetris-audio-policy.service' \
             "$rootfs/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset"
-          check_not_contains "demoted greeter display policy preset" \
-            'nothing-tetris-greeter-display-policy' \
+          check_contains "greeter display policy user preset" \
+            'enable nothing-tetris-greeter-display-policy.service' \
             "$rootfs/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset"
-          if test -e "$rootfs/usr/libexec/nothing-tetris-greeter-display-policy" ||
-              test -e "$rootfs/usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service"; then
-            echo "demoted greeter display policy must not ship in recovery image"
-            exit 1
-          fi
+          check_contains "greeter display policy exec" \
+            'sleep-inactive-battery-type nothing' \
+            "$rootfs/usr/libexec/nothing-tetris-greeter-display-policy"
+          check_contains "greeter display policy unit" \
+            'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
+            "$rootfs/usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service"
           check_contains "greeter PulseAudio autostart disabled" \
             'Hidden=true' \
             "$rootfs/var/lib/greetd/.config/autostart/pulseaudio.desktop"

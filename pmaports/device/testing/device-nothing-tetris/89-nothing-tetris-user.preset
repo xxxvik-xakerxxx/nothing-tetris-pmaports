@@ -1,1 +1,2 @@
 enable nothing-tetris-audio-policy.service
+enable nothing-tetris-greeter-display-policy.service
