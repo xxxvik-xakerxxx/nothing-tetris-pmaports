@@ -57,8 +57,10 @@ before touching sensors or GPU runtime.
 The first r13 CI run `34739853869` passed validation and built both kernel and
 device packages, but failed in install-image generation because apk preferred
 the upstream `linux-postmarketos-mediatek-mt6878 7.2-r0` package over the local
-`6.18-r158` package. The next candidate adds a package epoch to keep clean
-installs on the locally built kernel and native DTB.
+`6.18-r158` package. CI run `34743002254` proved that adding `epoch=1` did not
+change this pmbootstrap package selection. The next candidate raises the local
+package version to `7.2.1-r158` so clean installs keep the locally built kernel
+and native DTB; the kernel release itself remains `6.18.0`.
 
 The test handset was clean-flashed from verified CI run `34692383850`,
 artifact `10297439743`, commit

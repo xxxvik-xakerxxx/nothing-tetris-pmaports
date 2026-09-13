@@ -45,9 +45,11 @@ flash, visual confirmation and the regression/frontier gates before promotion.
 The first r13 CI run `34739853869` built the kernel and device packages, but
 the install-image stage failed because apk selected the upstream
 `linux-postmarketos-mediatek-mt6878 7.2-r0` over the locally built
-`6.18-r158`, leaving the native DTB absent for FIT generation. The follow-up
-candidate adds a kernel package epoch so the local package wins without changing
-the actual `6.18.0` kernel release.
+`6.18-r158`, leaving the native DTB absent for FIT generation. CI run
+`34743002254` proved that `epoch=1` did not affect pmbootstrap's local package
+selection in this path. The follow-up candidate raises the local package version
+to `7.2.1-r158` so apk prefers it over upstream `7.2-r0`, while the built kernel
+release remains `6.18.0`.
 
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
