@@ -1,5 +1,37 @@
 # Nothing Tetris GNSS bring-up
 
+## Live repository gate result (2026-09-13)
+
+`scripts/check-live-gnss-gate.sh 172.16.42.1 user 147147 readonly` passed on
+the clean-flashed next-SCP r13 image, boot ID
+`0c4ebbb4-6d1a-4e48-a0a4-99d4ed42b041`, kernel
+`6.18.0 #159-postmarketos-mediatek-mt6878`, with
+`device-nothing-tetris-8-r13`, `firmware-nothing-tetris-1-r3` and
+`linux-postmarketos-mediatek-mt6878-7.2.1-r158`.
+
+The gate first confirmed `usb0` UP, zero failed units, connectivity active,
+GNSS transport inactive, and no CCCI/DPMAIF/modem runtime. It then started
+`nothing-tetris-gnss-transport.service`, which loaded `gps_drv_dl_v051` and
+published `/dev/gps_emi`, `/dev/gpsdl0` and `/dev/gpsdl1`. The packaged
+read-only link0 diagnostic returned `status=0`, `code_size=42505`,
+`fragment_count=106`, `boot_time_ns=4515769320499` and
+`arch_counter=58840310939`; `cipher_key` remained redacted. The close path
+reported `OPENING -> OPENED -> CLOSING -> CLOSED`, left no `/dev/gpsdl*`
+owners, kept `usb0` UP, kept failed units at zero, did not publish modem nodes
+or CCCI/DPMAIF modules, and the final 32 MiB USB transfer reported exactly
+`33554432` bytes.
+
+The first two gate attempts stopped before the readonly probe because the new
+script treated an empty `fuser /dev/gpsdl*` result as a shell failure. The
+script now terminates the optional baseline, transport and post-state probes
+with `true`, so "no owner" is recorded as the required healthy state rather
+than as a harness failure.
+
+This promotes the GNSS transport/read-only boundary from a manual sequence to
+a passing live repository gate. It still does not claim end-user GPS: there is
+no NMEA stream, GeoClue/gpsd integration, satellite acquisition, timed fix,
+restart stress, Wi-Fi/BT coexistence matrix or suspend/resume evidence.
+
 ## Clean next-SCP read-only result (2026-09-12)
 
 After clean-flashing CI run `34692383850`, artifact `10297439743`, commit

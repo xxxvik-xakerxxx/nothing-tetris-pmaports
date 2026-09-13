@@ -52,6 +52,7 @@ systemctl is-active nothing-tetris-gnss-transport.service 2>/dev/null
 lsmod | grep -Ei "conninfra|gps|gnss|ccci|dpmaif|ccmni|modem|mddp"
 ls -l /dev/gps_emi /dev/gpsdl0 /dev/gpsdl1 /dev/wwan* /dev/cdc-wdm* /dev/ccci* 2>/dev/null
 fuser /dev/gpsdl0 /dev/gpsdl1 2>/dev/null
+true
 ' > "$outdir/baseline.txt" 2> "$outdir/baseline.err" ||
 	fail "baseline command failed"
 
@@ -74,6 +75,7 @@ test -c /dev/gpsdl0 && echo gpsdl0-present || echo gpsdl0-missing
 test -c /dev/gpsdl1 && echo gpsdl1-present || echo gpsdl1-missing
 test -c /dev/gps_emi && echo gps-emi-present || echo gps-emi-missing
 fuser /dev/gpsdl0 /dev/gpsdl1 2>/dev/null
+true
 ' > "$outdir/transport.txt" 2> "$outdir/transport.err" ||
 	fail "GNSS transport state command failed"
 
@@ -104,6 +106,7 @@ find /proc/[0-9]*/fd -lname "/dev/gpsdl*" -print 2>/dev/null
 ls -l /dev/wwan* /dev/cdc-wdm* /dev/ccci* 2>/dev/null
 lsmod | grep -Ei "gps|gnss|ccci|dpmaif|ccmni|modem|mddp"
 dmesg -T | grep -Ei "gps|gnss|conninfra|ccci|dpmaif|BUG:|WARNING:|Oops:|Kernel panic|hung task|use-after-free|usb0|ncm" | tail -n 500
+true
 ' > "$outdir/post.txt" 2> "$outdir/post.err" ||
 	fail "post-GNSS state command failed"
 

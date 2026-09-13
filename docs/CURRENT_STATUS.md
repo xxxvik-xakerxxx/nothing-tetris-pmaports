@@ -41,6 +41,25 @@ modem, camera, GNSS autostart or any new high-risk module. Its gate is a new CI
 artifact, clean flash, automatic `fb0/blank=0`, visual confirmation,
 USB/transfer regression and hardware frontier.
 
+On the current r13 boot, the live peripheral inventory still shows the
+remaining non-display frontier plainly: GNSS transport is available but manual,
+ModemManager reports no modem, no `/dev/wwan*`, `/dev/cdc-wdm*` or `/dev/ccci*`
+nodes exist, IIO exposes only PMIC ADC devices
+`mt6369-auxadc.3.auto`, `mt6375-auxadc` and `mt6375-adc`, no user accel/gyro/
+proximity/light sensor nodes exist, no `/dev/video*`, `/dev/media*` or
+`/dev/v4l-subdev*` camera nodes exist, and GPU still exposes only
+`/dev/dri/card0` without a render node.
+
+The GNSS live repository gate then passed on this same boot at
+`local/live-logs/20260913T165223Z-172.16.42.1-gnss-gate`. It started the
+manual transport, loaded `gps_drv_dl_v051`, published `/dev/gps_emi`,
+`/dev/gpsdl0` and `/dev/gpsdl1`, ran the packaged readonly link0 diagnostic
+with `status=0`, `code_size=42505`, `fragment_count=106`, redacted the cipher
+key, left no gpsdl owner, kept failed units at zero, kept modem/CCCI/DPMAIF
+absent and completed the final 32 MiB USB transfer with exactly `33554432`
+bytes. This upgrades GNSS from manual readonly evidence to a passing live
+repository gate, but still not to end-user GPS.
+
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
 `3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP
