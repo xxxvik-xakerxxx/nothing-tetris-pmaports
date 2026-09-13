@@ -60,6 +60,15 @@ absent and completed the final 32 MiB USB transfer with exactly `33554432`
 bytes. This upgrades GNSS from manual readonly evidence to a passing live
 repository gate, but still not to end-user GPS.
 
+The same GNSS gate also passed on the clean-flashed r14 display candidate boot
+`ce8e6541-ab38-4d82-8cec-1b5f2c03b971`, with `device-nothing-tetris-8-r14`,
+`usb0` UP, zero failed units, GNSS transport initially inactive, no GPS module
+and no CCCI/DPMAIF/modem runtime. The readonly result was again `status=0`,
+`code_size=42505`, `fragment_count=106`, `cipher_key=redacted`; the post-state
+kept `usb0` UP, left no gpsdl owner and completed the final 32 MiB USB transfer
+with exactly `33554432` bytes. Evidence:
+`local/live-logs/20260913T185257Z-172.16.42.1-gnss-gate`.
+
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
 `3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP

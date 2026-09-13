@@ -32,6 +32,19 @@ a passing live repository gate. It still does not claim end-user GPS: there is
 no NMEA stream, GeoClue/gpsd integration, satellite acquisition, timed fix,
 restart stress, Wi-Fi/BT coexistence matrix or suspend/resume evidence.
 
+The same gate later passed on the clean-flashed r14 display candidate after
+the r14 USB/display helper issue was isolated. Baseline boot ID
+`ce8e6541-ab38-4d82-8cec-1b5f2c03b971` reported
+`device-nothing-tetris-8-r14`, kernel package
+`linux-postmarketos-mediatek-mt6878-7.2.1-r158`, `usb0` UP, zero failed
+units, connectivity active, GNSS transport inactive, no GPS module and no
+CCCI/DPMAIF/modem runtime. The readonly diagnostic returned `status=0`,
+`code_size=42505`, `fragment_count=106`, `boot_time_ns=361450649944` and
+`arch_counter=4833009559`, with `cipher_key=redacted`. The post-state kept
+`usb0` UP, failed units at zero, no gpsdl owner and no modem runtime, and the
+final 32 MiB USB transfer reported exactly `33554432` bytes. Evidence:
+`local/live-logs/20260913T185257Z-172.16.42.1-gnss-gate`.
+
 ## Clean next-SCP read-only result (2026-09-12)
 
 After clean-flashing CI run `34692383850`, artifact `10297439743`, commit
