@@ -42,6 +42,12 @@ user service for `greetd`. It does not enable SCP/sensorhub, GPU runtime, modem,
 camera, GNSS autostart or any new high-risk module. Its job is to make the r12
 display wake result automatic on a clean install; it still requires CI, clean
 flash, visual confirmation and the regression/frontier gates before promotion.
+The first r13 CI run `34739853869` built the kernel and device packages, but
+the install-image stage failed because apk selected the upstream
+`linux-postmarketos-mediatek-mt6878 7.2-r0` over the locally built
+`6.18-r158`, leaving the native DTB absent for FIT generation. The follow-up
+candidate adds a kernel package epoch so the local package wins without changing
+the actual `6.18.0` kernel release.
 
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit

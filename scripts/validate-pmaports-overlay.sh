@@ -882,6 +882,7 @@ validate_compile_only_boundaries() {
 	grep -Fq 'drivers/clk/mediatek/clk-mt6878-cam.o' "$kernel_apkbuild"
 	grep -Fq 'compile-only MT6878 camera clock module must not be packaged' \
 		"$kernel_apkbuild"
+	grep -Fxq 'epoch=1' "$kernel_apkbuild"
 	grep -Fq 'mediatek/mt6878-nothing-tetris-native.dtb' "$kernel_apkbuild"
 	grep -Fq 'mt6878-nothing-tetris-native.dtb"' "$kernel_apkbuild"
 	grep -Fq "grep -Eq '^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$'" "$kernel_apkbuild"

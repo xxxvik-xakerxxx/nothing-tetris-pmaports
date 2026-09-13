@@ -54,6 +54,12 @@ It still does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS
 autostart or any new high-risk module. Retest clean boot and visual output
 before touching sensors or GPU runtime.
 
+The first r13 CI run `34739853869` passed validation and built both kernel and
+device packages, but failed in install-image generation because apk preferred
+the upstream `linux-postmarketos-mediatek-mt6878 7.2-r0` package over the local
+`6.18-r158` package. The next candidate adds a package epoch to keep clean
+installs on the locally built kernel and native DTB.
+
 The test handset was clean-flashed from verified CI run `34692383850`,
 artifact `10297439743`, commit
 `3a016d36153d504f6b1002d29120bd84a8183533`. `super` and `userdata` were
