@@ -265,6 +265,7 @@ jobs:
             /usr/libexec/nothing-tetris-connectivity-setup \
             /usr/libexec/nothing-tetris-gnss-readonly \
             /usr/libexec/nothing-tetris-audio-policy \
+            /usr/libexec/nothing-tetris-display-unblank \
             /usr/libexec/nothing-tetris-bluetooth-address-extract \
             /usr/libexec/nothing-tetris-bluetooth-address \
             /usr/libexec/nothing-tetris-wifi-nvram-extract \
@@ -276,6 +277,7 @@ jobs:
           done
           check_file /usr/lib/systemd/system-preset/89-nothing-tetris.preset
           check_file /usr/lib/systemd/user-preset/89-nothing-tetris-user.preset
+          check_file /usr/lib/systemd/system/nothing-tetris-display-unblank.service
           check_file /usr/lib/systemd/user/nothing-tetris-audio-policy.service
           check_file /usr/lib/modules-load.d/nothing-tetris-audio.conf
           check_file /usr/share/mkinitfs/modules/00-device-nothing-tetris.modules
@@ -288,6 +290,7 @@ jobs:
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-connectivity.service \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address-extract.service \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-bluetooth-address.service \
+            /etc/systemd/system/multi-user.target.wants/nothing-tetris-display-unblank.service \
             /etc/systemd/system/multi-user.target.wants/nothing-tetris-wifi-nvram.service \
             /etc/systemd/system/multi-user.target.wants/NetworkManager.service \
             /etc/systemd/system/dbus-org.bluez.service \
@@ -454,6 +457,15 @@ jobs:
           check_contains "greeter display policy unit" \
             'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
             "$rootfs/usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service"
+          check_contains "display unblank system preset" \
+            'enable nothing-tetris-display-unblank.service' \
+            "$rootfs/usr/lib/systemd/system-preset/89-nothing-tetris.preset"
+          check_contains "display unblank exec" \
+            'printf 0 > "$fb_blank"' \
+            "$rootfs/usr/libexec/nothing-tetris-display-unblank"
+          check_contains "display unblank unit" \
+            'ExecStart=/usr/libexec/nothing-tetris-display-unblank' \
+            "$rootfs/usr/lib/systemd/system/nothing-tetris-display-unblank.service"
           check_contains "greeter PulseAudio autostart disabled" \
             'Hidden=true' \
             "$rootfs/var/lib/greetd/.config/autostart/pulseaudio.desktop"

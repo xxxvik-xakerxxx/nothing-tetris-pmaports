@@ -4,12 +4,11 @@ Updated: 2026-09-13.
 
 ## Latest clean next-SCP installation
 
-r12 recovered the clean boot baseline after the r11 regression. CI run
-`34716528686` for commit
-`8db0d6ef3d217b1d27b33e4297e0d80034542296` completed successfully and
-published `nothing-tetris-images` artifact `10305003418`. The downloaded ZIP
+r13 is the latest clean-flashed next-SCP image. CI run `34752524434` for commit
+`dcaa75d3bdd87606776d64b5e9509ade9ec350d7` completed successfully and
+published `nothing-tetris-images` artifact `10316991883`; the downloaded ZIP
 SHA256 matched GitHub's artifact digest
-`b8f8ef00c5da73fd2cf0ff6376a965ba20591e58f234fb76ddb6e9468a3fce15`.
+`7017cc873d8f7b721407441dd41ff7b207638a938e70e2001162c9c9226ab637`.
 `scripts/verify-ci-install-artifacts.sh` passed for `boot_image.itb`,
 `nothing-tetris-boot.img` and `nothing-tetris-root.sparse.img`; the manifest
 reports kernel `6.18.0`, required U-Boot
@@ -17,39 +16,30 @@ reports kernel `6.18.0`, required U-Boot
 `nothing-tetris-boot.img -> super`, `nothing-tetris-root.sparse.img ->
 userdata`.
 
-The phone entered `tetris-uboot` fastboot on slot `a`. `super` and `userdata`
-were clean-flashed from the verified r12 artifact. `fastboot reboot` returned
-the usual USB status-read error, but the phone booted kernel
+The phone was visible as `tetris-uboot` fastboot on slot `a`; `super` and
+`userdata` were clean-flashed from the verified r13 artifact. `fastboot reboot`
+returned the usual USB status-read error, but the phone booted kernel
 `Linux nothing-tetris 6.18.0 #159-postmarketos-mediatek-mt6878` with
-`device-nothing-tetris-8-r12`, restored USB NCM/SSH, reported zero failed
-systemd units and passed the transfer regression gate at
-`local/live-logs/20260913T050249Z-172.16.42.1-regression-gate`.
+`device-nothing-tetris-8-r13`, restored USB NCM/SSH on `172.16.42.1`, reported
+zero failed systemd units and passed the transfer regression gate at
+`local/live-logs/20260913T153822Z-172.16.42.1-regression-gate`.
 
-r12 deliberately kept the greeter display idle policy out of the package to
-recover from r11 with one fewer boot-time variable, and kept the sensor-list
-predicate patch as a host-validated candidate outside the runtime kernel
-package. On the first clean r12 boot, Phoc and the graphical session were alive
-but DSI was blanked (`DSI-1 enabled=disabled`, `fb0/blank=4`, `bl_power=4`).
-Applying the previously tested greetd idle settings live and restarting only
-`greetd` restored `DSI-1 enabled=enabled` and `bl_power=0`; the hard USB
-regression gate then passed again at
-`local/live-logs/20260913T050527Z-172.16.42.1-regression-gate`, and the
+r13 packages the live-proven greeter idle settings, but the first clean boot
+still reached `fb0/blank=4` while DSI stayed `connected`/`enabled` and backlight
+brightness stayed `1024`. A reversible live write of `0` to
+`/sys/class/graphics/fb0/blank` changed the state to `0` without USB loss; the
+greeter-display gate then passed at
+`local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate`, and the
 hardware frontier gate passed at
-`local/live-logs/20260913T050604Z-172.16.42.1-hardware-frontier`.
+`local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`.
 
-Device candidate r13 packages only that live-proven greeter idle policy as a
-user service for `greetd`. It does not enable SCP/sensorhub, GPU runtime, modem,
-camera, GNSS autostart or any new high-risk module. Its job is to make the r12
-display wake result automatic on a clean install; it still requires CI, clean
-flash, visual confirmation and the regression/frontier gates before promotion.
-The first r13 CI run `34739853869` built the kernel and device packages, but
-the install-image stage failed because apk selected the upstream
-`linux-postmarketos-mediatek-mt6878 7.2-r0` over the locally built
-`6.18-r158`, leaving the native DTB absent for FIT generation. CI run
-`34743002254` proved that `epoch=1` did not affect pmbootstrap's local package
-selection in this path. The follow-up candidate raises the local package version
-to `7.2.1-r158` so apk prefers it over upstream `7.2-r0`, while the built kernel
-release remains `6.18.0`.
+Device candidate r14 is the next display packaging fix. It keeps the same
+runtime hardware boundary as r13, applies the greeter idle policy from the
+greetd session wrapper, and adds a small system service that safely unblanks
+`fb0` after `greetd.service`. It does not enable SCP/sensorhub, GPU runtime,
+modem, camera, GNSS autostart or any new high-risk module. Its gate is a new CI
+artifact, clean flash, automatic `fb0/blank=0`, visual confirmation,
+USB/transfer regression and hardware frontier.
 
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
@@ -166,9 +156,10 @@ The earlier display promotion candidate at
 mismatch by depending on `greetd` before the device package runs and resolving
 the packaged `greetd` UID/GID at install time instead of baking one
 builder-local numeric owner. That ownership repair is preserved in the current
-r12/r13 device package line. The new r13 candidate is narrower: it adds the
-live-proven greeter display idle policy back as a packaged user service after
-r12 proved the base image boots and the policy restores DSI without USB loss.
+r12/r13/r14 device package line. r13 proved the base image boots with the
+packaged idle policy, but also proved that a separate boot-time framebuffer
+unblank is required. r14 adds that unblank service and runs the idle policy
+inside the greetd session wrapper before Phoc/Phrog starts.
 
 ## Modem and sensor prerequisites
 
@@ -548,8 +539,8 @@ still open. A compile-only patch does not improve the end-user status.
 
 | Subsystem | Current status | Confirmed evidence | Candidate / next gate |
 | --- | --- | --- | --- |
-| Boot and root filesystem | Works | Clean flash boots pmOS; root is writable and expanded. r12 from CI `34716528686`, artifact `10305003418`, commit `8db0d6ef3d217b1d27b33e4297e0d80034542296`, kernel `6.18.0 #159`, device package `8-r12`, verified and clean-flashed on 2026-09-13 after r11 failed to return USB. | Recheck after every candidate installation. |
-| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and exact 32 MiB transfers passed after the clean #130 install and again on live r155 boot d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a at 20260912T100523Z. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. Clean r132 presents a valid CDC-NCM control/data pair; after the macOS session was unlocked, a host-side reset created `en4`, assigned `172.16.42.2` and restored SSH without rebooting the phone. A 2026-09-12 read-only r155/r9 check found `/chosen` still empty, root `serial-number` present without logging its value, `mediatek,mt6878-devinfo` present and `adie-sku = 1`. r12 clean flash restored `en4`/USB NCM and passed transfer regression at `local/live-logs/20260913T050249Z-172.16.42.1-regression-gate`; after the live greeter restart it passed again at `local/live-logs/20260913T050527Z-172.16.42.1-regression-gate`. The random host MAC remains a locked-host reliability defect. | Review whether root `serial-number` or devinfo can be an allowed hashed seed without leaking unique data, then package stable per-device gadget identity and repeat clean install, locked-host reconnect, reboot, 32 MiB transfer and suspend/resume. |
+| Boot and root filesystem | Works | Clean flash boots pmOS; root is writable and expanded. r13 from CI `34752524434`, artifact `10316991883`, commit `dcaa75d3bdd87606776d64b5e9509ade9ec350d7`, kernel `6.18.0 #159`, device package `8-r13`, verified and clean-flashed on 2026-09-13. | Recheck after every candidate installation. |
+| USB debug / NCM SSH | Partial | Automatic `usb0`, SSH and exact 32 MiB transfers passed after the clean #130 install and again on live r155 boot d9d69266-fb08-464f-a7d7-fb7b2fdf1a7a at 20260912T100523Z. A normal Linux reboot produced a new boot ID and restored USB SSH automatically with no failed system units. Clean r132 presents a valid CDC-NCM control/data pair; after the macOS session was unlocked, a host-side reset created `en4`, assigned `172.16.42.2` and restored SSH without rebooting the phone. A 2026-09-12 read-only r155/r9 check found `/chosen` still empty, root `serial-number` present without logging its value, `mediatek,mt6878-devinfo` present and `adie-sku = 1`. r13 clean flash restored `en4`/USB NCM and passed transfer regression at `local/live-logs/20260913T153822Z-172.16.42.1-regression-gate`; the post-unblank display gates preserved SSH. The random host MAC remains a locked-host reliability defect. | Review whether root `serial-number` or devinfo can be an allowed hashed seed without leaking unique data, then package stable per-device gadget identity and repeat clean install, locked-host reconnect, reboot, 32 MiB transfer and suspend/resume. |
 | Wi-Fi | Partial | Clean #130 automatically reassociated with DHCP/default route/DNS/HTTPS and completed an exact 64 MiB SSH stream at `192.168.22.64` while USB and Bluetooth remained active. The r151 regression gate now distinguishes `wlan0` presence from usable Wi-Fi; the current clean r155 configuration has no user Wi-Fi association and `apk info` reports transient DNS failures while refreshing indexes. | Restore normal Wi-Fi config on the clean image, then repeat cold reconnect, DHCP/DNS/HTTPS, suspend/resume, sustained bidirectional transfer and second-unit checks. |
 | Bluetooth | Partial | Clean #130 registers powered BlueZ `hci0`; `bluetoothctl --timeout 8 scan on` found 23 devices and exited with `Discovering: no` while USB and Wi-Fi remained active. The earlier stuck-discovery result came from an unbounded client invocation rather than the bounded lifecycle. | Pair/reconnect and test audio/data profiles across suspend. |
 | Touch and keys | Works | Installed r132 binds `fts_ts` at I2C `2-0038` and exposes `/dev/input/event0`; the reported graphical failure is not a missing touch device. The current fbcon intentionally has no touch interaction. Balanced power/volume events passed previously. | Recheck sustained touch after the graphical display path is restored. |
@@ -557,34 +548,35 @@ still open. A compile-only patch does not improve the end-user status.
 | Audio | Partial | Speaker playback remains historical physical evidence. On clean #130 a quiet five-second capture produced 387856 samples, 386262 nonzero, zero clipping and 193359 stereo pairs with different channels. After a reversible r6 overlay and normal reboot (`246b8a99-05bc-4ae6-8017-623314471cf9`), `greetd` had zero PulseAudio processes, no fresh ALSA/BlueZ ownership errors appeared, failed units were zero and USB/Wi-Fi/BT returned normally. On installed r151/r8 the new audio audit initially failed because `/var/lib/greetd/.config/dconf` was absent; after creating it live with `greetd:greetd 0700`, the audit passed with USB, ALSA card and zero greeter PulseAudio owner regressions. Later greeter logs still showed Permission denied creating sibling config directories and a stale root-owned `dconf/user` under `/var/lib/greetd/.config`. Device package r12 keeps the recursive private `.config` ownership repair, and the r12 hardware frontier snapshot still exposes the `mt6878-mt6369` ALSA card and playback devices. | Require zero greeter PulseAudio owners and one real graphical-user owner, then retest login/relogin, speaker/system events, capture, Bluetooth profiles and suspend. |
 | Thermal | Partial | All 24 MT6878 zones return plausible polling-mode values without USB loss. | IRQ/trip routing and sustained load remain disabled/unverified. |
 | Charging | Partial | Clean #128 uses AICR/ICHG 500000 uA when TCPM publishes no current limit. A later real PD session published 5 V / 2 A and drove the policy to 2 A. On installed r151, the source-aware power gate passed: this PD-capable computer attachment reports 5 V but `CURRENT_MAX=0`, so the conservative 500 mA fallback remains correct. These are contract/taper snapshots, not a full charge-rate result. Native BC1.2 SDP/CDP/DCP classification is absent. | Repeat PD from a partially discharged battery while logging battery/connector temperatures, rate, taper, termination and detach. Separately observe a USB 2.0 host, known Rp source and known 5 V BC1.2 DCP. Preserve USB2 DP/DM ownership; explicit PPS setpoints, higher voltages and OTG remain disabled. |
-| Idle battery drain | Broken | Roughly half the battery was reported lost overnight. A live r147 capture found `dconf-service` at 5.1 GiB RSS plus 596 MiB swap and persistent CPU use because `/var/lib/greetd/.config/dconf` did not exist; Calls and Chatty retried failed writes continuously. A soft restart reclaimed the memory, but growth resumed until the directory was created. Device package r12 keeps the recursive private `.config` greeter tree repair from target `/etc/passwd`; r12 clean boot recovered USB but still allowed the greeter display to blank until the idle policy was applied live. Wi-Fi and USB suspend costs remain unisolated. | Package the greeter idle policy as a single-variable candidate, clean-flash it, validate flat dconf RSS/CPU across reboot, then run physically unplugged screen-off A/B intervals with Wi-Fi associated and disabled. Record coulomb, suspend and wake/IRQ deltas. |
+| Idle battery drain | Broken | Roughly half the battery was reported lost overnight. A live r147 capture found `dconf-service` at 5.1 GiB RSS plus 596 MiB swap and persistent CPU use because `/var/lib/greetd/.config/dconf` did not exist; Calls and Chatty retried failed writes continuously. A soft restart reclaimed the memory, but growth resumed until the directory was created. Device package r13 keeps the recursive private `.config` greeter tree repair and packaged idle settings; r13 clean boot still needed a live `fb0` unblank. Wi-Fi and USB suspend costs remain unisolated. | Clean-flash r14, validate automatic unblank plus flat dconf RSS/CPU across reboot, then run physically unplugged screen-off A/B intervals with Wi-Fi associated and disabled. Record coulomb, suspend and wake/IRQ deltas. |
 | GNSS | Partial | Clean r155 from CI 34589225716 passed three fresh supervised BINFO/download/stop cycles on separate boots and preserved the exact 32 MiB USB hash. The read-only diagnostic lifecycle hardening is published at 14a7a2f with 19 isolated host scenarios; CI 34687644038 now runs this gate in validate-overlay and passed it. The integrated GNSS boot-protocol gate covers FE08/FE31/FE32 framing, checksums, split reads, truncation/overflow rejection and 1/106/256-fragment state. Current live r155 inventory shows `gps_drv_dl_v051` loaded with `/dev/gpsdl0` and `/dev/gpsdl1`, failed units zero, and no modem device. | Do not retry GNSS on the current boot with the module already loaded. Next reboot, then advance from read-only/download reliability to bounded startup command ownership and navigation/NMEA semantics before exposing gpsd/GeoClue. |
 | Modem / SIM | Broken | Current live r155 inventory still reports no ModemManager modem and no CCCI/DPMAIF/WWAN device. U-Boot CCCI branch 1b8c954dba accepts the real stock48 descriptor form and CI passed, but this only publishes diagnostic handoff status. The combined compile-only modem inventory classifies remaining references and still ships no ECCCI/DPMAIF module or autoload. `codex/hardware-integration` now has CI-passing pinned B4.1 modem prereq gates for the CCMNI Linux 6.18 adaptation and DPMAIF page-pool DMA sizing candidates. | Validate actual configured-kernel exports, module ownership and final LTO/modpost; then cover page-pool and UDC provider lifecycle. Handoff memory, trusted-firmware semantics, power, IRQ/DMA isolation, DT, SIM detect and runtime remain later gates. |
 | Sensors | Broken | Current live r155 inventory exposes only PMIC ADC IIO devices (`mt6369-auxadc`, `mt6375-auxadc`, `mt6375-adc`); no accelerometer, gyro, proximity or light sensor is exposed. Sensor reply correlation and SCP DRAM span validation are host-proven prerequisites, but SCP/mailbox/IPI/HF/sensorhub remain disabled. CI 34692383850 has a verified next-scp install artifact carrying the packaged DRAM recovery-span guard, but it has not been flashed. | Establish authoritative active `scp1`/`scp2` authentication/selection and decode the live LK TCM region-info ABI. Only then integrate an observation-only U-Boot path; publication, disabled DVFS nodes and live probes remain separate later gates. |
 | GPU | Broken | Current live r12 inventory has `/dev/dri/card0` only and no render node. Panthor compile/source prerequisites exist, and the VGPU readback gate proves a vendor/mainline enabled-rail source mismatch; shipped DT still has no GPU node, MFG RPC remains disabled, and there is no GPU regulator consumer or autoload. Commit `8db0d6e` hardens the Panthor default-off gate so MFG0/MFG RPC `KEEP_DEFAULT_OFF`, disabled MFG RPC providers and absent `vsram-cpum` runtime DT child remain enforced. | Complete MFG runtime sequencing, clock/reset ownership, coupled rails, DT consumer, CSF firmware and protected memory before any recovery-image probe. First live gate must be read-only rail/register observation, not a GPU probe. |
 | Rear/front cameras | Broken | Current live r155 inventory has no `/dev/video*` or `/dev/media*`. Torch channels work independently. The IMX882 reset-polarity prerequisite is host-proven, but no camera node, sensor power-on, I2C transaction, SENINF/ISP, CCU or media pipeline is enabled. | Complete final DT/clock/rail ownership, observation-only clean boots, then one bounded sensor identity probe before SENINF/ISP or preview/capture work. |
-| Display | Partial | Installed r12 exposes native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output, and the frame-end synchronized buffer update removed visible redraw flicker in live testing. r12 clean boot initially repeated the greeter blanking failure (`DSI-1 enabled=disabled`, `fb0/blank=4`, `bl_power=4`) while USB/SSH and Phoc stayed alive. Reapplying the greeter settings `idle-delay=0`, `idle-dim=false` and inactive sleep type `nothing` live, then restarting only `greetd`, restored `DSI-1 enabled=enabled` and `bl_power=0`; the hardware frontier gate passed at `local/live-logs/20260913T050604Z-172.16.42.1-hardware-frontier`. `fb0/blank` still reports `4`, the r11-specific greeter-display gate remains held until the policy is reintroduced in a boot-proven package, and the bounded DPMS lifecycle failure (`QUEUE_SEQUENCE EINVAL` after off/on) remains open. The panel still exposes only fixed 60 Hz and the session has no render node, so perceived slowness is likely software rendering/GPU, not the scanout flicker fix. | Reintroduce greeter idle policy as the next single-variable package, clean-flash it, then fix/retest DPMS/brightness cadence, visual output, touch, USB transfer, warm reboot and suspend/resume before further main promotion. |
+| Display | Partial | Installed r13 exposes native `/sys/class/drm/card0/card0-DSI-1`; prior clean install and user inspection confirmed visually good output, and the frame-end synchronized buffer update removed visible redraw flicker in live testing. r13 clean boot preserved DSI as `connected`/`enabled` with brightness `1024`, but `fb0/blank=4` kept the greeter-display gate failed until a reversible live write of `0` to `/sys/class/graphics/fb0/blank`. After that, the greeter-display gate passed at `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate` and hardware frontier passed at `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`. r14 packages this as an automatic boot unblank plus greetd session idle policy. The bounded DPMS lifecycle failure (`QUEUE_SEQUENCE EINVAL` after off/on), fixed 60 Hz mode and missing render node remain open. | Build and clean-flash r14, require automatic `fb0/blank=0`, visual output, touch, USB transfer, warm reboot and suspend/resume before further main promotion. |
 | microSD | Untested | Controller probes, but no physical card I/O test was recorded. | Insert/remove, read/write and remount test. |
 
 ## Current installation test
 
-The installed image is r12 from CI `34716528686`, not a daily-phone claim. Its
-job is to restore the clean-boot baseline after the r11 USB/boot regression.
+The installed image is r13 from CI `34752524434`, not a daily-phone claim. Its
+job is to prove the next-SCP package line clean-installs while preserving USB.
 Current gate state:
 
-1. CI artifact `10305003418` downloaded with SHA-256
-   `b8f8ef00c5da73fd2cf0ff6376a965ba20591e58f234fb76ddb6e9468a3fce15`; the
+1. CI artifact `10316991883` downloaded with SHA-256
+   `7017cc873d8f7b721407441dd41ff7b207638a938e70e2001162c9c9226ab637`; the
    local verifier accepted `BUILD-MANIFEST`, `SHA256SUMS`,
    `nothing-tetris-boot.img`, `nothing-tetris-root.sparse.img` and
    `boot_image.itb`.
 2. Clean fastboot writes to `super` and `userdata`: passed.
 3. Automatic USB NCM/SSH and exact 32 MiB transfer: passed at
-   `local/live-logs/20260913T050249Z-172.16.42.1-regression-gate`.
+   `local/live-logs/20260913T153822Z-172.16.42.1-regression-gate`.
 4. First clean boot started Phoc and exposed DSI, touch, Wi-Fi, Bluetooth and
-   ALSA inventory, but the greeter blanked the panel until the idle policy was
-   applied live and `greetd` was restarted. The post-restart hardware frontier
-   gate passed at
-   `local/live-logs/20260913T050604Z-172.16.42.1-hardware-frontier`.
+   ALSA inventory, but `fb0/blank=4` remained set. A reversible live unblank
+   changed it to `0`; greeter-display then passed at
+   `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate`, and
+   hardware frontier passed at
+   `local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`.
 5. Camera, GPU render node, CCCI/DPMAIF modem, user sensors and automatic GNSS
    publication remain absent from the runtime module/device set as required.
 6. Wi-Fi interface presence is not treated as success; association, DHCP,
@@ -595,7 +587,7 @@ Native display is installed without any framebuffer fallback. The HWCCF and
 SPM DISP-domain, DSI publication, mutex readiness, full route, OVL shadow and
 DSC parameter-flow blockers are fixed or disproven, and the frame-end OVL
 update removed visible redraw flicker in live testing. The remaining display
-work is greeter idle policy packaging, DPMS lifecycle, brightness lifecycle,
+work is r14 clean-boot automatic unblank, DPMS lifecycle, brightness lifecycle,
 fixed 60 Hz mode and the lack of a render node. The next GNSS gate is userspace
 protocol integration and a real position fix, followed by cold-start and
 lifecycle validation.

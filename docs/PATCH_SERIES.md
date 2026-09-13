@@ -228,8 +228,13 @@ not a confirmed external RT1711H controller.
   r11 clean flash did not return as fastboot or USB NCM after reboot. r12
   removed that service and recovered the clean boot/USB baseline; applying the
   same policy live then restored DSI and passed the hardware frontier gate.
-  Device r13 packages only that policy as the next single-variable display
-  candidate. A two-cycle DPMS live gate still fails after the first off/on
+  Device r13 packaged only that policy and clean-flashed from CI
+  `34752524434`, but the first clean boot still left `fb0/blank=4` while DSI
+  stayed connected/enabled. A reversible live unblank changed `fb0/blank` to
+  `0`; greeter-display and hardware-frontier gates then passed. Device r14
+  packages that unblank as a root oneshot after `greetd.service` and also runs
+  the idle policy directly in the greetd session wrapper. A two-cycle DPMS live
+  gate still fails after the first off/on
   transition with a DRM sequence discontinuity and a disabled connector
   post-state, so blank/unblank lifecycle remains a separate display bug. Do not
   mark it `Works` until display lifecycle passes on a CI artifact while USB

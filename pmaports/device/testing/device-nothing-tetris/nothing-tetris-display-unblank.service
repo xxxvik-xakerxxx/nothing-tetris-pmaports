@@ -1,0 +1,12 @@
+[Unit]
+Description=Unblank the Nothing Tetris greeter display during bring-up
+After=greetd.service
+Wants=greetd.service
+ConditionPathExists=/sys/class/graphics/fb0/blank
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-display-unblank
+
+[Install]
+WantedBy=multi-user.target

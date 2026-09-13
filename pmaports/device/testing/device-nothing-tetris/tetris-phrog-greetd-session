@@ -5,4 +5,8 @@ export WLR_RENDERER_ALLOW_SOFTWARE=1
 export WLR_DRM_NO_MODIFIERS=1
 export WLR_NO_HARDWARE_CURSORS=1
 
+if [ -x /usr/libexec/nothing-tetris-greeter-display-policy ]; then
+	/usr/libexec/nothing-tetris-greeter-display-policy
+fi
+
 exec /usr/libexec/phrog-greetd-session

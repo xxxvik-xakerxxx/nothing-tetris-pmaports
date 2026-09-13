@@ -188,6 +188,7 @@ validate_power_and_audio_config() {
 	audio_policy="$device_pkg/nothing-tetris-audio-policy"
 	audio_policy_unit="$device_pkg/nothing-tetris-audio-policy.service"
 	audio_user_preset="$device_pkg/89-nothing-tetris-user.preset"
+	system_preset="$device_pkg/89-nothing-tetris.preset"
 	greetd_pulse_client="$device_pkg/greetd-pulse-client.conf"
 	greetd_pulse_autostart="$device_pkg/greetd-pulseaudio.desktop"
 	audio_ucm="$device_pkg/HiFi.conf"
@@ -296,12 +297,29 @@ validate_power_and_audio_config() {
 		"$device_pkg/APKBUILD"
 	grep -Fq 'nothing-tetris-greeter-display-policy.service' \
 		"$device_pkg/APKBUILD"
+	grep -Fq 'nothing-tetris-display-unblank' \
+		"$device_pkg/APKBUILD"
+	grep -Fq 'nothing-tetris-display-unblank.service' \
+		"$device_pkg/APKBUILD"
 	sh -n "$device_pkg/nothing-tetris-greeter-display-policy"
+	sh -n "$device_pkg/nothing-tetris-display-unblank"
 	grep -Fq 'sleep-inactive-battery-type nothing' \
 		"$device_pkg/nothing-tetris-greeter-display-policy"
+	grep -Fq 'printf 0 > "$fb_blank"' \
+		"$device_pkg/nothing-tetris-display-unblank"
+	grep -Fq '/usr/libexec/nothing-tetris-greeter-display-policy' \
+		"$device_pkg/tetris-phrog-greetd-session"
 	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-greeter-display-policy' \
 		"$device_pkg/nothing-tetris-greeter-display-policy.service"
+	grep -Fq 'ExecStart=/usr/libexec/nothing-tetris-display-unblank' \
+		"$device_pkg/nothing-tetris-display-unblank.service"
+	grep -Fxq 'enable nothing-tetris-display-unblank.service' \
+		"$system_preset"
 	grep -Fq 'check_contains "greeter display policy exec"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "display unblank exec"' \
+		"$repo_root/.github/workflows/ci.yml"
+	grep -Fq 'check_contains "display unblank unit"' \
 		"$repo_root/.github/workflows/ci.yml"
 	grep -Fxq 'autospawn = no' "$greetd_pulse_client"
 	grep -Fxq 'Hidden=true' "$greetd_pulse_autostart"
@@ -1097,6 +1115,8 @@ validate_live_gate_scripts() {
 	grep -Fq 'greetd owns a PulseAudio process' "$audio_gate"
 	grep -Fq '/var/lib/greetd/.config/dconf' "$audio_gate"
 	grep -Fq 'nothing-tetris-greeter-display-policy.service' \
+		"$greeter_display_gate"
+	grep -Fq 'nothing-tetris-display-unblank.service' \
 		"$greeter_display_gate"
 	grep -Fq 'greetd-config-write-ok' "$greeter_display_gate"
 	grep -Fq 'greeter idle-delay is not disabled' "$greeter_display_gate"

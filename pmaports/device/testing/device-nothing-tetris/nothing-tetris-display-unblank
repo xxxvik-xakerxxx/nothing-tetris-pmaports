@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+fb_blank=${FB_BLANK:-/sys/class/graphics/fb0/blank}
+drm_enabled=${DRM_ENABLED:-/sys/class/drm/card0-DSI-1/enabled}
+backlight_root=${BACKLIGHT_ROOT:-/sys/class/backlight}
+tries=${DISPLAY_UNBLANK_TRIES:-20}
+
+i=0
+while [ "$i" -lt "$tries" ]; do
+	if [ -w "$fb_blank" ]; then
+		break
+	fi
+	i=$((i + 1))
+	sleep 1
+done
+
+if [ -r "$drm_enabled" ] && [ "$(cat "$drm_enabled")" != enabled ]; then
+	exit 0
+fi
+
+if [ -w "$fb_blank" ]; then
+	printf 0 > "$fb_blank"
+fi
+
+for bl_power in "$backlight_root"/*/bl_power; do
+	[ -w "$bl_power" ] || continue
+	printf 0 > "$bl_power"
+done

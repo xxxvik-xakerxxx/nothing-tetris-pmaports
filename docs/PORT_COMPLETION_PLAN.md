@@ -50,9 +50,22 @@ tested greetd idle policy live and restarting only `greetd` restored
 `DSI-1 enabled=enabled` and `bl_power=0`; the hardware frontier gate then
 passed at `local/live-logs/20260913T050604Z-172.16.42.1-hardware-frontier`.
 r13 packages that greeter idle fix again as the next single-variable candidate.
-It still does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS
-autostart or any new high-risk module. Retest clean boot and visual output
-before touching sensors or GPU runtime.
+CI `34752524434` built a flashable image, and the verified artifact
+`10316991883` clean-flashed to `super` and `userdata`. USB NCM/SSH and the
+transfer regression gate passed at
+`local/live-logs/20260913T153822Z-172.16.42.1-regression-gate`, but the clean
+boot still left `fb0/blank=4` while DSI stayed connected/enabled. A reversible
+live unblank changed the state to `0`, after which the greeter-display gate
+passed at `local/live-logs/20260913T154120Z-172.16.42.1-greeter-display-gate`
+and the hardware frontier gate passed at
+`local/live-logs/20260913T154426Z-172.16.42.1-hardware-frontier`.
+
+r14 is the next single-variable display packaging candidate. It applies the
+greeter idle policy from the greetd session wrapper and adds a root systemd
+oneshot that safely writes `0` to `fb0/blank` after `greetd.service`. It still
+does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS autostart or
+any new high-risk module. Retest clean boot and visual output before touching
+sensors or GPU runtime.
 
 The first r13 CI run `34739853869` passed validation and built both kernel and
 device packages, but failed in install-image generation because apk preferred
@@ -80,7 +93,7 @@ and reversible, with USB/SSH as the stop condition.
 Each clean-install cycle must run
 `scripts/check-live-hardware-frontier-gate.sh 172.16.42.1 user 147147
 baseline` after the regression gate. The greeter-display gate must be run
-against the r13 package before the display policy is promoted. It
+against the r14 package before the display policy is promoted. It
 records one frontier snapshot for display/touch, radio, GNSS, modem/SIM,
 sensors, camera, GPU and audio, and it rejects accidental runtime publication
 of unvalidated GPU, modem, camera or sensor nodes until their own functional

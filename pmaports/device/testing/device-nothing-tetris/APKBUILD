@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=13
+pkgrel=14
 url="https://postmarketos.org"
 license="MIT AND GPL-2.0-only"
 arch="aarch64"
@@ -53,6 +53,8 @@ source="
 	nothing-tetris-greeter-display-policy
 	nothing-tetris-greeter-display-policy.service
 	nothing-tetris-greetd.conf
+	nothing-tetris-display-unblank
+	nothing-tetris-display-unblank.service
 	nothing-tetris-audio.conf
 	nothing-tetris-haptics.conf
 	nothing-tetris-usb-sleep
@@ -85,6 +87,7 @@ check() {
 	sh -n "$srcdir"/nothing-tetris-audio-policy
 	sh -n "$srcdir"/nothing-tetris-bluetooth-address-extract
 	sh -n "$srcdir"/nothing-tetris-connectivity-setup
+	sh -n "$srcdir"/nothing-tetris-display-unblank
 	sh -n "$srcdir"/nothing-tetris-gnss-transport
 	sh -n "$srcdir"/nothing-tetris-greeter-display-policy
 	test "$(grep -c '^#define GPSDL_V051_IOC_' "$srcdir"/gpsdl_v051.h)" -eq 3
@@ -263,6 +266,10 @@ package() {
 		"$pkgdir"/usr/libexec/nothing-tetris-greeter-display-policy
 	install -Dm644 "$srcdir"/nothing-tetris-greeter-display-policy.service \
 		"$pkgdir"/usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service
+	install -Dm755 "$srcdir"/nothing-tetris-display-unblank \
+		"$pkgdir"/usr/libexec/nothing-tetris-display-unblank
+	install -Dm644 "$srcdir"/nothing-tetris-display-unblank.service \
+		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-display-unblank.service
 	install -Dm644 "$srcdir"/89-nothing-tetris-user.preset \
 		"$pkgdir"/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset
 	mkdir -p "$pkgdir"/usr/share/alsa/ucm2/conf.d/mt6878-mt6369
@@ -301,7 +308,7 @@ ddfbc0776faca5fc9468fccafe8ee559bdbc44ba84467eebcbb9e55ce3d0d31f03c85573b42edd63
 55535bfc5e918df3831df3d254a7bafa070db70bfc1bb733c046d0e0eec454eab6548be7bf016525fdab1fa4e030da74559b2914db0dcedd7b75fc5fd4bc8398  20-nothing-tetris-wifi-powersave.conf
 da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
 f15571c7b170ddd427c72231bbf476bfa95c66a7a86f22db97bf368cd2822b45472840ee1b901486e8c510786b85371cd931bf3dbdfea213cdaff54ea2f47c6f  80-nothing-tetris-udisks.rules
-72b429fe6adb84e0ddecdc0f4d5afb069359d3bddadd93be9c9c68faa15ead0fa7f8ea43da2aa54c26dde2bc4c5a5e85c6150a6bafca82cfdda858149625e54e  89-nothing-tetris.preset
+4d0227192a8bdcbc3dc795c6655341f814da474c9411586411fcf60ea143dd073c249dba84fb097f2a138456b602b8632745e2eb293e3dd19ef5868c6a8c9c0e  89-nothing-tetris.preset
 06a9a9a93e690723f9a591b1d358606be02ecd15cf0907915f0a34af5ff2950d41cee447f0909fa28874774194577be5adf78f58c55fb62f6026b9c795540dbd  89-nothing-tetris-user.preset
 89efa7852253b57b63c6b52199e0f08700cf5960f25cd27dbe91e864f3cb9b50f4652a6fe5aa0db264db1270f01c5945a349c33f069d8cf3a3ca7d555a1529b2  boot_image.its
 5beb26b028a5e9c7ce1046055c497f837658012b18ffeafbdc14b99cc9241bca6a808732a70f50c0ec039b6a13c11839d3b90d8f654df1225a22f6d84ed38db4  deviceinfo
@@ -333,7 +340,9 @@ a9574c65474ba420461cac734afc87396e7d97d031c0676dd218a17ac7542e5ff0aa9cd216d643c0
 291488cf24bb4ecc515d5c44907f5899bf818bb148b4729da2257b5deadf113c65e3d2f228c730f1ce79250de94dd217b7da5d69abe71be5e707f966f4a80c2a  phoc.ini
 56a1000f12f4b2d61f1bbe08554a1707f6c75eea0603301aef084ebe8271d1ae42a76f1cf9e67bb5e47dee880f3a43ac4041bfafc4eab76f33718107a6b56085  phrog-greetd-config.toml
 ac1be71804ef7617db8936fef36c7b96a8f9a0aa637b9a3f774f473eca0d4fc50398efc3c2e509c407e680082c0ddd581318480e4e59c7e27a043db6e06ccd0a  mt6878-mt6369.conf
-27cbf6e7f0862098bcf0a614a5c97878e9452e682e494a5ff256ae5cd98a0bfa587b8803ef2019fea15e9b9a4f3ee47de78de5b93cb3d3080f8704e2089f6faa  tetris-phrog-greetd-session
+7c7904d16d8b04f99d5dc51d5b2210895664b435f3a902e8a2a55f45f52f32ad832face32428578c14c5df187bc2d7ff560e9a608acf6f6e0a54b123e0bf8f76  nothing-tetris-display-unblank
+7fef66ac0cf0fe7ab09f741cc3c0d47814af573e7cb334c35a431df8cba489e0788b8eeb18aa1c28b805767576f62d964d18db3297018dd3e7a8304d58207f6e  nothing-tetris-display-unblank.service
+53e225871c1c4429675f21761451ddfb58dbf118c3588923999199d89bdef3c28cd13bf402b3934bad51da3a95b9de0d0423e64d0572e9c1a152e517ce55d6af  tetris-phrog-greetd-session
 b3258b90497b55ba21788a2cb038273b7c7b6a9510d25c051845e000dbf4ab8e553f6579cebd59ab41551ec633bd25df5e4d9766ee7037727e26ed319fb8afc6  validate-audio-ucm
 c985e642cbea9f95080ccd05f14ff93799e84b8b41adb3a5417b4eb24ec2e16f38f7733dd5e6d99dc24694296a25e4d7258a5248ee93795e4d46fb762403b281  wifi.cfg
 "

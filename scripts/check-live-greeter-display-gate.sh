@@ -38,8 +38,12 @@ systemctl --failed --no-pager
 echo "== greeter package files =="
 test -x /usr/libexec/nothing-tetris-greeter-display-policy && echo policy-exec-present
 test -f /usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service && echo policy-unit-present
+test -x /usr/libexec/nothing-tetris-display-unblank && echo unblank-exec-present
+test -f /usr/lib/systemd/system/nothing-tetris-display-unblank.service && echo unblank-unit-present
 grep -F 'enable nothing-tetris-greeter-display-policy.service' \
 	/usr/lib/systemd/user-preset/89-nothing-tetris-user.preset
+grep -F 'enable nothing-tetris-display-unblank.service' \
+	/usr/lib/systemd/system-preset/89-nothing-tetris.preset
 grep -F 'ConditionUser=greetd' \
 	/usr/lib/systemd/user/nothing-tetris-greeter-display-policy.service
 
@@ -98,6 +102,10 @@ grep -q '^policy-exec-present$' "$gate" ||
 	fail "greeter display policy executable is missing"
 grep -q '^policy-unit-present$' "$gate" ||
 	fail "greeter display policy unit is missing"
+grep -q '^unblank-exec-present$' "$gate" ||
+	fail "display unblank executable is missing"
+grep -q '^unblank-unit-present$' "$gate" ||
+	fail "display unblank unit is missing"
 grep -q '^greetd-config-write-ok$' "$gate" ||
 	fail "greetd cannot write its private config tree"
 grep -q '^uint32 0$' "$gate" ||
