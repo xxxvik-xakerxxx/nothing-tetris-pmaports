@@ -69,6 +69,15 @@ kept `usb0` UP, left no gpsdl owner and completed the final 32 MiB USB transfer
 with exactly `33554432` bytes. Evidence:
 `local/live-logs/20260913T185257Z-172.16.42.1-gnss-gate`.
 
+It passed again on the clean-flashed r15 display candidate boot
+`87e5ff1c-2e8b-4350-be62-57951a40e065`, with `device-nothing-tetris-8-r15`,
+`usb0` UP, zero failed units, GNSS transport initially inactive, no GPS module
+and no CCCI/DPMAIF/modem runtime. The readonly result was again `status=0`,
+`code_size=42505`, `fragment_count=106`, `cipher_key=redacted`; the post-state
+kept `usb0` UP, left no gpsdl owner and completed the final 32 MiB USB transfer
+with exactly `33554432` bytes. Evidence:
+`local/live-logs/20260914T043950Z-172.16.42.1-gnss-gate`.
+
 Clean-installed `codex/hardware-integration-next-scp` CI artifact
 `10297439743` from run `34692383850` and commit
 `3a016d36153d504f6b1002d29120bd84a8183533` on 2026-09-12. The image ZIP

@@ -45,6 +45,19 @@ CCCI/DPMAIF/modem runtime. The readonly diagnostic returned `status=0`,
 final 32 MiB USB transfer reported exactly `33554432` bytes. Evidence:
 `local/live-logs/20260913T185257Z-172.16.42.1-gnss-gate`.
 
+After r15 fixed the automatic display-unblank boot ordering, the same GNSS gate
+passed again on the clean-flashed r15 image. Baseline boot ID
+`87e5ff1c-2e8b-4350-be62-57951a40e065` reported
+`device-nothing-tetris-8-r15`, kernel package
+`linux-postmarketos-mediatek-mt6878-7.2.1-r158`, `usb0` UP, zero failed units,
+connectivity active, GNSS transport inactive, no GPS module and no
+CCCI/DPMAIF/modem runtime. The readonly diagnostic returned `status=0`,
+`code_size=42505`, `fragment_count=106`, `boot_time_ns=178477714548` and
+`arch_counter=2453158179`, with `cipher_key=redacted`. The post-state kept
+`usb0` UP, failed units at zero, no gpsdl owner and no modem runtime, and the
+final 32 MiB USB transfer reported exactly `33554432` bytes. Evidence:
+`local/live-logs/20260914T043950Z-172.16.42.1-gnss-gate`.
+
 ## Clean next-SCP read-only result (2026-09-12)
 
 After clean-flashing CI run `34692383850`, artifact `10297439743`, commit
