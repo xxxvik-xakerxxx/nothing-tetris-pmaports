@@ -67,10 +67,19 @@ and clean-flashed, and USB/SSH plus the transfer regression gate returned. The
 display service was installed and enabled, but systemd skipped it because
 `ConditionPathExists=/sys/class/graphics/fb0/blank` was evaluated before fb0
 existed; a manual start of the same service changed `fb0/blank` from `4` to
-`0`. r15 removes that premature condition and keeps the helper's bounded wait
-for fb0. It still does not enable SCP/sensorhub, GPU runtime, modem, camera,
-GNSS autostart or any new high-risk module. Retest clean boot and visual output
-before touching sensors or GPU runtime.
+`0`.
+
+r15 removes that premature condition and keeps the helper's bounded wait for
+fb0. CI run `34775951132` passed, artifact `10324214249` was hash-verified and
+clean-flashed, and the first boot restored USB/SSH with
+`device-nothing-tetris-8-r15`, zero failed units, automatic
+`nothing-tetris-display-unblank.service` success, `fb0/blank=0`, DSI
+connected/enabled at `1080x2400`, and touch as `fts_ts` on event0. Regression,
+greeter-display and hardware-frontier gates passed without manual unblank. It
+still does not enable SCP/sensorhub, GPU runtime, modem, camera, GNSS autostart
+or any new high-risk module. Get fresh visual confirmation, then test warm
+reboot, brightness lifecycle and DPMS/suspend-resume before touching sensors or
+GPU runtime.
 
 The first r13 CI run `34739853869` passed validation and built both kernel and
 device packages, but failed in install-image generation because apk preferred

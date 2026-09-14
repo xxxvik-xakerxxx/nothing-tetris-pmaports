@@ -238,8 +238,11 @@ not a confirmed external RT1711H controller.
   because `ConditionPathExists=/sys/class/graphics/fb0/blank` was evaluated
   before fb0 existed; manually starting the same service then changed
   `fb0/blank` from `4` to `0`. Device r15 removes that premature condition and
-  relies on the helper's bounded wait for fb0. A two-cycle DPMS live gate still
-  fails after the first off/on
+  relies on the helper's bounded wait for fb0. Its CI artifact clean-flashed,
+  automatically reached `fb0/blank=0`, kept DSI connected/enabled at
+  `1080x2400`, exposed `fts_ts` on event0, and passed regression,
+  greeter-display and hardware-frontier gates without manual unblank. A
+  two-cycle DPMS live gate still fails after the first off/on
   transition with a DRM sequence discontinuity and a disabled connector
   post-state, so blank/unblank lifecycle remains a separate display bug. Do not
   mark it `Works` until display lifecycle passes on a CI artifact while USB
