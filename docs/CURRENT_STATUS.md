@@ -4,6 +4,16 @@ Updated: 2026-09-21.
 
 ## Live U-Boot SCP boundary
 
+Update: U-Boot `0d71414af7` from successful CI `35606234615` fixes the
+incorrect block-device descriptor lookup in the container observer. After
+flashing only `lk_a`, both `nothing,scp_a-container-status` and
+`nothing,scp_b-container-status` report `ok`, with size `0xa43070` on boot
+`f628eee9-5439-4913-bdcd-adf50c958b38`. The transfer regression gate passed
+at `20260921T133626Z`. SCP region-info remains zero and sensors remain
+Broken. See [SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md) for the reproduced
+storage fix and exact stock-loader call chain; secure loading is not yet
+implemented.
+
 U-Boot commit `9c93aa3f24b46443a01b1514440e2146706c844e` from CI run
 `35602069118` was flashed only to `lk_a`; `lk_b` remains the previous rollback
 image. Linux boot ID `26fe2a00-696b-43d0-aff5-bc042501912f` came up with
