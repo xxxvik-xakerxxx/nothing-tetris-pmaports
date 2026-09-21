@@ -1020,6 +1020,7 @@ validate_connectivity_build() {
 	gnss_uapi_patch="$kernel_pkg/1003-vendor-gnss-v051-readonly-uapi.patch.vendor"
 	gnss_header="$device_pkg/gpsdl_v051.h"
 	gnss_probe="$device_pkg/nothing-tetris-gnss-readonly.c"
+	gnss_bridge="$device_pkg/nothing-tetris-gnss-bridge.c"
 	gnss_navigation_gate="$repo_root/scripts/check-gnss-navigation-boundary.sh"
 
 	grep -Eq '^  PMBOOTSTRAP_COMMIT: [0-9a-f]{40}$' "$workflow"
@@ -1060,6 +1061,18 @@ validate_connectivity_build() {
 	fi
 	grep -Fq '/usr/libexec/nothing-tetris-gnss-readonly' \
 		"$device_pkg/APKBUILD"
+	grep -Fq '/usr/libexec/nothing-tetris-gnss-bridge' "$device_pkg/APKBUILD"
+	grep -Fq 'expected_post_init_frame' "$gnss_bridge"
+	grep -Fq 'aaf0090005fe32000001003f01aa0f' "$device_pkg/APKBUILD"
+	if grep -Eq '/dev/gpsdl|O_RDWR' "$gnss_bridge"; then
+		echo "GNSS bridge must remain recording-only" >&2
+		return 1
+	fi
+	if grep -Fl 'nothing-tetris-gnss-bridge' \
+		"$device_pkg"/*.service "$device_pkg"/*.preset 2>/dev/null | grep -q .; then
+		echo "GNSS bridge must remain manual-only" >&2
+		return 1
+	fi
 	if grep -Fl 'nothing-tetris-gnss-readonly' \
 		"$device_pkg"/*.service "$device_pkg"/*.preset \
 		"$device_pkg"/*.conf 2>/dev/null | grep -q .; then

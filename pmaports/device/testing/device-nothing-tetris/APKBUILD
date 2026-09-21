@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=15
+pkgrel=16
 url="https://postmarketos.org"
 license="MIT AND GPL-2.0-only"
 arch="aarch64"
@@ -50,6 +50,7 @@ source="
 	nothing-tetris-gnss-transport
 	nothing-tetris-gnss-transport.service
 	nothing-tetris-gnss-readonly.c
+	nothing-tetris-gnss-bridge.c
 	nothing-tetris-greeter-display-policy
 	nothing-tetris-greeter-display-policy.service
 	nothing-tetris-greetd.conf
@@ -81,6 +82,9 @@ build() {
 	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
 		-I"$srcdir" "$srcdir"/nothing-tetris-gnss-readonly.c \
 		$LDFLAGS -o "$srcdir"/nothing-tetris-gnss-readonly
+	$CC $CFLAGS $CPPFLAGS -std=c11 -Wall -Wextra -Werror \
+		"$srcdir"/nothing-tetris-gnss-bridge.c \
+		$LDFLAGS -o "$srcdir"/nothing-tetris-gnss-bridge
 }
 
 check() {
@@ -111,6 +115,15 @@ check() {
 
 	testdir=$(mktemp -d)
 	trap 'rm -rf "$testdir"' EXIT
+	"$srcdir"/nothing-tetris-gnss-bridge --self-test
+	recording="$testdir/gnss-post-init.frame"
+	"$srcdir"/nothing-tetris-gnss-bridge --record-post-init "$recording"
+	[ "$(od -An -tx1 -v "$recording" | tr -d ' \n')" = \
+		aaf0090005fe32000001003f01aa0f ]
+	if "$srcdir"/nothing-tetris-gnss-bridge --record-post-init \
+			/dev/null 2>/dev/null; then
+		return 1
+	fi
 	mkdir -p "$testdir"/usb-gadget/g1 "$testdir"/udc/11201000.usb0
 	printf '%s\n' 11201000.usb0 > "$testdir"/usb-gadget/g1/UDC
 	mkdir -p "$testdir"/usb-gadget/g1/functions/ncm.usb0
@@ -250,6 +263,8 @@ package() {
 		"$pkgdir"/usr/lib/systemd/system/nothing-tetris-gnss-transport.service
 	install -Dm755 "$srcdir"/nothing-tetris-gnss-readonly \
 		"$pkgdir"/usr/libexec/nothing-tetris-gnss-readonly
+	install -Dm755 "$srcdir"/nothing-tetris-gnss-bridge \
+		"$pkgdir"/usr/libexec/nothing-tetris-gnss-bridge
 	install -Dm644 "$srcdir"/nothing-tetris-audio.conf \
 		"$pkgdir"/usr/lib/modules-load.d/nothing-tetris-audio.conf
 	install -Dm644 "$srcdir"/mt6878-mt6369.conf \
@@ -304,6 +319,7 @@ package() {
 sha512sums="
 3d342711a112d76a86f73b30e069caaf9d2bf00b9858329f4728a0ab4cc68af2010e2919a11c8d15bf8943585f4f2908c612122dc90d40cfca4c716391c7380c  gpsdl_v051.h
 1ea1125ea7fbe1b7992afae09195b48aa992f2a0860eb9127291d4abf9a10599544726bb755cfc37a063701ceb87d776b90269de9bc76ac9979498f017759a40  nothing-tetris-gnss-readonly.c
+a5cc2415fa55a45aa99425a6cd7b0e2f17db459456815cea352bcc170137d3103ee8d9fb4baff3d0c91482787ad16cd392885ed879627bc4abf69b8531ed615b  nothing-tetris-gnss-bridge.c
 ddfbc0776faca5fc9468fccafe8ee559bdbc44ba84467eebcbb9e55ce3d0d31f03c85573b42edd6304add2cc8e3b69bcc1b55636996f4d2b3af44ec957bfc63b  nothing-tetris-greetd.conf
 55535bfc5e918df3831df3d254a7bafa070db70bfc1bb733c046d0e0eec454eab6548be7bf016525fdab1fa4e030da74559b2914db0dcedd7b75fc5fd4bc8398  20-nothing-tetris-wifi-powersave.conf
 da88324f2d95829a36ab13ee853441a97f6ab633c4ada93fa4a66d535b85549f998c96f85a0204e0813a67b39cc77bc2c21a8b441b5d8662c06a7293cc5b8f60  72-nothing-tetris-feedbackd.rules
