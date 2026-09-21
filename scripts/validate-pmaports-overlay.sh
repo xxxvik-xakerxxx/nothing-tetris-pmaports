@@ -8,6 +8,10 @@ firmware_pkg="$repo_root/pmaports/device/testing/firmware-nothing-tetris"
 kernel_apkbuild="$kernel_pkg/APKBUILD"
 deviceinfo="$device_pkg/deviceinfo"
 
+# Vendor patches are not auto-applied by abuild's normal *.patch handling.
+python3 "$repo_root/scripts/tests/test-vendor-patch-application.py"
+python3 "$repo_root/scripts/check-vendor-patch-application.py" "$kernel_apkbuild"
+
 if grep -q '^deviceinfo_usb_network_mac_seed_path=' "$deviceinfo"; then
 	echo "USB stable identity must remain disabled until seed publication passes its evidence gate" >&2
 	exit 1

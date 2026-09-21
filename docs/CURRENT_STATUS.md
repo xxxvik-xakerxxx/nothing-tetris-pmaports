@@ -2,6 +2,35 @@
 
 Updated: 2026-09-21.
 
+## Clean r162 test: SCP cleanup still fails
+
+CI `35605918332` (`f1c657c21417688937b6c467e608d10e451e67f7`)
+passed artifact/hash verification and was clean-flashed to `super` and
+`userdata` with user authorization to discard the test system. LK and all
+firmware/calibration partitions were unchanged. Boot
+`e419ca4f-266c-44bb-8b8e-e5aae562d216` reports kernel #163, package
+`7.2.1-r162`, device `8-r16`. Hardware-frontier baseline and 32 MiB USB/SSH
+transfer passed; the user confirmed normal display/touch. The full SCP memory
+region remains reserved.
+
+One manual SCP probe rejected empty region-info, then Oopsed again in
+`kfree -> scp_device_remove`; modprobe returned 139. USB/SSH transfer still
+passed, but that does NOT mean the SCP cleanup or kernel-health test passed.
+No module unload/retry was attempted. A normal reboot was requested; subsequent
+SSH checks timed out despite Linux USB enumeration. Recovery is not yet proven.
+
+Root cause: patch `0100` was declared and checksummed in APKBUILD but never
+applied by `prepare()`. r163 adds the missing application, plus an overlay
+validation guard requiring every declared vendor patch to be explicitly applied
+exactly once. Five guard tests pass; the original r162 APKBUILD fails this guard
+on `0100`. The full overlay validation passes after correction. Runtime validation
+of the corrected artifact remains pending; sensors remain Broken.
+
+Evidence: local logs `20260921T173751Z` (frontier), `20260921T173842Z`
+(pre-probe transfer), `20260921T174010Z` (post-Oops transfer); probe log
+`/private/tmp/tetris-r162-scp-probe.txt` and pre-probe memory inventory
+`/private/tmp/tetris-r162-scp-before.txt`.
+
 ## Live U-Boot SCP boundary
 
 **Memory collision fixed on-device:** U-Boot `ba0a2763ef` (CI `35611810150`)

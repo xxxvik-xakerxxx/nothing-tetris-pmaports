@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=162
+pkgrel=163
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -217,6 +217,8 @@ prepare() {
 		< "$srcdir"/0093-vendor-scp-validate-region-info.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0094-vendor-scp-validate-dram-recovery-span.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
