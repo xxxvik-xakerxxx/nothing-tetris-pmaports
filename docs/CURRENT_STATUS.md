@@ -18,10 +18,20 @@ partitions. Both start with a valid MediaTek container header named
 `tinysys-scp-RV55_A`; their full SHA-256 values differ. The active `scp_a`
 container has six bounded sections in this order: SCP payload, `cert1`,
 `cert2`, SCP DRAM payload, `cert1`, `cert2`, ending at `0xa43070`. No payload
-or certificate was committed to the repository. U-Boot commit `700c515702`
-adds a read-only, host-tested parser and UFS header observer for both slots;
-CI run `35604297386` is pending. It does not authenticate, decrypt, copy or
-start SCP, so sensors remain `Broken` rather than being overstated as working.
+or certificate was committed to the repository. U-Boot commit `366f8ab913`
+adds a read-only, host-tested parser and UFS header observer for both slots.
+CI run `35604799868` passed and published artifact `10641192508` with digest
+`7915cc7accabb0799f986b86904945c94b295a50753b1db8e862d5ae7d99be0c`;
+the verified `u-boot-tetris-lk.img` SHA-256 is
+`2f4c7fecac986a07f75cd57f6cec1972bef8bdff4afdec834cbb9a90690aa45a`.
+It was flashed only to `lk_a` and booted Linux as boot ID
+`bca2a305-20e1-407c-bb7e-838cc2479eb4`. The hardware-frontier and exact
+32 MiB transfer regression gates passed at `20260921T132741Z` and
+`20260921T132814Z`. Region-info remains correctly reported as zero, but the
+new container properties are absent, so the board-stage UFS observer needs an
+explicit storage/partition/read failure status before it can be considered
+live-proven. It does not authenticate, decrypt, copy or start SCP, so sensors
+remain `Broken` rather than being overstated as working.
 
 ## Clean r161 SCP handoff result
 
