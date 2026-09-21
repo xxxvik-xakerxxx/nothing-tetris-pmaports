@@ -3,6 +3,68 @@
 Sensors remain Broken. The missing production implementation is the SCP
 firmware loader, not another sensor-list or mailbox registration patch.
 
+## Runtime preparation progress, 2026-09-22
+
+U-Boot `ccf6919569`, CI `35654594924` passed the runtime C certificate
+parser tests, actual sandbox RSA-PSS salt-length regression and ARM64
+compilation. The parser verifies delegated RSA-2048/PSS signatures using a
+caller-provisioned root pin, checks ciphertext and extracts the signed
+plaintext digest for verification after decryption. The vendor
+fixture check is offline consistency only, not manufacturer-root provisioning.
+
+U-Boot `4c15eec5f0` joins authentication and secure preparation in
+`tetris_scp_prepare_component()`. Image address, alignment and capacity are
+checked before service registration. Failures poison the context, failed
+plaintext is erased, and successful components can share one registration.
+CI `35655641033` passed. Follow-up `8e9a46d51d` validates image capacity
+before authentication reads; sixteen local C-backed tests pass, plus the
+sanitizer transport suite. CI `35656023815` passed the tests, actual ARM64
+compilation and complete image build/packaging. No runtime board caller is
+enabled and no new image was flashed; the phone still uses r163/ba0a2763ef.
+
+### Recovery memory contract is not yet compatible
+
+The exact Nothing OS 4.1 source at
+`ee2be53cb75670b548948636a0db1d1ff112bf12` shows:
+
+- `scp_helper.c:2197` maps four rounded DRAM banks.
+- `scp_awake.c:361` in the non-secure reset path clears `core_nums` banks
+  and copies the backup from `roundup(ap_dram_size, 1024) * core_nums`.
+- `scp_awake.c:345` instead uses `scp_restore_dram()` for secure recovery.
+- Stock `mt6878.dts:11558` enables secure dump; the current manual pmOS
+  node has `core-nums = <2>` but does not enable that secure path.
+
+The audited LK copies a single backup at DRAM + rounded size, not at
+DRAM + two rounded sizes. With observed encrypted payload size `0x924740`
+and no size reduction identified in the loader, rounding gives `0x924800`.
+The four-bank mapping plus the `0x700000` core offset requires `0x2b92000`,
+exceeding the observed `0x2300000` reservation. This is a conditional layout
+conflict, not evidence that a running SCP has corrupted memory: SCP is still
+disabled and decrypted runtime region-info has not been obtained.
+
+Do not reduce the mapping blindly or enable secure dump alone. The full
+secure registration, dump allocation, backup ownership and restore behavior
+must match the loader before enabling reset/recovery. Patch 0094 checks
+arithmetic overflow only and does not establish carveout ownership.
+
+In the pinned installed ATF payload, the runtime dispatcher at `0x3a944`
+uses signed offsets at `0x48548` relative to `0x3a978`. Operation 5
+(`RESTORE_DRAM` in the matching kernel enum) selects `0x3ad30`: its success
+path checks state 4, stores state 5 at payload-relative `0x5af5c`, and returns
+zero via `0x3aec0`. It does not copy DRAM on that path. Operation 4 selects
+`0x3acc4` and begins clearing/restoring TCM; the remaining restore chain is
+not yet fully traced. Do not infer backup-copy semantics from the kernel
+wrapper's name or treat a zero return alone as proof of restored firmware.
+
+The read-only lk_b header on the current phone declares payload size
+`0x110d40`, different from the pinned offline LK's 1681136 bytes. It must not
+be described as an identical verified stock fallback based on its name.
+
+A final read-only SSH check still showed boot
+`b7fa5874-d0ac-4a3e-8321-0f53a4787065`, kernel 6.18.0 and usb0 UP.
+SCP, sensorhub and HF manager were not loaded. No secure call or module
+startup was performed during these tests.
+
 ## Live storage correction
 
 U-Boot 366f8ab913 passed a block-device child to blk_get_by_device(), which
