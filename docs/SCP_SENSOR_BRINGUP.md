@@ -186,3 +186,13 @@ The clean `fdeeda0` / kernel #128 boot still logs failure to reserve the capture
 that the current LK-derived loader-memory contract is not usable by Linux; it
 reinforces the fail-closed gate and must not be bypassed by hard-coding that
 physical address.
+
+Update 2026-09-21: this collision was traced to U-Boot importing the Linux DT
+reservations after initrd allocation. Commit `ba0a2763ef`, CI `35611810150`,
+reorders reservation before allocation without hard-coding the SCP address.
+Live boot `a081e530-e467-4cea-8c49-2d89d97da9cf` has its initrd below SCP and
+the full DT-declared 35 MiB reserved in `/proc/iomem`. Firmware startup and
+ownership/lifetime checks beyond this placement fix remain incomplete.
+Two additional warm boots reproduced the fixed placement and passed USB/SSH
+regression checks; display/touch were user-confirmed. The isolated fix is now
+on U-Boot master `e8cee3eaa6`. This does not establish SCP startup or sensor data.

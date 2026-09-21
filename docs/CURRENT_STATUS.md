@@ -4,6 +4,22 @@ Updated: 2026-09-21.
 
 ## Live U-Boot SCP boundary
 
+**Memory collision fixed on-device:** U-Boot `ba0a2763ef` (CI `35611810150`)
+now imports DT firmware reservations before allocating the initrd. After
+flashing only lk_a, boot `a081e530-e467-4cea-8c49-2d89d97da9cf` moved the
+initrd from inside SCP to `0xb746a000..0xb7fffe38`; the complete
+`0xb8000000..0xba2fffff` SCP region is now reserved. USB/SSH recovered.
+The new read-only CRC-checked boot-control observer reports recorded `scp_a`.
+Fastboot's existing constant `current-slot=a` is not independent slot proof.
+SCP startup and sensor samples are still missing; do not mark sensors Works.
+
+The same memory placement survived two further warm reboots. USB/SSH regression
+checks passed on all three boots, including 32 MiB transfers on the first and
+third; the user confirmed normal display and touch. The isolated bootm fix is
+published on U-Boot `master` as `e8cee3eaa6` (CI `35613343412` pending).
+Experimental SCP observers and crypto transport are not included in that commit.
+Cold-power, suspend/resume and second-device validation remain outstanding.
+
 Implementation update: U-Boot `2a693ef204` adds the experimental C secure
 decryption transport. Host sanitizer tests and CI ARM64 object compilation
 pass. It remains default-off and uncalled; board integration, authenticated

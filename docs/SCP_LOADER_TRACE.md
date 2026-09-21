@@ -93,6 +93,69 @@ region-info zero. No module reload, secure call or flash was performed.
 
 ## Next implementation boundary
 
+### Memory collision and slot evidence
+
+Read-only checks on boot `f628eee9-5439-4913-bdcd-adf50c958b38` found:
+
+- `misc+2048` contains version-1 Android A/B metadata with valid CRC32
+  `d2190560`, recorded `_a`, bootable A and disabled B. The U-Boot fastboot
+  current-slot handler is hard-coded to `a`; prior use of it as independent
+  confirmation was invalid. Recorded metadata does not prove the running LK slot.
+- `mediatek,crypto_hw` reserves `0x48401000..0x48402000`, matching the audited
+  secure service-page ABI. This identifies its reservation, not exclusive
+  permission to reuse it or proof that the secure service remains unlocked.
+- `mediatek,SCP-reserved` declares `0xb8000000` size `0x2300000`, but the
+  current Linux initrd is `0xba247000..0xbaddce38`, intersecting that region.
+  `/proc/iomem` does not show the full SCP carveout reserved.
+
+In `bootm_run_states()`, DT reservations were imported after initrd relocation.
+Candidate U-Boot `ba0a2763ef` moves the reservation import before ramdisk
+allocation, guarding DT-less boots, and adds a read-only boot-control decoder.
+Host tests pass, including corrupted metadata, stale suffix and no-write checks.
+The source-order guard is not a runtime allocation test.
+
+Live test plan: flash CI output to lk_a only, preserve lk_b and the prior
+0d71414af7 recovery image; expect initrd outside SCP and a reserved SCP interval,
+then require Linux USB/SSH transfer regression PASS. No SCP reset, decryption
+or module reload is part of this experiment. Baseline transfer passed at
+`local/live-logs/20260921T142334Z-172.16.42.1-regression-gate`.
+
+CI `35611810150` passed all tests and image packaging. The flashable image
+SHA256 is `99cc4f5c3c771c26f145a9de5b0b812910823eadd495935dcd775fe9aa682a22`.
+Manifest verification passed and fastboot confirmed writing only `lk_a`.
+The reboot command returned the usual USB disconnect; Linux recovery is
+checked separately rather than treating that return code as a boot failure.
+
+Live result on boot `a081e530-e467-4cea-8c49-2d89d97da9cf`:
+
+- Initrd moved to `0xb746a000..0xb7fffe38`, below SCP.
+- `/proc/iomem` now lists `0xb8000000..0xba2fffff` as reserved, matching
+  the entire SCP region; the prior overlap is eliminated.
+- `nothing,scp-boot-control-error` is zero and
+  `nothing,scp-recorded-partition` is `scp_a`.
+- Linux USB and SSH recovered. The first SSH attempt was simply too early;
+  USB inspection showed Linux mode before the successful retry.
+
+This is a live-proven memory-placement fix, not SCP firmware startup. Crypto
+transport remains disabled and no remote-processor registers were written.
+
+Two Linux warm reboots reproduced the same non-overlapping initrd placement:
+`d99e401d-979d-4986-a660-7517ba824ba5` and
+`01d702e6-e42f-4298-b76b-2465f0fb4015`. Regression gates passed:
+
+- First boot, 32 MiB transfer:
+  `local/live-logs/20260921T142734Z-172.16.42.1-regression-gate`.
+- Second boot, baseline:
+  `local/live-logs/20260921T143044Z-172.16.42.1-regression-gate`.
+- Third boot, 32 MiB transfer:
+  `local/live-logs/20260921T143239Z-172.16.42.1-regression-gate`.
+
+The user confirmed normal display and touch after the first boot. These were
+warm boots, not power-cycle or suspend/resume tests. The isolated bootm fix,
+source guard and documentation are on U-Boot master `e8cee3eaa6`; its CI run
+`35613343412` is pending. The running image remains candidate `ba0a2763ef`,
+not a separately flashed master artifact.
+
 U-Boot `2a693ef204` now implements a C secure decryption transport in
 `board/mediatek/mt6878/tetris_scp_crypto.c`, with real SMC/cache/SHA256
 adapters, input/output integrity checks, physical bounds and overlap checks,
