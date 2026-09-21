@@ -746,9 +746,19 @@ validate_compile_only_boundaries() {
 		0090-power-supply-mt6375-bc12-lifecycle-compile-only.patch \
 		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch \
 		0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch \
-		0092-clk-mediatek-mt6878-camera-main.patch; do
+		0092-clk-mediatek-mt6878-camera-main.patch \
+		0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
+	vlp_scp_patch="$kernel_pkg/0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch"
+	grep -Fq 'compatible = "mediatek,mt6878-vlp-cksys";' "$vlp_scp_patch"
+	grep -Fq 'MUX_GATE_CLR_SET_UPD(CLK_VLP_SCP_SEL' "$vlp_scp_patch"
+	grep -Fq 'This patch only registers the clock provider.' "$vlp_scp_patch"
+	if grep -Eq '^\+[[:space:]]*(compatible = "mediatek,scp"|.*mediatek,scp-dvfs|.*sensorhub|.*module[s-]load)' \
+		"$vlp_scp_patch"; then
+		echo "VLP SCP clock prerequisite acquired an SCP runtime consumer" >&2
+		return 1
+	fi
 	camera_clk_binding="$kernel_pkg/0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch"
 	camera_clk_driver="$kernel_pkg/0092-clk-mediatek-mt6878-camera-main.patch"
 	grep -Fq 'const: mediatek,mt6878-camsys' "$camera_clk_binding"

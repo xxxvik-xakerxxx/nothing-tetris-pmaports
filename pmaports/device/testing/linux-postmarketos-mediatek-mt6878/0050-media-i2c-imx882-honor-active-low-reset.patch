@@ -15,7 +15,8 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
 
 --- a/drivers/media/i2c/imx882-identity.c
 +++ b/drivers/media/i2c/imx882-identity.c
-@@ -112,7 +112,8 @@ static void imx882_power_off(struct imx882_identity *imx882,
+@@ -112,7 +112,8 @@
+ static void imx882_power_off(struct imx882_identity *imx882,
  			     unsigned long enabled_supplies, bool clock_enabled)
  {
 -	gpiod_set_value_cansleep(imx882->reset, 0);
@@ -24,7 +25,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
  
  	if (clock_enabled)
  		clk_disable_unprepare(imx882->xclk);
-@@ -139,7 +140,7 @@ static int imx882_power_on(struct imx882_identity *imx882,
+@@ -139,7 +140,7 @@
  	if (ret)
  		return ret;
  
@@ -33,7 +34,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
  
  	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AFVDD);
  	if (ret)
-@@ -172,7 +173,7 @@ static int imx882_power_on(struct imx882_identity *imx882,
+@@ -172,7 +173,7 @@
  	*clock_enabled = true;
  	usleep_range(5000, 5100);
  
@@ -42,7 +43,7 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
  	usleep_range(1000, 1100);
  
  	return 0;
-@@ -210,7 +211,7 @@ static int imx882_identity_probe(struct i2c_client *client)
+@@ -210,7 +211,7 @@
  		return dev_err_probe(dev, PTR_ERR(imx882->xclk),
  				     "failed to get xclk\n");
  
