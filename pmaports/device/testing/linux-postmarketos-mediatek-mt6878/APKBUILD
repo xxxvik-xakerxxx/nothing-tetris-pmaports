@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=158
+pkgrel=159
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -73,6 +73,7 @@ source="
 	0046-dt-bindings-media-i2c-pd9302a.patch
 	0047-media-i2c-pd9302a-vcm.patch
 	0049-media-i2c-imx882-identity.patch
+	0050-media-i2c-imx882-honor-active-low-reset.patch
 	0050-drm-panel-samsung-s6e8fc3x02.patch
 	0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 	0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
@@ -931,6 +932,7 @@ b23be015a0dd8335b37189656edf32d350a808bfdcbc249698e29d5656394d72d3cf78a158a79b84
 45a6c19c379011df1ee3fc65eddcdb8db5e8966a5f960aa783d625be5fcadda3051f6da79323a962bd1c3a55c186eb5eaa4d10bad3725e9e06533875cfdd7bc6  0046-dt-bindings-media-i2c-pd9302a.patch
 8fb270dfe47c9a9a8f94fec5a518951dd07bef7cf7f78d03509ab9454078c208109d6df105ba64393a24abc141b14cffd1bfa7bc9e18771a21a42d2122500538  0047-media-i2c-pd9302a-vcm.patch
 f10207ccadc5f3f731fb75930c3f411cbfd1d02aab46da0a401be566a5dc62e1c851e6e2a688148e18f7311372f7589187fb190ca4225f9eb07d38bd8fdd46e7  0049-media-i2c-imx882-identity.patch
+61da4e9cefa62ae1387b7880e4c12f7328c93a95819b5db30ae577228caf2156b7076a724303b9c98e9bc694c88074a2ce196147e31d783481501f7930617121  0050-media-i2c-imx882-honor-active-low-reset.patch
 56a60d02412fb5ab7f10d08e9281f8367dba026483dadbd7910cc0fea57c078654105d346d5b8d4a6e6cbb9b6cdbfd89fd310b6350c079ab6273ee55e1901eba  0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 7607fe1d467067fca42d8671b7884ce28e6a2627e4ce17ab46e75535d955f5e68f6cdf98ee8f4597cbd597d38ca2001c94a85b9e7618ecc70a1d1eeeb876e551  0050-drm-panel-samsung-s6e8fc3x02.patch
 a378ad3efc8a7853e2d7feecc71bbc8c6595552b733835515d611c5588f780758671ae8db2d737499f255cbcc6e701487c01bf67dde2801af47770a4873c63bd  0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch
