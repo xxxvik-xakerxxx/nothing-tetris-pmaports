@@ -16,15 +16,19 @@ region remains reserved.
 One manual SCP probe rejected empty region-info, then Oopsed again in
 `kfree -> scp_device_remove`; modprobe returned 139. USB/SSH transfer still
 passed, but that does NOT mean the SCP cleanup or kernel-health test passed.
-No module unload/retry was attempted. A normal reboot was requested; subsequent
-SSH checks timed out despite Linux USB enumeration. Recovery is not yet proven.
+No module unload/retry was attempted. A normal reboot was requested; the first
+SSH checks timed out despite Linux USB enumeration. SSH subsequently recovered
+on new boot `47b4b160-6a65-4450-a020-65cbdb3b59f1`, with no SCP/transport
+modules loaded and systemd reporting `running`.
+The post-recovery hardware-frontier baseline passed at `20260921T174516Z`.
 
 Root cause: patch `0100` was declared and checksummed in APKBUILD but never
 applied by `prepare()`. r163 adds the missing application, plus an overlay
 validation guard requiring every declared vendor patch to be explicitly applied
 exactly once. Five guard tests pass; the original r162 APKBUILD fails this guard
 on `0100`. The full overlay validation passes after correction. Runtime validation
-of the corrected artifact remains pending; sensors remain Broken.
+of the corrected artifact remains pending; sensors remain Broken. Commit
+`437e999` is building in CI `35633921256`; no local kernel build was run.
 
 Evidence: local logs `20260921T173751Z` (frontier), `20260921T173842Z`
 (pre-probe transfer), `20260921T174010Z` (post-Oops transfer); probe log
