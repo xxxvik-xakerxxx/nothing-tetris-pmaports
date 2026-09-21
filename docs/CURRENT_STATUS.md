@@ -2,6 +2,34 @@
 
 Updated: 2026-09-21.
 
+## Clean r163: first SCP error-cleanup test passes
+
+CI `35633921256`, commit `437e9998ccb94717969240b8ff1a76cd2d4f411b`,
+passed manifest and SHA256 verification. Only `super` and `userdata` were
+clean-flashed; U-Boot remains `ba0a2763ef`, with LK, firmware and calibration
+partitions unchanged. Boot `50a3889c-1971-4920-8fdb-90ed310684e8` reports
+kernel #164, package `7.2.1-r163` and device `8-r16`.
+
+The hardware-frontier baseline passed at `20260921T203338Z`; the user
+confirmed normal display and touch. One manual SCP probe still rejects
+`region-info too small: 0 < 56` with `-71`, but now modprobe exits 1 with
+`Protocol error`, not SIGSEGV. SCP is absent from the post-probe module list;
+USB stays up and the boot ID is unchanged. No Oops, BUG, call trace or kernel
+panic was found in the captured probe log. Transport modules were not reloaded.
+This is one successful cleanup test, not SCP startup or sensor functionality.
+The post-probe 32 MiB USB/SSH transfer gate passed at `20260921T203510Z`.
+A normal reboot after the test also passed the hardware-frontier baseline at
+`20260921T203642Z`; the phone is left in that clean boot, not the probe session.
+
+Artifact SHA256:
+
+- boot: `7a6715e794878b5c6e47ac7b24d5edf66821d058e01ee71d18452fac20af3bce`
+- root sparse: `7aec76804ff20164b03825acf3e14c0edc7c93b2237b5e4213924c4b6a5574ab`
+- FIT: `76142ba99ab07867d127ebf31188fac33bf3b658cd7c40d4290c5e60b9dc751e`
+
+Probe evidence: `/private/tmp/tetris-r163-scp-probe.txt`. Authenticated SCP
+firmware loading and the TCM region-info handoff remain the next blockers.
+
 ## Clean r162 test: SCP cleanup still fails
 
 CI `35605918332` (`f1c657c21417688937b6c467e608d10e451e67f7`)
