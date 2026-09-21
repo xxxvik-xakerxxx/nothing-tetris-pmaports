@@ -93,6 +93,21 @@ region-info zero. No module reload, secure call or flash was performed.
 
 ## Next implementation boundary
 
+U-Boot `2a693ef204` now implements a C secure decryption transport in
+`board/mediatek/mt6878/tetris_scp_crypto.c`, with real SMC/cache/SHA256
+adapters, input/output integrity checks, physical bounds and overlap checks,
+temporary-material erasure and a non-retryable state after secure failure.
+It is default-off (`CONFIG_TETRIS_SCP_CRYPTO`) and has no board/command caller.
+Caller-side authenticated metadata, ATF compatibility and exclusive reservation
+of the service page and image buffers remain mandatory, not implemented by
+this transport. It does not load or start SCP by itself.
+
+The mock secure-monitor test passes under address/undefined-behavior sanitizers.
+CI `35609751074` passed those tests, cross-compiled the actual ARM64 adapter,
+and completed the full U-Boot image build and packaging successfully. The
+preceding offline-verifier CI `35608462624` completed successfully. No new
+image was flashed and no secure call was issued on the phone during this work.
+
 Trace certificate/context production and the secure backend against the
 installed trusted firmware. Implement authenticated active-slot loading,
 bounded memory allocation and error propagation as one loader operation.

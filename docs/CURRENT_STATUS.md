@@ -4,6 +4,12 @@ Updated: 2026-09-21.
 
 ## Live U-Boot SCP boundary
 
+Implementation update: U-Boot `2a693ef204` adds the experimental C secure
+decryption transport. Host sanitizer tests and CI ARM64 object compilation
+pass. It remains default-off and uncalled; board integration, authenticated
+metadata, memory ownership, TCM preparation and SCP startup are still missing.
+Sensors remain **Broken**, not fixed by the existence of this transport.
+
 Offline security follow-up: U-Boot `0748fe7afc` adds an eight-test verifier
 for SCP certificate chains and ciphertext hashes. Both components from the
 active-slot dump pass consistency verification. Secure AES backend selection
