@@ -1020,6 +1020,7 @@ validate_connectivity_build() {
 	gnss_uapi_patch="$kernel_pkg/1003-vendor-gnss-v051-readonly-uapi.patch.vendor"
 	gnss_header="$device_pkg/gpsdl_v051.h"
 	gnss_probe="$device_pkg/nothing-tetris-gnss-readonly.c"
+	gnss_navigation_gate="$repo_root/scripts/check-gnss-navigation-boundary.sh"
 
 	grep -Eq '^  PMBOOTSTRAP_COMMIT: [0-9a-f]{40}$' "$workflow"
 	grep -Eq '^  PMAPORTS_COMMIT: [0-9a-f]{40}$' "$workflow"
@@ -1078,6 +1079,13 @@ validate_connectivity_build() {
 	grep -Fq 'nothing-tetris-radio-live.tar.zst' "$workflow"
 	grep -Fq 'name: nothing-tetris-radio-live' "$workflow"
 	grep -Fq 'python3 scripts/check-gnss-boot-protocol.py' "$workflow"
+	test -x "$gnss_navigation_gate"
+	sh -n "$gnss_navigation_gate"
+	grep -Fq 'sh scripts/check-gnss-navigation-boundary.sh' "$workflow"
+	grep -Fq 'test_b41_nmea_boundary.c' "$gnss_navigation_gate"
+	grep -Fq 'test_b41_frame_sync.c' "$gnss_navigation_gate"
+	grep -Fq 'proprietary GNSS binaries must not be stored' \
+		"$gnss_navigation_gate"
 	grep -Fq 'MAX_CHUNK = 512' "$repo_root/scripts/check-gnss-boot-protocol.py"
 	grep -Fq 'MAX_BODY = 508' "$repo_root/scripts/check-gnss-boot-protocol.py"
 	grep -Fq 'encode_frame(0xFE08, b"\x18\x00").hex()' \
