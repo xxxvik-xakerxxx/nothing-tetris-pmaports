@@ -18,6 +18,7 @@ PATCHES = (
     "0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor",
     "0093-vendor-scp-validate-region-info.patch.vendor",
     "0094-vendor-scp-validate-dram-recovery-span.patch.vendor",
+    "0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor",
 )
 SOURCE_FILES = (
     SOURCE,

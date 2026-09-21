@@ -2,6 +2,28 @@
 
 Updated: 2026-09-21.
 
+## Clean r161 SCP handoff result
+
+CI run `35590748657` for commit `4c84c11b6b57ca1d38c0400e620662fb3a8901a2`
+completed successfully. Its artifact `10637188685`, digest
+`20325d9c5383f633672131478596cfbed67609d49e53be75da5b44111c7ce800`,
+passed `verify-ci-install-artifacts.sh` and was clean-flashed to `super` and
+`userdata`; no LK, modem, NV or calibration partition was changed. The phone
+booted `6.18.0 #162` with `device-nothing-tetris-8-r16` and kernel package
+`7.2.1-r161`; `usb0` and SSH returned on boot ID
+`bfd63396-f3b4-4d7b-8a8a-cf48544891c8`.
+
+Manual loading of `mtk-mbox`, `mtk_rpmsg_mbox` and `mtk_tinysys_ipi` passed
+with `usb0` still up. Loading `scp` reached the new handoff validator and
+reported `region-info too small: 0 < 56`, proving that the current U-Boot does
+not publish the expected SCP TCM handoff. The ensuing probe-error cleanup then
+hit a separate allocator mismatch: three tables created by `vzalloc` were
+released with `kfree`, producing an Oops in `scp_device_remove`. Patch `0100`
+changes those releases to `vfree`. Sensorhub was not loaded and no sensor
+functionality is claimed. The next runtime prerequisite is an authenticated
+active-slot SCP firmware/region-info handoff in U-Boot, followed by the same
+manual fail-closed probe on a clean build.
+
 ## Latest clean next-SCP installation
 
 r16 is the latest clean-flashed unified image. CI run `35577386901` for

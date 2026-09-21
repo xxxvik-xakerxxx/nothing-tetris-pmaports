@@ -594,6 +594,7 @@ validate_sensor_transport() {
 	scp_patch="$kernel_pkg/0036-vendor-scp-linux-6.18-api.patch.vendor"
 	region_patch="$kernel_pkg/0093-vendor-scp-validate-region-info.patch.vendor"
 	dram_region_patch="$kernel_pkg/0094-vendor-scp-validate-dram-recovery-span.patch.vendor"
+	cleanup_patch="$kernel_pkg/0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor"
 	workflow="$repo_root/.github/workflows/ci.yml"
 
 	for patch in \
@@ -604,6 +605,7 @@ validate_sensor_transport() {
 		0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor \
 		0093-vendor-scp-validate-region-info.patch.vendor \
 		0094-vendor-scp-validate-dram-recovery-span.patch.vendor \
+		0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor \
 		1200-vendor-sensor-framework-linux-6.18.patch.vendor; do
 		grep -Fq "$patch" "$kernel_apkbuild"
 	done
@@ -653,6 +655,11 @@ validate_sensor_transport() {
 	grep -Fq 'scp_region_info_copy.ap_dram_start ||' "$dram_region_patch"
 	grep -Fq 'invalid DRAM recovery span in region-info' \
 		"$dram_region_patch"
+	test "$(grep -c '^+.*vfree(scp_mbox_' "$cleanup_patch")" -eq 3
+	if grep -Eq '^[+].*kfree\(scp_mbox_' "$cleanup_patch"; then
+		echo "SCP cleanup must not kfree vzalloc mailbox tables" >&2
+		return 1
+	fi
 
 	for patch in "$kernel_pkg"/*.patch*; do
 		case "${patch##*/}" in

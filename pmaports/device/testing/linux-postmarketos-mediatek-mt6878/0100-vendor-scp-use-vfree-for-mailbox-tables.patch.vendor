@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 21 Sep 2026 16:00:00 +0300
+Subject: [PATCH] soc: mediatek: scp: use vfree for mailbox tables
+
+scp_ipi_table_init() allocates the mailbox info, send and receive tables
+with vzalloc().  The probe-error unregister path released those aliases with
+kfree(), causing an arm64 translation fault when the fail-closed region-info
+validation rejected a missing bootloader handoff.
+
+Release all three tables with vfree() so a malformed or absent SCP handoff
+returns the original probe error without crashing the calling modprobe task.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ drivers/misc/mediatek/scp/rv/scp_helper.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -2974,15 +2974,15 @@ static void scp_device_shutdown(struct platform_device *dev)
+ static void scp_device_remove(struct platform_device *dev)
+ {
+ 	if (scp_mbox_info) {
+-		kfree(scp_mbox_info);
++		vfree(scp_mbox_info);
+ 		scp_mbox_info = NULL;
+ 	}
+ 	if (scp_mbox_pin_recv) {
+-		kfree(scp_mbox_pin_recv);
++		vfree(scp_mbox_pin_recv);
+ 		scp_mbox_pin_recv = NULL;
+ 	}
+ 	if (scp_mbox_pin_send) {
+-		kfree(scp_mbox_pin_send);
++		vfree(scp_mbox_pin_send);
+ 		scp_mbox_pin_send = NULL;
+ 	}
+ 
+-- 
+2.51.0
