@@ -4,6 +4,13 @@ Updated: 2026-09-21.
 
 ## Live U-Boot SCP boundary
 
+Offline security follow-up: U-Boot `0748fe7afc` adds an eight-test verifier
+for SCP certificate chains and ciphertext hashes. Both components from the
+active-slot dump pass consistency verification. Secure AES backend selection
+is now traced against the installed ATF, but runtime loading and actual sensor
+samples remain unavailable. This is not a new working sensor image. Details:
+[SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md).
+
 Update: U-Boot `0d71414af7` from successful CI `35606234615` fixes the
 incorrect block-device descriptor lookup in the container observer. After
 flashing only `lk_a`, both `nothing,scp_a-container-status` and

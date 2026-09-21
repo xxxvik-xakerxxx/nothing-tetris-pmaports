@@ -59,12 +59,37 @@ using the result of 0x16ea0. Only one branch uses 0x820a0, which writes a
 request into a mapped service buffer and calls 0x8216c. That wrapper invokes
 SMC 0xc2000133 with a selector in x1 and checks the return value.
 
-This does not establish which backend the live device selects, the origin
-and lifetime of all context fields, the certificate validation contract, or
-permission to reuse the observed service-buffer address in U-Boot. These
-must be resolved together with memory reservation, cache visibility, TCM
-power-up and the SCP boot-completion handshake. No raw address from this
-trace is a production allocation or an executable loader implementation.
+Follow-up: LK 0x16ea0 returns constant 2, selecting the secure backend in this
+exact binary. The installed ATF payload (SHA256
+05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e)
+names 0xc2000133 MTK_SIP_LK_AES256_CBC_DEC_FW. Its handler is 0xafcc,
+calling 0x2bff4; the handler pointer precedes the paired SMC IDs in the
+service table. SCP boot service 0xc200040f similarly maps to 0x3b670,
+not the adjacent runtime service 0x3a944.
+
+The page-registration wrapper at ATF 0xb0b8 requires physical 0x48401000
+and length <=4096. Registration and decryption fail after the service lock
+flag is set by the 0xc200010c handler. Whether that lock is invoked on our
+current U-Boot/Linux path is not established. A prior conversational claim
+that Linux handoff necessarily closes it was too strong.
+
+U-Boot commit 0748fe7afc adds tools/tetris_scp_security.py, dependency pins,
+eight synthetic test cases and CI integration. Both components in the
+existing scp_a dump pass RSA-PSS/SHA256 signature checks, cert1 image-key
+delegation to cert2, and encrypted-payload SHA256 matching OID
+2.16.886.2454.2.1. No vendor blobs or wrapped material were committed.
+Results are explicitly self-consistent-only unless an independently obtained
+root SPKI hash is supplied; this does not establish trust against device efuses.
+
+This is an offline verifier, not the runtime loader. The origin/lifetime of
+all context fields, certificate trust policy, service-page ownership, memory
+reservation, cache visibility, TCM power-up and SCP boot-completion handshake
+still need implementation/validation. The new U-Boot documentation
+doc/board/mediatek/tetris-scp-loader.rst records the exact trace.
+
+A subsequent read-only SSH check found the same boot ID
+f628eee9-5439-4913-bdcd-adf50c958b38, usb0 UP, container status ok and
+region-info zero. No module reload, secure call or flash was performed.
 
 ## Next implementation boundary
 
