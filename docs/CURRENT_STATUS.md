@@ -1,8 +1,38 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-14.
+Updated: 2026-09-21.
 
 ## Latest clean next-SCP installation
+
+r16 is the latest clean-flashed unified image. CI run `35577386901` for
+commit `67da4fd057569637d0d3f28dea748a8b4725b32b` completed successfully and
+published `nothing-tetris-images` artifact `10631878514` with digest
+`fe1aefba03cea31df4b5aaffd67d63b4ab55dec1f3b5d6c75e4b0f38b9d8e40d`.
+`scripts/verify-ci-install-artifacts.sh` passed before flashing. Only `super`
+and `userdata` were written on slot `a`; LK, trusted firmware, modem/NV and
+calibration partitions were not changed. The manifest requires U-Boot
+`60bcf22fdc0a94526424db59fc7640298ea8f0dd` and reports kernel `6.18.0`.
+
+The clean image booted kernel
+`Linux nothing-tetris 6.18.0 #159-postmarketos-mediatek-mt6878` with
+`device-nothing-tetris-8-r16` and
+`linux-postmarketos-mediatek-mt6878-7.2.1-r158`. USB NCM appeared as `usb0`,
+Wi-Fi associated automatically, Bluetooth exposed `hci0`, no systemd units
+failed, and the exact 32 MiB SSH transfer passed. DSI is
+`connected`/`enabled` at `1080x2400`, `fb0/blank=0`, touch is `fts_ts` on
+`event0`, and the packaged greeter display gate passed. The user confirmed
+that the phone booted and the display remained visually correct. Evidence is
+in `local/live-logs/20260921T100513Z-172.16.42.1-regression-gate`,
+`local/live-logs/20260921T100518Z-172.16.42.1-hardware-frontier` and
+`local/live-logs/20260921T100548Z-172.16.42.1-greeter-display-gate`.
+
+The same clean r16 frontier confirms the remaining boundary: only DRM
+`card0` exists with no render node, ModemManager reports no modem, no user
+sensor IIO devices are exposed, and no camera/media nodes exist. GNSS remains
+manual and inactive on this baseline. No diagnostic hardware module was
+loaded during this audit.
+
+## Previous next-SCP installations
 
 r15 is the latest clean-flashed next-SCP image. CI run `34775951132` for commit
 `63d2b3917f83066ab75d836b56ffd7d9d7496832` completed successfully and
@@ -50,8 +80,6 @@ diagnostic with `status=0`, `code_size=42505`, `fragment_count=106`,
 `cipher_key=redacted`, left no gpsdl owner, kept modem/CCCI/DPMAIF absent and
 completed the final 32 MiB USB transfer with exactly `33554432` bytes. This is
 repeatable GNSS transport/read-only evidence, not end-user GPS.
-
-## Previous next-SCP installations
 
 r13 was the previous clean-flashed next-SCP image. CI run `34752524434` for commit
 `dcaa75d3bdd87606776d64b5e9509ade9ec350d7` completed successfully and

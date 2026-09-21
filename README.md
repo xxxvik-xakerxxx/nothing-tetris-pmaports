@@ -84,6 +84,15 @@ Per-device data remains outside the image. The live phone exposes separate
 records from `nvdata`; future modem, GNSS, sensor and camera work must identify
 its exact calibration records without committing whole dumps or unique IDs.
 
+The current unified r16 image is commit
+`67da4fd057569637d0d3f28dea748a8b4725b32b` from CI run `35577386901`.
+After a clean `super` and `userdata` flash it booted kernel #159 with device
+package `8-r16`; USB NCM/SSH, a 32 MiB transfer, associated Wi-Fi, Bluetooth,
+touch, native `1080x2400` display and the greeter display gate all passed with
+zero failed systemd units. GPU render, ModemManager modem, user sensor IIO and
+camera/media nodes remain absent; see `docs/CURRENT_STATUS.md` for the exact
+artifact identity and live evidence paths.
+
 ## Feature Status
 
 | Area | Feature | Status | Notes |
