@@ -709,6 +709,7 @@ validate_ci_rootfs_module_checks() {
 	grep -Fq 'sh patches/modem/check-candidates.sh upstream/device-modules' "$workflow"
 	grep -Fq 'sh patches/modem/check-ccmni.sh upstream/device-modules' "$workflow"
 	grep -Fq 'python3 scripts/check-sensor-list-reply.py upstream/device-modules' "$workflow"
+	grep -Fq 'python3 patches/camera-identity/check-reset.py' "$workflow"
 	grep -Fq 'python3 ci/test-greetd-rootfs.py' "$workflow"
 	grep -Fq 'python3 /work/ci/check-greetd-rootfs.py "$rootfs"' "$workflow"
 	if grep -Fq '1201-vendor-sensorhub-reject-mismatched-list-reply.patch.vendor' "$kernel_apkbuild"; then
