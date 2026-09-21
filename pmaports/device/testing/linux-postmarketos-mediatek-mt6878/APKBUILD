@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=160
+pkgrel=161
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -130,6 +130,7 @@ source="
 	0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
 	0092-clk-mediatek-mt6878-camera-main.patch
 	0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
+	0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -989,7 +990,8 @@ fa01b5106883144835c826948dbef4bdca05894b3c3c6221b5f7bff9bf561be5a93a071d19435bbb
 332eb074ae83b7c7d71f19d4c0b480054b488c82e10722957f2df8e2c76b003847427adb677795c6766b9b20fc37cc83e54d491c042fd69711497bc8a280442d  0097-drm-mediatek-update-MT6878-planes-at-frame-end.patch
 43061095a049629a014d63b60f1649e747fffdbc2c6ee8ce68032c880df21a8eb92081b12164fc6f0ac4428928e8bb4dcd142a88996f056a2d9facee1d9809ba  0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch
 fdf0fc19670be99eef4940648ae521ae51462811d0c49400b44d03e09558bc85b296921842a9e11ccf45c2525e65c075451d44ee5ca3fb54a559c05165195bee  0092-clk-mediatek-mt6878-camera-main.patch
-04480aff1df3d7cfb2ec069d988a65d3adb04bf8b4f7f4b8038535e1934e88fdbff021a8dfe9e2bc06d6125f211534c0ab80c5a1e5bad943e9e242c21ffd8562  0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
+857da6ed4c28079647b74fd3b2c340bc3da8283027d1087a4e1a91ca8ce0e4967550f4b20ffe9c34e4292b9cec04c18e659c13387ecbdac227f3b4e7158e5d8d  0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
+9f5f6142669b7a83f8d491cf0169cca3084c669186c560787eed4aa70d53d918ad9524abc23468f0e60b69fa54a9ba248113e4d9f39616995aba09ce3e7a5e3f  0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

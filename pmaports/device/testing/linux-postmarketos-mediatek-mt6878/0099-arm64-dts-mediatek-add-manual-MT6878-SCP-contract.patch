@@ -1,0 +1,151 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Date: Mon, 21 Sep 2026 14:00:00 +0300
+Subject: [PATCH] arm64: dts: mediatek: add manual MT6878 SCP contract
+
+Publish the register, interrupt, mailbox, feature and reserved-memory
+allocation contract used by the Tetris SCP firmware from the matching
+Nothing OS 4.1 source.
+
+Keep SCP DVFS explicitly disabled for the first bring-up. The vendor SCP
+module is manual-only and validates the bootloader TCM region-info before
+recovery setup, so adding these nodes does not touch SCP hardware during a
+normal boot. Loading scp.ko becomes the single controlled experiment.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+ arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi | 114 ++++++++++++++++++++
+ arch/arm64/boot/dts/mediatek/mt6878.dtsi            |   2 +
+ 2 files changed, 116 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878.dtsi b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt6878.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878.dtsi
+@@ -1507,3 +1507,5 @@
+ 		};
+ 	};
+ };
++
++#include "mt6878-scp-manual.dtsi"
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
+@@ -0,0 +1,114 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++
++/*
++ * Manual-only SCP bring-up contract for Nothing Tetris.
++ * No module autoloads this node. SCP DVFS is deliberately bypassed until
++ * the bootloader handoff and ready IPI have been validated on a cold boot.
++ */
++
++/ {
++	scp_dvfs: scp-dvfs {
++		compatible = "mediatek,scp-dvfs";
++		scp-dvfs-disable;
++	};
++};
++
++&soc {
++	scp_clk_ctrl: syscon@1cb21000 {
++		compatible = "mediatek,scp-clk-ctrl", "syscon";
++		reg = <0x1cb21000 0x1000>;
++	};
++
++	scp: remoteproc@1c400000 {
++		compatible = "mediatek,scp";
++		reg = <0x1c400000 0x100000>,
++		      <0x1cb24000 0x1000>,
++		      <0x1cb21000 0x1000>,
++		      <0x1cb30000 0x1000>,
++		      <0x1cb40000 0x1000>,
++		      <0x1cb80000 0x1000>,
++		      <0x1cb60000 0x20000>,
++		      <0x1cb2a000 0x4>,
++		      <0x1cba0000 0x100>,
++		      <0x1cba0100 0x4>,
++		      <0x1cba010c 0x4>,
++		      <0x1cb2a020 0x4>,
++		      <0x1cbb0000 0x100>,
++		      <0x1cbb0100 0x4>,
++		      <0x1cbb010c 0x4>,
++		      <0x1cb2a024 0x4>,
++		      <0x1cbc0000 0x100>,
++		      <0x1cbc0100 0x4>,
++		      <0x1cbc010c 0x4>,
++		      <0x1cb2a028 0x4>,
++		      <0x1cbd0000 0x100>,
++		      <0x1cbd0100 0x4>,
++		      <0x1cbd010c 0x4>,
++		      <0x1cb2a02c 0x4>,
++		      <0x1cbe0000 0x100>,
++		      <0x1cbe0100 0x4>,
++		      <0x1cbe010c 0x4>,
++		      <0x1cb2a030 0x4>;
++		reg-names = "scp_sram_base", "scp_cfgreg", "scp_clkreg",
++			    "scp_cfgreg_core0", "scp_cfgreg_core1",
++			    "scp_bus_tracker", "scp_l1creg", "scp_cfgreg_sec",
++			    "mbox0_base", "mbox0_set", "mbox0_clr", "mbox0_init",
++			    "mbox1_base", "mbox1_set", "mbox1_clr", "mbox1_init",
++			    "mbox2_base", "mbox2_set", "mbox2_clr", "mbox2_init",
++			    "mbox3_base", "mbox3_set", "mbox3_clr", "mbox3_init",
++			    "mbox4_base", "mbox4_set", "mbox4_clr", "mbox4_init";
++
++		interrupts = <GIC_SPI 516 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 517 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 518 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 519 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 520 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 521 IRQ_TYPE_LEVEL_HIGH 0>,
++			     <GIC_SPI 522 IRQ_TYPE_LEVEL_HIGH 0>;
++		interrupt-names = "ipc0", "ipc1", "mbox0", "mbox1", "mbox2",
++				  "mbox3", "mbox4";
++
++		core-0 = "enable";
++		scp-sram-size = <0x100000>;
++		core-nums = <2>;
++		twohart = <1>;
++		mbox-count = <4>;
++
++		send-table =
++			<0 0 11>, <14 0 1>, <15 0 2>, <16 0 1>,
++			<17 1 6>, <18 1 2>, <46 1 1>, <29 1 16>, <31 1 7>,
++			<4 2 1>, <5 2 2>, <6 2 1>, <33 2 16>,
++			<3 3 4>, <37 3 1>, <26 3 9>, <35 3 2>, <39 3 4>,
++			<43 3 4>, <45 3 1>;
++
++		#recv-cells-mode = <1>;
++		recv-table =
++			<1 0 2 0 0 0 0>, <2 0 26 0 0 0 0>,
++			<36 0 1 0 0 0 0>, <15 0 1 1 0 0 0>,
++			<20 1 10 0 0 0 0>, <21 1 6 0 0 0 0>,
++			<22 1 1 0 0 0 0>, <30 1 2 0 0 0 0>,
++			<32 1 7 0 0 0 0>, <5 2 1 1 0 0 0>,
++			<8 2 10 0 0 0 0>, <34 2 16 0 0 0 0>,
++			<7 3 2 0 0 0 0>, <38 3 1 0 0 0 0>,
++			<28 3 5 0 0 0 0>, <27 3 2 0 0 0 0>,
++			<35 3 4 1 0 0 0>, <40 3 4 0 0 0 0>,
++			<44 3 4 0 0 0 0>;
++
++		scp-feature-tbl =
++			<0 40 0>, <1 0 0>, <2 26 0>, <3 0 0>, <4 200 0>,
++			<5 0 0>, <6 135 0>, <7 10 0>, <8 80 0>, <9 43 0>,
++			<10 22 0>, <11 20 0>, <12 100 0>, <13 200 0>;
++
++		scp-mem-key = "mediatek,reserve-memory-scp_share";
++		scp-mem-tbl =
++			<0 0x0 0x0>, <1 0xca700 0x0>, <2 0x100000 0x0>,
++			<3 0x180000 0x0>, <5 0xa000 0x0>, <7 0x1a000 0x0>,
++			<8 0x10000 0x0>, <9 0x1000 0x0>, <10 0x2000 0x0>,
++			<11 0x100 0x0>, <12 0x100 0x0>, <19 0x200 0x0>;
++
++		memorydump = <0x100000>, <0xc4000>, <0x3c00>, <0x400>,
++			     <0xc60000>;
++		scp-resource-dump = "disable";
++		awake-timeout = <30000>;
++	};
++};
+-- 
+2.51.0

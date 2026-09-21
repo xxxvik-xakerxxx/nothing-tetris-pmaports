@@ -654,11 +654,18 @@ validate_sensor_transport() {
 	grep -Fq 'invalid DRAM recovery span in region-info' \
 		"$dram_region_patch"
 
-	if grep -E '^[+]([[:space:]]*)compatible = "mediatek,scp(-dvfs)?"' \
-		"$kernel_pkg"/*.patch* >/dev/null 2>&1; then
-		echo "SCP and SCP DVFS DT nodes must remain absent until handoff validation" >&2
-		return 1
-	fi
+	for patch in "$kernel_pkg"/*.patch*; do
+		case "${patch##*/}" in
+		0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch)
+			continue
+			;;
+		esac
+		if grep -Eq '^[+]([[:space:]]*)compatible = "mediatek,scp(-dvfs)?"' \
+			"$patch"; then
+			echo "SCP runtime node escaped the manual handoff contract" >&2
+			return 1
+		fi
+	done
 
 	grep -Fq 'mtk_ipi_unregister(&scp_ipidev, IPI_IN_SENSOR_CTRL);' \
 		"$sensor_patch"
@@ -747,7 +754,8 @@ validate_compile_only_boundaries() {
 		0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch \
 		0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch \
 		0092-clk-mediatek-mt6878-camera-main.patch \
-		0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch; do
+		0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch \
+		0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch; do
 		grep -Fq "$source" "$kernel_apkbuild"
 	done
 	vlp_scp_patch="$kernel_pkg/0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch"
@@ -757,6 +765,16 @@ validate_compile_only_boundaries() {
 	if grep -Eq '^\+[[:space:]]*(compatible = "mediatek,scp"|.*mediatek,scp-dvfs|.*sensorhub|.*module[s-]load)' \
 		"$vlp_scp_patch"; then
 		echo "VLP SCP clock prerequisite acquired an SCP runtime consumer" >&2
+		return 1
+	fi
+	scp_contract_patch="$kernel_pkg/0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch"
+	grep -Fq 'compatible = "mediatek,scp";' "$scp_contract_patch"
+	grep -Fq 'scp-dvfs-disable;' "$scp_contract_patch"
+	grep -Fq 'scp-mem-key = "mediatek,reserve-memory-scp_share";' "$scp_contract_patch"
+	grep -Fq 'No module autoloads this node.' "$scp_contract_patch"
+	if grep -Eq '^\+.*(modules-load|reset_scp|do-ulposc-cali|scp-dvfs-flag = "enable")' \
+		"$scp_contract_patch"; then
+		echo "manual SCP contract acquired an unsafe runtime trigger" >&2
 		return 1
 	fi
 	camera_clk_binding="$kernel_pkg/0091-dt-bindings-clock-mediatek-mt6878-camera-main.patch"

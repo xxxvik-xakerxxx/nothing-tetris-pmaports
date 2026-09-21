@@ -30,7 +30,7 @@ index ab298d2b3..db63fe2db 100644
 +
 +		vlp_cksys: clock-controller@1c012000 {
 +			compatible = "mediatek,mt6878-vlp-cksys";
-+			reg = <0 0x1c012000 0 0x1000>;
++			reg = <0x1c012000 0x1000>;
 +			#clock-cells = <1>;
 +		};
  	};
