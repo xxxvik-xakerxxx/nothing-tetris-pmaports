@@ -102,8 +102,8 @@ published carveouts.
 
 | Boundary | Required evidence | Current state |
 | --- | --- | --- |
-| Image selection | Active `scp1`/`scp2` slot, authenticated identity and bounded size | Unknown |
-| Firmware state | Valid LK/preloader launch state and TCM region-info ABI | Unknown |
+| Image selection | Active `scp_a`/`scp_b` slot, authenticated identity and bounded size | Both live containers are structurally decoded; authentication and boot-control selection remain unproven |
+| Firmware state | Valid LK/preloader launch state and TCM region-info ABI | New U-Boot observer proves the region-info record is zero before Linux |
 | LK FDT input | Structurally valid preserved FDT with portable carveout data | Host parser validates shape/ranges without mutation; live payload unobserved |
 | Linux publication | Sanitized ranges and firmware state from U-Boot | Missing |
 | Shared memory | Non-overlapping region below `0x90000000`, at least `0x11a9b00` bytes | One captured unit has `0x11c8000`; portability unproven |
@@ -115,12 +115,17 @@ The shared-memory and loader carveouts are distinct and must never be
 substituted for one another. Physical addresses captured from this phone are
 evidence for validation fixtures, not constants for production DT or U-Boot.
 
-The live partition table contains 16 MiB `scp_a` and `scp_b` images. Their
-container format, active-slot selection, authentication state and relationship
-to the TCM `scp_region_info` ABI remain unknown. They are firmware inputs, not
-generic sensor calibration blobs, and must not be copied into rootfs. Sensor
-calibration ownership is still unlocated; it may be supplied by SCP firmware
-rather than directly from `nvdata`, `nvcfg` or `persist`.
+The live partition table contains 16 MiB `scp_a` and `scp_b` images. Both use
+the MediaTek `0x58881688`/`0x58891689` container and expose six bounded
+sections: `tinysys-scp-RV55_A`, two certificates,
+`tinysys-scp-RV55_A_dram`, and two more certificates. The active `scp_a`
+container ends at `0xa43070`; its payloads appear encrypted or signed and must
+not be copied directly into TCM. Active-slot authentication, secure loading
+and the relationship to `scp_region_info` remain unresolved. These are
+firmware inputs, not generic sensor calibration blobs, and must not be copied
+into rootfs. Sensor calibration ownership is still unlocated; it may be
+supplied by SCP firmware rather than directly from `nvdata`, `nvcfg` or
+`persist`.
 
 ## Completed host-only boundary
 

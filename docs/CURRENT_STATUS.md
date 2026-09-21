@@ -2,6 +2,27 @@
 
 Updated: 2026-09-21.
 
+## Live U-Boot SCP boundary
+
+U-Boot commit `9c93aa3f24b46443a01b1514440e2146706c844e` from CI run
+`35602069118` was flashed only to `lk_a`; `lk_b` remains the previous rollback
+image. Linux boot ID `26fe2a00-696b-43d0-aff5-bc042501912f` came up with
+`usb0` and SSH, and both the hardware-frontier and exact 32 MiB transfer gates
+passed. The read-only pre-Linux observation published
+`nothing,scp-region-info-status = "zero"` and size zero. This proves the SCP
+handoff is already absent before Linux loads `scp.ko`; the kernel DT validator
+is not erasing it.
+
+Read-only Linux inspection then confirmed 16 MiB `scp_a` and `scp_b`
+partitions. Both start with a valid MediaTek container header named
+`tinysys-scp-RV55_A`; their full SHA-256 values differ. The active `scp_a`
+container has six bounded sections in this order: SCP payload, `cert1`,
+`cert2`, SCP DRAM payload, `cert1`, `cert2`, ending at `0xa43070`. No payload
+or certificate was committed to the repository. U-Boot commit `700c515702`
+adds a read-only, host-tested parser and UFS header observer for both slots;
+CI run `35604297386` is pending. It does not authenticate, decrypt, copy or
+start SCP, so sensors remain `Broken` rather than being overstated as working.
+
 ## Clean r161 SCP handoff result
 
 CI run `35590748657` for commit `4c84c11b6b57ca1d38c0400e620662fb3a8901a2`
