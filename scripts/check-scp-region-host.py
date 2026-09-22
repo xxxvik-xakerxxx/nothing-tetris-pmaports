@@ -30,6 +30,7 @@ SOURCE_FILES = (
     "drivers/misc/mediatek/scp/rv/scp_dvfs.h",
     "drivers/misc/mediatek/scp/rv/scp_excep.c",
     "drivers/misc/mediatek/scp/rv/scp_awake.c",
+    "drivers/misc/mediatek/scp/rv/scp_feature_define.h",
 )
 
 
@@ -131,6 +132,33 @@ static struct { u32 scp_dram_region, core_nums, secure_dump; } scpreg;
                 raise RuntimeError(f"missing bootstrap cleanup at {label}")
         if "scp_bootstrap_resource_put();" not in init.split("static void __exit scp_exit", 1)[1]:
             raise RuntimeError("missing bootstrap exit cleanup")
+        # The firmware sends LOGGER_CTRL before READY. A DT pin without the
+        # logger's receive buffer reaches vendor mtk_mbox_isr's BUG_ON.
+        apkbuild = (patches / "APKBUILD").read_text()
+        scp_build = apkbuild.split('_tinysys_make "$_scp"', 1)[1].split(
+            '_symbols=', 1)[0]
+        logger_flag = "-DCONFIG_MTK_TINYSYS_SCP_LOGGER_SUPPORT=1"
+        if logger_flag not in scp_build or 'KCFLAGS=' not in scp_build:
+            raise RuntimeError("SCP logger must be enabled in C, not just Kbuild")
+        if init.index("scp_logger_init(") > init.index("reset_scp(SCP_ALL_ENABLE)"):
+            raise RuntimeError("logger receive buffer registered after SCP start")
+        harness = scratch / "logger-config.c"
+        harness.write_text('''#include <stdint.h>
+#define __SCP_H__
+#define NUM_FEATURE_ID 16
+#include "drivers/misc/mediatek/scp/rv/scp_feature_define.h"
+int main(void) { return SCP_LOGGER_ENABLE != EXPECT_LOGGER; }
+''')
+        for enabled in (0, 1):
+            executable = scratch / f"logger-config-{enabled}"
+            run(shlex.split(os.environ.get("CC", "cc")) + [
+                "-std=c11", "-Wall", "-Wextra", "-Werror",
+                f"-DEXPECT_LOGGER={enabled}",
+                "-I" + str(scratch / "drivers/misc/mediatek/scp/include"),
+            ] + ([logger_flag] if enabled else []) + [
+                str(harness), "-o", str(executable)])
+            run([str(executable)])
+        print("PASS: SCP logger C configuration and pre-reset initialization")
         print(f"PASS: exact-source patch application and host UBSan ({VENDOR_COMMIT})")
 
 

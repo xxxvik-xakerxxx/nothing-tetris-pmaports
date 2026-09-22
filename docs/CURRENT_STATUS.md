@@ -2,7 +2,29 @@
 
 Updated: 2026-09-22.
 
-## SCP audio-memory fix built and installed; cold test pending
+## r166 candidate: register SCP logger before firmware startup
+
+The audio handoff candidate passed cold ATF registration, but the single
+SCP probe panicked Linux in `mtk_mbox_isr`, not in the earlier firmware
+audio ASSERT. At kernel time 62.365983, the mailbox reported a missing
+receive buffer for IPI 21 (LOGGER_CTRL); `BUG_ON` at mtk-mbox.c:561 followed.
+The phone rebooted. Recovery boot `8eb5aae7-1ba1-4fc3-9838-fcd56b9f1a01`
+has systemd running, zero failed units and USB/SSH available. No probe was
+repeated. The first console panic was preserved as
+`/private/tmp/tetris-bf75-panic.txt`, SHA256
+`25b6fe64bd244e1185fb612143d73089359939a8bd3229925fe214e2daf4751d`.
+
+Root cause of the AP panic: the external SCP module was compiled without
+`CONFIG_MTK_TINYSYS_SCP_LOGGER_SUPPORT`, so no LOGGER_CTRL receive buffer
+was registered. r166 enables that C feature only for SCP. This uses the
+existing vendor logger initialization before `reset_scp(SCP_ALL_ENABLE)`;
+it does not remove mailbox BUG checks, invent a dummy receiver, autoload SCP
+or change watchdogs. Host tests verify both disabled/enabled feature-header
+paths and the pre-reset initialization order. Package validation passes.
+Full kernel/module/rootfs compilation remains CI-only. Sensors are Broken;
+neither READY nor sensor data was captured in this test.
+
+## SCP audio-memory fix built and installed; cold registration passes
 
 Candidate U-Boot `bf75c572e16079a36ab43a032be3360c3e93250c` is on the
 existing `codex/scp-handoff-inventory` branch. Diagnostic CI
@@ -22,12 +44,13 @@ remain unchanged. Warm boot `784d3c79-2771-481c-99d5-0603a688971d`
 reports systemd running and USB/SSH healthy. SCP remains disabled at the
 expected warm `preflight` guard. The pre-flash 32 MiB transfer gate passed
 at `local/live-logs/20260922T105717Z-172.16.42.1-regression-gate`.
-Cold boot and one SCP probe with first-dump capture are still required,
-followed by readiness and real sensor samples. No sensor success is claimed.
+Cold boot `614a39d4-2533-4686-87b4-f11263c2d155` passed preparation and
+secure state 3/error 0; the allocator selected `0x9d000000`, size `0x9c0000`.
+The one probe then exposed the logger panic recorded above. This proves
+registration acceptance, not complete audio/SCP readiness or sensor support.
 Post-flash transfer gate also passed at
 `local/live-logs/20260922T110014Z-172.16.42.1-regression-gate`.
-The user confirmed normal display and touch. Full poweroff was requested
-successfully; manual power-on is pending for the cold SCP test.
+The user confirmed normal display and touch before the cold SCP test.
 
 ## r165 baseline passes; SCP dump identifies audio-memory assertion
 

@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=165
+pkgrel=166
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -469,6 +469,7 @@ _build_sensor_modules() {
 	_tinysys_make "$_scp" \
 		CONFIG_MTK_TINYSYS_SCP_SUPPORT=m \
 		CONFIG_MTK_TINYSYS_SAP_SUPPORT=n \
+		KCFLAGS="-I$_devmods_dir/include $(_vendor_kcflags) -DCONFIG_MTK_TINYSYS_SCP_LOGGER_SUPPORT=1" \
 		KBUILD_EXTRA_SYMBOLS="$_symbols"
 	_symbols="$_symbols $_scp/Module.symvers"
 

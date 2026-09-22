@@ -619,6 +619,8 @@ validate_sensor_transport() {
 		"$kernel_apkbuild"
 	test "$(grep -c '_audio_symbols"' "$kernel_apkbuild")" -eq 2
 	grep -Fq 'CONFIG_MTK_TINYSYS_SCP_SUPPORT=m' "$kernel_apkbuild"
+	# Firmware sends LOGGER_CTRL before READY; its receive buffer is mandatory.
+	grep -Fq -- '-DCONFIG_MTK_TINYSYS_SCP_LOGGER_SUPPORT=1' "$kernel_apkbuild"
 	grep -Fq 'CONFIG_MTK_SENSORHUB=m' "$kernel_apkbuild"
 	for module in \
 		mtk-mbox.ko \
