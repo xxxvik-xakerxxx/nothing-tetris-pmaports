@@ -23,6 +23,9 @@ or change watchdogs. Host tests verify both disabled/enabled feature-header
 paths and the pre-reset initialization order. Package validation passes.
 Full kernel/module/rootfs compilation remains CI-only. Sensors are Broken;
 neither READY nor sensor data was captured in this test.
+Commit `1bb4a3f96dce3529e66ab9ae6482238d662d7a5c` is building in CI
+`35719843739`. The recovery 32 MiB USB/SSH transfer passed at
+`local/live-logs/20260922T110925Z-172.16.42.1-regression-gate`.
 
 ## SCP audio-memory fix built and installed; cold registration passes
 
