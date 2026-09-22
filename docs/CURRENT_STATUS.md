@@ -2,11 +2,11 @@
 
 Updated: 2026-09-22.
 
-## SCP audio-memory fix submitted to U-Boot CI
+## SCP audio-memory fix built and installed; cold test pending
 
 Candidate U-Boot `bf75c572e16079a36ab43a032be3360c3e93250c` is on the
 existing `codex/scp-handoff-inventory` branch. Diagnostic CI
-`35718518185` is running with prepare/TCM/secure options enabled.
+`35718518185` passed with prepare/TCM/secure options enabled.
 No new pmOS kernel/rootfs build is required for this boot-only candidate.
 
 It adds the missing four-entry audio table, separate bank 5 registration
@@ -15,9 +15,19 @@ there is no handset-specific physical address. Bounds, overlaps, duplicate
 ownership and each secure-call failure are tested with ASan/UBSan. The
 firmware/ATF hash gate and default-off diagnostic policy are unchanged.
 This is not yet hardware-verified and has not been merged to master.
-Installed r165 and U-Boot `9177841177` remain unchanged. The next gate is
-verified CI artifacts, lk_a-only installation, cold boot and one SCP probe
-with first-dump capture, followed by readiness and real sensor samples.
+All artifact checksums and the commit manifest passed. LK image SHA256:
+`7fd5bb218af3d3371dca59930f320ba98d38ddba6cbf7229851c33ba746d62fe`.
+Flashed only `lk_a`; `lk_b`, installed r165, userdata and stock firmware
+remain unchanged. Warm boot `784d3c79-2771-481c-99d5-0603a688971d`
+reports systemd running and USB/SSH healthy. SCP remains disabled at the
+expected warm `preflight` guard. The pre-flash 32 MiB transfer gate passed
+at `local/live-logs/20260922T105717Z-172.16.42.1-regression-gate`.
+Cold boot and one SCP probe with first-dump capture are still required,
+followed by readiness and real sensor samples. No sensor success is claimed.
+Post-flash transfer gate also passed at
+`local/live-logs/20260922T110014Z-172.16.42.1-regression-gate`.
+The user confirmed normal display and touch. Full poweroff was requested
+successfully; manual power-on is pending for the cold SCP test.
 
 ## r165 baseline passes; SCP dump identifies audio-memory assertion
 
