@@ -2,6 +2,36 @@
 
 Updated: 2026-09-22.
 
+## r166 clean install: boot/display/touch pass; SCP test pending
+
+CI `35719843739` for `1bb4a3f96dce3529e66ab9ae6482238d662d7a5c`
+completed successfully. All three artifact hashes and manifest identity
+passed before flashing only `super` and `userdata`; all 17 userdata chunks
+completed. Installed U-Boot `bf75c572e1` in `lk_a` was retained. No write
+to `lk_b`, stock firmware or calibration partitions was made. The manifest
+still names the older generic minimum bootloader, not this diagnostic build.
+
+Boot `b87021dc-297e-4872-b9ab-15cd3669f265` reports kernel #167, systemd
+running, zero failed units, USB/SSH up, rootfs 104.5 GiB. The user confirmed
+normal display and touch. SCP/sensorhub/HF modules remain unloaded; the
+warm preflight guard disables SCP as expected. A cold test is still needed;
+this installation alone does not prove the logger panic is fixed or sensors
+work. Pre-flash transfer passed at
+`local/live-logs/20260922T121212Z-172.16.42.1-regression-gate`.
+Installed package database confirms `7.2.1-r166`. Post-install 32 MiB transfer
+also passed at `local/live-logs/20260922T122221Z-172.16.42.1-regression-gate`.
+Full poweroff was sent successfully; awaiting manual power-on for the cold
+SCP test. No SCP module was loaded during this installation check.
+
+Artifact SHA256:
+
+- boot: `a49713e71557b8525b9e23d7a818436cc8061ac852317c49b38dbf3624a0e063`
+- root sparse: `727b555f731cee55cd6f261486f4259b8b59d18a090f46076f6f8e8935548d54`
+- FIT: `02a4929826e013e212c6936b1b4f63c7b419bd3969ecda6b497e50cf62b58732`
+
+Only obsolete downloaded r164 images were removed to make host disk space.
+Their metadata/logs, the r165 rollback images and all U-Boot images remain.
+
 ## r166 candidate: register SCP logger before firmware startup
 
 The audio handoff candidate passed cold ATF registration, but the single
@@ -23,8 +53,8 @@ or change watchdogs. Host tests verify both disabled/enabled feature-header
 paths and the pre-reset initialization order. Package validation passes.
 Full kernel/module/rootfs compilation remains CI-only. Sensors are Broken;
 neither READY nor sensor data was captured in this test.
-Commit `1bb4a3f96dce3529e66ab9ae6482238d662d7a5c` is building in CI
-`35719843739`. The recovery 32 MiB USB/SSH transfer passed at
+Commit `1bb4a3f96dce3529e66ab9ae6482238d662d7a5c` passed CI
+`35719843739` and is now installed as recorded above. The recovery 32 MiB USB/SSH transfer passed at
 `local/live-logs/20260922T110925Z-172.16.42.1-regression-gate`.
 
 ## SCP audio-memory fix built and installed; cold registration passes
