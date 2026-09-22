@@ -2,6 +2,16 @@
 
 Updated: 2026-09-22.
 
+## Consolidated current checkpoint
+
+See [PORT_SUMMARY.md](PORT_SUMMARY.md) for the authoritative cross-repository
+hardware summary, installed-versus-main distinction, CI checkpoint and branch
+archive ledger. Display route and frame-end fixes are in main, along with
+the r167 sensor prerequisites and packaged desktop backend. U-Boot secure
+handoff is in master, still guarded and opt-in. Older sections below are a
+chronological experiment history; their pending/broken statements apply to
+those checkpoints, not to the newer sensor results above them.
+
 ## Sensor desktop integration: live behavior confirmed
 
 The native HF backend for standard iio-sensor-proxy now connects the real
@@ -11,8 +21,9 @@ automatic brightness, and proximity blank/unblank in a local dummy call.
 Brightness transitions are visibly stepped and remain an open issue.
 This is **Partial**, not calibrated/lifecycle-complete support or GSM call
 verification. See [SENSOR_DESKTOP_INTEGRATION.md](SENSOR_DESKTOP_INTEGRATION.md)
-for exact evidence, CI APK hashes and the clean-install boundary. The pending
-full image contains only the previous startup helper, not this newer backend.
+for exact evidence, CI APK hashes and the clean-install boundary. Main CI
+35746976417 includes the backend; the older 35738754109 run only included
+the startup helper. Neither should be confused with the installed r167 image.
 
 ## Device r17 candidate: supervised cold-boot sensor service
 
@@ -38,7 +49,8 @@ repeats or a clean installation of the new package.
 
 Integration commit `fd61e7b` is pushed. CI `35738754109` passed
 `validate-overlay`; image building remains in progress at this checkpoint.
-No default autoload or main branch promotion is justified yet.
+This was the pre-promotion checkpoint. Guarded experimental code is now in
+main; default autoload and a production Works label remain unjustified.
 
 ## r167 cold test: real samples from all five physical sensor classes
 

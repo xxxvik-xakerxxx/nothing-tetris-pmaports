@@ -8,6 +8,14 @@ kernel package, patch series, validation scripts, and CI config needed to build
 the postmarketOS port. Full upstream source trees, generated images, local
 logs, and device backups are not committed.
 
+## Current Summary (2026-09-22)
+
+The canonical branches are pmOS `main` and U-Boot `master`. Native display
+route/frame-end fixes and the sensor stack are included, with tests and
+documentation. See [the complete port summary](docs/PORT_SUMMARY.md) for
+hardware status, exact installed versions, CI results and archived branches.
+Archive tags preserve unfinished experiments without enabling them by default.
+
 ## Sensor Integration (2026-09-22)
 
 Sensors now have **partial, live-tested desktop support**: automatic rotation,
@@ -47,8 +55,8 @@ See [sensor integration evidence](docs/SENSOR_DESKTOP_INTEGRATION.md).
 | FOSS boot path | Yes |
 | Device package | `device/testing/device-nothing-tetris` |
 | Kernel package | `device/testing/linux-postmarketos-mediatek-mt6878` |
-| Kernel version | `6.18` (clean-installed CI `34692383850`, `pkgrel=156`, kernel `6.18.0 #157`; display route/frame-end updates and next SCP prerequisites, lifecycle testing incomplete) |
-| Kernel source commit | `3a016d36153d504f6b1002d29120bd84a8183533` |
+| Kernel version | Linux `6.18.0 #168`, package `7.2.1-r167`, clean-installed CI `35729169169`; lifecycle testing incomplete |
+| Installed image source commit | `ff4433f1515a4f29529d7f14684b5aea9c62858a` |
 | Device DTB | `mt6878-nothing-tetris-native` |
 
 Patch grouping and cleanup debt are documented in [docs/PATCH_SERIES.md](docs/PATCH_SERIES.md).
@@ -64,7 +72,12 @@ The measured charging path, source-classification blocker and idle-drain test
 contract are documented in
 [docs/POWER_CHARGING_BRINGUP.md](docs/POWER_CHARGING_BRINGUP.md).
 
-The installed image is the `codex/hardware-integration-next-scp` CI artifact
+## Historical Baselines
+
+The following older baseline records retain their original evidence; they do
+not describe the current r167 installation. Use the current summary above.
+
+The September 12 image was the `codex/hardware-integration-next-scp` CI artifact
 from pmaports commit `3a016d36153d504f6b1002d29120bd84a8183533`. CI run
 `34692383850` passed and its downloaded `nothing-tetris-images` artifact
 `10297439743` was verified locally before flashing. The ZIP SHA256 is
@@ -104,6 +117,10 @@ camera/media nodes remain absent; see `docs/CURRENT_STATUS.md` for the exact
 artifact identity and live evidence paths.
 
 ## Feature Status
+
+The consolidated current matrix is in [PORT_SUMMARY.md](docs/PORT_SUMMARY.md).
+The detailed entries below retain earlier subsystem-specific test evidence;
+older kernel/image identifiers are historical, not the installed version.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
