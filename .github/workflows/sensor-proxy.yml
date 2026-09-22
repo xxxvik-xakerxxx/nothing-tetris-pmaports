@@ -1,5 +1,13 @@
 name: Sensor proxy live candidate
 on:
+  push:
+    paths:
+      - 'integrations/sensor-proxy/**'
+      - '.github/workflows/sensor-proxy.yml'
+  pull_request:
+    paths:
+      - 'integrations/sensor-proxy/**'
+      - '.github/workflows/sensor-proxy.yml'
   workflow_dispatch:
 permissions:
   contents: read
