@@ -14,9 +14,19 @@ remains intentional and visible; this is not universal automatic support.
 On the existing ready cold boot, preflight/status and two repeated starts
 passed without reloading modules. The candidate unit was installed and
 enabled only on the test handset, systemd verification and adoption passed,
-and a full poweroff was sent for the first automatic cold-start test.
-Manual power-on is pending at this checkpoint. No default autoload or main
-branch promotion is justified by these adoption tests.
+and a full poweroff was sent for the first automatic startup test.
+The next observed boot, `126ad547-de18-4874-bd8d-959aaeadd4f4`, passed
+the secure-handoff preflight and initialized all 24 entries automatically
+at 16.93 seconds, with physical mask 31. No manual module load was used.
+Five-second captures returned 124 accelerometer, 123 gyroscope, 124
+magnetometer, 41 light and one proximity sample. System state is running
+and USB/SSH survived. The user's exact power-off interval has not been
+independently confirmed. This is one automatic startup, not three cold
+repeats or a clean installation of the new package.
+
+Integration commit `fd61e7b` is pushed. CI `35738754109` passed
+`validate-overlay`; image building remains in progress at this checkpoint.
+No default autoload or main branch promotion is justified yet.
 
 ## r167 cold test: real samples from all five physical sensor classes
 

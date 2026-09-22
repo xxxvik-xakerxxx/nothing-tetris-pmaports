@@ -95,6 +95,35 @@ working 24-entry inventory, without creating a load-attempt marker or
 reloading modules. Systemd unit verification and start passed. This only
 proves adoption of already-ready state, not boot-time initialization.
 
+Following a requested full poweroff, the next observed boot
+`126ad547-de18-4874-bd8d-959aaeadd4f4` initialized SCP and sensorhub through
+the enabled unit alone. Preflight passed and the service completed at
+16.95 seconds with 24 entries and physical mask 31. No manual modprobe was
+issued on this boot. Five-second captures returned:
+
+| Class | Samples | Observed rate |
+| --- | --- | --- |
+| Accelerometer | 124 | 25.011 Hz |
+| Gyroscope | 123 | 25.067 Hz |
+| Magnetometer | 124 | 24.997 Hz |
+| Light | 41 | 8.333 Hz |
+| Proximity | 1 | On-change; raw value 5 |
+
+System state remained running and USB/SSH survived. No BUG/Oops/panic,
+SCP ready timeout or awake-handshake failure was found before or after capture.
+The subsequent 32 MiB USB transfer gate passed; logs:
+`local/live-logs/20260922T141854Z-172.16.42.1-regression-gate`.
+The exact manual power-off interval has not been confirmed by the user;
+do not count this as three controlled cold repeats or clean-package testing.
+Evidence is saved at `/private/tmp/tetris-sensors-autostart-126ad547/`.
+SHA256 of `kernel-after`:
+`856880205c5b7d0ab6f4908eb9044f4b63d2adaa5d9b6badbefd076dfd5f9ab1`;
+of `service-journal`:
+`ed7e129dbfd482f95d1f46df5784ae20e0c9f06f871b6fe97d92cfa5fd944efc`.
+
+Integration commit `fd61e7b` has been pushed. CI `35738754109` passed
+the overlay and source/ABI checks; image building is still in progress.
+
 Still required: repeated automatic cold starts, CI package clean installation,
 safe warm-start ownership, controlled motion/light tests, calibration
 provisioning, native IIO/sensor-consumer integration, suspend/resume,
