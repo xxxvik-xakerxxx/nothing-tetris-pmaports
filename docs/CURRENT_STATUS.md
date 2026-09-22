@@ -2,6 +2,35 @@
 
 Updated: 2026-09-22.
 
+## r167 clean-installed; cold SCP test pending
+
+CI `35729169169` for `ff4433f1515a4f29529d7f14684b5aea9c62858a`
+completed successfully. Manifest identity and all three SHA256 checks passed
+before flashing `super` and `userdata`; all 17 userdata chunks completed
+successfully (162.869 seconds). U-Boot `bf75c572e160` remains in slot a;
+no bootloader, stock firmware or calibration partition was written.
+
+Boot `5f804476-ef36-4aaa-8bb9-4f3a01224b72` confirms package
+`7.2.1-r167`, kernel #168, systemd running, zero failed units, 104.5 GiB
+rootfs and USB/SSH available. The user confirmed normal display and touch.
+The live SCP `mediatek,infracfg` property matches the existing syscon's
+phandle, and the installed SCP module vermagic matches kernel 6.18.0.
+No SCP/sensorhub/HF module was loaded. Warm preflight remains expected.
+
+Pre-flash USB transfer passed at
+`local/live-logs/20260922T134051Z-172.16.42.1-regression-gate`;
+post-install transfer passed at
+`local/live-logs/20260922T134955Z-172.16.42.1-regression-gate`.
+Full poweroff was requested after these checks; manual power-on is pending
+for the next controlled SCP probe. Sensors remain **Broken**, not verified
+by successful installation or by the phandle check.
+
+Artifact SHA256 (`/private/tmp/tetris-r167-35729169169`):
+
+- boot: `d09cb4fa4e72411c3d72fbf3411b50d712ce73a28f07cecf4009088f996186f9`
+- root sparse: `870fc9e090c05179c2e523c29095313a1d29edc36d77368d07fabb31ca6ae7bc`
+- FIT: `66dcaab83ef1ea0e9e7176f2ae1aa41f72f4b23b3a5e1088bbb254da1a743ae7`
+
 ## r167 candidate: share the existing infracfg syscon
 
 Replaced the unmatched vendor auxiliary `scpsys` driver with a required
