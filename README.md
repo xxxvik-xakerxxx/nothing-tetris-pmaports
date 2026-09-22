@@ -53,7 +53,7 @@ the working SCP loader based only on that generic minimum.
 - `pmaports/`: device, kernel and firmware overlay.
 - `integrations/sensor-proxy/`: native HF backend and optional APK.
 - `patches/`: subsystem prerequisites and source-level validation.
-- `scripts/`, `ci/`: validation, diagnostics and build configuration.
+- [`scripts/`](scripts/README.md), `ci/`: validation, diagnostics and build configuration.
 - `docs/`: current status, maintained research and reproducible test boundaries.
 
 No factory calibration, unique device identity, firmware dumps or generated
