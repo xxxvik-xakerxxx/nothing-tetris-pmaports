@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=163
+pkgrel=164
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -85,6 +85,7 @@ source="
 	0093-vendor-scp-validate-region-info.patch.vendor
 	0094-vendor-scp-validate-dram-recovery-span.patch.vendor
 	0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor
+	0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
@@ -219,6 +220,8 @@ prepare() {
 		< "$srcdir"/0094-vendor-scp-validate-dram-recovery-span.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -996,6 +999,7 @@ fdf0fc19670be99eef4940648ae521ae51462811d0c49400b44d03e09558bc85b296921842a9e11c
 857da6ed4c28079647b74fd3b2c340bc3da8283027d1087a4e1a91ca8ce0e4967550f4b20ffe9c34e4292b9cec04c18e659c13387ecbdac227f3b4e7158e5d8d  0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
 9f5f6142669b7a83f8d491cf0169cca3084c669186c560787eed4aa70d53d918ad9524abc23468f0e60b69fa54a9ba248113e4d9f39616995aba09ce3e7a5e3f  0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
 6c702a5b0ce2d56683b6239fb3ad86e1c7fcfe5c890cf515b90571fdaa8c772c7941e672abf2cc12cb168803f5b94341971fd79b6bb6751ac8b09af746630499  0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor
+83501433f86f84855f8c1b9dbf44039e6cc39b7172d0307a72ba9a2b7acb17ea1ae2efaaae63e04123a4746b60c37023989c7a4f7ed0770f68263c2aaef0530f  0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor
 95aa25e03d8d72a7402249d3e8c5259df9bd82992c9f603b0d30c25a9e69f383f2c89f5ef8de6ccdcda718e03e9f23bbe1f5890fac3c8d29b89439dd8458aadc  1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 370ab1e6dbc945f67384365bb08892a4a46c72659c10fe8e34c9a8d22e5e71a2c47afa07b84683b3c58be558535cad9b348814b80a7da86bebd0537f69a18a6e  1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 b58231a79491a9212fe42d0ad32a1402710d7eaca906151e5d3544b5e8739397019e7d12fb563d5964463a054725fe5dea4784141b9a809a55590a91868f2380  1002-vendor-gnss-linux-6.18-compat.patch.vendor

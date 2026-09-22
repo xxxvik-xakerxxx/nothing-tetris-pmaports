@@ -610,6 +610,7 @@ validate_sensor_transport() {
 		0093-vendor-scp-validate-region-info.patch.vendor \
 		0094-vendor-scp-validate-dram-recovery-span.patch.vendor \
 		0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor \
+		0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor \
 		1200-vendor-sensor-framework-linux-6.18.patch.vendor; do
 		grep -Fq "$patch" "$kernel_apkbuild"
 	done

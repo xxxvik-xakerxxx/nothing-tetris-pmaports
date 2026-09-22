@@ -76,6 +76,8 @@ jobs:
             upstream/device-modules
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
+      - name: Validate SCP recovery memory contract
+        run: python3 scripts/check-scp-region-host.py upstream/device-modules
       - name: Validate IMX882 reset gate
         run: python3 patches/camera-identity/check-reset.py
       - name: Validate GNSS boot protocol gate

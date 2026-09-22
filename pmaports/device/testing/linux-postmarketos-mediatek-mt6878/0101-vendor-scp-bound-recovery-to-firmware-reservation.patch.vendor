@@ -1,0 +1,177 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] soc: mediatek: scp: bound recovery to its firmware reservation
+
+The pinned Nothing OS 4.1 driver maps four rounded DRAM images regardless
+of recovery mode. Secure recovery never reads the backup through this
+mapping; non-secure recovery clears core_nums banks then reads one backup.
+Calculate the actual mapping extent and require the non-secure backup
+address to match region-info instead of silently reading another location.
+
+Before recovery setup, require loader, firmware, mapped DRAM and backup to
+fit the no-map mediatek,SCP-reserved region obtained from OF reserved memory.
+This is separate from the sensor shared-memory reservation. Do not embed
+the test handset's address or size. Reject missing ownership explicitly.
+
+This does not enable secure dump, start SCP or authenticate firmware.
+It requires the loader to supply a compatible, already validated handoff.
+Source: NothingOSS device modules ee2be53cb75670b548948636a0db1d1ff112bf12.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -44,8 +44,8 @@
+ #include "scp_scpctl.h"
+ #include "scp.h"
+ 
+-#ifdef CONFIG_OF_RESERVED_MEM
+ #include <linux/of_reserved_mem.h>
++#ifdef CONFIG_OF_RESERVED_MEM
+ #include "scp_reservedmem_define.h"
+ #endif
+ 
+@@ -2157,19 +2157,36 @@
+ 	return start && size && !check_add_overflow(start, size, &end);
+ }
+ 
+-static bool scp_region_dram_valid(u32 start, u32 size)
++static u32 scp_region_dram_map_size(void)
+ {
+-	u32 rounded, span;
++	u32 size = scp_region_info_copy.ap_dram_size;
++	u32 rounded, span, offset, backup;
+ 
+-	if (!size || check_add_overflow(size, 1023U, &rounded))
+-		return false;
++	if (!size || size > 0x7fffffffU ||
++	    check_add_overflow(size, 1023U, &rounded))
++		return 0;
+ 	rounded &= ~1023U;
+ 
+-	/* Recovery maps four 1 KiB-aligned banks, including backups. */
+-	if (check_mul_overflow(rounded, 4U, &span))
+-		return false;
++	/* Secure recovery does not dereference the backup through this mapping. */
++	if (scpreg.secure_dump)
++		return rounded;
++	if (scpreg.core_nums < 1 || scpreg.core_nums > 2 ||
++	    check_mul_overflow(rounded, scpreg.core_nums, &offset) ||
++	    check_add_overflow(scp_region_info_copy.ap_dram_start, offset, &backup) ||
++	    backup != scp_region_info_copy.ap_dram_backup_start ||
++	    check_add_overflow(offset, rounded, &span))
++		return 0;
++	return span;
++}
+ 
+-	return scp_region_range_valid(start, span);
++static bool scp_region_dram_valid(u32 start, u32 size)
++{
++	u32 end, span = scp_region_dram_map_size();
++
++	return size && span && scp_region_range_valid(start, span) &&
++		!check_add_overflow(start, size, &end) &&
++		scp_region_info_copy.ap_dram_backup_start >= end &&
++		scp_region_range_valid(scp_region_info_copy.ap_dram_backup_start, size);
+ }
+ 
+ static int scp_region_info_validate(void)
+@@ -2206,8 +2223,42 @@
+ 	return 0;
+ }
+ 
++static bool scp_region_contains(u64 base, u64 capacity, u32 start, u32 size)
++{
++	u64 offset;
++
++	if (!capacity || !size || start < base)
++		return false;
++	offset = (u64)start - base;
++	return offset < capacity && size <= capacity - offset;
++}
++
++static int scp_region_memory_validate(u64 base, u64 capacity)
++{
++	if (!scp_region_contains(base, capacity,
++			scp_region_info_copy.ap_loader_start,
++			scp_region_info_copy.ap_loader_size) ||
++	    !scp_region_contains(base, capacity,
++			scp_region_info_copy.ap_firmware_start,
++			scp_region_info_copy.ap_firmware_size))
++		return -ERANGE;
++	if (scp_region_info_copy.ap_dram_size &&
++	    (!scp_region_contains(base, capacity,
++			scp_region_info_copy.ap_dram_start,
++			scp_region_dram_map_size()) ||
++	     !scp_region_contains(base, capacity,
++			scp_region_info_copy.ap_dram_backup_start,
++			scp_region_info_copy.ap_dram_size)))
++		return -ERANGE;
++	return 0;
++}
++
+ static int scp_region_info_init(void)
+ {
++	struct device_node *node;
++	struct reserved_mem *rmem;
++	int ret;
++
+ 	if (SCP_REGION_INFO_OFFSET + sizeof(scp_region_info_copy) >
+ 	    SCP_TCM_SIZE) {
+ 		pr_err("[SCP] region-info lies outside TCM\n");
+@@ -2220,7 +2271,25 @@
+ 	memcpy_from_scp(&scp_region_info_copy,
+ 		scp_region_info, sizeof(scp_region_info_copy));
+ 
+-	return scp_region_info_validate();
++	ret = scp_region_info_validate();
++	if (ret)
++		return ret;
++	/* LK's firmware reservation is distinct from scp-mem-key shared memory. */
++	node = of_find_compatible_node(NULL, NULL, "mediatek,SCP-reserved");
++	if (!node)
++		return -ENODEV;
++	if (!of_property_read_bool(node, "no-map")) {
++		of_node_put(node);
++		return -EINVAL;
++	}
++	rmem = of_reserved_mem_lookup(node);
++	of_node_put(node);
++	if (!rmem)
++		return -ENODEV;
++	ret = scp_region_memory_validate(rmem->base, rmem->size);
++	if (ret)
++		pr_err("[SCP] region-info exceeds reserved firmware memory\n");
++	return ret;
+ }
+ #else
+ static int scp_region_info_init(void)
+@@ -2259,10 +2328,10 @@
+ 		scp_region_info_copy.regdump_size);
+ 
+ 	if ((int)(scp_region_info_copy.ap_dram_size) > 0) {
+-		/*if l1c enable, map it (include backup) */
++		/* Validated against the selected recovery path and LK reservation. */
+ 		scp_ap_dram_virt = ioremap_wc(
+ 		scp_region_info_copy.ap_dram_start,
+-		ROUNDUP(scp_region_info_copy.ap_dram_size, 1024)*4);
++		scp_region_dram_map_size());
+ 
+ 	pr_notice("[SCP] scp_ap_dram_virt map: 0x%x + 0x%x\n",
+ 		scp_region_info_copy.ap_dram_start,
+--- a/drivers/misc/mediatek/scp/rv/scp_awake.c
++++ b/drivers/misc/mediatek/scp/rv/scp_awake.c
+@@ -339,9 +339,6 @@
+ #if SCP_SECURE_DUMP_MEASURE
+ 		scpdump_cal[2].start = ktime_get_boottime_ns();
+ #endif
+-		tmp = (void *)(scp_ap_dram_virt +
+-			ROUNDUP(scp_region_info_copy.ap_dram_size, 1024)
+-			* scpreg.core_nums);
+ 		scp_restore_dram();
+ #if SCP_SECURE_DUMP_MEASURE
+ 		scpdump_cal[2].end = ktime_get_boottime_ns();
+@@ -388,4 +385,3 @@
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(scp_clr_spm_reg);
+-

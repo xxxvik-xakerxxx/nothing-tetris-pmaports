@@ -19,6 +19,7 @@ PATCHES = (
     "0093-vendor-scp-validate-region-info.patch.vendor",
     "0094-vendor-scp-validate-dram-recovery-span.patch.vendor",
     "0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor",
+    "0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor",
 )
 SOURCE_FILES = (
     SOURCE,
@@ -27,6 +28,7 @@ SOURCE_FILES = (
     "drivers/misc/mediatek/scp/rv/scp_dvfs.c",
     "drivers/misc/mediatek/scp/rv/scp_dvfs.h",
     "drivers/misc/mediatek/scp/rv/scp_excep.c",
+    "drivers/misc/mediatek/scp/rv/scp_awake.c",
 )
 
 
@@ -57,13 +59,14 @@ def main():
 #include <string.h>
 #include <errno.h>
 typedef uint32_t u32;
+typedef uint64_t u64;
 #define check_add_overflow(a, b, out) __builtin_add_overflow(a, b, out)
 #define check_mul_overflow(a, b, out) __builtin_mul_overflow(a, b, out)
 #define pr_err(...) ((void)0)
 #define SCP_A_TCM_SIZE (128U * 1024U)
 """ + structure.group() + """
 static struct scp_region_info_st scp_region_info_copy;
-static struct { u32 scp_dram_region; } scpreg;
+static struct { u32 scp_dram_region, core_nums, secure_dump; } scpreg;
 """
     tests = (root / "scripts/tests/scp-region-dram.c").read_text()
     with tempfile.TemporaryDirectory(prefix="scp-region-host-") as tmp:
@@ -74,19 +77,25 @@ static struct { u32 scp_dram_region; } scpreg;
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(vendor(path))
         before = None
+        arithmetic = None
         for name in PATCHES:
             # Apply all files of each SCP patch in disposable storage.
             run(["git", "apply", "--check", str(patches / name)], cwd=scratch)
             run(["git", "apply", str(patches / name)], cwd=scratch)
             if name.startswith("0093-"):
                 before = source.read_text()
+            if name.startswith("0100-"):
+                arithmetic = source.read_text()
 
-        for label, contents in (("before", before), ("after", source.read_text())):
+        for label, contents in (("before", before), ("after", arithmetic),
+                                ("memory", source.read_text())):
             start = contents.index("static bool scp_region_range_valid(")
             end = contents.index("static int scp_region_info_init(", start)
             harness = scratch / f"{label}.c"
             executable = scratch / label
-            harness.write_text(preamble + contents[start:end] + tests)
+            cases = ((root / "scripts/tests/scp-region-memory.c").read_text()
+                     if label == "memory" else tests)
+            harness.write_text(preamble + contents[start:end] + cases)
             run(shlex.split(os.environ.get("CC", "cc")) + [
                 "-std=c11", "-Wall", "-Wextra", "-Werror", "-O1",
                 "-fsanitize=undefined", "-fno-sanitize-recover=all",

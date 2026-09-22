@@ -5,6 +5,22 @@ firmware loader, not another sensor-list or mailbox registration patch.
 
 ## Runtime preparation progress, 2026-09-22
 
+Candidate kernel r164 adds patch 0101 for the recovery memory contract.
+It replaces the unconditional four-bank mapping with one rounded image in
+secure mode, or `core_nums + 1` rounded banks in non-secure mode. The latter
+requires region-info's backup address to match the actual reset consumer.
+Loader, firmware, DRAM mapping and backup must all fit the `no-map`
+`mediatek,SCP-reserved` region returned by OF reserved memory. The address
+and size are not hard-coded; sensor shared memory is a separate reservation.
+
+The exact-source host suite now tests this helper with 49 checks under UBSan,
+including two reservation bases, the observed four-bank overflow, secure and
+non-secure layouts, wrong backup placement, missing/out-of-range memory and
+integer limits. The older arithmetic regression cases remain tested too.
+CI runs the exact-source patch application and tests before packaging.
+This patch neither enables secure dump nor creates region-info. r163 remains
+installed; no sensor samples or live validation of r164 are claimed.
+
 U-Boot `ccf6919569`, CI `35654594924` passed the runtime C certificate
 parser tests, actual sandbox RSA-PSS salt-length regression and ARM64
 compilation. The parser verifies delegated RSA-2048/PSS signatures using a
