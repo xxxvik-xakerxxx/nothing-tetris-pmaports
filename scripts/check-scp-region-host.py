@@ -21,9 +21,12 @@ PATCHES = (
     "0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor",
     "0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor",
     "0102-vendor-scp-bootstrap-resource-diagnostic.patch.vendor",
+    "0103-vendor-scp-share-infracfg-syscon.patch.vendor",
 )
 SOURCE_FILES = (
     SOURCE,
+    HEADER,
+    "drivers/misc/mediatek/scp/rv/scp_reg.h",
     "drivers/misc/mediatek/scp/include/scp.h",
     "drivers/misc/mediatek/scp/rv/Makefile",
     "drivers/misc/mediatek/scp/rv/scp_dvfs.c",
@@ -110,6 +113,36 @@ static struct { u32 scp_dram_region, core_nums, secure_dump; } scpreg;
             elif result.returncode:
                 raise RuntimeError(result.stderr)
         contents = source.read_text()
+        start = contents.index("static int scp_infracfg_init(void)")
+        end = contents.index("static const struct dev_pm_ops", start)
+        cases = (root / "scripts/tests/scp-infracfg.c").read_text()
+        before, after = cases.split("/* INSERT_PATCHED_HELPER */")
+        harness = scratch / "infracfg.c"
+        executable = scratch / "infracfg"
+        harness.write_text(before + contents[start:end] + after)
+        run(shlex.split(os.environ.get("CC", "cc")) + [
+            "-std=c11", "-Wall", "-Wextra", "-Werror", "-O1",
+            "-fsanitize=undefined", "-fno-sanitize-recover=all",
+            str(harness), "-o", str(executable)])
+        run([str(executable)])
+        init = contents[contents.index("static int __init scp_init("):]
+        if init.index("scp_infracfg_init();") > init.index("scp_dvfs_init();"):
+            raise RuntimeError("infracfg must be validated before hardware setup")
+        if "mtk_scpsys_device" in contents or "while (IS_ERR_OR_NULL" in contents:
+            raise RuntimeError("legacy infracfg owner/readiness wait remains")
+        awake = (scratch / "drivers/misc/mediatek/scp/rv/scp_awake.c").read_text()
+        start = awake.index("int scp_awake_lock(")
+        end = awake.index("EXPORT_SYMBOL_GPL(scp_awake_unlock);")
+        cases = (root / "scripts/tests/scp-infracfg-awake.c").read_text()
+        before, after = cases.split("/* INSERT_PATCHED_AWAKE */")
+        harness = scratch / "infracfg-awake.c"
+        executable = scratch / "infracfg-awake"
+        harness.write_text(before + awake[start:end] + after)
+        run(shlex.split(os.environ.get("CC", "cc")) + [
+            "-std=c11", "-Wall", "-Wextra", "-Werror", "-O1",
+            "-fsanitize=undefined", "-fno-sanitize-recover=all",
+            str(harness), "-o", str(executable)])
+        run([str(executable)])
         start = contents.index("static bool bootstrap_26m;")
         end = contents.index("/* scp semaphore timeout count definition */", start)
         harness = scratch / "bootstrap.c"

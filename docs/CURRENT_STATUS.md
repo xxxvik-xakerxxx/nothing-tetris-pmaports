@@ -2,6 +2,24 @@
 
 Updated: 2026-09-22.
 
+## r167 candidate: share the existing infracfg syscon
+
+Replaced the unmatched vendor auxiliary `scpsys` driver with a required
+`mediatek,infracfg` phandle to the existing MT6878 syscon. Validate the
+enabled node, exact compatible, syscon identity and register span before
+DVFS setup or firmware start. Wake SET/CLEAR and exception dump accesses
+now use that shared regmap, including explicit error handling. No second
+MMIO owner, fake READY, or unconditional readiness wait is used.
+
+Exact Nothing OS 4.1 source patch application and host UBSan checks pass:
+16 dependency/ownership cases, wake lock/unlock and failure paths, plus
+the existing memory, bootstrap and logger checks. Full kernel/image build
+is CI-only. Overlay validation and native DT preprocessing/compilation pass
+(pre-existing unit-address warnings); the compiled SCP phandle resolves
+to the existing 0x10001000/0x1000 syscon. This candidate is not yet
+device-validated; SCP stays manual
+and sensors remain **Broken** until real data and lifecycle tests pass.
+
 ## r166 installed: logger panic absent; readiness blocked on infracfg
 
 Cold boot `e14bf361-3811-44fd-8776-0467b865f8da` passed secure handoff

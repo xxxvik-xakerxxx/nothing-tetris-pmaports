@@ -1,0 +1,16 @@
+Subject: [PATCH] arm64: dts: mediatek: connect SCP to shared MT6878 infracfg
+
+Use the existing syscon also used by power domains; do not instantiate the
+vendor's competing infracfg platform driver or duplicate its MMIO resource.
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi
+@@ -22,6 +22,7 @@
+ 
+ 	scp: remoteproc@1c400000 {
+ 		compatible = "mediatek,scp";
++		mediatek,infracfg = <&infracfg_ao>;
+ 		reg = <0x1c400000 0x100000>,
+ 		      <0x1cb24000 0x1000>,
+ 		      <0x1cb21000 0x1000>,

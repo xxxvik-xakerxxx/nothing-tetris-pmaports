@@ -4,6 +4,29 @@ Sensors remain Broken. Authenticated loading and secure handoff pass cold
 testing; the latest firmware reaches the READY handler, but host readiness
 completion remains blocked.
 
+## r167 candidate: explicit shared infrastructure dependency
+
+`0018-pmdomain-mediatek-mt6878-audio.patch` already defines
+`infracfg_ao: syscon@10001000`, compatible `mediatek,mt6878-infracfg-ao`,
+`syscon`, size 0x1000. Power domains use this same node. Adding the vendor
+`mediatek,infracfg_ao` driver would duplicate ownership rather than model
+the shared block. Patch 0104 instead links SCP to it with a phandle.
+
+Patch 0103 removes that auxiliary driver, resolves the phandle before
+DVFS/resource requests, rejects absent/disabled/mismatched/undersized nodes,
+and obtains the existing syscon regmap. Mainline syscon uses the MMIO regmap
+backend with fast_io (spinlock), no register cache, and this node has no
+clock property; the SCP wake paths can therefore retain their IRQ-disabled
+locking. SET/CLEAR accesses remain writes, not read-modify-write operations.
+The dump path uses regmap_bulk_read. Failed accesses do not increment or
+decrement the awake count as if the handshake succeeded.
+
+Host tests compile the actual patched init and wake functions with UBSan.
+They cover 16 dependency cases, balanced node references, nested wake votes,
+SET/read/CLEAR errors, missing ready, timeout and pending watchdog.
+This does not establish that firmware or sensors work on the device.
+Next test requires a CI image and a clean cold start, not a reload on r166.
+
 ## r166: READY handler reached, host completion blocked
 
 With U-Boot `bf75c572e1` and r166 CI `35719843739`, cold boot
@@ -23,7 +46,8 @@ The auxiliary `scpsys` driver matches `mediatek,infracfg_ao`. Its mapping
 also supplies INFRA_IRQ_SET/CLEAR at offsets 0xb14/0xb18 and diagnostic
 register reads. Fix the resource ownership and mapping rather than removing
 the wait, setting ready manually, or adding competing MMIO owners.
-The exact integration is still unimplemented.
+The integration is implemented in the r167 candidate above, not yet tested
+on hardware.
 
 Host evidence `/private/tmp/tetris-r166-scp-evidence/kernel-journal` has
 SHA256 `3e85b7edfed0845fd77e4e7afe4b6607c11dcdd4377751877c615e9ec8987694`.

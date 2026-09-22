@@ -1,0 +1,311 @@
+diff --git a/drivers/misc/mediatek/scp/rv/scp_awake.c b/drivers/misc/mediatek/scp/rv/scp_awake.c
+index af49958..89b89d0 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_awake.c
++++ b/drivers/misc/mediatek/scp/rv/scp_awake.c
+@@ -56,7 +56,7 @@ struct mutex scp_awake_mutexs[SCP_CORE_TOTAL];
+  */
+ int scp_awake_lock(void *_scp_id)
+ {
+-	enum scp_core_id scp_id = (enum scp_core_id) _scp_id;
++	enum scp_core_id scp_id = (unsigned long)_scp_id;
+ 	unsigned long spin_flags;
+ 	char *core_id;
+ 	int *scp_awake_count;
+@@ -87,7 +87,9 @@ int scp_awake_lock(void *_scp_id)
+ 
+ 	/*set a direct IPI to awake SCP */
+ 	/*pr_debug("scp_awake_lock: try to awake %s\n", core_id);*/
+-	writel(0xA0 | (1 << AP_AWAKE_LOCK), INFRA_IRQ_SET);
++	if (regmap_write(scpreg.scpsys, INFRA_IRQ_SET,
++			 0xA0 | (1 << AP_AWAKE_LOCK)))
++		goto lock_failed;
+ 
+ 	count = 0;
+ 	while (++count != SCP_AWAKE_TIMEOUT) {
+@@ -103,7 +105,8 @@ int scp_awake_lock(void *_scp_id)
+ 			break;
+ 		}
+ 
+-		tmp = readl(INFRA_IRQ_SET);
++		if (regmap_read(scpreg.scpsys, INFRA_IRQ_SET, &tmp))
++			break;
+ 		if ((tmp & 0xA0) != 0xA0) {
+ 			pr_notice("%s: INFRA_IRQ_SET %x\n", __func__, tmp);
+ 			break;
+@@ -115,8 +118,11 @@ int scp_awake_lock(void *_scp_id)
+ 		udelay(10);
+ 	}
+ 	/* clear status */
+-	writel(0xA0 | (1 << AP_AWAKE_LOCK), INFRA_IRQ_CLEAR);
++	if (regmap_write(scpreg.scpsys, INFRA_IRQ_CLEAR,
++			 0xA0 | (1 << AP_AWAKE_LOCK)))
++		ret = -1;
+ 
++lock_failed:
+ 	/* scp lock awake success*/
+ 	if (ret != -1)
+ 		*scp_awake_count = *scp_awake_count + 1;
+@@ -174,7 +180,7 @@ EXPORT_SYMBOL_GPL(scp_awake_lock);
+  */
+ int scp_awake_unlock(void *_scp_id)
+ {
+-	enum scp_core_id scp_id = (enum scp_core_id) _scp_id;
++	enum scp_core_id scp_id = (unsigned long)_scp_id;
+ 	unsigned long spin_flags;
+ 	int *scp_awake_count;
+ 	char *core_id;
+@@ -205,7 +211,9 @@ int scp_awake_unlock(void *_scp_id)
+ 
+ 	/* WE1: set a direct IPI to release awake SCP */
+ 	/*pr_debug("scp_awake_lock: try to awake %s\n", core_id);*/
+-	writel(0xA0 | (1 << AP_AWAKE_UNLOCK), INFRA_IRQ_SET);
++	if (regmap_write(scpreg.scpsys, INFRA_IRQ_SET,
++			 0xA0 | (1 << AP_AWAKE_UNLOCK)))
++		goto unlock_failed;
+ 
+ 	count = 0;
+ 	while (++count != SCP_AWAKE_TIMEOUT) {
+@@ -220,7 +228,8 @@ int scp_awake_unlock(void *_scp_id)
+ 			break;
+ 		}
+ 
+-		tmp = readl(INFRA_IRQ_SET);
++		if (regmap_read(scpreg.scpsys, INFRA_IRQ_SET, &tmp))
++			break;
+ 		if ((tmp & 0xA0) != 0xA0) {
+ 			pr_notice("%s: INFRA7_IRQ_SET %x\n", __func__, tmp);
+ 			break;
+@@ -232,8 +241,11 @@ int scp_awake_unlock(void *_scp_id)
+ 		udelay(10);
+ 	}
+ 	/* clear status */
+-	writel(0xA0 | (1 << AP_AWAKE_UNLOCK), INFRA_IRQ_CLEAR);
++	if (regmap_write(scpreg.scpsys, INFRA_IRQ_CLEAR,
++			 0xA0 | (1 << AP_AWAKE_UNLOCK)))
++		ret = -1;
+ 
++unlock_failed:
+ 	/* scp unlock awake success*/
+ 	if (ret != -1) {
+ 		if (*scp_awake_count <= 0)
+diff --git a/drivers/misc/mediatek/scp/rv/scp_excep.c b/drivers/misc/mediatek/scp/rv/scp_excep.c
+index 6b7a00b..42f5cc7 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_excep.c
++++ b/drivers/misc/mediatek/scp/rv/scp_excep.c
+@@ -305,9 +305,16 @@ void scp_do_regdump(uint32_t *out, uint32_t *out_end)
+ 		*buf = reg_save_list[i].size;
+ 		buf++;
+ 		from = scp_regdump_virt + (reg_save_list[i].addr & 0xfffff);
+-		if ((reg_save_list[i].addr & 0xfff00000) < 0x10700000)
+-			from = scpreg.scpsys + (reg_save_list[i].addr & 0xfff);
+-		memcpy_from_scp(buf, from, reg_save_list[i].size);
++		if ((reg_save_list[i].addr & 0xfff00000) < 0x10700000) {
++			if (regmap_bulk_read(scpreg.scpsys,
++					     reg_save_list[i].addr & 0xfff, buf,
++					     reg_save_list[i].size / sizeof(*buf))) {
++				pr_err("[SCP] infrastructure register dump failed\n");
++				break;
++			}
++		} else {
++			memcpy_from_scp(buf, from, reg_save_list[i].size);
++		}
+ 		buf += (reg_save_list[i].size / sizeof(uint32_t));
+ 	}
+ }
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.c b/drivers/misc/mediatek/scp/rv/scp_helper.c
+index 20a4062..b683a76 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -31,6 +31,7 @@
+ #include <linux/err.h>
+ #include <linux/overflow.h>
+ #include <linux/debugfs.h>
++#include <linux/mfd/syscon.h>
+ //#include <mt-plat/sync_write.h>
+ //#include <mt-plat/aee.h>
+ #include <linux/delay.h>
+@@ -694,8 +695,9 @@ static void scp_A_notify_ws(struct work_struct *ws)
+ 		container_of(ws, struct scp_work_struct, work);
+ 	unsigned int scp_notify_flag = sws->flags;
+ 
+-	while (IS_ERR_OR_NULL((void const *) scpreg.scpsys))
+-		msleep(100);
++	/* The shared infrastructure regmap is required before SCP is started. */
++	if (WARN_ON_ONCE(IS_ERR_OR_NULL(scpreg.scpsys)))
++		return;
+ 
+ #if SCP_RECOVERY_SUPPORT
+ 	if (atomic_read(&scp_reset_status) == RESET_STATUS_START_WDT) {
+@@ -830,11 +832,7 @@ static void scp_A_set_ready(void)
+ {
+ 	pr_debug("[SCP] %s()\n", __func__);
+ #if SCP_BOOT_TIME_OUT_MONITOR
+-	/* confirm scpsys has already probed */
+-	if (IS_ERR_OR_NULL((void const *) scpreg.scpsys))
+-		pr_notice("[SCP] scpreg.scpsys error\n");
+-	else
+-		timer_delete(&scp_ready_timer[SCP_A_ID].tl);
++	timer_delete(&scp_ready_timer[SCP_A_ID].tl);
+ #endif
+ 	scp_A_notify_work.flags = 1;
+ 	scp_schedule_work(&scp_A_notify_work);
+@@ -3170,19 +3168,51 @@ static void scp_device_remove(struct platform_device *dev)
+ 
+ }
+ 
+-static int scpsys_device_probe(struct platform_device *pdev)
++static int scp_infracfg_init(void)
+ {
+-	int ret = 0;
+-	struct resource *res;
+-	struct device *dev = &pdev->dev;
++	struct device_node *scp, *infra;
++	struct resource res;
++	struct regmap *map;
++	int ret;
+ 
+-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+-	scpreg.scpsys = devm_ioremap_resource(dev, res);
+-	//pr_notice("[SCP] scpreg.scpsys = %x\n", scpreg.scpsys);
+-	if (IS_ERR((void const *) scpreg.scpsys)) {
+-		pr_notice("[SCP] scpreg.scpsys error\n");
+-		return -1;
++	scp = of_find_compatible_node(NULL, NULL, "mediatek,scp");
++	if (!scp)
++		return -ENODEV;
++	if (!of_device_is_available(scp)) {
++		of_node_put(scp);
++		return -ENODEV;
++	}
++	if (of_property_count_u32_elems(scp, "mediatek,infracfg") != 1) {
++		of_node_put(scp);
++		return -EINVAL;
+ 	}
++	infra = of_parse_phandle(scp, "mediatek,infracfg", 0);
++	of_node_put(scp);
++	if (!infra)
++		return -EINVAL;
++	/* This driver uses MT6878's always-on wake IRQ and dump registers. */
++	if (!of_device_is_available(infra) ||
++	    !of_device_is_compatible(infra, "mediatek,mt6878-infracfg-ao") ||
++	    !of_device_is_compatible(infra, "syscon")) {
++		ret = -EINVAL;
++		goto out;
++	}
++	ret = of_address_to_resource(infra, 0, &res);
++	if (ret)
++		goto out;
++	if (resource_size(&res) < 0x1000) {
++		ret = -ERANGE;
++		goto out;
++	}
++	/* Share the existing syscon owner; never claim/map its MMIO twice. */
++	map = syscon_node_to_regmap(infra);
++	if (IS_ERR(map)) {
++		ret = PTR_ERR(map);
++		goto out;
++	}
++	scpreg.scpsys = map;
++out:
++	of_node_put(infra);
+ 	return ret;
+ }
+ 
+@@ -3210,22 +3240,6 @@ static struct platform_driver mtk_scp_device = {
+ 	},
+ };
+ 
+-static const struct of_device_id scpsys_of_ids[] = {
+-	{ .compatible = "mediatek,infracfg_ao", },
+-	{}
+-};
+-
+-static struct platform_driver mtk_scpsys_device = {
+-	.probe = scpsys_device_probe,
+-	.driver = {
+-		.name = "scpsys",
+-		.owner = THIS_MODULE,
+-#ifdef CONFIG_OF
+-		.of_match_table = scpsys_of_ids,
+-#endif
+-	},
+-};
+-
+ int notify_scp_semaphore_event(struct notifier_block *nb,
+ 			       unsigned long event, void *v)
+ {
+@@ -3264,6 +3278,12 @@ static int __init scp_init(void)
+ 	}
+ 	scp_dvfs_cali_ready = 0;
+ 
++	ret = scp_infracfg_init();
++	if (ret) {
++		pr_err("[SCP] shared infracfg unavailable: %d\n", ret);
++		return ret;
++	}
++
+ 	ret = scp_dvfs_init();
+ 	pr_notice("scp_dvfs_init status = %d\n", ret);
+ 	if (ret)
+@@ -3294,12 +3314,6 @@ static int __init scp_init(void)
+ 		goto err_without_unregister;
+ 	}
+ 
+-	ret = platform_driver_register(&mtk_scpsys_device);
+-	if (ret) {
+-		pr_notice("[SCP] scpsys probe fail %d\n", ret);
+-		goto err;
+-	}
+-
+ 	/* skip initial if dts status = "disable" */
+ 	if (!scp_enable[SCP_A_ID]) {
+ 		pr_notice("[SCP] scp disabled!!\n");
+@@ -3412,7 +3426,6 @@ static int __init scp_init(void)
+ 	return ret;
+ err_region_info:
+ 	scp_bootstrap_resource_put();
+-	platform_driver_unregister(&mtk_scpsys_device);
+ 	platform_driver_unregister(&mtk_scp_device);
+ 	if (scp_dvfs_feature_enable()) {
+ 		scp_resource_req(SCP_REQ_RELEASE);
+diff --git a/drivers/misc/mediatek/scp/rv/scp_helper.h b/drivers/misc/mediatek/scp/rv/scp_helper.h
+index 6d0bd75..e06d842 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.h
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.h
+@@ -10,6 +10,7 @@
+ #include <linux/notifier.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
++#include <linux/regmap.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
+ #include "scp_reg.h"
+ #include "scp_feature_define.h"
+@@ -124,7 +125,7 @@ struct scp_bus_tracker_status {
+ };
+ 
+ struct scp_regs {
+-	void __iomem *scpsys;
++	struct regmap *scpsys;
+ 	void __iomem *sram;
+ 	void __iomem *cfg;
+ 	void __iomem *clkctrl;
+diff --git a/drivers/misc/mediatek/scp/rv/scp_reg.h b/drivers/misc/mediatek/scp/rv/scp_reg.h
+index 0950b9e..1b6ee58 100644
+--- a/drivers/misc/mediatek/scp/rv/scp_reg.h
++++ b/drivers/misc/mediatek/scp/rv/scp_reg.h
+@@ -259,12 +259,12 @@
+ #define R_CORE1_CACHE_RAM		(scpreg.l1cctrl + 0x20000)
+ 
+ /* INFRA_IRQ (always on register) */
+-#define INFRA_IRQ_SET			(scpreg.scpsys + 0x0B14)
++#define INFRA_IRQ_SET			0x0B14
+ 	#define AP_AWAKE_LOCK		(0)
+ 	#define AP_AWAKE_UNLOCK		(1)
+ 	#define CONNSYS_AWAKE_LOCK	(2)
+ 	#define CONNSYS_AWAKE_UNLOCK	(3)
+-#define INFRA_IRQ_CLEAR			(scpreg.scpsys + 0x0B18)
+-#define SCP_SYS_INFRA_MON		(scpreg.scpsys + 0x0D50)
++#define INFRA_IRQ_CLEAR			0x0B18
++#define SCP_SYS_INFRA_MON		0x0D50
+ 
+ #endif
