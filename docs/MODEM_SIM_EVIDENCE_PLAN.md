@@ -6,7 +6,7 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Source identity
 
-- Current port branch: `codex/hardware-integration`, current candidate recorded in
+- Canonical port branch: `main`; current hardware status is recorded in
   `docs/CURRENT_STATUS.md`.
 - The original source audit was performed on historical branch
   `codex/scp-thermal` at `cd8fbdf`; its vendor-source conclusions remain the
@@ -26,7 +26,12 @@ does not authorize loading a modem module or enabling a DT node.
 
 ## Boot-chain trace
 
-### Current r153 observation
+This section preserves source-correlated observations needed for unresolved
+modem handoff. Installed/candidate wording within each experiment refers to
+that experiment, not today's r167 installation. Former U-Boot diagnostic
+branches are archived as tags; they are not current deployment instructions.
+
+### r153 handoff evidence
 
 A fresh read-only check on the running r153 phone reports kernel
 6.18.0 #154-postmarketos and U-Boot 2026.07-rc1-g60bcf22fdc0a. The published

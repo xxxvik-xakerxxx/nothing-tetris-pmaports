@@ -1,233 +1,57 @@
-# Nothing Tetris SCP and sensor bring-up
+# SCP and sensor architecture
 
-Status: `Partial`; manual r167 runtime returns real data, autostart disabled.
+Status: **Partial**. r167 plus the pinned U-Boot profile reaches SCP READY
+and real data from five physical sensor classes. Opt-in service startup,
+rotation, automatic brightness and proximity UI behavior were observed.
+See [startup](SENSOR_INTEGRATION_PATCH.md),
+[desktop integration](SENSOR_DESKTOP_INTEGRATION.md) and
+[loader research](SCP_LOADER_TRACE.md).
 
-## Current checkpoint: 2026-09-22
+## Hardware ownership
 
-See [CURRENT_STATUS.md](CURRENT_STATUS.md) and
-[SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md) for current evidence. Clean r167
-with U-Boot `bf75c572e160` passes cold secure handoff and SCP READY.
-A manual sensorhub probe enumerates 24 entries, physical mask 31. Ten-second
-HF captures contain real accelerometer, gyro, magnetic, light and proximity
-events; the latter transitions 5/0/5. USB transfer passes after the captures.
-Gyro/magnetic calibration is not proven (accuracy 0). This is one boot with
-the diagnostic 26 MHz vote held, not automatic or lifecycle-qualified support.
-Older handoff/DVFS blockers below are historical, not the next action.
-
-Next: controlled motion/light response and calibration ownership, repeated
-cold tests, warm boot, suspend/resume, idle power, then automatic native
-integration. Preserve USB/SSH and reboot after a failed probe; do not
-repeatedly reload SCP.
-
-The manual `scripts/check-live-sensor-samples.py` tool runs on the phone
-with Python 3 after those gates. Without arguments it only queries the five
-physical classes; `--sample accel` (or `gyro`, `magnetic`, `light`,
-`proximity`) requests a bounded 10-second capture at 25 Hz, then disables
-that client's request. It checks firmware inventory before opening the HF
-device, never loads a module and never writes calibration. JSONL contains
-boot identity, model/vendor/gain, raw events and a count/rate/range summary.
-No-data and non-monotonic timestamps fail. On-change light/proximity rates
-must not be interpreted as periodic motion-sensor rates.
-
-ABI source: pinned `ee2be53cb75670b548948636a0db1d1ff112bf12`,
-`drivers/misc/mediatek/sensor/2.0/core/hf_sensor_io.h` and `hf_manager.c`.
-The vendor write callback returns zero on success; the tool deliberately
-does not resend that command. Offline fixtures cover packed layouts,
-ioctl encoding, control bytes, signed samples and malformed records.
-The tool passed one live capture for each of the five classes on r167;
-it is not an IIO integration.
-
-## Tetris sensor hardware inventory
-
-The saved stock `dumpsys sensorservice` observation identifies these SCP
-endpoints.  The endpoint strings prove the stock firmware-facing identity;
-they do not prove that Linux owns the underlying bus or that a similarly named
-mainline driver is register-compatible.
-
-| Function | Stock endpoint | Confidence | Linux ownership |
-| --- | --- | --- | --- |
-| Accelerometer | `icm4n607_acc` | Observed on Tetris | SCP firmware |
-| Gyroscope | `icm4n607_gyro` | Observed on Tetris | SCP firmware |
-| Ambient light | `ltr569_als` | Observed on Tetris | SCP firmware |
-| Proximity | `ltr569_ps` | Observed on Tetris | SCP firmware |
-| Magnetometer | `qmc6308` | Live r167 SCP inventory and HF data | SCP firmware |
-| SAR | `SAR-hx9031as` | Observed on Tetris; outside the requested five basic classes | SCP firmware |
-
-The exact Nothing OS 4.1 device-module source at
-`ee2be53cb75670b548948636a0db1d1ff112bf12` contains no Tetris I2C/SPI child
-nodes for these physical sensors.  Its AP-side sensor code is the generic
-MediaTek 2.0 transport.  The stock DTBO likewise exposes no matching physical
-motion, light, proximity or magnetic node.  Therefore adding guessed I2C
-addresses for ICM-426xx or LTR-559-family drivers would create a second bus
-owner beside SCP and is rejected.
-
-## Exact AP-side chain
-
-The source and package dependency chain is:
-
-1. LK/preloader selects and authenticates the active `scp1`/`scp2` image and
-   supplies TCM region-info plus loader/shared-memory handoff.
-2. `mtk-mbox.ko` provides the vendor mailbox controller.
-3. `mtk_rpmsg_mbox.ko` and `mtk_tinysys_ipi.ko` provide the vendor IPI path.
-4. `scp.ko` consumes the firmware/handoff and exports `scp_ipidev`, ready
-   notifiers and reserve-memory lookup helpers.
-5. `sensorhub.ko` registers control/notify IPIs, configures SCP shared memory,
-   requests the firmware sensor list and registers one HF device.
-6. `hf_manager.ko` exposes `/dev/hf_manager`; a future native userspace bridge
-   must translate that ABI to standard Linux sensor consumers.
-
-All six modules are built and installed under
-`extra/mediatek-sensors/` by the kernel package.  None is in `modules-initfs`,
-a modules-load file, a device preset or an automatic service.  The packaged
-`patches/sensors/0001-sensor-list-reject-mismatched-reply.patch.vendor` only
-tightens sensor-list reply correlation before any inventory write-position is consumed;
-it does not start SCP or publish sensors.  The normal kernel also builds
-`inv-icm42600-i2c.ko` and `ltr501.ko`, but they have no matching DT devices and
-are only historical candidates, not the active Tetris chain.  No model-specific
-magnetometer driver has been selected.
-
-The manual-only inventory patch exports `firmware_ready`, `sensor_count` and
-`physical_sensor_mask`.  Mask bits 0..4 represent accelerometer,
-magnetometer, gyroscope, light and proximity respectively.  The mask and the
-firmware-provided model/vendor log become valid only after the SCP handshake,
-shared-memory list transfer and HF manager registration all succeed.
-
-## Historical Compile and Runtime Boundaries
-
-There is no known compile blocker in the currently packaged AP bridge: the
-mailbox, RPMsg, IPI, SCP, HF manager and sensorhub modules were built together
-in the prior CI artifact.  The inventory-mask revision still requires a fresh
-targeted build before it can enter an image.
-
-The first observed runtime blocker remains earlier than sensor enumeration:
-`scp.ko` waits for the separate `mediatek,scp-dvfs` driver and returns
-`-ETIMEDOUT` after three seconds because the target DT has no valid, proven
-DVFS provider chain.  The clean installed image reproduced this boundary;
-`sensorhub.ko` consequently cannot bind and no firmware inventory is
-available.  The same boot also failed to reserve the LK-derived SCP loader
-range, so enabling a guessed DVFS node would merely move execution into an
-unvalidated firmware/TCM/shared-memory handoff.
-
-## First causal blocker
-
-The Nothing OS 4.1 SCP initialization registers a separate
-`mediatek,scp-dvfs` platform driver and then waits for its probe to complete.
-The target DT intentionally contains no matching device, so
-`wait_scp_dvfs_init_done()` reaches the bounded failure path. The existing
-timeout patch prevents a warning loop and leaves USB intact; it does not make
-SCP or any sensor functional.
-
-Adding only a vendor `scp-dvfs` node is not a valid fix. Its probe immediately
-touches ULPOSC, frequency measurement and clock providers before the port has
-proved the active SCP firmware, TCM region-info, secure reset contract or
-shared-memory ownership.
-
-Patches `0093` and `0094` add the next fail-closed kernel boundary without
-changing that runtime state. If a later disabled-DVFS experiment reaches SCP
-core probe, the driver now rejects a TCM resource smaller than the DT
-declaration, rejects region-info whose known layout, loader, firmware or
-requested DRAM ranges are structurally invalid, and validates the complete
-four-bank DRAM recovery span with bounded 32-bit arithmetic. It returns the
-error before recovery workqueues, loader/DRAM recovery mappings or reset
-startup. These checks are necessary memory-safety conditions; they are not
-proof that LK authenticated the active slot or that the addresses belong to the
-published carveouts.
-
-## Required ownership chain
-
-| Boundary | Required evidence | Current state |
+| Function | Firmware endpoint | Owner |
 | --- | --- | --- |
-| Image selection | Active `scp_a`/`scp_b` slot, authenticated identity and bounded size | Both live containers are structurally decoded; authentication and boot-control selection remain unproven |
-| Firmware state | Valid LK/preloader launch state and TCM region-info ABI | New U-Boot observer proves the region-info record is zero before Linux |
-| LK FDT input | Structurally valid preserved FDT with portable carveout data | Host parser validates shape/ranges without mutation; live payload unobserved |
-| Linux publication | Sanitized ranges and firmware state from U-Boot | Missing |
-| Shared memory | Non-overlapping region below `0x90000000`, at least `0x11a9b00` bytes | One captured unit has `0x11c8000`; portability unproven |
-| Loader memory | Separate `mediatek,SCP-reserved` region | Captured only; ownership unproven |
-| DVFS providers | MT6878 VLP clocks, fmeter and ULPOSC with a disabled consumer | Missing |
-| Sensor interface | Standard IIO devices or a documented bounded bridge | Missing |
+| Accelerometer | icm4n607_acc | SCP |
+| Gyroscope | icm4n607_gyro | SCP |
+| Magnetometer | qmc6308 | SCP |
+| Light | ltr569_als | SCP |
+| Proximity | ltr569_ps | SCP |
+| SAR | SAR-hx9031as | SCP; outside the five tested basic classes |
 
-The shared-memory and loader carveouts are distinct and must never be
-substituted for one another. Physical addresses captured from this phone are
-evidence for validation fixtures, not constants for production DT or U-Boot.
+Nothing OS 4.1 device modules at
+`ee2be53cb75670b548948636a0db1d1ff112bf12` and stock DTBO expose no
+matching AP I2C/SPI children for these sensors. Do not add guessed direct
+sensor drivers or a competing bus owner.
 
-The live partition table contains 16 MiB `scp_a` and `scp_b` images. Both use
-the MediaTek `0x58881688`/`0x58891689` container and expose six bounded
-sections: `tinysys-scp-RV55_A`, two certificates,
-`tinysys-scp-RV55_A_dram`, and two more certificates. The active `scp_a`
-container ends at `0xa43070`; its payloads appear encrypted or signed and must
-not be copied directly into TCM. Active-slot authentication, secure loading
-and the relationship to `scp_region_info` remain unresolved. These are
-firmware inputs, not generic sensor calibration blobs, and must not be copied
-into rootfs. Sensor calibration ownership is still unlocated; it may be
-supplied by SCP firmware rather than directly from `nvdata`, `nvcfg` or
-`persist`.
+## Active chain
 
-## Completed host-only boundary
+1. U-Boot authenticates the pinned slot-A firmware, reserves memory before
+   initrd allocation, decrypts/prepares TCM and completes secure registration.
+2. `mtk-mbox`, `mtk_rpmsg_mbox` and `mtk_tinysys_ipi` provide transport.
+3. `scp` consumes validated handoff and shared infracfg regmap, registers its
+   logger receive path before reset release, then completes READY.
+4. `sensorhub` validates reply correlation and shared-memory inventory.
+5. `hf_manager` publishes the packed HF ABI at `/dev/hf_manager`.
+6. Native iio-sensor-proxy HF backend publishes standard desktop properties;
+   Phosh/GNOME own screen behavior.
 
-The U-Boot candidate `5e450af73a` extends the earlier parser into a disabled
-inventory gate. Its host tests validate exactly one shared and one loader
-carveout, two-cell 64-bit encoding, overflow, DRAM containment, minimum shared
-size, non-overlap, A/B partition matching, bounded image size, nonzero verified
-identity, region-info agreement and byte-for-byte FDT immutability. The board
-call still returns `-EOPNOTSUPP`; no live adapter supplies authoritative
-boot-control, authenticated image or decoded LK region-info observations, and
-nothing is published to Linux.
+Modules are packaged under `extra/mediatek-sensors/`. They are not early
+initramfs or unconditional modules-load inputs. The guarded startup service
+is disabled by default. Mask bits 0..4 identify accelerometer, magnetometer,
+gyroscope, light and proximity; ready Y, count 24 and mask 31 were observed.
 
-The integrated Linux-side SCP region gate on
-`codex/hardware-integration-next-scp` packages `0094` after `0093`. Its
-exact-source host harness reproduces the pre-fix defect across 18 DRAM cases
-with 10 failures, then passes all 18 cases under UBSan after the patch. The
-same branch keeps the sensor-list reply predicate fix as a demoted host-tested
-candidate after the r11 clean-boot regression; the
-host gate proves the old source accepts six mismatched correlation cases while
-the packaged patch rejects all eight match/mismatch combinations correctly,
-checks all 65536 sequence pairs and rejects both single-operator regressions.
-SCP, DVFS and sensorhub remain disabled; this is a prerequisite for safe
-handoff experiments, not a sensor runtime claim.
+## Diagnostics and remaining work
 
-## Historical Next Patch Boundary
+`scripts/check-live-sensor-samples.py` inventories or captures a bounded
+stream without loading modules or writing calibration. Source ABI:
+`drivers/misc/mediatek/sensor/2.0/core/hf_sensor_io.h` and `hf_manager.c`
+at the pinned vendor commit. The vendor write callback returns zero on
+success; do not resend it. On-change light/proximity are not periodic-rate
+failures. Packed-layout, signed-sample and malformed-record tests are in CI.
 
-The next runtime-facing work remains in U-Boot and must be observation-only:
-
-1. Establish an authoritative active-slot metadata ABI.
-2. Validate `scp1`/`scp2` payload identity and TCM region-info against an
-   authoritative loader ABI.
-3. Integrate the already host-tested carveout parser only after those inputs
-   can be validated from the live preserved LK data.
-4. Publish only sanitized status/ranges to Linux; do not start, stop or reset
-   SCP.
-5. Fail closed with no SCP/Sensorhub DT activation on any mismatch.
-
-After host tests and bootloader CI, perform one observation-only boot while USB
-NCM/SSH remains available. A later, separate candidate may compile the missing
-DVFS providers and add a disabled DT node. Enabling only DVFS is its own
-single-variable live test after three clean handoff repeats.
-
-## Evidence and limits
-
-The contract was checked against Nothing OS 4.1 Tetris branch head
-`7493a2ab6b2e91ab9f7dd6a171defaafb1855b75`, pinned device modules
-`ee2be53cb75670b548948636a0db1d1ff112bf12`, and U-Boot candidate
-`5e450af73a`. Positive source/DT checks,
-reserved-memory accounting, negative activation tests and undersized-memory
-tests pass offline.
-
-This proves the fail-closed staging contract only. It does not prove firmware
-execution, remoteproc readiness, sensor enumeration, calibration, idle power,
-warm reboot or suspend/resume.
-
-The clean `fdeeda0` / kernel #128 boot still logs failure to reserve the captured
-`mblock-27-SCP-reserved` range at `0xb8000000` (35 MiB). This is live evidence
-that the current LK-derived loader-memory contract is not usable by Linux; it
-reinforces the fail-closed gate and must not be bypassed by hard-coding that
-physical address.
-
-Update 2026-09-21: this collision was traced to U-Boot importing the Linux DT
-reservations after initrd allocation. Commit `ba0a2763ef`, CI `35611810150`,
-reorders reservation before allocation without hard-coding the SCP address.
-Live boot `a081e530-e467-4cea-8c49-2d89d97da9cf` has its initrd below SCP and
-the full DT-declared 35 MiB reserved in `/proc/iomem`. Firmware startup and
-ownership/lifetime checks beyond this placement fix remain incomplete.
-Two additional warm boots reproduced the fixed placement and passed USB/SSH
-regression checks; display/touch were user-confirmed. The isolated fix is now
-on U-Boot master `e8cee3eaa6`. This does not establish SCP startup or sensor data.
+The backend is not a kernel IIO driver and does not advertise an uncalibrated
+compass. Gyro/magnetic accuracy was 0; calibration is not proven.
+Remaining: clean packaged installation, repeated cold starts, safe warm
+ownership, suspend, resource lifetime/idle power, stress and other variants.
+Do not clear stale TCM, fake READY, reset/reload modules, or weaken firmware
+checks to bypass these gates.

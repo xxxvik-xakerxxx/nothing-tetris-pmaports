@@ -42,7 +42,7 @@ does not contain reusable Linux drivers and is not shipped by this repository.
 | Block | Source | Expected approach | Notes |
 | --- | --- | --- | --- |
 | Wi-Fi / Bluetooth | `android_kernel_modules_nothing_mt6878/connectivity` | Staged as B4.1 vendor modules with native cfg80211/HCI integration and reproducible boot services. | Includes `conninfra`, `connfem`, WMT, WLAN and BT pieces; per-device calibration/address data is read-only extracted from `nvdata`. |
-| GNSS / FM | `android_kernel_modules_nothing_mt6878/connectivity/gps`, `fmradio` | Installed v050 proved the transport boundary but lacks the ATF boot-info backend. The next manual pmOS package uses stock-derived Tetris profile v051; FM remains inventory-only. | The service loads only v051 and verifies `gpsdl0`/`gpsdl1` without opening them. Clean-boot boot-info, a compatible MNL bridge, position data and suspend remain unvalidated. |
+| GNSS / FM | `android_kernel_modules_nothing_mt6878/connectivity/gps`, `fmradio` | The packaged manual path uses stock-derived v051; FM remains inventory-only. | The service loads only v051 and verifies `gpsdl0`/`gpsdl1` without opening them. Boot-info and supervised download/stop were demonstrated; navigation, position data and suspend remain unvalidated. |
 | Modem / SIM | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/misc/mediatek/eccci`, `dpmaif`, `ccmni` | Validate LK handoff and compile transport boundaries before any runtime module. | Stock-derived userspace is dual-SIM `c6m_1rild` with CCCI daemons and Android Radio AIDL v2; native pmOS still needs a standard telephony bridge. |
 | Speaker / microphones | `android_kernel_device_modules_6.1_nothing_mt6878/sound/soc`, `drivers/mfd/mt6685-*` | Stage official MT6878 AFE, MT6369 codec, MT6685 BBCK5 and MT6878-MT6369 machine driver modules with board DT and UCM. | Both speakers and AIN0/AIN2 microphones work live; clean CI installation remains. |
 | PMIC ADC / efuse | `android_kernel_device_modules_6.1_nothing_mt6878/drivers/iio`, `drivers/nvmem` | Stage vendor PMIC ADC/efuse modules or port the small parts natively. | Needed to remove temporary optional audio calibration fallback. |
@@ -71,25 +71,20 @@ built for this MT6878 family:
   haptics, LEDs, flashlight and logging/debug helpers.
 
 The stable port should not enable this whole list at once. Keep already working
-local patches for framebuffer display, touchscreen and the currently proven
+local patches for native display, touchscreen and the currently proven
 PMIC/peripheral glue. For hardware that is still broken or missing, prefer the
 official module implementation, added in small package-level groups with one
 clear owner per patch.
 
-## Display finding
+## Display source boundary
 
-The official native display implementation exists, but it is not only a panel
-driver. The Tetris device tree uses `compatible = "samsung,s6e8fc3x02"`, and
-Nothing builds `drivers/gpu/drm/panel/panel-samsung-s6e8fc3x02.ko`. That panel
-depends on MediaTek DRM v2 helpers such as `mtk_panel_ext`, DDP/DSI, MML and
-display notifier modules. The shipped native DTB no longer exposes the inherited
-framebuffer. Installed r143 proves panel ID, backlight, touch, Phoc and USB
-survival, but its first native frame stalls with all three OVL blocks waiting
-downstream and DSC input stuck at `1x1`. Read-only and reversible tests ruled
-out the inherited mutex mask and omitted DSC selectors as standalone causes.
-The official MT6878 OVL data sets `need_bypass_shadow=true`; live r143 starts
-OVL0/1/2 with bit 22 clear. Candidate r144 adds that missing start behavior;
-clean pixels and lifecycle are still required before promotion.
+The native Tetris panel is `samsung,s6e8fc3x02`. Vendor DRM v2 includes
+panel extensions, DDP/DSI, MML and notifier dependencies; copying only its
+panel module does not reproduce the graph. Native route and frame-end
+corrections are now in main. See
+[the display audit](DISPLAY_FIRST_FRAME_AUDIT.md) for causal evidence and
+remaining inherited PQ/POSTMASK ownership. The vendor bypass graph listed
+above is a source reference, not proof that live switching to it is safe.
 
 ## Maintenance rule
 

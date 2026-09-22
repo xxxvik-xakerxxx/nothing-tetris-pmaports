@@ -22,7 +22,8 @@ and simple-framebuffer properties, but no `atag,devinfo`. The empty
 `local/live-logs/booted-pmos-r2/devicetree-chosen.txt` provides no contrary
 evidence.
 
-Current U-Boot source was audited at branch `codex/scp-handoff-inventory`.
+The source audit used the former `codex/scp-handoff-inventory` branch;
+its SCP lineage is now in U-Boot master.
 Commit `6ab33f59df8b5116c1d63bd637cda4efbbaeb6ef` adds validated copying of
 `atag,devinfo`, while `73faaa2d0ecfaf8fe8da3330a45ff11f5d0c5a99` safely preserves the LK FDT
 through relocation. The packaged bootloader remains pinned to

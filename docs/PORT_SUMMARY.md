@@ -58,30 +58,9 @@ This preserves unique work without enabling unvalidated experiments in the
 default image. Archived does NOT mean merged or hardware-verified. Local
 worktrees and uncommitted research files are intentionally untouched.
 
-| Former pmOS branch (prefix `codex/`) | Archived tip | Disposition |
-| --- | --- | --- |
-| display-main-promotion | `8a79aa9` | Included in main ancestry |
-| gnss-navigation-next | `d6da684` | Included in main ancestry |
-| hardware-integration-next-scp | `9fbe5b6` | Included in main ancestry |
-| next-hardware | `1f8aef1` | Included in main ancestry |
-| camera-clk-prereq-v2 | `594dd75` | Some equivalent patches integrated; unique diagnostic history retained |
-| gnss-userspace-bridge | `82181b3` | Unique research retained, not blindly merged |
-| gnss-userspace-next | `8a55e12` | Unique diagnostic/test history retained |
-| hardware-integration | `64d5037` | Unique tooling/audit history retained |
-| modem-fsm-port-compile-only | `1feccd9` | Some equivalent patches integrated; unique gate history retained |
-| panthor-compile-prereq | `8e9fbbb` | Unique compile-only groundwork retained |
-| scp-region-prereq | `44e233c` | Some equivalent patches integrated; unique audit history retained |
-| sensor-startup-contract | `e3c2a64` | Unique prerequisite/test history retained |
+See `git tag -l 'archive/2026-09-22/*'` or GitHub tags for exact retired
+tips. Unmerged research remains recoverable there, including NOS 4.0
+early-boot diagnostics; it is not declared compatible or enabled.
 
-| Former U-Boot branch | Archived tip | Disposition |
-| --- | --- | --- |
-| codex/scp-handoff-inventory | `e90badbdbc` | Included in master ancestry |
-| codex/b40-early-breadcrumb | `281058eab6` | Unresolved early-boot diagnostic, not universal NOS 4.0 support |
-| codex/b40-fastboot-diagnostic | `5adc90565f` | Earlier diagnostic retained |
-| codex/ccci-prev-fdt-diagnostic | `1b8c954dba` | Unique handoff diagnostic retained |
-| lenowo | `51222dd867` | Upstream snapshot already in master ancestry |
-| ub-as-bl2 | `0db380b6a8` | Alternative upstream boot experiment retained, not enabled |
-
-Next validation is the complete main CI image on a clean installation,
-followed by controlled cold starts and sensor lifecycle checks. Separate
-bring-up is still needed for modem, navigation, GPU and cameras.
+Next: [remaining work and test gates](PORT_COMPLETION_PLAN.md).
+Research: [documentation index](README.md).

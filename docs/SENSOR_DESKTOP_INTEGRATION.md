@@ -67,11 +67,10 @@ the upstream orientation/matrix/policy tests and HF ABI tests. APK SHA256:
 `1930baf2a276389bff9dc380049869c18adf6af9bda5f82208321847ca4de403`.
 The APK was downloaded and verified, but has not yet been installed as a
 package on the phone. Live tests used its equivalent sources/configuration.
-The next full rootfs workflow now builds and installs the backend as an
-extra package and checks its executable, service drop-in and udev rule.
-The already-running full image run `35738754109` contains only the earlier
-startup helper, not this later backend. Do not flash that older image and
-expect this later integration to be present.
+The main rootfs workflow builds and installs the backend as an extra package
+and checks its executable, service drop-in and udev rule. Current CI state is
+tracked in [PORT_SUMMARY.md](PORT_SUMMARY.md). Older startup-only images do
+not contain this backend.
 
 Post-integration 32 MiB USB regression gate passed:
 `local/live-logs/20260922T151139Z-172.16.42.1-regression-gate`.

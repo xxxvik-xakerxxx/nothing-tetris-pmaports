@@ -121,11 +121,14 @@ SHA256 of `kernel-after`:
 of `service-journal`:
 `ed7e129dbfd482f95d1f46df5784ae20e0c9f06f871b6fe97d92cfa5fd944efc`.
 
-Integration commit `fd61e7b` has been pushed. CI `35738754109` passed
-the overlay and source/ABI checks; image building is still in progress.
+## Current integration boundary
 
-Still required: repeated automatic cold starts, CI package clean installation,
-safe warm-start ownership, controlled motion/light tests, calibration
-provisioning, native IIO/sensor-consumer integration, suspend/resume,
-clock/resource lifetime and idle power, and another supported handset.
-Default enablement and production merge remain gated on these results.
+The helper and desktop backend are now in main. CI/package state is tracked
+only in [PORT_SUMMARY.md](PORT_SUMMARY.md); the live-installed helper/backend
+must not be confused with clean testing of the complete image.
+
+Still required: clean packaged installation, repeated automatic cold starts,
+safe warm ownership, calibration, suspend/resume, clock/resource lifetime,
+idle power and another handset. Rotation, light response and proximity UI
+are already demonstrated in [desktop evidence](SENSOR_DESKTOP_INTEGRATION.md).
+Default startup enablement remains gated.

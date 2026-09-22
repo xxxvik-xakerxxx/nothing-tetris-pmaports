@@ -1,16 +1,17 @@
 # Nothing Tetris power and charging bring-up
 
-Updated: 2026-09-04.
+Status: **Partial**. Measurements below are dated evidence from earlier
+images, not the current installed version; see [PORT_SUMMARY.md](PORT_SUMMARY.md).
 
 This document records the measured power state and the next safe experiments.
 It does not authorize charger-register writes, forced current limits, PD/PPS,
 OTG, suspend beyond the existing s2idle boundary, or any change that can remove
 USB NCM/SSH recovery.
 
-## Current evidence
+## Measured behavior
 
-The installed pmaports image is `f607513` with kernel `6.18.0 #123`. Its saved
-power capture showed all of the following at the same time:
+The `f607513` image (kernel `6.18.0 #123`) supplied a saved
+power capture with all of the following at the same time:
 
 - MT6375 charger state `Charging`;
 - AICR and ICHG both at 500000 uA;

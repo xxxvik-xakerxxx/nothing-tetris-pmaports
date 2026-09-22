@@ -6,8 +6,10 @@ This audit used local sources only. The authoritative connectivity source is
 Nothing OS 4.1 Tetris commit
 `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835` from the local
 `upstream/android_kernel_modules_nothing_mt6878` object store. The pmaports
-baseline is `1f8aef10668c62284ac4824eb334a67a14f6c1df` on the isolated
-`codex/gnss-userspace-bridge` branch.
+baseline is `1f8aef10668c62284ac4824eb334a67a14f6c1df` from the former
+`codex/gnss-userspace-bridge` branch, retained under its archive tag.
+This is protocol research; current status is in PORT_SUMMARY.md. Dated
+experiments below describe their own software, not the installed r167.
 
 The source exposes a private character-device ABI, not NMEA or the Linux GNSS
 subsystem. Opening `/dev/gpsdl0` powers link0. Closing the final descriptor
@@ -97,7 +99,7 @@ the subsequent cycle passed. The clean image manifest still names U-Boot
 60bcf22 as required, while the live repeat intentionally kept c931695; the
 bootloader-contract validation is therefore not complete.
 
-## Latest experiment and remaining gate (2026-09-11)
+## Protocol and lifecycle experiments (2026-09-11)
 
 ### Candidate 1004: finalize the FSM log records
 
@@ -263,7 +265,8 @@ executing the sender or any external call. This narrows the missing stop
 contract to FE05 with argument 4 and conditional link selection, but does
 not prove delivery or acceptance before RAM-code startup, nor safe close.
 The research CALLBACK_ABI.md records table addresses and mode/queue caveats.
-The full-download probe remains unexecuted; no new GPS hardware test ran.
+That isolated callback test did not execute the full-download probe;
+the later r155 hardware result is recorded above.
 
 ### 2026-09-11 input provenance correction
 
