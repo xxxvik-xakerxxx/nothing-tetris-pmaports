@@ -24,6 +24,19 @@ Initial CI `35728863556` passed host validation but failed package prepare:
 0104 was listed before prerequisite 0099. Reordered the source list and
 added an explicit order/application host gate; no failed artifact was flashed.
 
+Replacement CI [35729169169](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/35729169169)
+builds `ff4433f1515a4f29529d7f14684b5aea9c62858a`. Validation completed
+successfully; the kernel package is still building at this checkpoint.
+The manual HF sample capture tool was separately committed as `116304d`
+with six offline ABI tests passing; it is not live-validated or autostarted.
+Read-only SSH inspection confirmed unchanged recovery boot
+`bf25f907-0541-44df-94e4-9a323653250b`, systemd running, usb0 up and no
+SCP/sensorhub/HF modules loaded. No new firmware probe was attempted.
+
+To prepare space for r167, removed only the three downloaded r165 image
+files from `/private/tmp/tetris-r165-35707613091`; its metadata and all
+runtime evidence remain. The full r166 image set is retained for rollback.
+
 ## r166 installed: logger panic absent; readiness blocked on infracfg
 
 Cold boot `e14bf361-3811-44fd-8776-0467b865f8da` passed secure handoff
