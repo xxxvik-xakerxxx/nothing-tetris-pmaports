@@ -20,6 +20,7 @@ typedef struct {
         gboolean enabled;
         int64_t timestamp;
         AccelVec3 *matrix;
+        GUdevDevice *device;
 } HfData;
 
 static gboolean
@@ -157,11 +158,22 @@ hf_set_polling(SensorDevice *sensor, gboolean enabled)
                 return;
         g_clear_handle_id(&data->watch, g_source_remove);
         g_clear_handle_id(&data->deadline, g_source_remove);
+        if (enabled) {
+                struct hf_info info;
+                data->fd = hf_open_info(data->device, data->sensor, &info);
+                if (data->fd < 0 || info.gain != data->gain)
+                        g_error("HF sensor identity changed or transport unavailable");
+                data->timestamp = 0;
+        }
         hf_control(data, enabled);
         if (enabled) {
                 data->watch = g_unix_fd_add(data->fd, G_IO_IN | G_IO_ERR | G_IO_HUP,
                                            hf_read, sensor);
                 data->deadline = g_timeout_add_seconds(5, hf_first_sample_timeout, sensor);
+        } else {
+                /* A fresh client on the next claim cannot replay queued old samples. */
+                close(data->fd);
+                data->fd = -1;
         }
 }
 
@@ -176,7 +188,9 @@ hf_open(GUdevDevice *device, uint8_t id)
                 return NULL;
         sensor = g_new0(SensorDevice, 1);
         data = g_new0(HfData, 1);
-        data->fd = fd; data->sensor = id; data->gain = info.gain;
+        close(fd);
+        data->fd = -1; data->sensor = id; data->gain = info.gain;
+        data->device = g_object_ref(device);
         data->matrix = setup_mount_matrix(device);
         sensor->priv = data;
         sensor->name = g_strndup(info.name, sizeof(info.name));
@@ -188,7 +202,7 @@ hf_close(SensorDevice *sensor)
 {
         HfData *data = sensor->priv;
         hf_set_polling(sensor, FALSE);
-        close(data->fd);
+        g_object_unref(data->device);
         g_free(data->matrix);
         g_free(data);
         g_free(sensor);
