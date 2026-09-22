@@ -1,6 +1,36 @@
 # Nothing Tetris current port status
 
-Updated: 2026-09-21.
+Updated: 2026-09-22.
+
+## Clean r164 installed: baseline regression passes
+
+CI `35692283994`, commit `68516ccf406f7ed8c3ac2ee276c10b0e04d25e4d`,
+completed successfully. Manifest identity and all three image SHA256 values
+passed before flashing. Only `super` and `userdata` were replaced; existing
+U-Boot `ba0a2763ef`, firmware and calibration partitions were not written.
+The previous r163 audit passed at `20260922T071751Z`.
+
+Both fastboot writes succeeded (17 userdata chunks). Reboot returned the
+known USB disconnect; Linux and SSH subsequently recovered. Current boot
+`b8eddccf-112e-40a9-942e-13c67fc8b23c` reports kernel #165,
+`linux-postmarketos-mediatek-mt6878-7.2.1-r164`, device `8-r16` and a
+104.5 GiB root filesystem. The user confirmed normal display and touch.
+The regression gate, including a 32 MiB USB/SSH transfer, passed at
+`local/live-logs/20260922T072618Z-172.16.42.1-regression-gate`.
+USB, wlan0 and hci0 are present; this is not a Wi-Fi association or Bluetooth
+pairing test. Systemd reports `running`; no Oops, BUG, call trace or kernel
+panic appeared in the checked logs.
+
+SCP, sensorhub and HF manager were not loaded. Region-info remains `zero`,
+size 0. Patch 0101 is packaged, but its valid-handoff recovery path has not
+run on hardware. Sensors remain Broken pending authenticated SCP loading
+and a valid TCM handoff. No SCP reset, module probe or reload was attempted.
+
+Artifact SHA256:
+
+- boot: `d2fdcc11c67922674c2f159d258553bd48abcb2e9405aaceb26aed7db300d477`
+- root sparse: `c4f90389f1d3736e465fc6cd9be8f4e8f5a8376b3f73964b6601813047d794fb`
+- FIT: `a39888049e02e09a03ada67aabc73c146bd8f9fb37ae0a7a8dce9b0dc01ecc04`
 
 ## Clean r163: first SCP error-cleanup test passes
 

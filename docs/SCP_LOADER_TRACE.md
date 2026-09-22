@@ -18,10 +18,15 @@ including two reservation bases, the observed four-bank overflow, secure and
 non-secure layouts, wrong backup placement, missing/out-of-range memory and
 integer limits. The older arithmetic regression cases remain tested too.
 CI runs the exact-source patch application and tests before packaging.
-This patch neither enables secure dump nor creates region-info. r163 remains
-installed; no sensor samples or live validation of r164 are claimed.
-Commit `68516cc`, CI `35692283994`: overlay validation (including the new
-exact-source UBSan suite) passed; kernel build is in progress at this checkpoint.
+This patch neither enables secure dump nor creates region-info.
+Commit `68516cc`, CI `35692283994` completed successfully, including the
+exact-source UBSan suite, kernel build and image packaging. Verified images
+were clean-flashed to super/userdata on 2026-09-22. Boot
+`b8eddccf-112e-40a9-942e-13c67fc8b23c` reports package r164 and kernel #165.
+Display/touch were confirmed by the user; the 32 MiB USB/SSH regression gate
+passed at `20260922T072618Z`. No SCP module was loaded, region-info remains
+zero, and there are no sensor samples. The new valid-handoff recovery path
+therefore remains hardware-untested. See CURRENT_STATUS.md for image hashes.
 
 ### Bounded LK SRAM trace
 
