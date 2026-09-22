@@ -1,20 +1,23 @@
 # Nothing Tetris SCP and sensor bring-up
 
-Status: `Broken`; runtime remains disabled.
+Status: `Partial`; manual r167 runtime returns real data, autostart disabled.
 
 ## Current checkpoint: 2026-09-22
 
 See [CURRENT_STATUS.md](CURRENT_STATUS.md) and
-[SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md) for current evidence. On r166,
-authenticated cold handoff passes and firmware reaches the READY handler;
-Linux readiness is blocked by the missing shared infracfg dependency.
-r167 implements that dependency with a syscon regmap and remains a CI/test
-candidate. No sensor samples have been observed. The older handoff/DVFS
-blockers recorded below are historical, not the current next action.
+[SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md) for current evidence. Clean r167
+with U-Boot `bf75c572e160` passes cold secure handoff and SCP READY.
+A manual sensorhub probe enumerates 24 entries, physical mask 31. Ten-second
+HF captures contain real accelerometer, gyro, magnetic, light and proximity
+events; the latter transitions 5/0/5. USB transfer passes after the captures.
+Gyro/magnetic calibration is not proven (accuracy 0). This is one boot with
+the diagnostic 26 MHz vote held, not automatic or lifecycle-qualified support.
+Older handoff/DVFS blockers below are historical, not the next action.
 
-Next: CI image, clean install, cold SCP probe, completed readiness without
-timeout, then gated sensorhub enumeration and HF samples. Preserve USB/SSH
-and reboot after a failed probe; do not repeatedly reload SCP.
+Next: controlled motion/light response and calibration ownership, repeated
+cold tests, warm boot, suspend/resume, idle power, then automatic native
+integration. Preserve USB/SSH and reboot after a failed probe; do not
+repeatedly reload SCP.
 
 The manual `scripts/check-live-sensor-samples.py` tool runs on the phone
 with Python 3 after those gates. Without arguments it only queries the five
@@ -31,7 +34,8 @@ ABI source: pinned `ee2be53cb75670b548948636a0db1d1ff112bf12`,
 The vendor write callback returns zero on success; the tool deliberately
 does not resend that command. Offline fixtures cover packed layouts,
 ioctl encoding, control bytes, signed samples and malformed records.
-The tool itself is not yet live-validated and is not an IIO integration.
+The tool passed one live capture for each of the five classes on r167;
+it is not an IIO integration.
 
 ## Tetris sensor hardware inventory
 
@@ -46,7 +50,7 @@ mainline driver is register-compatible.
 | Gyroscope | `icm4n607_gyro` | Observed on Tetris | SCP firmware |
 | Ambient light | `ltr569_als` | Observed on Tetris | SCP firmware |
 | Proximity | `ltr569_ps` | Observed on Tetris | SCP firmware |
-| Magnetometer | Model not preserved in the available dump | Class advertised by stock product configuration only | SCP inventory must identify it |
+| Magnetometer | `qmc6308` | Live r167 SCP inventory and HF data | SCP firmware |
 | SAR | `SAR-hx9031as` | Observed on Tetris; outside the requested five basic classes | SCP firmware |
 
 The exact Nothing OS 4.1 device-module source at

@@ -1,8 +1,36 @@
 # SCP loader trace, 2026-09-21
 
-Sensors remain Broken. Authenticated loading and secure handoff pass cold
-testing; the latest firmware reaches the READY handler, but host readiness
-completion remains blocked.
+Sensors are Partial as of the r167 cold test: authenticated handoff, host
+READY completion, sensorhub inventory and samples from five physical sensor
+classes pass on one boot. Production initialization/lifecycle remain open.
+
+## r167 runtime result: READY, inventory and samples
+
+Cold boot `e60a958f-55af-4b19-a2ae-59e294ef10a6`, U-Boot `bf75c572e160`,
+CI `35729169169`: one SCP probe with `bootstrap_26m=1` reached recovery
+success at 102.550245 and logger re-enable ret=0 at 102.551005/102.551637.
+The r166 `scpreg.scpsys` failure and ready-timeout cascade are absent.
+Sensorhub was loaded once after checking this stable baseline; the initial
+host guard falsely matched the configuration print `scp_awake_timeout`,
+and stopped before loading anything. Its corrected check uses the actual
+`scp_timeout_times=` failure message. This was not a module reload.
+
+At 279.492084 sensorhub began publishing the 24-entry inventory. Parameters
+are ready Y, count 24, physical mask 31. Ten-second captures produced 249
+accelerometer, 248 gyro, 249 magnetic, 83 light and 3 proximity events.
+Motion/magnetic rates are approximately 25 Hz; proximity data transitions
+5/0/5. Gyro/magnetic accuracy remains 0, and the narrow light range does not
+yet prove controlled lighting response. No calibration commands were sent.
+See CURRENT_STATUS.md for lifecycle limits and USB evidence.
+
+Host evidence `/private/tmp/tetris-r167-sensorhub-evidence/` SHA256:
+
+- `accel.jsonl`: `b3347b1227fdfb4a0ab2e08c108bf78bb4be9a368ed4459d80de885635273be7`
+- `gyro.jsonl`: `ab5f2892633d928b6a4a0b9c9f72ded2178bce1950a574e092153560f7af5e8e`
+- `magnetic.jsonl`: `aaed0f4f6301105171083dbc4b4de1ecfd5ad4a91f156a5a5286b44e0b8b674c`
+- `light.jsonl`: `f53ccb3afa16cd6bbfb819e590acb832698b3d42dfd84d988b901c1d6555e77c`
+- `proximity.jsonl`: `82a82dfb3d7ce8ebbaca165a2ad2cad4a2d38fc8cf5fb39c16e3bb0e5f59c179`
+- `kernel-after-samples`: `214d9fd2fab65325d8d0ecde976ee92d2fd5c9837ea613b443dc94c21fdc8c8d`
 
 ## r167 candidate: explicit shared infrastructure dependency
 

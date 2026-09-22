@@ -2,6 +2,46 @@
 
 Updated: 2026-09-22.
 
+## r167 cold test: real samples from all five physical sensor classes
+
+Status advances to **Partial**, not Works. Cold boot
+`e60a958f-55af-4b19-a2ae-59e294ef10a6` passed secure preparation with
+error 0. One `modprobe scp bootstrap_26m=1` completed: at 102.550245
+SCP reports recovery success, followed by two logger transactions returning
+0. No previous infracfg error or SCP ready timeout recurred. The first
+collection had no firmware dump; USB/SSH survived.
+
+One subsequent sensorhub probe returned `firmware_ready=Y`,
+`sensor_count=24`, `physical_sensor_mask=31`. Five separate ten-second HF
+captures returned actual DATA_ACTION events with increasing timestamps:
+
+| Class | Firmware model | Samples | Observed rate / values |
+| --- | --- | --- | --- |
+| Accelerometer | icm4n607_acc | 249 | 25.009 Hz; raw XYZ [325..344, -464..-430, 9777..9825], gain 1000 |
+| Gyroscope | icm4n607_gyro | 248 | 25.067 Hz; accuracy field 0, calibration not proven |
+| Magnetometer | qmc6308 | 249 | 24.999 Hz; accuracy field 0, calibration/field accuracy not proven |
+| Light | ltr569_als | 83 | 8.333 Hz; first word 135..137, gain 1; controlled lighting response pending |
+| Proximity | ltr569_ps | 3 | First word transitions 5/0/5; on-change events, not a periodic-rate failure |
+
+Each capture disabled its client request afterward. No calibration or
+persistent sensor configuration was written. The saved journal contains no
+BUG/Oops/panic, SCP ready timeout or awake-handshake failure. Existing
+optional resource/CHRE diagnostics and the Wi-Fi-to-SCP notification timeout
+remain separate unresolved observations. Post-sample 32 MiB USB transfer
+passed at `local/live-logs/20260922T135827Z-172.16.42.1-regression-gate`.
+
+Evidence: `/private/tmp/tetris-r167-scp-evidence/` and
+`/private/tmp/tetris-r167-sensorhub-evidence/`. The latter's
+`kernel-after-samples` SHA256 is
+`214d9fd2fab65325d8d0ecde976ee92d2fd5c9837ea613b443dc94c21fdc8c8d`.
+Full sample hashes are recorded in `SCP_LOADER_TRACE.md`.
+
+This is one cold boot with manual modules and a held diagnostic 26 MHz
+resource vote. Automatic initialization, native sensor consumers, calibrated
+motion/field response, three cold repeats, warm restart, suspend/resume,
+idle power and another handset remain unverified. SCP/sensorhub stay loaded
+on this test boot; no module reload or production merge was performed.
+
 ## r167 clean-installed; cold SCP test pending
 
 CI `35729169169` for `ff4433f1515a4f29529d7f14684b5aea9c62858a`
