@@ -2,6 +2,23 @@
 
 Updated: 2026-09-22.
 
+## SCP audio-memory fix submitted to U-Boot CI
+
+Candidate U-Boot `bf75c572e16079a36ab43a032be3360c3e93250c` is on the
+existing `codex/scp-handoff-inventory` branch. Diagnostic CI
+`35718518185` is running with prepare/TCM/secure options enabled.
+No new pmOS kernel/rootfs build is required for this boot-only candidate.
+
+It adds the missing four-entry audio table, separate bank 5 registration
+and stock EMI region 29. Memory is allocated by LMB and published as no-map;
+there is no handset-specific physical address. Bounds, overlaps, duplicate
+ownership and each secure-call failure are tested with ASan/UBSan. The
+firmware/ATF hash gate and default-off diagnostic policy are unchanged.
+This is not yet hardware-verified and has not been merged to master.
+Installed r165 and U-Boot `9177841177` remain unchanged. The next gate is
+verified CI artifacts, lk_a-only installation, cold boot and one SCP probe
+with first-dump capture, followed by readiness and real sensor samples.
+
 ## r165 baseline passes; SCP dump identifies audio-memory assertion
 
 CI `35707613091`, commit `395d7f63d9373372fbf6128503ea1f9b275f801c`,
