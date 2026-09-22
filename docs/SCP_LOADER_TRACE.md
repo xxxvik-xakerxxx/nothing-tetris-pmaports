@@ -1,9 +1,65 @@
 # SCP loader trace, 2026-09-21
 
-Sensors remain Broken. The missing production implementation is the SCP
-firmware loader, not another sensor-list or mailbox registration patch.
+Sensors remain Broken. Authenticated loading and secure handoff now pass
+one cold-boot test; SCP firmware execution fails before readiness.
+
+## First secure execution failure, 2026-09-22
+
+U-Boot `9177841177758007927fb9b687378868cfe4a1fc`, CI `35703856720`,
+LK SHA256 `659f360ffd561e9959d26e7e855fc8c03298d17ef03eda335ff2a013dadfd96a`,
+was flashed only to `lk_a`. Kernel/rootfs remain r164. Warm boot was rejected
+with preflight `-16` because TCM retained the previous loader. After full
+poweroff, boot `84392df4-d857-48ed-b457-ae99ebdacacf` passed
+`secure-handoff-prepared`, error 0, secure state 3/error 0, region-info `ok`.
+The Linux SCP node and secure dump were enabled only after this success.
+
+One manual module probe returned 0. At kernel time 66.235881, roughly
+0.2 seconds after initialization, watchdog recovery began. The first snapshot
+shows c0h0 PC `0x2e9da`, LR `0x1431a`, SP `0xd4fc0`; c1h0 PC `0x139f4`,
+LR `0x139ec`, SP `0xd4dd0`. Both hart1 snapshots are zero. Automatic recovery
+then reset SCP and eventually timed out; this is not a successful ready test.
+No sensorhub/HF manager probe followed. USB/SSH survived. The first log is
+`/private/tmp/tetris-r164-secure-scp-dmesg.txt`; the next clean Linux boot was
+`81cf0a74-46fc-4c19-9f23-cd1029caa7eb`, with no SCP modules loaded.
+
+Bounded read-only U-Boot console reads of retained plaintext firmware DRAM
+resolve the first PCs. Physical addresses in this experiment equal the
+observed firmware base `0xb8000000` plus runtime PC, NOT PC plus 8192.
+These are trace coordinates, not portable addresses for a driver.
+
+- `0x2e9ba` multiplies the delay argument by 13 and polls a counter at
+  `[*(u32 *)0xd9350 + 0x8c]`. PC `0x2e9d4` is the polling load.
+- Caller `0x14300` stores 1 in a byte indexed by `mhartid >> 16` at
+  `0xdfb24`. `0x14308..0x1431a` waits for the AND of the first two bytes,
+  calling that delay with argument 5 between checks.
+- The next path references the string `send ready IPI` at `0x580b6` and
+  passes IPI ID 22. This places the observed wait before ready notification.
+- Core1 executes `wfi` at `0x139f0`; its sampled next PC is `0x139f4`.
+  This alone does not explain why the second initialization flag is absent.
+
+Capstone does not decode all vendor instructions in these windows. Unknown
+instructions must remain unknown, not be silently skipped or assigned guessed
+semantics. A sampled delay loop does not prove a stopped timer: its caller
+also loops. Next investigation must explain the startup rendezvous and core1
+initialization, not blindly alter clocks, mailbox tables or watchdog timeouts.
+The matching stock DT also omits optional mailbox send/receive-status resources
+and READY0 ID 9; those startup notices are not evidence of the root cause.
 
 ## Runtime preparation progress, 2026-09-22
+
+Real ATF decryption now passes on r164: U-Boot `8066a9a1ee`, CI
+`35701102610`, boot `ccf7199a-cd40-401b-a0c8-90e8f7b3018d` reports
+`plaintext-verified`, error zero and firmware region-info size 60.
+Both component plaintext hashes passed. The 32 MiB USB/SSH regression gate
+passed at `20260922T080034Z`. This build does not touch TCM or release reset.
+The default-off TCM diagnostic `d965233d2f`/CI `35702796137` also passed
+on hardware: boot `7249e562-fff9-4cb8-bd1c-32c492064ae2` reports
+`tcm-verified-reset-held`, error 0, region-info `ok`, size 60; USB/SSH
+transfer passed at `20260922T081548Z`. Its ordered-write, bounds, clear/copy
+and readback tests pass under ASan/UBSan. It disables the Linux SCP node until
+the secure handoff is implemented. `9177841177`/CI `35703856720`
+adds that registration; its later hardware result is recorded above. Earlier `c3700615cb` CI
+failed on a compiler-macro collision and was superseded without flashing.
 
 Candidate kernel r164 adds patch 0101 for the recovery memory contract.
 It replaces the unconditional four-bank mapping with one rounded image in
@@ -50,10 +106,25 @@ bounded straight-line sequence; that does not establish external prerequisites.
 
 The kernel's exact region-info structure identifies offset `0x28` as
 `scpctl`. LK obtains that value from `0x7eab8`, backed by dynamic global
-`0x24e2f8`; it is not a universal constant. The source of that global still
-needs tracing. After the loader returns, its caller also invokes `0x2d248`,
+`0x24e2f8`; it is not a universal constant. Additional trace at
+`0x7e62c..0x7e668` resolves its source to the string DT property `scpctl`
+passed through `0x694a4`; a missing property yields zero. The same function
+reads `scp-sram-size` into `0x24e2f0`, `secure-dump`/`secure-dump-size`,
+`scp-protect`, `scp-mem-tbl` and `memorydump`. After the loader returns,
+its caller also invokes `0x2d248`,
 which passes the allocated base and base + `0x2300000` to `0x7ef84`, followed
-by `0x2d58c`. These post-load operations must be audited before declaring the
+by `0x2d58c`. The latter allocates `0x3a0000 + secure-dump-size`, registers
+it through SCP boot SMC operation 0, and then configures EMI region 27;
+the former configures region 26 for the firmware reservation. The pinned
+LK backend `0x7ef84` chooses SMC `0x82000415`, operation 0, with start/end
+shifted right 12 and the region ID, rather than passing the local permission
+words to this backend. ATF entry `0x58e80` dispatches this service to
+`0x2f750`; operation 0 calls `0x2f618`. The deeper trace shows `0x10300`
+validates/normalizes page boundaries, `0x10370` restricts region IDs to 1..64,
+and `0x10380` makes all but IDs 8/10/11/19 one-shot per boot. Thus 26/27
+cannot be retried after registration. `0x2d61c` writes their boundary/enable
+registers. The new diagnostic preserves this exact boot-only call order.
+These post-load operations must pass hardware tests before declaring the
 loader chain complete; SRAM writes and the region-info snapshot alone do not
 reproduce the complete LK handoff.
 

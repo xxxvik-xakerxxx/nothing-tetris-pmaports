@@ -2,6 +2,66 @@
 
 Updated: 2026-09-22.
 
+## SCP executes after secure handoff, but readiness fails
+
+U-Boot `9177841177`, CI `35703856720`, is installed in `lk_a` with
+kernel/rootfs r164 unchanged. LK SHA256:
+`659f360ffd561e9959d26e7e855fc8c03298d17ef03eda335ff2a013dadfd96a`.
+After a complete poweroff and manual power-on, boot
+`84392df4-d857-48ed-b457-ae99ebdacacf` reported
+`secure-handoff-prepared`, prepare error 0, secure state 3, secure error 0,
+region-info `ok`, and the SCP node enabled with secure dump enabled.
+All pinned boot-time secure calls completed. This does not prove runtime
+recovery correctness or sensor operation.
+
+One manual `modprobe scp` returned 0, but firmware watchdog recovery started
+about 0.2 seconds later, before a confirmed ready event. First-failure PC/LR:
+core0 `0x2e9da`/`0x1431a`; core1 `0x139f4`/`0x139ec`.
+No sensorhub/HF manager was loaded and no sensor samples were obtained.
+USB/SSH survived; the failure log was saved before a clean reboot.
+Sensors remain **Broken**. See SCP_LOADER_TRACE.md for the bounded code trace.
+
+Warm reboot retains TCM contents: the strict preflight rejects that state
+with `-16` and leaves the Linux SCP node disabled. Cold boot was required
+for the successful secure handoff. Warm-start ownership remains unresolved;
+do not remove the guard or advertise this diagnostic as production support.
+
+## Earlier decryption and TCM hardware checks
+
+U-Boot `8066a9a1ee`, diagnostic CI `35701102610`, was flashed to `lk_a`
+only after manifest/checksum validation. LK image SHA256:
+`691164969062e9728178de4a8da7c9e7ee48b5185908def7e1f1bb150596a22d`.
+The installed kernel/rootfs remain r164; `lk_b`, firmware and calibration
+partitions were not modified. Previous `ba0a2763ef` image is retained for
+rollback, not assumed to match the unrelated stock image in `lk_b`.
+
+Boot `ccf7199a-cd40-401b-a0c8-90e8f7b3018d` reports
+`nothing,scp-prepare-stage=plaintext-verified`, error 0 and plaintext
+region-info size 60. Both core and DRAM passed certificate, ciphertext and
+post-ATF-decryption plaintext hash checks. The diagnostic pins the actual
+slot-A ATF/SCP version and reads DT/LMB reservations; it is not a universal
+firmware selector. No TCM writes or SCP reset release occurred in this build.
+Systemd is running, no SCP/BUG/Oops/call-trace/panic lines appeared in the
+checked kernel log, and the 32 MiB USB/SSH regression gate passed:
+`local/live-logs/20260922T080034Z-172.16.42.1-regression-gate`.
+
+The user confirmed normal display/touch after this decryption build.
+
+The TCM follow-up `d965233d2f`, CI `35702796137`, was then verified and
+flashed to `lk_a` only. SHA256:
+`5d12bbe40474a362459fe8e93ecc1133e86fb6c6996a8bff23323943dec60530`.
+Boot `7249e562-fff9-4cb8-bd1c-32c492064ae2` reports
+`tcm-verified-reset-held`, error zero, region-info `ok`, size 60. The full
+8192-byte loader readback matched. `/soc@0/remoteproc@1c400000/status` is
+`disabled` and no SCP/transport module is loaded. The 32 MiB USB/SSH gate
+passed at `local/live-logs/20260922T081548Z-172.16.42.1-regression-gate`.
+The earlier TCM CI `35702366933` failed on a callback/macro name collision;
+that image was never flashed. The fixed build also corrects the FDT physical
+address conversion warning.
+
+These intermediate checks preceded the full secure-handoff test above.
+Do not confuse firmware decrypt or TCM readback with sensor functionality.
+
 ## Clean r164 installed: baseline regression passes
 
 CI `35692283994`, commit `68516ccf406f7ed8c3ac2ee276c10b0e04d25e4d`,
