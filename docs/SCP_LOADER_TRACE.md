@@ -5,6 +5,8 @@ one cold-boot test; SCP firmware execution fails before readiness.
 
 ## Bootstrap resource hypothesis
 
+Result on r165: the vote succeeds, but does not prevent the failure below.
+
 The matching vendor `scp_init()` calls `scp_resource_req(SCP_REQ_26M)`
 before SCP device registration only when `scp_dvfs_feature_enable()` is true.
 The current manual DT explicitly bypasses DVFS, skipping that vote as well as
@@ -25,7 +27,7 @@ the diagnostic module lifetime to isolate this one variable. Ordinary probes
 are unchanged. Host tests compile the patched helper and cover default-off,
 competing DVFS ownership, negative/positive firmware errors, double acquire,
 successful cleanup and a failed release that must not clear ownership.
-No live result for this hypothesis exists yet. Do not expand the vote mask,
+The live result does not justify expanding the vote mask. Do not
 enable full DVFS or disable watchdog based only on the sampled delay loop.
 
 ## First secure execution failure, 2026-09-22
@@ -55,7 +57,7 @@ These are trace coordinates, not portable addresses for a driver.
 - `0x2e9ba` multiplies the delay argument by 13 and polls a counter at
   `[*(u32 *)0xd9350 + 0x8c]`. PC `0x2e9d4` is the polling load.
 - Caller `0x14300` stores 1 in a byte indexed by `mhartid >> 16` at
-  `0xdfb24`. `0x14308..0x1431a` waits for the AND of the first two bytes,
+  `0xe3b24`. `0x14308..0x1431a` waits for the AND of the first two bytes,
   calling that delay with argument 5 between checks.
 - The next path references the string `send ready IPI` at `0x580b6` and
   passes IPI ID 22. This places the observed wait before ready notification.
@@ -69,6 +71,52 @@ also loops. Next investigation must explain the startup rendezvous and core1
 initialization, not blindly alter clocks, mailbox tables or watchdog timeouts.
 The matching stock DT also omits optional mailbox send/receive-status resources
 and READY0 ID 9; those startup notices are not evidence of the root cause.
+
+## r165 first dump: core1 audio ASSERT
+
+Cold boot `1e5a3f0d-cc0d-41d5-a358-6ec813d779f0`, installed r165 and
+U-Boot `9177841177`, passed secure preparation. The single opt-in probe held
+the 26 MHz resource at kernel time 106.701537; watchdog followed at 106.903879.
+The first dump completed at 107.259970, before any manual reset/reload.
+Evidence: `/private/tmp/tetris-r165-scp-evidence/scp-dump.bin`, 11,454,272
+bytes, SHA256
+`b02bc1be5190c076889d7c0a86b1bd42e2c99f6a50e38500a7e5ec7aef6f6f88`.
+
+The firmware ring log at dump offsets `0xe2000..0xe3330` includes:
+
+```
+[0.024](1)[0] audio_get_common_shared_mem() fail, AP view: 0x0, SCP view: 0x50000000, size: 0x0
+[0.025](1)[0] [ASSERT] task: ipi_s, file: drivers/RV55_A/mt6878/audio/utility/utility.c, line: 149
+```
+
+Core1's return address `0xc9f2cc` follows the ASSERT call at `0xc9f2c8`
+to `0x14650`. Its WFI snapshot is therefore post-assert, not proof of normal
+idle. The actual rendezvous bytes at `0xe3b24` are `01 00 00 00`.
+The earlier `0xdfb24` address was a disassembly transcription error; those
+bytes are not the rendezvous flags. Core0 also logs I3C DAA/transfer errors;
+their effect on sensor discovery remains untested after this startup blocker.
+
+DRAM code is at file offset `0x1c8000 + runtime_pc - 0x700000`; this mapping
+resolves the ASSERT caller and its utility.c string. These are coordinates
+of this exact dump, not addresses suitable for hard-coding in drivers.
+The helper at `0xc9f2d4` reads descriptors at SCP `0xb0000080/84/88`,
+then an offset/size table, rather than simply reading AUDIO_IPI_MEM_ID.
+Unknown vendor instructions remain undecoded.
+
+Exact stock LK trace identifies a missing handoff candidate: `0x172ac` calls
+`0x2d418` with bank ID 5 and dynamically allocated `adsp_shared_reserved`
+address/size. The wrapper issues SCP_BOOT operation 8. Its surrounding DT
+lookup names `mediatek,reserve-memory-adsp_share` and `shared_memory`.
+Pinned ATF operation 8 calls `0x2b740`, which validates the bank (0..5),
+address and size before storing a 12-byte bank descriptor. Current U-Boot
+does not issue operation 8. This is evidence for the next investigation,
+not yet proof that registering any arbitrary buffer is sufficient: establish
+the complete descriptor/table layout, DT allocation and memory ownership first.
+Do not conflate this bank with SCP feature-memory ID 4 or bypass the ASSERT.
+
+No sensorhub/HF modules were loaded after failure. Clean recovery boot
+`1c647422-1fca-4bcf-b7a7-6f4d7f3f6ed1` restored USB/SSH without SCP modules
+or failed systemd units. No further probe has been performed on that boot.
 
 ## Runtime preparation progress, 2026-09-22
 

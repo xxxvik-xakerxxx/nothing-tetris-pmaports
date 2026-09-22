@@ -2,7 +2,7 @@
 
 Updated: 2026-09-22.
 
-## r165 clean install passes baseline; cold SCP test pending
+## r165 baseline passes; SCP dump identifies audio-memory assertion
 
 CI `35707613091`, commit `395d7f63d9373372fbf6128503ea1f9b275f801c`,
 completed successfully. Manifest identity and all image hashes passed before
@@ -18,10 +18,18 @@ parameter present. The user confirmed normal display and touch. The 32 MiB
 USB/SSH regression gate passed at
 `local/live-logs/20260922T103428Z-172.16.42.1-regression-gate`.
 
-SCP remains unloaded. As expected after warm reboot, preparation stopped at
-`preflight` and the SCP DT node is disabled. A full poweroff was sent after
-the baseline checks; manual power-on is required before the one-shot resource
-vote test. No r165 sensor result is claimed. The verified r164 images and
+Cold boot `1e5a3f0d-cc0d-41d5-a358-6ec813d779f0` passed secure handoff.
+One `modprobe scp bootstrap_26m=1` acquired the resource vote, but SCP hit
+watchdog approximately 0.202 seconds later. The first complete dump identifies
+core1 ASSERT in `drivers/RV55_A/mt6878/audio/utility/utility.c:149`:
+`audio_get_common_shared_mem()` received AP address 0 and size 0.
+The resource vote alone does not fix startup. Sensors remain **Broken**.
+See `SCP_LOADER_TRACE.md` for dump identity and the separate audio-memory
+registration path; adding a sensor-table entry is not yet a justified fix.
+
+Recovered by clean reboot to `1c647422-1fca-4bcf-b7a7-6f4d7f3f6ed1`:
+USB/SSH healthy, no SCP/sensorhub/HF modules, zero failed systemd units.
+Warm-boot preflight guard disables SCP as expected. Verified r164 images and
 known-good U-Boot rollback images remain available locally.
 
 Artifact SHA256:
@@ -43,8 +51,8 @@ Normal boot and the default manual probe are unchanged.
 
 Exact-source patch application, existing memory tests and the new UBSan
 resource-ownership/error tests pass locally. Full ARM64 build is CI-only.
-This is an **untested diagnostic**, not a sensor fix. It is now installed
-with U-Boot `9177841177` as recorded above; no new SCP probe has been performed.
+This is a **tested diagnostic, not a sensor fix**. Its accepted resource vote
+did not prevent the audio-memory ASSERT, as recorded above.
 
 Test plan: verify the r165 artifact, install it without replacing the pinned
 U-Boot, obtain a full cold boot and successful secure handoff, then perform
