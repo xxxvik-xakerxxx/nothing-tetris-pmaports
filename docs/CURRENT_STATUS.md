@@ -2,6 +2,34 @@
 
 Updated: 2026-09-22.
 
+## r165 clean install passes baseline; cold SCP test pending
+
+CI `35707613091`, commit `395d7f63d9373372fbf6128503ea1f9b275f801c`,
+completed successfully. Manifest identity and all image hashes passed before
+writing only `super` and `userdata`. All 17 userdata chunks completed.
+The existing diagnostic U-Boot `9177841177` in `lk_a` was retained;
+`lk_b`, stock firmware and calibration partitions were not changed.
+The generic artifact manifest references the older minimum U-Boot profile,
+not the diagnostic bootloader actually used in this test.
+
+Boot `c8110874-a77a-4381-a1f1-c18801d6f161` reports kernel #166, a 104.5 GiB
+root filesystem, systemd running, USB/SSH up, and the `bootstrap_26m` module
+parameter present. The user confirmed normal display and touch. The 32 MiB
+USB/SSH regression gate passed at
+`local/live-logs/20260922T103428Z-172.16.42.1-regression-gate`.
+
+SCP remains unloaded. As expected after warm reboot, preparation stopped at
+`preflight` and the SCP DT node is disabled. A full poweroff was sent after
+the baseline checks; manual power-on is required before the one-shot resource
+vote test. No r165 sensor result is claimed. The verified r164 images and
+known-good U-Boot rollback images remain available locally.
+
+Artifact SHA256:
+
+- boot: `89a1092b1e31bb158ed1b3eac447372dd7d3e58e38e58745b5d64ebc1c4faf4c`
+- root sparse: `90c6976fef76c1b40c84cdbd74c1dc2a9e6363c8178b8ca9e43ace4eee279b15`
+- FIT: `5d1e3e3f2d07948596b1fb2b1eccd79e37c3c2c9c7ea00397488ab8242baa504`
+
 ## r165 candidate: isolate the missing bootstrap resource vote
 
 Patch 0102 adds the default-off, read-only `scp.bootstrap_26m` module
@@ -15,8 +43,8 @@ Normal boot and the default manual probe are unchanged.
 
 Exact-source patch application, existing memory tests and the new UBSan
 resource-ownership/error tests pass locally. Full ARM64 build is CI-only.
-This is an **untested diagnostic**, not a sensor fix. The phone remains on
-r164/U-Boot `9177841177`; no new SCP probe has been performed.
+This is an **untested diagnostic**, not a sensor fix. It is now installed
+with U-Boot `9177841177` as recorded above; no new SCP probe has been performed.
 
 Test plan: verify the r165 artifact, install it without replacing the pinned
 U-Boot, obtain a full cold boot and successful secure handoff, then perform
