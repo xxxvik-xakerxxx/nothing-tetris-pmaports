@@ -2,7 +2,35 @@
 
 Updated: 2026-09-22.
 
-## r166 clean install: boot/display/touch pass; SCP test pending
+## r166 installed: logger panic absent; readiness blocked on infracfg
+
+Cold boot `e14bf361-3811-44fd-8776-0467b865f8da` passed secure handoff
+with error 0. One `modprobe scp bootstrap_26m=1` returned 0. The r165
+LOGGER_CTRL null-buffer panic did not recur and USB/SSH survived. No sensorhub
+or HF module was loaded. The first three-second collection had no SCP dump.
+
+The new blocker is host readiness completion: at 104.199164 the log reports
+`[SCP] scpreg.scpsys error`. Source tracing places this in `scp_A_set_ready()`
+after the READY IPI, while `scp_A_notify_ws()` waits indefinitely for that
+mapping before setting `scp_ready[]`. The vendor auxiliary driver matches
+`mediatek,infracfg_ao`; this resource has not been connected in the current
+port. Logger IPI 17 consequently fails its readiness precondition; the
+uncancelled ready timer logs timeout 1 at 114.141321 and timeout 2 at
+124.637063. This is not a complete ready transition or sensor support.
+The resource is also used by wake/ack register accesses, so bypassing the
+wait or fabricating readiness is not a valid fix.
+
+Evidence is `/private/tmp/tetris-r166-scp-evidence/kernel-journal`, SHA256
+`3e85b7edfed0845fd77e4e7afe4b6607c11dcdd4377751877c615e9ec8987694`.
+Stopped without module reload and performed a clean reboot. Recovery boot
+`bf25f907-0541-44df-94e4-9a323653250b` has systemd running, zero failed
+units, USB/SSH up and no SCP/sensorhub/HF modules loaded. Sensors remain
+**Broken**; next gate is proper infracfg ownership/mapping, then ready and
+real samples. No production merge is justified by this single test.
+Post-recovery 32 MiB transfer passed at
+`local/live-logs/20260922T122940Z-172.16.42.1-regression-gate`.
+
+## r166 clean-install baseline
 
 CI `35719843739` for `1bb4a3f96dce3529e66ab9ae6482238d662d7a5c`
 completed successfully. All three artifact hashes and manifest identity
@@ -14,14 +42,14 @@ still names the older generic minimum bootloader, not this diagnostic build.
 Boot `b87021dc-297e-4872-b9ab-15cd3669f265` reports kernel #167, systemd
 running, zero failed units, USB/SSH up, rootfs 104.5 GiB. The user confirmed
 normal display and touch. SCP/sensorhub/HF modules remain unloaded; the
-warm preflight guard disables SCP as expected. A cold test is still needed;
-this installation alone does not prove the logger panic is fixed or sensors
-work. Pre-flash transfer passed at
+warm preflight guard disables SCP as expected. The subsequent cold test is
+recorded above; this installation alone does not prove sensors work.
+Pre-flash transfer passed at
 `local/live-logs/20260922T121212Z-172.16.42.1-regression-gate`.
 Installed package database confirms `7.2.1-r166`. Post-install 32 MiB transfer
 also passed at `local/live-logs/20260922T122221Z-172.16.42.1-regression-gate`.
-Full poweroff was sent successfully; awaiting manual power-on for the cold
-SCP test. No SCP module was loaded during this installation check.
+Full poweroff and manual power-on preceded the cold test above. No SCP
+module was loaded during the initial installation baseline check.
 
 Artifact SHA256:
 

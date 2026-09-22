@@ -1,7 +1,35 @@
 # SCP loader trace, 2026-09-21
 
-Sensors remain Broken. Authenticated loading and secure handoff now pass
-one cold-boot test; SCP firmware execution fails before readiness.
+Sensors remain Broken. Authenticated loading and secure handoff pass cold
+testing; the latest firmware reaches the READY handler, but host readiness
+completion remains blocked.
+
+## r166: READY handler reached, host completion blocked
+
+With U-Boot `bf75c572e1` and r166 CI `35719843739`, cold boot
+`e14bf361-3811-44fd-8776-0467b865f8da` passed secure preparation. One
+manual probe with the unchanged 26 MHz diagnostic vote returned 0 without
+the r165 IPI 21 null-buffer BUG. USB/SSH remained available. The first
+collection produced no firmware dump and no sensor samples.
+
+The source-correlated READY-path message `scpreg.scpsys error` appears at
+104.199164. `scp_A_set_ready()` checks this pointer before cancelling the
+ready timer; the queued `scp_A_notify_ws()` loops while it is absent, before
+setting `scp_ready[SCP_A_ID]`. Logger IPI 17 then fails `scp_awake_lock`'s
+ready precondition. Timeouts at 114.141321 and 124.637063 show this is not
+a completed startup. Do not count module-load success as ready.
+
+The auxiliary `scpsys` driver matches `mediatek,infracfg_ao`. Its mapping
+also supplies INFRA_IRQ_SET/CLEAR at offsets 0xb14/0xb18 and diagnostic
+register reads. Fix the resource ownership and mapping rather than removing
+the wait, setting ready manually, or adding competing MMIO owners.
+The exact integration is still unimplemented.
+
+Host evidence `/private/tmp/tetris-r166-scp-evidence/kernel-journal` has
+SHA256 `3e85b7edfed0845fd77e4e7afe4b6607c11dcdd4377751877c615e9ec8987694`.
+After saving it, a clean reboot returned Linux to boot
+`bf25f907-0541-44df-94e4-9a323653250b`, systemd running, zero failed units,
+USB/SSH present and no SCP/sensorhub/HF modules. No second probe was made.
 
 ## Bootstrap resource hypothesis
 
