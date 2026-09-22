@@ -1,0 +1,20 @@
+name: Sensor proxy live candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sensor-proxy:
+    runs-on: ubuntu-24.04-arm
+    container: alpine:edge
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install native ARM64 build dependencies
+        run: apk add --no-cache build-base linux-headers curl patch meson glib-dev libgudev-dev polkit-dev libssc-dev coreutils
+      - name: Build and test standard proxy with HF backend
+        run: sh integrations/sensor-proxy/build-ci.sh /tmp/sensor-proxy-build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sensor-proxy-aarch64
+          path: /tmp/sensor-proxy-build/artifact/
+          if-no-files-found: error
