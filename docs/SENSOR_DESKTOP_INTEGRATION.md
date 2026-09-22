@@ -79,4 +79,8 @@ Post-integration 32 MiB USB regression gate passed:
 Remaining gates: clean packaged installation, repeated startup, warm-handoff
 ownership, suspend/resume, client lifetime/stress, calibration and units
 against reference measurements, brightness smoothness, and a second handset.
-No main-branch production promotion or blanket sensor Works status yet.
+The user requested source consolidation into main. This preserves the tested
+implementation and its prerequisites as guarded experimental support; it
+does not enable the startup preset, certify lifecycle behavior or assign a
+blanket sensor Works status. Future clean installs must use the new image
+containing the backend, not the earlier startup-only image.

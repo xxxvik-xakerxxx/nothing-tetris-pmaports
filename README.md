@@ -8,6 +8,16 @@ kernel package, patch series, validation scripts, and CI config needed to build
 the postmarketOS port. Full upstream source trees, generated images, local
 logs, and device backups are not committed.
 
+## Sensor Integration (2026-09-22)
+
+Sensors now have **partial, live-tested desktop support**: automatic rotation,
+automatic brightness and proximity blank/unblank during a local test call.
+The native MediaTek backend uses standard iio-sensor-proxy and Phosh rather
+than custom screen-control scripts. The next CI image includes its package.
+Startup remains opt-in and requires the verified cold SCP/U-Boot handoff;
+warm reboot, suspend, calibration and smooth brightness are not yet complete.
+See [sensor integration evidence](docs/SENSOR_DESKTOP_INTEGRATION.md).
+
 ## Device
 
 | Field | Value |

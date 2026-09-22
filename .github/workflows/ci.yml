@@ -460,6 +460,12 @@ jobs:
           check_contains "mono speaker sink identity" \
             'mono_sink=tetris_mono_speaker' \
             "$rootfs/usr/libexec/nothing-tetris-audio-policy"
+          check_contains "audio policy greeter exclusion" \
+            'ConditionUser=!greetd' \
+            "$rootfs/usr/lib/systemd/user/nothing-tetris-audio-policy.service"
+          check_contains "audio policy session target" \
+            'WantedBy=graphical-session.target' \
+            "$rootfs/usr/lib/systemd/user/nothing-tetris-audio-policy.service"
           check_contains "deferred mono speaker remap" \
             'pactl load-module module-remap-sink' \
             "$rootfs/usr/libexec/nothing-tetris-audio-policy"
@@ -500,6 +506,8 @@ jobs:
             'd /var/lib/greetd/.config/dconf 0700 greetd greetd -' \
             "$rootfs/usr/lib/tmpfiles.d/nothing-tetris-greetd.conf"
           python3 /work/ci/check-greetd-rootfs.py "$rootfs"
+          sh /work/pmaports/device/testing/device-nothing-tetris/validate-audio-ucm \
+            "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
           native_dtb="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
           test -e "$native_dtb"
           if fdtget -l "$native_dtb" /chosen | grep -Fxq simplefb@fe0d0000; then

@@ -198,6 +198,7 @@ validate_power_and_audio_config() {
 	audio_ucm="$device_pkg/HiFi.conf"
 	audio_ucm_card="$device_pkg/mt6878-mt6369.conf"
 	audio_ucm_validator="$device_pkg/validate-audio-ucm"
+	sh "$audio_ucm_validator" "$audio_ucm"
 
 	for option in \
 		CONFIG_BT_RFCOMM=m \
