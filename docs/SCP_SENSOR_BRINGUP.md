@@ -16,6 +16,23 @@ Next: CI image, clean install, cold SCP probe, completed readiness without
 timeout, then gated sensorhub enumeration and HF samples. Preserve USB/SSH
 and reboot after a failed probe; do not repeatedly reload SCP.
 
+The manual `scripts/check-live-sensor-samples.py` tool runs on the phone
+with Python 3 after those gates. Without arguments it only queries the five
+physical classes; `--sample accel` (or `gyro`, `magnetic`, `light`,
+`proximity`) requests a bounded 10-second capture at 25 Hz, then disables
+that client's request. It checks firmware inventory before opening the HF
+device, never loads a module and never writes calibration. JSONL contains
+boot identity, model/vendor/gain, raw events and a count/rate/range summary.
+No-data and non-monotonic timestamps fail. On-change light/proximity rates
+must not be interpreted as periodic motion-sensor rates.
+
+ABI source: pinned `ee2be53cb75670b548948636a0db1d1ff112bf12`,
+`drivers/misc/mediatek/sensor/2.0/core/hf_sensor_io.h` and `hf_manager.c`.
+The vendor write callback returns zero on success; the tool deliberately
+does not resend that command. Offline fixtures cover packed layouts,
+ioctl encoding, control bytes, signed samples and malformed records.
+The tool itself is not yet live-validated and is not an IIO integration.
+
 ## Tetris sensor hardware inventory
 
 The saved stock `dumpsys sensorservice` observation identifies these SCP
