@@ -223,6 +223,13 @@ jobs:
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax device-nothing-tetris --arch aarch64 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
+      - name: Build sensor desktop backend package
+        run: |
+          cd /work/upstream/pmbootstrap
+          ./pmbootstrap.py --as-root --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg \
+            build --force --lax iio-sensor-proxy-tetris --arch aarch64 ||
+            { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
       - name: Build install images
         run: |
           cd /work/upstream/pmbootstrap
@@ -294,6 +301,10 @@ jobs:
           check_file /usr/lib/systemd/user/nothing-tetris-audio-policy.service
           check_file /usr/lib/modules-load.d/nothing-tetris-audio.conf
           check_file /usr/share/mkinitfs/modules/00-device-nothing-tetris.modules
+          check_exec /usr/libexec/nothing-tetris-sensor-proxy
+          check_exec /usr/libexec/nothing-tetris-sensors
+          check_file /usr/lib/systemd/system/iio-sensor-proxy.service.d/90-tetris-hf.conf
+          check_file /usr/lib/udev/rules.d/80-tetris-hf.rules
           check_file /usr/lib/firmware/wifi.cfg
           check_file /etc/pulse/default.pa.d/90-nothing-tetris-audio.pa
           check_file /usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf

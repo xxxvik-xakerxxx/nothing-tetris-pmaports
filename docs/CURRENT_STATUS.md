@@ -2,6 +2,18 @@
 
 Updated: 2026-09-22.
 
+## Sensor desktop integration: live behavior confirmed
+
+The native HF backend for standard iio-sensor-proxy now connects the real
+sensor stream to Phosh and GNOME power management. The user confirmed
+correct portrait/both landscape rotation after the mount-matrix correction,
+automatic brightness, and proximity blank/unblank in a local dummy call.
+Brightness transitions are visibly stepped and remain an open issue.
+This is **Partial**, not calibrated/lifecycle-complete support or GSM call
+verification. See [SENSOR_DESKTOP_INTEGRATION.md](SENSOR_DESKTOP_INTEGRATION.md)
+for exact evidence, CI APK hashes and the clean-install boundary. The pending
+full image contains only the previous startup helper, not this newer backend.
+
 ## Device r17 candidate: supervised cold-boot sensor service
 
 The kernel remains the verified r167. Device package `8-r17` adds a bounded

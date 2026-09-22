@@ -37,3 +37,13 @@ for patch in "$repo_root"/pmaports-patches/*.patch; do
 	}
 	git -C "$pmaports_tree" apply "$patch"
 done
+
+# Keep the standalone CI-tested backend and the rootfs package on one source.
+sensor_pkg="$pmaports_tree/device/testing/iio-sensor-proxy-tetris"
+mkdir -p "$sensor_pkg"
+cp "$repo_root"/integrations/sensor-proxy/APKBUILD \
+	"$repo_root"/integrations/sensor-proxy/*.c \
+	"$repo_root"/integrations/sensor-proxy/*.h \
+	"$repo_root"/integrations/sensor-proxy/*.patch \
+	"$repo_root"/integrations/sensor-proxy/*.conf \
+	"$repo_root"/integrations/sensor-proxy/*.rules "$sensor_pkg/"
