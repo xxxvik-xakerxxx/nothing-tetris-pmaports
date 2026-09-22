@@ -47,6 +47,12 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     patches = root / "pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
+    apkbuild = (patches / "APKBUILD").read_text()
+    source_list = apkbuild.split('source="', 1)[1].split('"', 1)[0].split()
+    dt_base = "0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch"
+    dt_link = "0104-arm64-dts-mt6878-scp-infracfg.patch"
+    if source_list.index(dt_link) < source_list.index(dt_base):
+        raise RuntimeError("SCP infracfg DT patch precedes its prerequisite in APKBUILD")
 
     def vendor(path):
         return run(["git", "-C", str(args.vendor_repo), "show",
@@ -76,6 +82,12 @@ static struct { u32 scp_dram_region, core_nums, secure_dump; } scpreg;
     tests = (root / "scripts/tests/scp-region-dram.c").read_text()
     with tempfile.TemporaryDirectory(prefix="scp-region-host-") as tmp:
         scratch = Path(tmp)
+        dt_path = "arch/arm64/boot/dts/mediatek/mt6878-scp-manual.dtsi"
+        for name in (dt_base, dt_link):
+            run(["git", "apply", "--include=" + dt_path, str(patches / name)], cwd=scratch)
+        if "mediatek,infracfg = <&infracfg_ao>;" not in (scratch / dt_path).read_text():
+            raise RuntimeError("SCP DT lacks shared infracfg phandle")
+        print("PASS: SCP DT patch order and application")
         source = scratch / SOURCE
         for path in SOURCE_FILES:
             target = scratch / path

@@ -2,6 +2,20 @@
 
 Status: `Broken`; runtime remains disabled.
 
+## Current checkpoint: 2026-09-22
+
+See [CURRENT_STATUS.md](CURRENT_STATUS.md) and
+[SCP_LOADER_TRACE.md](SCP_LOADER_TRACE.md) for current evidence. On r166,
+authenticated cold handoff passes and firmware reaches the READY handler;
+Linux readiness is blocked by the missing shared infracfg dependency.
+r167 implements that dependency with a syscon regmap and remains a CI/test
+candidate. No sensor samples have been observed. The older handoff/DVFS
+blockers recorded below are historical, not the current next action.
+
+Next: CI image, clean install, cold SCP probe, completed readiness without
+timeout, then gated sensorhub enumeration and HF samples. Preserve USB/SSH
+and reboot after a failed probe; do not repeatedly reload SCP.
+
 ## Tetris sensor hardware inventory
 
 The saved stock `dumpsys sensorservice` observation identifies these SCP
@@ -57,7 +71,7 @@ magnetometer, gyroscope, light and proximity respectively.  The mask and the
 firmware-provided model/vendor log become valid only after the SCP handshake,
 shared-memory list transfer and HF manager registration all succeed.
 
-## Compile and runtime boundaries
+## Historical Compile and Runtime Boundaries
 
 There is no known compile blocker in the currently packaged AP bridge: the
 mailbox, RPMsg, IPI, SCP, HF manager and sensorhub modules were built together
@@ -150,7 +164,7 @@ checks all 65536 sequence pairs and rejects both single-operator regressions.
 SCP, DVFS and sensorhub remain disabled; this is a prerequisite for safe
 handoff experiments, not a sensor runtime claim.
 
-## Next patch boundary
+## Historical Next Patch Boundary
 
 The next runtime-facing work remains in U-Boot and must be observation-only:
 

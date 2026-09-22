@@ -88,7 +88,6 @@ source="
 	0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor
 	0102-vendor-scp-bootstrap-resource-diagnostic.patch.vendor
 	0103-vendor-scp-share-infracfg-syscon.patch.vendor
-	0104-arm64-dts-mt6878-scp-infracfg.patch
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
@@ -136,6 +135,7 @@ source="
 	0092-clk-mediatek-mt6878-camera-main.patch
 	0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
 	0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
+	0104-arm64-dts-mt6878-scp-infracfg.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor

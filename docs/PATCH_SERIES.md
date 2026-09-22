@@ -123,6 +123,8 @@ normal Alpine/postmarketOS practice.
 | `0092-clk-mediatek-mt6878-camera-main.patch` | Compile-only MT6878 CAMSYS_MAIN provider. The package checks it in a temporary output tree while the shipped config keeps it disabled. |
 | `0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch` | Adds the missing MT6878 VLP SCP clock mux and provider from the matching Nothing OS 4.1 source. It registers no SCP/SCP-DVFS consumer and does not change mux state at boot; this closes the first clock dependency before a separately gated SCP-DVFS probe. |
 | `0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch` | Publishes the Nothing OS 4.1 Tetris SCP register, IRQ, mailbox and shared-memory allocation contract. SCP DVFS is explicitly bypassed and no sensor module is autoloaded, making one manual `scp.ko` load the first controlled TCM handoff and ready-IPI test. |
+| `0103-vendor-scp-share-infracfg-syscon.patch.vendor` | Resolves the mandatory shared infrastructure regmap before SCP startup; replaces the unmatched auxiliary owner and moves wake/dump accesses to regmap. Host-tested r167 candidate, not sensor-function evidence. |
+| `0104-arm64-dts-mt6878-scp-infracfg.patch` | Connects SCP to the existing MT6878 infracfg syscon. Must follow 0099 in the package source list. |
 | `0016-usb-typec-hl5280-audio-switch.patch` | HL5280 support in the Linux Type-C analog mux driver, including the vendor-required audio accessory sequence and MT6375 connector graph. |
 | `0017-mfd-mt6363-auxadc-registers.patch` | MT6363 AUXADC register definitions shared by the official PMIC ADC and audio calibration modules. |
 | `0018-pmdomain-mediatek-mt6878-audio.patch` | MT6878 audio power-domain wiring required by the staged ASoC card. |

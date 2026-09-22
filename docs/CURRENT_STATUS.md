@@ -20,6 +20,10 @@ to the existing 0x10001000/0x1000 syscon. This candidate is not yet
 device-validated; SCP stays manual
 and sensors remain **Broken** until real data and lifecycle tests pass.
 
+Initial CI `35728863556` passed host validation but failed package prepare:
+0104 was listed before prerequisite 0099. Reordered the source list and
+added an explicit order/application host gate; no failed artifact was flashed.
+
 ## r166 installed: logger panic absent; readiness blocked on infracfg
 
 Cold boot `e14bf361-3811-44fd-8776-0467b865f8da` passed secure handoff
