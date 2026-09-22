@@ -20,6 +20,37 @@ integer limits. The older arithmetic regression cases remain tested too.
 CI runs the exact-source patch application and tests before packaging.
 This patch neither enables secure dump nor creates region-info. r163 remains
 installed; no sensor samples or live validation of r164 are claimed.
+Commit `68516cc`, CI `35692283994`: overlay validation (including the new
+exact-source UBSan suite) passed; kernel build is in progress at this checkpoint.
+
+### Bounded LK SRAM trace
+
+Additional offline disassembly of the same pinned LK identifies the exact
+write sequence in `0x2c0a4..0x2cfc8`. LK virtual MMIO addresses have prefix
+`0xffff0000`; physical addresses below omit that prefix. This is trace
+evidence, not authorization to execute writes on an arbitrary ATF/SKU.
+
+1. Write 1 to `0x1cb30004`, then 1 to `0x1cb40004`, then 3 to `0x1cb21000`.
+2. Read/modify/write `0x1cb50234`, setting bit 14 and preserving other bits.
+3. For each offset from physical `0x1cb21000`, in this exact order, write
+   `(1U << n) - 1` for n = 31 down to 0:
+   `c0 c4 c8 cc d0 d4 d8 80 84 2c d8 88 8c 90 94`.
+
+This is 15 groups of 32 writes (480 total), not a single zero write per
+register. Offset `d8` occurs twice, separated by `80 84 2c`; do not deduplicate
+it. Bounded Capstone constant propagation checked every stored value in
+those groups against the descending mask sequence. The RMW source value
+was intentionally left unknown. No delay or barrier occurs inside this
+bounded straight-line sequence; that does not establish external prerequisites.
+
+The kernel's exact region-info structure identifies offset `0x28` as
+`scpctl`. LK obtains that value from `0x7eab8`, backed by dynamic global
+`0x24e2f8`; it is not a universal constant. The source of that global still
+needs tracing. After the loader returns, its caller also invokes `0x2d248`,
+which passes the allocated base and base + `0x2300000` to `0x7ef84`, followed
+by `0x2d58c`. These post-load operations must be audited before declaring the
+loader chain complete; SRAM writes and the region-info snapshot alone do not
+reproduce the complete LK handoff.
 
 U-Boot `ccf6919569`, CI `35654594924` passed the runtime C certificate
 parser tests, actual sandbox RSA-PSS salt-length regression and ARM64
