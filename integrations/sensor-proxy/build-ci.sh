@@ -28,6 +28,7 @@ mkdir -p "$dest/testing/iio-sensor-proxy-tetris"
 cp "$src"/* "$dest/testing/iio-sensor-proxy-tetris/"
 cd "$dest/testing/iio-sensor-proxy-tetris"
 abuild-keygen -a -n
+cp /root/.abuild/*.pub /etc/apk/keys/
 REPODEST="$dest/packages" abuild -F -d
 cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r0.apk" "$dest/artifact/"
 cd "$dest/artifact"
