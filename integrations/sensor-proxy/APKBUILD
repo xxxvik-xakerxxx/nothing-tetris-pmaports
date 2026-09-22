@@ -1,0 +1,58 @@
+# Experimental opt-in transport adapter; not a replacement for calibration.
+pkgname=iio-sensor-proxy-tetris
+pkgver=3.9
+pkgrel=0
+pkgdesc="MediaTek HF backend for standard sensor-proxy on Nothing Tetris"
+url="https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports"
+arch="aarch64"
+license="GPL-3.0-or-later"
+depends="iio-sensor-proxy device-nothing-tetris>=8-r17"
+makedepends="glib-dev libgudev-dev meson polkit-dev libssc-dev linux-headers"
+source="https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/$pkgver/iio-sensor-proxy-$pkgver.tar.gz
+	0001-register-hf-backend.patch
+	drv-mtk-hf.c
+	hf-abi.h
+	test-hf-abi.c
+	80-tetris-hf.rules
+	90-tetris-hf.conf
+	90-sensor-proxy.conf
+	"
+builddir="$srcdir/iio-sensor-proxy-$pkgver"
+
+prepare() {
+	default_prepare
+	cp "$srcdir/drv-mtk-hf.c" "$srcdir/hf-abi.h" src/
+}
+
+build() {
+	abuild-meson -Dssc-support=enabled \
+		-Dudevrulesdir=/usr/lib/udev/rules.d \
+		-Dsystemdsystemunitdir=/usr/lib/systemd/system . output
+	meson compile -C output
+	${CC:-cc} -std=gnu11 -Wall -Wextra -Werror "$srcdir/test-hf-abi.c" -o output/test-hf-abi
+}
+
+check() {
+	meson test --print-errorlogs -C output
+	output/test-hf-abi
+}
+
+package() {
+	install -Dm755 output/src/iio-sensor-proxy "$pkgdir/usr/libexec/nothing-tetris-sensor-proxy"
+	install -Dm644 "$srcdir/90-tetris-hf.conf" \
+		"$pkgdir/usr/lib/systemd/system/iio-sensor-proxy.service.d/90-tetris-hf.conf"
+	install -Dm644 "$srcdir/90-sensor-proxy.conf" \
+		"$pkgdir/usr/lib/systemd/system/nothing-tetris-sensors.service.d/90-sensor-proxy.conf"
+	install -Dm644 "$srcdir/80-tetris-hf.rules" "$pkgdir/usr/lib/udev/rules.d/80-tetris-hf.rules"
+}
+
+sha512sums="
+a89c842f8db2a1a36c1c7c990434bb57fd905224459170cba2ec56e79f1272acc4cac4221937704d5e9247f957d86fde716d25e2d1ccb80d88fa643b47edfda6  iio-sensor-proxy-3.9.tar.gz
+4f35e6bf040ae8ed14a2425129e4e86f0f689f0da1cba67cd6eaae61fc63a11ee1d8611d75f7b4062a4699c1df788ba8c3ea42b8200e3c5cffc292db33ad4e30  0001-register-hf-backend.patch
+2d0e2b69e4e21476e97816038cd4fe427fdc62491ca531192b572db2fd6c825b0dad67dd8f2a2c4dc50606a35cc05881bd4cd58de15c3401485add71808cdbcc  drv-mtk-hf.c
+7a560f79eae720250832fba6c0d4c60682651002dc070bbfc257a39c4a0a43cdb9260627ac5549a90349dfc51f39c3c668048ac34437b304b482d896e25e3799  hf-abi.h
+6f84672f6cb88a9e287f83548b61b17cf743b175a3390e89cb40260937ac52e211e250755f7c7d46fab6bbb4f70f7af9ec9c60b22cbde08ae520f5ec75b406cd  test-hf-abi.c
+e2a48daf27a523ffc6f247a5403bacaa35e9b1189b5ffb3c2cef08ddf3a2b1bf0e5f305c89fda7adc9ec7787be011091b83156ea3489e2e04dcd3560c06cac4e  80-tetris-hf.rules
+e5b6d268da1095050c709223068b746684ec816f60ddf22947b10a9d6a79b22e27e3da94051e688e3da150e76b28973d05907a357cc0df06308b23e56de197a9  90-tetris-hf.conf
+a38b992b8562ecfd41de87a4eb8c48d8b762caefd0390959e3ce5b3d0f16f9e94e92ee760798517e4f18ac3dcfa788520332d74b1fb5eb6d0de8354888ce669f  90-sensor-proxy.conf
+"

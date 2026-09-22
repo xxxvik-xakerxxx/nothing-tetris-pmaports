@@ -20,7 +20,7 @@ jobs:
         run: |
           docker run --rm -e GITHUB_SHA -v "$GITHUB_WORKSPACE:/src:ro" \
             -v "$RUNNER_TEMP:/out" -w /src alpine:edge sh -ec '
-              apk add --no-cache build-base linux-headers curl patch meson glib-dev libgudev-dev polkit-dev libssc-dev coreutils
+              apk add --no-cache abuild build-base linux-headers curl patch meson glib-dev libgudev-dev polkit-dev libssc-dev coreutils
               sh integrations/sensor-proxy/build-ci.sh /out/sensor-proxy-build
             '
       - uses: actions/upload-artifact@v7

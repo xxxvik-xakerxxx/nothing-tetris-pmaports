@@ -1,0 +1,2 @@
+# Tetris HF Android axes -> sensor-proxy display axes. No per-unit calibration.
+SUBSYSTEM=="hf_manager", KERNEL=="hf_manager", ENV{ACCEL_MOUNT_MATRIX}="-1,0,0;0,-1,0;0,0,1", ENV{ACCEL_LOCATION}="display"

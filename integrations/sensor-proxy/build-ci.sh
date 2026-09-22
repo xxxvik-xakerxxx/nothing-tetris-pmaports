@@ -20,7 +20,16 @@ cc -std=gnu11 -Wall -Wextra -Werror "$src/test-hf-abi.c" -o output/test-hf-abi
 output/test-hf-abi
 mkdir -p "$dest/artifact"
 cp output/src/iio-sensor-proxy output/src/monitor-sensor "$dest/artifact/"
-cp "$src/nothing-tetris-sensor-proxy.service" "$dest/artifact/"
+cp "$src/90-tetris-hf.conf" "$dest/artifact/"
+cp "$src/80-tetris-hf.rules" "$dest/artifact/"
+cp "$src/90-sensor-proxy.conf" "$dest/artifact/"
+# Package the same reviewed sources; -d skips the phone-only runtime dependency.
+mkdir -p "$dest/testing/iio-sensor-proxy-tetris"
+cp "$src"/* "$dest/testing/iio-sensor-proxy-tetris/"
+cd "$dest/testing/iio-sensor-proxy-tetris"
+abuild-keygen -a -n
+REPODEST="$dest/packages" abuild -F -d
+cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r0.apk" "$dest/artifact/"
 cd "$dest/artifact"
-sha256sum iio-sensor-proxy monitor-sensor > SHA256SUMS
+sha256sum iio-sensor-proxy monitor-sensor ./*.apk ./*.conf ./*.rules > SHA256SUMS
 printf '%s\n' "${GITHUB_SHA:?CI source commit required}" > source-commit
