@@ -3,6 +3,31 @@
 Sensors remain Broken. Authenticated loading and secure handoff now pass
 one cold-boot test; SCP firmware execution fails before readiness.
 
+## Bootstrap resource hypothesis
+
+The matching vendor `scp_init()` calls `scp_resource_req(SCP_REQ_26M)`
+before SCP device registration only when `scp_dvfs_feature_enable()` is true.
+The current manual DT explicitly bypasses DVFS, skipping that vote as well as
+the clock mux and calibration setup. This is a concrete startup difference,
+not proof that it causes the observed rendezvous failure.
+
+The installed pinned ATF implements SMC `0xc2000232` at payload offset
+`0x2b5b0`. Operation 1 reaches `0x2b618`: it checks the request is <=7,
+shifts its three resource bits left once and calls the registered resource
+manager acquire callback (or release callback for zero). The service record
+handler precedes its 32/64-bit IDs; the adjacent SCP loader handler must not
+be confused with this handler. Vendor `scp_dvfs.h` defines RESOURCE_REQ=1,
+SCP_REQ_26M=1, SCP_REQ_RELEASE=0.
+
+r165 patch 0102 exposes only an opt-in diagnostic using the existing vendor
+request function, not a new raw SMC interface. It holds the resource vote for
+the diagnostic module lifetime to isolate this one variable. Ordinary probes
+are unchanged. Host tests compile the patched helper and cover default-off,
+competing DVFS ownership, negative/positive firmware errors, double acquire,
+successful cleanup and a failed release that must not clear ownership.
+No live result for this hypothesis exists yet. Do not expand the vote mask,
+enable full DVFS or disable watchdog based only on the sampled delay loop.
+
 ## First secure execution failure, 2026-09-22
 
 U-Boot `9177841177758007927fb9b687378868cfe4a1fc`, CI `35703856720`,

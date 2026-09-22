@@ -1,0 +1,98 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] scp: add opt-in bootstrap resource diagnostic
+
+The disabled-DVFS bring-up path omits the stock SCP_REQ_26M vote.
+Allow a manual, default-off test of that vote without enabling voltage,
+frequency or oscillator calibration changes. Hold it until teardown/reboot
+so an early firmware failure does not lose the experimental condition.
+Reject competing DVFS ownership and propagate secure request failures.
+This is a diagnostic, not a sensor fix or a production power policy.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+
+--- a/drivers/misc/mediatek/scp/rv/scp_helper.c
++++ b/drivers/misc/mediatek/scp/rv/scp_helper.c
+@@ -60,7 +60,46 @@
+ #include "scp_chre_manager.h"
+ 
+ #include "scp_low_pwr_dbg.h"
++
++/* Manual bring-up only: isolate the resource vote from DVFS/calibration. */
++static bool bootstrap_26m;
++module_param(bootstrap_26m, bool, 0444);
++MODULE_PARM_DESC(bootstrap_26m,
++	"Diagnostic: hold the SCP 26M resource until unload/reboot; DVFS must be disabled");
++static bool bootstrap_26m_held;
++
++static int scp_bootstrap_resource_get(void)
++{
++	int ret;
++
++	if (!bootstrap_26m)
++		return 0;
++	if (scp_dvfs_feature_enable())
++		return -EINVAL;
++	if (bootstrap_26m_held)
++		return -EBUSY;
++	ret = scp_resource_req(SCP_REQ_26M);
++	if (ret)
++		return ret < 0 ? ret : -EIO;
++	bootstrap_26m_held = true;
++	pr_notice("[SCP] diagnostic 26M resource held until unload/reboot\n");
++	return 0;
++}
+ 
++static void scp_bootstrap_resource_put(void)
++{
++	int ret;
++
++	if (!bootstrap_26m_held)
++		return;
++	ret = scp_resource_req(SCP_REQ_RELEASE);
++	if (ret) {
++		pr_err("[SCP] diagnostic resource release failed: %d; reboot required\n", ret);
++		return;
++	}
++	bootstrap_26m_held = false;
++}
++
+ /* scp semaphore timeout count definition */
+ #define SEMAPHORE_TIMEOUT 5000
+ #define SEMAPHORE_3WAY_TIMEOUT 5000
+@@ -3235,6 +3274,12 @@
+ 		scp_dvfs_exit();
+ 		return ret;
+ 	}
++	ret = scp_bootstrap_resource_get();
++	if (ret) {
++		pr_err("[SCP] diagnostic resource request failed: %d\n", ret);
++		scp_dvfs_exit();
++		return ret;
++	}
+ 
+ 	if (scp_dvfs_feature_enable()) {
+ 		/* pll maybe gate, request pll before access any scp reg/sram */
+@@ -3366,6 +3411,7 @@
+ 
+ 	return ret;
+ err_region_info:
++	scp_bootstrap_resource_put();
+ 	platform_driver_unregister(&mtk_scpsys_device);
+ 	platform_driver_unregister(&mtk_scp_device);
+ 	if (scp_dvfs_feature_enable()) {
+@@ -3377,6 +3423,7 @@
+ err:
+ 	platform_driver_unregister(&mtk_scp_device);
+ err_without_unregister:
++	scp_bootstrap_resource_put();
+ 	/* remember to release scp_dvfs resource */
+ 	if (scp_dvfs_feature_enable()) {
+ 		scp_resource_req(SCP_REQ_RELEASE);
+@@ -3425,6 +3472,7 @@
+ 	for (i = 0; i < SCP_CORE_TOTAL ; i++)
+ 		timer_delete_sync(&scp_ready_timer[i].tl);
+ #endif
++	scp_bootstrap_resource_put();
+ }
+ 
+ device_initcall_sync(scp_init);

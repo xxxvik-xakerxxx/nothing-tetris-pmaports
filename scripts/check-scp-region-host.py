@@ -20,6 +20,7 @@ PATCHES = (
     "0094-vendor-scp-validate-dram-recovery-span.patch.vendor",
     "0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor",
     "0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor",
+    "0102-vendor-scp-bootstrap-resource-diagnostic.patch.vendor",
 )
 SOURCE_FILES = (
     SOURCE,
@@ -107,6 +108,29 @@ static struct { u32 scp_dram_region, core_nums, secure_dump; } scpreg;
                     raise RuntimeError("test did not reproduce the baseline mapping defect")
             elif result.returncode:
                 raise RuntimeError(result.stderr)
+        contents = source.read_text()
+        start = contents.index("static bool bootstrap_26m;")
+        end = contents.index("/* scp semaphore timeout count definition */", start)
+        harness = scratch / "bootstrap.c"
+        executable = scratch / "bootstrap"
+        tests = (root / "scripts/tests/scp-bootstrap-resource.c").read_text()
+        before, after = tests.split("/* INSERT_PATCHED_HELPERS */")
+        harness.write_text(before + contents[start:end] + after)
+        run(shlex.split(os.environ.get("CC", "cc")) + [
+            "-std=c11", "-Wall", "-Wextra", "-Werror", "-O1",
+            "-fsanitize=undefined", "-fno-sanitize-recover=all",
+            str(harness), "-o", str(executable)])
+        run([str(executable)])
+        init = contents[contents.index("static int __init scp_init("):]
+        if init.index("scp_bootstrap_resource_get();") > init.index(
+                "platform_driver_register(&mtk_scp_device)"):
+            raise RuntimeError("bootstrap request is too late")
+        for label in ("err_region_info:", "err_without_unregister:"):
+            if not init.split(label, 1)[1].lstrip().startswith(
+                    "scp_bootstrap_resource_put();"):
+                raise RuntimeError(f"missing bootstrap cleanup at {label}")
+        if "scp_bootstrap_resource_put();" not in init.split("static void __exit scp_exit", 1)[1]:
+            raise RuntimeError("missing bootstrap exit cleanup")
         print(f"PASS: exact-source patch application and host UBSan ({VENDOR_COMMIT})")
 
 

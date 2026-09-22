@@ -2,6 +2,30 @@
 
 Updated: 2026-09-22.
 
+## r165 candidate: isolate the missing bootstrap resource vote
+
+Patch 0102 adds the default-off, read-only `scp.bootstrap_26m` module
+parameter. With SCP DVFS disabled, it requests the same `SCP_REQ_26M` vote
+that the matching vendor init normally issues before SCP register access.
+The diagnostic keeps the vote until module exit/reboot, deliberately avoiding
+DVFS, voltage changes and oscillator calibration. It rejects simultaneous
+DVFS ownership, propagates secure-call errors, and cleans up owned votes on
+init failure and module exit. Failed release is reported as requiring reboot.
+Normal boot and the default manual probe are unchanged.
+
+Exact-source patch application, existing memory tests and the new UBSan
+resource-ownership/error tests pass locally. Full ARM64 build is CI-only.
+This is an **untested diagnostic**, not a sensor fix. The phone remains on
+r164/U-Boot `9177841177`; no new SCP probe has been performed.
+
+Test plan: verify the r165 artifact, install it without replacing the pinned
+U-Boot, obtain a full cold boot and successful secure handoff, then perform
+one manual `modprobe scp bootstrap_26m=1`. Capture the first failure/dump and
+readiness state. Success requires a real ready IPI followed by sensor samples,
+not a successful module load. On watchdog, lost USB/SSH or secure-call error,
+stop and cleanly reboot, without module reload. Retain r164 for rollback.
+Holding this vote increases idle power and is not a suspend/power policy.
+
 ## SCP executes after secure handoff, but readiness fails
 
 U-Boot `9177841177`, CI `35703856720`, is installed in `lk_a` with
