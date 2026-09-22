@@ -3,3 +3,4 @@ enable nothing-tetris-connectivity.service
 enable nothing-tetris-bluetooth-address-extract.service
 enable nothing-tetris-bluetooth-address.service
 enable nothing-tetris-display-unblank.service
+disable nothing-tetris-sensors.service

@@ -1,0 +1,15 @@
+[Unit]
+Description=Nothing Tetris experimental cold-boot sensor transport
+After=sshd.service nothing-tetris-connectivity.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nothing-tetris-sensors start
+ExecReload=/usr/libexec/nothing-tetris-sensors status
+RemainAfterExit=yes
+TimeoutStartSec=65
+Restart=no
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

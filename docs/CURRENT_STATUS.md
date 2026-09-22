@@ -2,6 +2,22 @@
 
 Updated: 2026-09-22.
 
+## Device r17 candidate: supervised cold-boot sensor service
+
+The kernel remains the verified r167. Device package `8-r17` adds a bounded
+startup helper and an explicitly disabled-by-default systemd unit; see
+[SENSOR_INTEGRATION_PATCH.md](SENSOR_INTEGRATION_PATCH.md). Ten offline
+startup tests and six HF sample ABI tests pass. A failed/partial startup
+cannot reload the modules or reset SCP automatically. Warm handoff rejection
+remains intentional and visible; this is not universal automatic support.
+
+On the existing ready cold boot, preflight/status and two repeated starts
+passed without reloading modules. The candidate unit was installed and
+enabled only on the test handset, systemd verification and adoption passed,
+and a full poweroff was sent for the first automatic cold-start test.
+Manual power-on is pending at this checkpoint. No default autoload or main
+branch promotion is justified by these adoption tests.
+
 ## r167 cold test: real samples from all five physical sensor classes
 
 Status advances to **Partial**, not Works. Cold boot

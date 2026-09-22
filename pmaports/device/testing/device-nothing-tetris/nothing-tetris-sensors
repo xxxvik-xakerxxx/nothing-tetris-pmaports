@@ -1,0 +1,139 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Fail-closed, cold-boot-only SCP sensor transport integration.
+
+The bootstrap resource vote is diagnostic and persists until reboot.
+This does not implement an IIO bridge, calibration, or warm SCP recovery.
+"""
+
+import argparse
+import json
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import time
+
+DT = Path("/sys/firmware/devicetree/base")
+MODULES = Path("/sys/module")
+DEVICE = Path("/dev/hf_manager")
+STATE = Path("/run/nothing-tetris-sensors-attempted")
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
+MODPROBE = "/sbin/modprobe"
+TIMEOUT = 8.0
+
+
+def strings(path):
+    data = path.read_bytes()
+    if not data or data[-1:] != b"\0":
+        raise RuntimeError("malformed DT string: " + str(path))
+    return data[:-1].decode("ascii").split("\0")
+
+
+def cells(path, count):
+    data = path.read_bytes()
+    if len(data) != 4 * count:
+        raise RuntimeError("malformed DT integer: " + str(path))
+    return struct.unpack(">" + "I" * count, data)
+
+
+def preflight():
+    if "nothing,tetris" not in strings(DT / "compatible"):
+        raise RuntimeError("unsupported board")
+    chosen = DT / "chosen"
+    if strings(chosen / "nothing,scp-prepare-stage") != ["secure-handoff-prepared"]:
+        raise RuntimeError("SCP handoff not prepared; a full poweroff/on is required")
+    if cells(chosen / "nothing,scp-prepare-error", 1) != (0,):
+        raise RuntimeError("SCP preparation failed")
+    if cells(chosen / "nothing,scp-secure-state", 1) != (3,):
+        raise RuntimeError("SCP secure handoff is incomplete")
+    if cells(chosen / "nothing,scp-secure-error", 2) != (0, 0):
+        raise RuntimeError("SCP secure handoff failed")
+    # Locate by compatible rather than copying this handset's address.
+    nodes = [p.parent for p in DT.rglob("compatible")
+             if "mediatek,scp" in strings(p)]
+    if len(nodes) != 1 or strings(nodes[0] / "status") != ["okay"]:
+        raise RuntimeError("missing, ambiguous or disabled SCP consumer")
+    phandle = cells(nodes[0] / "mediatek,infracfg", 1)
+    if not phandle[0]:
+        raise RuntimeError("invalid infrastructure phandle")
+    owners = [p.parent for p in DT.rglob("phandle") if cells(p, 1) == phandle]
+    if len(owners) != 1:
+        raise RuntimeError("missing or ambiguous infrastructure owner")
+    compatibles = strings(owners[0] / "compatible")
+    if "mediatek,mt6878-infracfg-ao" not in compatibles or "syscon" not in compatibles:
+        raise RuntimeError("unexpected infrastructure owner")
+
+
+def inventory():
+    params = MODULES / "sensorhub/parameters"
+    if not (params / "firmware_ready").exists():
+        return None
+    if (params / "firmware_ready").read_text().strip() != "Y":
+        return None
+    count = int((params / "sensor_count").read_text().strip())
+    mask = int((params / "physical_sensor_mask").read_text().strip())
+    if not 1 <= count <= 255 or mask < 0 or mask & 31 != 31:
+        raise RuntimeError("incomplete physical sensor inventory")
+    if not all((MODULES / name).is_dir() for name in ("scp", "hf_manager", "sensorhub")):
+        raise RuntimeError("sensor dependency missing")
+    if not DEVICE.is_char_device():
+        raise RuntimeError("HF device missing")
+    return {"firmware_ready": True, "sensor_count": count,
+            "physical_sensor_mask": mask}
+
+
+def load(name, *options):
+    subprocess.run([MODPROBE, name, *options], check=True, timeout=25)
+
+
+def start():
+    preflight()
+    state = inventory()
+    if state:
+        return state
+    if any((MODULES / name).exists() for name in ("scp", "hf_manager", "sensorhub")):
+        raise RuntimeError("partial sensor state: refusing module reload; poweroff/on required")
+    try:
+        STATE.mkdir(mode=0o700)
+    except FileExistsError:
+        raise RuntimeError("startup already attempted this boot; refusing retry") from None
+    # Keep the attempt marker on every failure, including a killed process.
+    (STATE / "boot-id").write_text(BOOT_ID.read_text())
+    load("scp", "bootstrap_26m=1")
+    load("sensorhub")
+    deadline = time.monotonic() + TIMEOUT
+    while True:
+        state = inventory()
+        if state:
+            return state
+        if time.monotonic() >= deadline:
+            raise RuntimeError("sensor firmware inventory timeout; no reset/retry performed")
+        # Poll actual handshake completion; never assume ready after a sleep.
+        time.sleep(0.1)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("start", "status", "preflight"))
+    action = parser.parse_args().action
+    try:
+        if action == "start":
+            state = start()
+        elif action == "preflight":
+            preflight()
+            state = {"handoff_prepared": True}
+        else:
+            state = inventory()
+            if not state:
+                raise RuntimeError("sensor firmware inventory is not ready")
+        print(json.dumps({"boot_id": BOOT_ID.read_text().strip(), **state,
+                          "scope": "experimental transport, not calibrated IIO support"}))
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print("nothing-tetris-sensors: " + str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

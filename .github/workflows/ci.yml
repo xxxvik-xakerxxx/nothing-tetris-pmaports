@@ -76,6 +76,10 @@ jobs:
             upstream/device-modules
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
+      - name: Validate sensor startup and sample ABI
+        run: |
+          python3 scripts/tests/test-sensor-startup.py
+          python3 scripts/tests/test-sensor-samples.py
       - name: Validate SCP recovery memory contract
         run: python3 scripts/check-scp-region-host.py upstream/device-modules
       - name: Validate IMX882 reset gate

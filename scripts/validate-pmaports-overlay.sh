@@ -709,6 +709,11 @@ validate_sensor_transport() {
 	grep -Fq 'WRITE_ONCE(physical_sensor_mask, mask);' "$inventory_patch"
 	grep -Fq 'WRITE_ONCE(physical_sensor_mask, 0);' "$inventory_patch"
 	grep -Fq 'transceiver_clear_inventory();' "$inventory_patch"
+	grep -Fxq 'disable nothing-tetris-sensors.service' "$device_pkg/89-nothing-tetris.preset"
+	grep -Fxq 'Restart=no' "$device_pkg/nothing-tetris-sensors.service"
+	grep -Fxq 'TimeoutStartSec=65' "$device_pkg/nothing-tetris-sensors.service"
+	grep -Fq '/usr/libexec/nothing-tetris-sensors' "$device_pkg/APKBUILD"
+	python3 "$repo_root/scripts/tests/test-sensor-startup.py"
 
 	if grep -El '^[[:space:]]*(mtk-mbox|mtk_rpmsg_mbox|mtk_tinysys_ipi|scp|hf_manager|sensorhub)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then
