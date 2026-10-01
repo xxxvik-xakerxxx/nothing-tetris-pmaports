@@ -15,7 +15,8 @@
   for live validation. They are now packaged in main, but that complete new
   image has not yet been clean-installed and tested.
 - CI at this checkpoint: pmOS sensor package `35746976387` passed; full image
-  `35746976417` in progress. U-Boot ordinary `35747798350` and explicit SCP
+  `35746976417` passed (rechecked 2026-10-01; clean installation still unverified).
+  U-Boot ordinary `35747798350` and explicit SCP
   profile `35747862279` both passed. No local build or new flash was performed
   for source consolidation.
 

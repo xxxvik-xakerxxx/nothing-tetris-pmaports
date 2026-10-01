@@ -1,5 +1,8 @@
 # Documentation
 
+[Installation, artifact-to-partition mapping and FAQ](INSTALL.md).
+Read the risk disclaimer and firmware prerequisites before flashing.
+
 Use [PORT_SUMMARY.md](PORT_SUMMARY.md) for current hardware status, exact
 tested versions and CI state. [PORT_COMPLETION_PLAN.md](PORT_COMPLETION_PLAN.md)
 contains only remaining work and validation requirements.

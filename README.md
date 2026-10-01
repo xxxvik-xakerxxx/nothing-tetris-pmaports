@@ -3,6 +3,10 @@
 Experimental postmarketOS overlay for `nothing-tetris` (A015, MT6878 /
 Dimensity 7300), Linux 6.18 and Phosh. Not a daily-driver release.
 
+**[Read the installation guide and FAQ before flashing](docs/INSTALL.md).**
+Flashing can erase data or brick the phone. Use at your own risk; the project
+is provided without warranty. See the guide's responsibility disclaimer.
+
 ## Status
 
 Native display and touch are usable; the redraw flicker fix is in main.
