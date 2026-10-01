@@ -114,6 +114,22 @@ firmware slot. Do not overwrite both LK copies during initial bring-up.
 Preserving stock LK alone does NOT preserve a bootable Android installation
 after `super` and `userdata` are overwritten.
 
+**Optional: install to both LK slots after validation.** Once the chosen
+image has successfully booted Linux and you have verified that you can return
+to U-Boot fastboot, you may install that same image to both LK slots, provided
+it is compatible with the firmware/boot context of both slots:
+
+```sh
+fastboot flash lk_a u-boot-tetris-lk.img
+fastboot flash lk_b u-boot-tetris-lk.img
+```
+
+Require each write to succeed before continuing. This replaces both stock LK
+copies: keep off-device stock backups and an independent recovery method.
+The experimental SCP profile is currently validated only for slot A;
+successful boot from A does not establish slot-B SCP/firmware compatibility.
+Keep B stock until that compatibility is established for the selected image.
+
 Ordinary U-Boot CI builds leave SCP preparation disabled. The explicit SCP
 profile needs all three diagnostic inputs and the matching pinned firmware;
 the generic minimum U-Boot in the pmOS manifest is not sufficient evidence
