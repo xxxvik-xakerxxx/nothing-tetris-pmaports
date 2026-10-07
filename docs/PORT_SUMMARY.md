@@ -32,8 +32,12 @@
 is live-installed, with rotation and automatic brightness confirmed again.
 It skips duplicate scalar callbacks, not hardware sampling or validation.
 No measured battery/FPS gain is claimed. The current shared candidate is
-kernel r168, source `d4eba5e`, CI `37592121416`; preliminary checks passed
-and the full image is building. It includes driver fixes for active GPU-rail
+kernel r168, source `fdf549c`, CI `37600980145`. The preceding run
+`37592121416` built the kernel package, then failed in our evidence collector
+while recursively entering a chroot's mounted `/proc`. Discovery now visits
+only `chroot_*/home/pmos/build/src/*/Module.symvers`; nine collector tests pass,
+including mounted-tree exclusion and ambiguous-kernel rejection. The new full
+image run is in progress with unchanged kernel patches. It includes fixes for active GPU-rail
 voltage readback and GNSS clock-read error propagation, not GPU acceleration
 or navigation enablement. The first r168 validation run failed on an obsolete
 literal blocker-string assertion; the assertion was updated without removing
@@ -41,6 +45,17 @@ the runtime activation boundary. The installed phone remains on r167.
 The new separate kernel-export artifact is for dependency analysis, not
 runtime enablement. Current live modem handoff remains `no-fdt`; there is
 no modem, render node or camera node. GNSS transport is inactive.
+
+U-Boot modem prerequisites now on `master`: `f7ed9f7f6b` accepts bounded
+zero-tail 48-byte stock v3 descriptors; `b2917cce8f` verifies signed modem
+headers/payloads (full CI `37597316422` passed). `bbbc3b06c5` adds a bounded
+relative ROM/DSP layout planner for the observed v6/DRDI-mode-3 profile; native
+tests passed in CI `37601037773`, with the full build still running. The exact
+stock LK skips separate DRDI loading in mode 3. These are unactivated loader
+prerequisites, not modem boot: device-root/rollback policy, physical reservations,
+remapping, secure reset/protection and CCCI publication remain unresolved.
+See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/bbbc3b06c5/doc/board/mediatek/mt6878-tetris.rst).
+Neither these U-Boot candidates nor r168 have been flashed on the phone.
 
 A 60-second USB-attached idle capture passed on the same boot
 (`local/live-logs/20261007T074856Z-172.16.42.1-idle-delta`). CPU idle counters
