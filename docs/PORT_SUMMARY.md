@@ -55,7 +55,8 @@ planner: region/DSP/padding flags, overflow-safe base arithmetic, full reservati
 coverage and an atomic 32-block limit; full CI `37603138572` passed.
 `b9d96e38da` adds full-window remap bounds and masked register expectations:
 the audited ATF maps 512 MiB in 32 MiB pages, not only the ROM's 480 MiB
-declaration. CI `37604538052` is running. No memory is allocated/freed and no
+declaration. Full CI `37604538052` passed, including native bounds tests.
+No memory is allocated/freed and no
 protection SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
 but still marks DRDI memory windows. These are unactivated loader
 prerequisites, not modem boot: device-root/rollback policy, physical reservations,
