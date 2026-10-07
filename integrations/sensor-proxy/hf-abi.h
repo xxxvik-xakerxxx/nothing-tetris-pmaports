@@ -14,6 +14,23 @@ struct hf_event {
         int32_t words[16];
 } __attribute__((packed));
 struct hf_command { uint8_t sensor, action, length, reserved, data[48]; };
+struct hf_scalar_state { int valid; int32_t value; };
+
+/* Only scalar properties can skip duplicates: accelerometer callbacks also
+ * drive orientation timing. Reset on every new claim to publish its first value. */
+static inline int
+hf_scalar_changed(struct hf_scalar_state *state, uint8_t sensor, int32_t raw)
+{
+        int32_t value;
+        if ((sensor != 5 && sensor != 8) || raw < 0)
+                return 1;
+        value = sensor == 8 ? raw == 0 : raw;
+        if (state->valid && state->value == value)
+                return 0;
+        state->valid = 1;
+        state->value = value;
+        return 1;
+}
 _Static_assert(sizeof(struct hf_packet) == 68, "HF ioctl ABI");
 _Static_assert(sizeof(struct hf_info) == 40, "HF info ABI");
 _Static_assert(sizeof(struct hf_event) == 76, "HF event ABI");

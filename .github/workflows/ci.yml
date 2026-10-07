@@ -38,6 +38,8 @@ jobs:
         run: sh ./scripts/check-mt6878-display-route.sh
       - name: Validate DRM sequence measurement
         run: python3 ci/test-drm-sequence.py
+      - name: Test kernel export evidence collector
+        run: python3 scripts/tests/test-kernel-build-evidence.py
       - name: Test greeter rootfs gate
         run: python3 ci/test-greetd-rootfs.py
       - name: Fetch native display source
@@ -193,6 +195,17 @@ jobs:
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax linux-postmarketos-mediatek-mt6878 --arch aarch64 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
+      - name: Preserve configured kernel exports and DTB
+        run: |
+          python3 /work/scripts/collect-kernel-build-evidence.py \
+            /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA"
+      - name: Upload configured kernel evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: nothing-tetris-kernel-build-evidence
+          path: /work/out/kernel-build-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Build device package
         run: |
           cd /work/upstream/pmbootstrap

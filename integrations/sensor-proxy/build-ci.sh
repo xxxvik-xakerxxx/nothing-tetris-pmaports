@@ -30,7 +30,7 @@ cd "$dest/testing/iio-sensor-proxy-tetris"
 abuild-keygen -a -n
 cp /root/.config/abuild/*.pub /etc/apk/keys/
 REPODEST="$dest/packages" abuild -F -d
-cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r0.apk" "$dest/artifact/"
+cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r1.apk" "$dest/artifact/"
 cd "$dest/artifact"
 sha256sum iio-sensor-proxy monitor-sensor ./*.apk ./*.conf ./*.rules > SHA256SUMS
 printf '%s\n' "${GITHUB_SHA:?CI source commit required}" > source-commit

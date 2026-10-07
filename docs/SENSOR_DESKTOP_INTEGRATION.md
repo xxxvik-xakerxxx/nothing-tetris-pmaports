@@ -31,6 +31,18 @@ remains disabled by default pending lifecycle validation.
 
 ## Live evidence
 
+### Scalar callback optimization candidate
+
+Package `3.9-r1` suppresses repeated equal light values and repeated equal
+near/far states in our HF adapter. It preserves timestamp/error validation,
+the first sample deadline, all transitions and the first value after every
+new claim. Accelerometer delivery, sampling periods and upstream desktop
+code are unchanged. ABI tests include zero light, negative-value rejection
+handoff, proximity transitions and claim reset. CI/runtime validation is
+pending; no battery or frame-rate improvement has been measured.
+
+### Original behavior verification
+
 Boot: `126ad547-de18-4874-bd8d-959aaeadd4f4`, kernel `7.2.1-r167`.
 Installed U-Boot: `bf75c572e16079a36ab43a032be3360c3e93250c`.
 The binary is from CI `35742898933`, source `37b2bc9`, SHA256:

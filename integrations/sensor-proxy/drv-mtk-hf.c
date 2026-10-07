@@ -19,6 +19,7 @@ typedef struct {
         uint32_t gain;
         gboolean enabled;
         int64_t timestamp;
+        struct hf_scalar_state scalar;
         AccelVec3 *matrix;
         GUdevDevice *device;
 } HfData;
@@ -125,6 +126,8 @@ hf_read(int fd, GIOCondition condition, gpointer userdata)
                         g_error("HF sensor timestamp regressed");
                 data->timestamp = event->timestamp;
                 g_clear_handle_id(&data->deadline, g_source_remove);
+                if (!hf_scalar_changed(&data->scalar, data->sensor, event->words[0]))
+                        continue;
                 if (data->sensor == 1) {
                         AccelReadings values;
                         AccelVec3 v = { event->words[0], event->words[1], event->words[2] };
@@ -164,6 +167,7 @@ hf_set_polling(SensorDevice *sensor, gboolean enabled)
                 if (data->fd < 0 || info.gain != data->gain)
                         g_error("HF sensor identity changed or transport unavailable");
                 data->timestamp = 0;
+                data->scalar = (struct hf_scalar_state) { 0 };
         }
         hf_control(data, enabled);
         if (enabled) {

@@ -11,6 +11,7 @@ Build/package helpers used by CI remain here; do not run all scripts as a batch.
 | Overlay/package validation | `validate-pmaports-overlay.sh` |
 | Apply overlay and kernel config | `apply-pmaports-patches.sh`, `apply-kernel-config-overlay.sh` |
 | Verify downloaded install image | `verify-ci-install-artifacts.sh` |
+| Preserve exact CI kernel exports/config/DTB | `collect-kernel-build-evidence.py` |
 | Verify radio bundle | `verify-radio-live-artifact.sh` |
 | Inspect/expand bounded sparse artifact | `inspect_ci_sparse.py` |
 | Display routing | `check-mt6878-display-route.sh` |

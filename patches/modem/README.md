@@ -8,6 +8,16 @@ They target Nothing B4.1 device modules
 
 ## CCMNI
 
+CI now collects the built kernel's `Module.symvers`, configuration, compiler
+identity, release, System.map and native DTB into the separate
+`nothing-tetris-kernel-build-evidence` artifact, before rootfs generation.
+The manifest binds every file to its SHA256 and the workflow source commit.
+The collector rejects ambiguous/missing builds. This supplies configured
+export evidence for a subsequent modem dependency comparison; it is not a
+complete external-module SDK or a successful modem modpost. First artifact
+generation is still pending CI. The live 2026-10-07 boot still publishes
+`no-fdt` / `invalid` / `not-checked`, with no detected modem.
+
 0001 adapts the cellular network interface to size-aware sysctl registration
 and the new NAPI GRO node. The sysctl remains `net/tcp_pacing_shift`; its
 sentinel is removed because register_sysctl() supplies the array size.
