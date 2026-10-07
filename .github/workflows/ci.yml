@@ -127,9 +127,8 @@ jobs:
 
   build-pmaports:
     needs: validate-overlay
-    if: ${{ !inputs.validation_only }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.validation_only }}
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     container:
       image: alpine:3.23.3
       options: --privileged --ulimit nofile=1048576:1048576
