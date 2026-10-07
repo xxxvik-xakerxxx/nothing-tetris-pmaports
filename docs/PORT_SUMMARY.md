@@ -52,13 +52,16 @@ headers/payloads (full CI `37597316422` passed). `bbbc3b06c5` adds a bounded
 relative ROM/DSP layout planner for the observed v6/DRDI-mode-3 profile; native
 full CI `37601037773` passed. `b510cbb875` adds the initial physical block-map
 planner: region/DSP/padding flags, overflow-safe base arithmetic, full reservation
-coverage and an atomic 32-block limit. Native tests passed in CI `37603138572`;
-its full build is still running. No memory is allocated/freed and no protection
-SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
+coverage and an atomic 32-block limit; full CI `37603138572` passed.
+`b9d96e38da` adds full-window remap bounds and masked register expectations:
+the audited ATF maps 512 MiB in 32 MiB pages, not only the ROM's 480 MiB
+declaration. CI `37604538052` is running. No memory is allocated/freed and no
+protection SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
 but still marks DRDI memory windows. These are unactivated loader
 prerequisites, not modem boot: device-root/rollback policy, physical reservations,
 remapping, secure reset/protection and CCCI publication remain unresolved.
-See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/b510cbb875/doc/board/mediatek/mt6878-tetris.rst).
+See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/b9d96e38da/doc/board/mediatek/mt6878-tetris.rst)
+and the [exact ATF/LK memory-contract trace](MODEM_SIM_EVIDENCE_PLAN.md#2026-10-07-remap-and-protection-contract).
 Neither these U-Boot candidates nor r168 have been flashed on the phone.
 
 A 60-second USB-attached idle capture passed on the same boot

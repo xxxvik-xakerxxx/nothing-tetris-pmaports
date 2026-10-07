@@ -746,6 +746,45 @@ Actual configured exports and modpost remain required. The vendor page-pool
 CMA ownership, recycling and DMA lengths need runtime-oriented review before
 activation. No .ko, CI rebuild, firmware write or live modem probe was made.
 
+### 2026-10-07 remap and protection contract
+
+Offline analysis uses the LK container SHA256
+`29669b7a19dcb75b410cd8e35376c98892c0629cefd9eff7a5b01022f5667a1f`
+and the installed ATF payload SHA256
+`05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e`.
+Offsets are relative to each payload, excluding the 512-byte container header.
+The ATF container file hash `ee71f42f...` recorded above includes that header;
+it is not a different ATF version. Neither input was executed on the phone.
+
+ATF's `0xc200040b` dispatcher at `0xbe28` sends commands 1/2 to `0x1bbe0`
+and `0x1bcf0`. They encode sixteen consecutive 32 MiB pages into six bank-0
+remap registers, using ten bits per physical page. They check only whether
+the base lies inside the reported DRAM, returning `-7` otherwise; a dispatcher
+lock can return `-15`. This does not validate the entire 512 MiB window or
+alignment. U-Boot `b9d96e38da` therefore bounds the complete reservation,
+requires 32 MiB alignment and rejects truncation beyond the 35-bit aperture.
+Its pure planner computes masked expectations, without SMC or MMIO access.
+Command 2 returns a register readback in x0, not a zero-only success code;
+LK's check for `-15` alone is insufficient for a new caller.
+
+LK `0x8196c` stages 24-byte rows at `0x198678`: 64-bit base, 32-bit size,
+flags, logical ID and hardware slot. `0x81804`, called from `0x253cc`, later
+iterates twelve rows. It skips rows without flag bit 0 or with bit 7 set;
+bit 1 selects the extra `0x7ee38` call. That wrapper issues `0x82000415`
+command 6 with slot and logical ID. The common `0x7ef84` path forms the
+start/end range; its platform-type-2 branch issues `0x82000415` command 0
+with start/end shifted by 12 and the slot. The other platform branch writes
+registers directly. LK's loop does not check these helper return values.
+
+Still required: trace the installed ATF's `0x82000415` handler, establish the
+active platform selector and endpoint semantics, permission presets, locks,
+and failure/readback behavior. Do not copy the unchecked LK loop into a
+boot-time caller. No reservation, padding reclamation, protection programming,
+firmware start or CCCI publication has been enabled. Local emulator execution
+aborted in the emulator process and supplies no validation evidence; native
+U-Boot code tests and builds run only in CI. This remains `Untested` modem
+bring-up infrastructure, not working SIM/calls.
+
 ## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
