@@ -1,0 +1,3 @@
+# CI-only APKBUILD suffix, sourced after abuild's global configuration.
+# Keep results until collect-kernel-build-evidence.py has exported them.
+CLEANUP=""

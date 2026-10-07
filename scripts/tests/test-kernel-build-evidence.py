@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import shutil
+import subprocess
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
@@ -84,6 +86,43 @@ class EvidenceTests(unittest.TestCase):
     def test_invalid_commit(self):
         with self.assertRaises(ValueError):
             collector.collect(self.root, self.out, "main")
+
+    def cleanup_after_build(self, retain):
+        # abuild sources APKBUILD after its configuration and then runs
+        # cleanup $CLEANUP after a successful build, before our CI collector.
+        config = 'CLEANUP="srcdir pkgdir tmpdir"\n'
+        if retain:
+            suffix = Path(__file__).parents[2] / "ci/retain-kernel-evidence.abuild"
+            config += suffix.read_text()
+        config += '\nprintf "%s" "$CLEANUP"\n'
+        targets = subprocess.check_output(["sh", "-c", config], text=True).split()
+        build = self.sources.parent
+        for name in targets:
+            relative = {"srcdir": "src", "pkgdir": "pkg", "tmpdir": "tmp"}[name]
+            directory = build / relative
+            if directory.exists():
+                shutil.rmtree(directory)
+
+    def test_reproduce_successful_build_cleanup(self):
+        self.cleanup_after_build(retain=False)
+        with self.assertRaisesRegex(ValueError, "found 0"):
+            self.run_collect()
+        self.assertFalse(self.out.exists())
+
+    def test_ci_retains_evidence_after_successful_build(self):
+        self.cleanup_after_build(retain=True)
+        result = self.run_collect()
+        self.assertEqual(len(result["sha256"]), len(collector.FILES))
+
+    def test_ci_suffix_precedes_kernel_build(self):
+        workflow = (Path(__file__).parents[2] / ".github/workflows/ci.yml").read_text()
+        start = workflow.index("      - name: Build kernel package\n")
+        end = workflow.index("      - name: Preserve configured kernel exports and DTB\n")
+        build = workflow[start:end]
+        self.assertLess(build.index("cat /work/ci/retain-kernel-evidence.abuild"),
+                        build.index("build --force --lax linux-postmarketos-mediatek-mt6878"))
+        self.assertIn("/work/upstream/pmaports/device/testing/"
+                      "linux-postmarketos-mediatek-mt6878/APKBUILD", build)
 
 
 if __name__ == "__main__":

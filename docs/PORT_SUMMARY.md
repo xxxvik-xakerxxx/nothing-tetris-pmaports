@@ -35,12 +35,16 @@
 is live-installed, with rotation and automatic brightness confirmed again.
 It skips duplicate scalar callbacks, not hardware sampling or validation.
 No measured battery/FPS gain is claimed. The current shared candidate is
-kernel r168, source `fdf549c`, CI `37600980145`. The preceding run
+kernel r168. Run `37600980145`, source `fdf549c`, built the kernel package
+but failed before image creation: abuild removed the build tree before the
+evidence collector ran. CI now appends a package-local `CLEANUP=""` override
+to the mirrored kernel APKBUILD, retaining results for the collector without
+changing the shipped kernel. Twelve collector tests pass, including cleanup
+reproduction and retention. A full CI rerun is still required. The preceding run
 `37592121416` built the kernel package, then failed in our evidence collector
 while recursively entering a chroot's mounted `/proc`. Discovery now visits
-only `chroot_*/home/pmos/build/src/*/Module.symvers`; nine collector tests pass,
-including mounted-tree exclusion and ambiguous-kernel rejection. The new full
-image run is in progress with unchanged kernel patches. It includes fixes for active GPU-rail
+only `chroot_*/home/pmos/build/src/*/Module.symvers`, with mounted-tree exclusion
+and ambiguous-kernel rejection tested. The candidate includes fixes for active GPU-rail
 voltage readback and GNSS clock-read error propagation, not GPU acceleration
 or navigation enablement. The first r168 validation run failed on an obsolete
 literal blocker-string assertion; the assertion was updated without removing

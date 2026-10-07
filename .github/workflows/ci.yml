@@ -194,6 +194,11 @@ jobs:
             pmb-${{ runner.os }}-
       - name: Build kernel package
         run: |
+          # Set package-local cleanup policy after abuild's global defaults.
+          # pmbootstrap's global abuild.conf edit did not retain this build.
+          printf '\n' >> /work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
+          cat /work/ci/retain-kernel-evidence.abuild >> \
+            /work/upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
           cd /work/upstream/pmbootstrap
           ./pmbootstrap.py --as-root \
             --work /pmwork/work \
