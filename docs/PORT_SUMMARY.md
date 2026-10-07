@@ -5,8 +5,9 @@
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `791756c966e2b40f3d190c77de00ed7710e2f1e5` (new remap transaction;
-  CI `37639979367` passed; installed loader remains `1d4cb6496b`).
+  `fef0154b0404210799a6851ac2c07dcbc9e9c736` (optional RAM-only modem
+  reservation diagnostic; CI `37643162425` pending, not flashed).
+  Installed loader remains `1d4cb6496b`; remap-only CI `37639979367` passed.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
@@ -107,6 +108,18 @@ These inherited fragments cannot authorize the new loader's full-window
 mapping. Contiguous reservation before firmware copy/remap and kernel memory
 discovery remains necessary; no SMC was attempted on the running phone.
 
+U-Boot `fef0154b04` adds an opt-in allocator for the complete window after
+Linux image and existing SCP/conninfra placement. It uses free LMB memory,
+checks single-bank containment, and publishes no-map plus memreserve entries
+transactionally. Malformed/overlapping DT ranges, duplicate diagnostics and
+publication failures leave the original DT unchanged. No handset address is
+embedded, no firmware is copied and no modem SMC or startup is performed.
+The ordinary build leaves this disabled. Explicit CI `37643162425` enables
+`modem_reserve` and all three existing SCP inputs; compilation/native tests
+and hardware validation are pending. Do not flash the default SCP-disabled
+artifact over the installed sensor-capable loader. Successful reservation
+would consume 512 MiB of Linux RAM without providing SIM functionality yet.
+
 U-Boot `791756c966` adds a checked two-stage remap executor with injectable
 transport, explicit consumed/failed state and verification of every owned
 register field. Native tests and full ARM64 CI `37639979367` passed.
@@ -129,8 +142,8 @@ silent ATF address truncation; full CI `37608301896` passed. Offline execution
 of the pinned ATF handler passes 64 emulated scenarios, including one-shot
 slot rejection and permission-preset writes. This does not test physical
 protection or activate a modem boot path.
-No memory is allocated/freed and no
-protection SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
+These pure planners allocate no memory and execute no
+protection SMC. The exact stock LK skips separate DRDI loading in mode 3,
 but still marks DRDI memory windows. These are unactivated loader
 prerequisites, not modem boot: device-root/rollback policy, physical reservations,
 remapping, secure reset/protection and CCCI publication remain unresolved.
