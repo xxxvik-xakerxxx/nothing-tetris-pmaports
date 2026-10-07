@@ -4,6 +4,14 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
+2026-10-07: the separate `patches/camera-identity/0002` candidate adds the
+missing DOVDD settling delay and makes shutdown failures visible while
+continuing reverse-order cleanup. CI now tests 384 mocked startup/shutdown
+combinations and two negative mutants; new results are pending. It follows
+the logical reset candidate and is not packaged or enabled. On the current
+r168 cold boot `2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`, neither video4linux nor
+media class devices exist. No I2C transaction or camera power change was made.
+
 Candidate patch `0049-media-i2c-imx882-identity.patch` adds the first bounded
 native identification boundary for the main camera. It reads only physical ID
 registers `0x0016/0x0017` and expects raw silicon ID `0x8202`; the TXD module's

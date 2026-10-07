@@ -2,6 +2,28 @@
 
 Status: Untested on hardware; host regression passed. Not packaged or enabled.
 
+## Shutdown candidate, 2026-10-07
+
+`0002-imx882-identity-check-shutdown.patch` follows the logical reset fix.
+It adds the vendor's missing 1 ms DOVDD settling delay before MCLK selection,
+checks pinctrl and regulator shutdown results, attempts all owned rails in
+reverse order even after an error, and returns the first teardown error.
+The probe logs cleanup failure, rejects an otherwise successful identity
+probe on failed cleanup, and preserves an earlier power/read error.
+
+The CI runner now additionally exercises 384 combinations: success/eleven
+power-on failures crossed with all 32 pinctrl/rail shutdown failure masks.
+It checks that failed disables are not reported as successful, no later
+cleanup is skipped, reset remains asserted, and DOVDD settles before MCLK.
+Mutants removing the delay or swallowing the shutdown result must fail.
+Native tests run only in CI. `check-reset.py --check-only` validates both
+patch applications without local compilation and has passed. The new native
+tests and full-driver kernel ABI validation are not yet claimed as passed.
+
+Both patches remain outside APKBUILD; no camera node, rail, driver or service
+is enabled. Shared-rail ownership, exclusive clock control and physical
+shutdown behavior still require proof before a live identity probe.
+
 Authoritative integration baseline: aecf4f44f4170952709a7dd514538f0d75b55e22.
 This worktree is at 5944ffd1300e6ce1ebc2be54a377be29b3bec2a9, a divergent
 camera-clock commit. Its 0049 identity driver and 0055 disabled fixture are
@@ -61,9 +83,8 @@ integrated; APKBUILD, its checksums, DT, I2C8 and kernel config are untouched.
 ## Remaining blockers and next live gate
 
 Before authorizing identity: verify complete shared DOVDD/AFVDD consumer
-ownership, exclusive CAMTG2 rate control and actual 24 MHz; add the missing
-1 ms DOVDD settling delay from pw_seq; make pinctrl/regulator shutdown errors
-visible and reject success on failed teardown. Compile the complete driver
+ownership, exclusive CAMTG2 rate control and actual 24 MHz; validate the new
+DOVDD-delay and teardown-error candidate above. Compile the complete driver
 against the pinned kernel and review the final DT. This reset candidate
 alone does not make the baseline identity probe ready for a phone.
 

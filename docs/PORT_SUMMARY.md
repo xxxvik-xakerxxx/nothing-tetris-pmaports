@@ -6,7 +6,7 @@
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `e0399e8a9d8552aebdb6ce9869dd7352d5506088` (temporary modem staging
-  lifetime; CI `37655372236` pending, not installed). Installed loader remains
+  lifetime; CI `37655372236` passed, not installed). Installed loader remains
   `fef0154b04`: first warm reservation and one cold automatic sensor-start
   check passed; repeated cold starts, lifecycle and visual regression pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
@@ -128,7 +128,7 @@ is returned after cleanup, never references to freed firmware data. The
 separate modem window and outgoing Linux DT are not changed. No boot caller,
 slot inference or root pin is installed; execution and device policy gates
 remain open. Local Python reference checks passed (7 executed, 8 skipped);
-native lifetime tests and ARM64 compilation are pending in CI `37655372236`.
+native lifetime tests and full ARM64 compilation passed in CI `37655372236`.
 
 The next modem candidate, `0006-dpmaif-use-standard-allocation.patch.vendor`,
 removes automatic selection of the incompatible vendor CMA pool while leaving

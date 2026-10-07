@@ -8,6 +8,13 @@ platform device, so Panthor cannot probe and no render node is expected.
 from patch `0009` are present. This is build support, not proof that the GPU
 power, clock, firmware, or memory paths are usable.
 
+Read-only device check on 2026-10-07, r168 cold boot
+`2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`: DRM exposes display `card0` only,
+with no render node. Registered regulator names include the existing MT6369
+and connectivity supplies, but no MT6319 VBUCK2/VGPU or VSRAM_CPUM provider.
+This confirms that enabling Panthor alone would not close the supply chain.
+No regulator voltage/state read, MMIO access or GPU probe was performed.
+
 The compile-only prerequisite is now enforced by
 `scripts/check-panthor-compile-only.sh` and documented in
 `docs/PANTHOR_COMPILE_ONLY.md`. It links `panthor.o`, traces the pinned

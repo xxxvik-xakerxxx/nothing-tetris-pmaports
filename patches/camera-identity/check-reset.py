@@ -7,6 +7,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
+import argparse
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -43,6 +44,10 @@ def power_source(source):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-only", action="store_true",
+                        help="validate patch application without compiling C")
+    args = parser.parse_args()
     require_sha256(BASE, BASE_SHA256)
     require_sha256(FIXTURE, FIXTURE_SHA256)
     fixture = (REPO / FIXTURE).read_text()
@@ -59,6 +64,15 @@ def main():
         source = target.read_text()
         assert 'devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH)' in source
         assert source.count("gpiod_set_value_cansleep") == 3
+        cleanup = HERE / "0002-imx882-identity-check-shutdown.patch"
+        run("git", "apply", "--check", str(cleanup), cwd=root)
+        run("git", "apply", str(cleanup), cwd=root)
+        complete = target.read_text()
+        assert "cleanup_ret = imx882_power_off" in complete
+        assert "ret = cleanup_ret;" in complete
+        if args.check_only:
+            print("PASS: reset + shutdown patches apply; no local compilation")
+            return
         compiler = shlex.split(os.environ.get("CC", "cc"))
         for label, code in (("fixed", source), ("baseline", original)):
             (root / "identity-under-test.h").write_text(power_source(code))
@@ -73,6 +87,31 @@ def main():
                 assert result.returncode != 0, "test failed to reject inverted baseline"
                 assert "Assertion" in result.stderr or "assertion" in result.stderr
                 print("PASS: unmodified baseline rejected by the same host test")
+        power = power_source(complete)
+        mutants = {
+            "fixed": power,
+            "ignore-shutdown": power.replace("return ret;\n}\n\nstatic int imx882_power_on",
+                                               "return 0;\n}\n\nstatic int imx882_power_on"),
+            "missing-dovdd-delay": power.replace(
+                "*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);\n\tusleep_range(1000, 1100);",
+                "*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);"),
+        }
+        for label, code in mutants.items():
+            if label != "fixed":
+                assert code != power, f"mutant not applied: {label}"
+            (root / "identity-under-test.h").write_text(code)
+            binary = root / ("cleanup-" + label)
+            run(*compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
+                "-DTEST_CLEANUP", "-I", str(root), str(HERE / "reset-test.c"),
+                "-o", str(binary))
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
+            if label == "fixed":
+                assert result.returncode == 0, result.stderr
+                print(result.stdout.strip())
+            else:
+                assert result.returncode != 0, f"mutant survived: {label}"
+                assert "Assertion" in result.stderr or "assertion" in result.stderr
+                print(f"PASS: rejected {label}")
 
 
 if __name__ == "__main__":

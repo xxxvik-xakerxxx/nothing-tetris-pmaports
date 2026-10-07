@@ -32,7 +32,17 @@ It did not submit firmware fragments or start navigation.
 The warning `emi_mng_get_gps_emi failed to find gps node` still needs
 source-level cleanup despite the later successful supervised cycle.
 
-These are dated transport results, not a new GNSS test on r167.
+These are dated transport results, not a new GNSS test on r168.
+
+Read-only inspection on 2026-10-07, r168 boot
+`2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`, confirms the root DT path
+`/gps@18c00000` is absent. The pinned conninfra function
+`emi_mng_get_gps_emi()` hard-codes that path; the existing warning is therefore
+not evidence of a failed satellite receiver. The live conninfra node has
+`memory-region` and `ro-gps-emi-size`, but those alone do not authorize deriving
+and programming another GPS base address. Do not merely suppress the warning
+or invent a DT node: reconcile the platform transport and loader mapping
+contracts first. GNSS transport was not started in this check.
 
 ## Userspace ownership
 
