@@ -3,26 +3,27 @@
 ## Canonical sources and installed device
 
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
-  source `24b86a8` (before this documentation update).
+  source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `1d4cb6496b02971dbdb537e92f921d036f29ec7a`.
-- Installed clean kernel: `7.2.1-r167`, Linux `6.18.0 #168`, CI
-  `35746976417`, source `7c0ce0389c03d2820155bde72192aca95281de8f`.
+- Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
+  `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
   SCP-profile CI `37609012691`, slot A only; stock slot B retained. The earlier
   `bf75c572e160` loader is backed up locally for rollback. Warm boot and image
-  readback passed. One subsequent cold sensor startup passed; greeter sensor
-  behavior and visual display/touch checks remain separate open checks.
+  readback passed. One subsequent r167 cold sensor startup passed; greeter
+  sensor behavior remains unresolved. Display/touch were confirmed on r168.
 - The complete main CI image was clean-installed on 2026-10-07 to `super`
-  and `userdata`; device package `8-r17` and the sensor backend came from
+  and `userdata`; device package `8-r17` and SensorProxy `3.9-r1` came from
   the image, with no runtime implementation replacement. Root expanded to
-  104.5 GiB. Display/touch were visually confirmed and USB transfer gates
-  passed before and after starting the packaged sensor service.
-- All five physical sensor classes and SensorProxy light updates passed
+  104.5 GiB. Display/touch were visually confirmed and a 32 MiB USB transfer
+  passed. Sensor startup was disabled in the fresh image; its opt-in was
+  restored without starting modules. The r168 cold-start check is pending.
+- On the previous r167 installation, all five physical sensor classes and SensorProxy light updates passed
   after one supervised service start and a subsequent automatic cold start
   after user-confirmed 10-second poweroff. Startup remains opt-in. See the exact
   [clean-install evidence](SENSOR_INTEGRATION_PATCH.md#clean-ci-installation-2026-10-07).
-- CI at this checkpoint: pmOS sensor package `35746976387` passed; full image
+- CI at the previous r167 checkpoint: pmOS sensor package `35746976387` passed; full image
   `35746976417` passed (rechecked and installed 2026-10-07).
   U-Boot ordinary `35747798350` and explicit SCP
   profile `35747862279` both passed. At that clean-install checkpoint the
@@ -31,16 +32,17 @@
 
 ## Hardware summary
 
-2026-10-07 follow-up: our SensorProxy `3.9-r1` from CI `37589615272`
-is live-installed, with rotation and automatic brightness confirmed again.
+Before the r168 clean install, SensorProxy `3.9-r1` from CI `37589615272`
+was live-installed, with rotation and automatic brightness confirmed again.
 It skips duplicate scalar callbacks, not hardware sampling or validation.
-No measured battery/FPS gain is claimed. The current shared candidate is
-kernel r168. Run `37600980145`, source `fdf549c`, built the kernel package
+No measured battery/FPS gain is claimed. Kernel r168 is now installed from
+successful CI `37614381947`. Run `37600980145`, source `fdf549c`, built the kernel package
 but failed before image creation: abuild removed the build tree before the
 evidence collector ran. CI now appends a package-local `CLEANUP=""` override
 to the mirrored kernel APKBUILD, retaining results for the collector without
 changing the shipped kernel. Twelve collector tests pass, including cleanup
-reproduction and retention. A full CI rerun is still required. The preceding run
+reproduction and retention. The full rerun passed, including kernel evidence
+upload and install-image creation. The preceding run
 `37592121416` built the kernel package, then failed in our evidence collector
 while recursively entering a chroot's mounted `/proc`. Discovery now visits
 only `chroot_*/home/pmos/build/src/*/Module.symvers`, with mounted-tree exclusion
@@ -48,10 +50,36 @@ and ambiguous-kernel rejection tested. The candidate includes fixes for active G
 voltage readback and GNSS clock-read error propagation, not GPU acceleration
 or navigation enablement. The first r168 validation run failed on an obsolete
 literal blocker-string assertion; the assertion was updated without removing
-the runtime activation boundary. The installed phone remains on r167.
+the runtime activation boundary.
 The new separate kernel-export artifact is for dependency analysis, not
 runtime enablement. Current live modem handoff remains `no-fdt`; there is
 no modem, render node or camera node. GNSS transport is inactive.
+
+### r168 clean installation
+
+Both `super` and `userdata` writes completed successfully. The complete
+download matched GitHub's archive digest; all three image checksums passed.
+Boot `0c1ef926-a8c5-4b90-9340-8e43981ecbcf` reports r168, active USB/SSH,
+`wlan0`, `hci0`, connected/enabled DSI and the touchscreen input device.
+The user confirmed normal display and touch. No system units were failed.
+The installed `/boot/boot_image.itb` hash matches the CI artifact. The 32 MiB
+USB transfer passed. These checks do not establish Wi-Fi association,
+Bluetooth pairing, GPU acceleration, modem operation, GNSS fixes or cameras.
+
+SHA256:
+
+- Boot partition image: `a102a9ace52760ebbae866012ad642e061a7711eed54a69aea14ac422637ae4b`.
+- Sparse root image: `cf61bd6adca5f086a032d2339a354ad4c99283bc1020f7ad34798b51582abc16`.
+- FIT: `73a565bd4bd16b3c59afd5d45e591611679f5313e5a8b48b6dd82a02ec9e0a28`.
+
+The packaged sensor service was disabled on the fresh rootfs. It was enabled
+for the next boot, without a module load/reload on this warm boot, then the
+phone was powered off. Cold startup and sensor behavior remain pending;
+this is not evidence of zero-configuration sensor startup. Local logs are in
+`local/ci-run-37614381947/` in the parent workspace. The LK slots and factory
+partitions were not flashed; both loader hashes matched before installation.
+
+### Loader prerequisites
 
 U-Boot modem prerequisites now on `master`: `f7ed9f7f6b` accepts bounded
 zero-tail 48-byte stock v3 descriptors; `b2917cce8f` verifies signed modem
@@ -76,7 +104,7 @@ remapping, secure reset/protection and CCCI publication remain unresolved.
 See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/1167c6c1d9/doc/board/mediatek/mt6878-tetris.rst)
 and the [exact ATF/LK memory-contract trace](MODEM_SIM_EVIDENCE_PLAN.md#2026-10-07-remap-and-protection-contract).
 The explicit SCP-profile build `37609012691` of `1d4cb6496b` was flashed to
-`lk_a` on 2026-10-07; r168 has not been flashed. Ordinary push builds have
+`lk_a` on 2026-10-07 and retained for the r168 installation. Ordinary push builds have
 SCP preparation disabled and were not substituted for the sensor-ready profile.
 The 3,275,616-byte LK artifact passed manifest, checksum, aligned-payload and
 partition-size checks. Readback from the phone matches SHA256
