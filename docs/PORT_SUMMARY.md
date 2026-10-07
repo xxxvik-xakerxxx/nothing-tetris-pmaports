@@ -3,14 +3,15 @@
 ## Canonical sources and installed device
 
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
-  source `7c0ce0389c03d2820155bde72192aca95281de8f` (before this documentation update).
+  source `24b86a8` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `a55dc63befc0ec97bd946e412d6c14d3a82b9cc9`.
+  `1d4cb6496b02971dbdb537e92f921d036f29ec7a`.
 - Installed clean kernel: `7.2.1-r167`, Linux `6.18.0 #168`, CI
   `35746976417`, source `7c0ce0389c03d2820155bde72192aca95281de8f`.
-- Installed loader: `bf75c572e16079a36ab43a032be3360c3e93250c`, CI
-  `35718518185`, slot A only; stock slot B retained. Master has the same
-  runtime code, plus documentation and reservation-order CI coverage.
+- Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
+  SCP-profile CI `37609012691`, slot A only; stock slot B retained. The earlier
+  `bf75c572e160` loader is backed up locally for rollback. Warm boot and image
+  readback passed; new-loader cold sensor start and visual checks are pending.
 - The complete main CI image was clean-installed on 2026-10-07 to `super`
   and `userdata`; device package `8-r17` and the sensor backend came from
   the image, with no runtime implementation replacement. Root expanded to
@@ -23,8 +24,9 @@
 - CI at this checkpoint: pmOS sensor package `35746976387` passed; full image
   `35746976417` passed (rechecked and installed 2026-10-07).
   U-Boot ordinary `35747798350` and explicit SCP
-  profile `35747862279` both passed. The existing verified loader was retained;
-  neither LK slot nor factory/calibration partitions were changed.
+  profile `35747862279` both passed. At that clean-install checkpoint the
+  existing loader was retained. The later slot-A update is recorded below;
+  factory/calibration partitions remain unchanged.
 
 ## Hardware summary
 
@@ -68,7 +70,23 @@ prerequisites, not modem boot: device-root/rollback policy, physical reservation
 remapping, secure reset/protection and CCCI publication remain unresolved.
 See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/1167c6c1d9/doc/board/mediatek/mt6878-tetris.rst)
 and the [exact ATF/LK memory-contract trace](MODEM_SIM_EVIDENCE_PLAN.md#2026-10-07-remap-and-protection-contract).
-Neither these U-Boot candidates nor r168 have been flashed on the phone.
+The explicit SCP-profile build `37609012691` of `1d4cb6496b` was flashed to
+`lk_a` on 2026-10-07; r168 has not been flashed. Ordinary push builds have
+SCP preparation disabled and were not substituted for the sensor-ready profile.
+The 3,275,616-byte LK artifact passed manifest, checksum, aligned-payload and
+partition-size checks. Readback from the phone matches SHA256
+`b8baaba76c131c6a47ccfd8ed63a5cdda55337c4b76e5bc6c9e665748324f983`.
+Stock `lk_b` retained SHA256
+`812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.
+
+Warm boot `a4478ecb-7af2-41d2-bba7-553c739e7d17` reports the new U-Boot
+version, unchanged r167 kernel and USB/SSH recovery. The native display
+connector appeared after normal deferred initialization, not at the first
+early probe. SCP stopped at the documented warm-reboot `preflight -16` gate;
+the sensor service refused startup rather than reusing unprepared state.
+The phone was fully powered off for the required cold check. Cold sensor
+startup and visual display/touch confirmation remain pending; this is not a
+completed regression/lifecycle pass. No modem execution was enabled.
 
 A 60-second USB-attached idle capture passed on the same boot
 (`local/live-logs/20261007T074856Z-172.16.42.1-idle-delta`). CPU idle counters
