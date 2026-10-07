@@ -838,8 +838,11 @@ validate_compile_only_boundaries() {
 	test -x "$panthor_vgpu_gate"
 	grep -Fq 'Host-only executable source comparison; success does NOT authorize GPU probe.' \
 		"$panthor_vgpu_gate"
-	grep -Fq 'BLOCKER: enabled-rail ELR2/DBG0 equivalence is unproven; no runtime approval.' \
+	grep -Fq 'PASS: candidate matches vendor active/off readback; no runtime GPU approval.' \
 		"$panthor_vgpu_gate"
+	grep -Fq '0105-regulator-mt6315-read-active-voltage-selector.patch' "$kernel_apkbuild"
+	grep -Fq '+	.get_voltage_sel = mt6315_get_voltage_sel,' \
+		"$kernel_pkg/0105-regulator-mt6315-read-active-voltage-selector.patch"
 	grep -Fq 'This adds no runtime' "$repo_root/docs/GPU_BRINGUP.md"
 	grep -Fq 'VGPU readback prerequisite is enforced by' \
 		"$repo_root/docs/GPU_BRINGUP.md"
