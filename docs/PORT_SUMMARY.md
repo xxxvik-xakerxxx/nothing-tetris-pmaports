@@ -11,7 +11,8 @@
 - Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
   SCP-profile CI `37609012691`, slot A only; stock slot B retained. The earlier
   `bf75c572e160` loader is backed up locally for rollback. Warm boot and image
-  readback passed; new-loader cold sensor start and visual checks are pending.
+  readback passed. One subsequent cold sensor startup passed; greeter sensor
+  behavior and visual display/touch checks remain separate open checks.
 - The complete main CI image was clean-installed on 2026-10-07 to `super`
   and `userdata`; device package `8-r17` and the sensor backend came from
   the image, with no runtime implementation replacement. Root expanded to
@@ -84,9 +85,16 @@ version, unchanged r167 kernel and USB/SSH recovery. The native display
 connector appeared after normal deferred initialization, not at the first
 early probe. SCP stopped at the documented warm-reboot `preflight -16` gate;
 the sensor service refused startup rather than reusing unprepared state.
-The phone was fully powered off for the required cold check. Cold sensor
-startup and visual display/touch confirmation remain pending; this is not a
-completed regression/lifecycle pass. No modem execution was enabled.
+After full poweroff, cold boot `88190cd5-a538-4a6c-9afc-ec73b95d5059`
+reports SCP secure state 3 and error 0. The transport automatically reports
+firmware ready, 24 entries and physical mask 31 at 17.005 seconds; SensorProxy
+starts at 17.432 seconds. User login occurs only at 1245.907 seconds. The user
+reports sensor-driven behavior working after login but not before it. Thus
+hardware/service startup is not login-triggered; the greeter's sensor use is
+an unresolved desktop integration issue, not a demonstrated loader failure.
+USB/SSH recovered and both services remain active. This is one cold-start
+pass, not completed regression/lifecycle coverage or visual display/touch
+confirmation. No modem execution was enabled.
 
 A 60-second USB-attached idle capture passed on the same boot
 (`local/live-logs/20261007T074856Z-172.16.42.1-idle-delta`). CPU idle counters
