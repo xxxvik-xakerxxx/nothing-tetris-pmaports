@@ -8,6 +8,7 @@ git -C "$1" archive ee2be53cb75670b548948636a0db1d1ff112bf12 \
     drivers/misc/mediatek/ccmni/ccmni.c \
     drivers/misc/mediatek/rps/rps_perf.c \
     drivers/misc/mediatek/eccci/fsm/ap_md_mem.c \
+    drivers/misc/mediatek/eccci/hif/Makefile \
     drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.h \
     drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c > "$tmp/source.tar"
 tar -xf "$tmp/source.tar" -C "$tmp"
@@ -16,12 +17,14 @@ for candidate in \
     0002-rps-linux-6.18-headers.patch.vendor \
     0003-mdss-optional-mrdump.patch.vendor \
     0004-dpmaif-page-pool-linux-6.18.patch.vendor \
-    0005-dpmaif-page-pool-dma-length.patch.vendor
+    0005-dpmaif-page-pool-dma-length.patch.vendor \
+    0006-dpmaif-use-standard-allocation.patch.vendor
 do
     (cd "$tmp" && git apply --check "$here/$candidate")
     (cd "$tmp" && git apply "$here/$candidate")
 done
-echo 'PASS: five modem candidates apply to exact B4.1 files; no hardware execution'
+echo 'PASS: six modem candidates apply to exact B4.1 files; no hardware execution'
+python3 "$here/check-dpmaif-allocation.py" "$tmp/drivers/misc/mediatek/eccci/hif/Makefile"
 file=drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c
 awk '/^int skb_alloc_from_pool\(/ { active=1 }
      active { print } active && /^}/ { exit }' "$tmp/$file" > "$tmp/allocation.h"

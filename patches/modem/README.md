@@ -235,6 +235,22 @@ functionality remain required gates.
 
 ## CMA pool ownership finding
 
+Candidate 0006 removes the automatic vendor `RX_PAGE_POOL` selection from
+the HIF Makefile. DPMAIF uses its existing normal skb/page allocator even
+when the kernel's generic `CONFIG_PAGE_POOL=y`; other drivers keep page-pool
+support. The unused vendor CMA implementation is retained for research,
+not linked into this candidate. No private allocator export or dummy symbol
+is added. The change remains outside APKBUILD and runtime autoload.
+
+`check-dpmaif-allocation.py` evaluates the actual patched Makefile for twelve
+driver/page-pool configurations. It checks that normal RX objects remain
+selected, the vendor pool flag/object are absent and restoring the old
+automatic selection fails. These are Kbuild-selection checks, not a new
+ARM64 link, modpost or DMA test. `check-candidates.sh` includes this gate and
+all six patch-application checks. Native harness compilation runs in CI only.
+The CI workflow accepts `validation_only=true` for this validation without
+building a kernel or install image; normal push/default dispatch is unchanged.
+
 ### Configured r168 exports
 
 The six kernel-evidence files from CI `37614381947`, source

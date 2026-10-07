@@ -1,0 +1,26 @@
+From: Tetris port maintainers
+Subject: [PATCH] modem: keep DPMAIF on its standard RX allocation path
+
+CONFIG_PAGE_POOL describes kernel infrastructure, not compatibility with the
+vendor CMA pool. The latter requires unexported cma_alloc on Linux 6.18 and
+has unresolved page-pool refcount and CMA release ownership. Keep the existing
+normal skb/page allocation path without disabling page pools for other drivers.
+Do not stub/export cma_alloc or advertise this as verified modem DMA support.
+
+diff --git a/drivers/misc/mediatek/eccci/hif/Makefile b/drivers/misc/mediatek/eccci/hif/Makefile
+--- a/drivers/misc/mediatek/eccci/hif/Makefile
++++ b/drivers/misc/mediatek/eccci/hif/Makefile
+@@ -32,10 +32,9 @@
+ 	ccci_dpmaif_com.o ccci_dpmaif_bat.o ccci_dpmaif_debug.o ccci_dpmaif_resv_mem.o \
+ 	ccci_dpmaif_drv_com.o ccci_dpmaif_drv_v1.o ccci_dpmaif_drv_v2.o ccci_dpmaif_drv_v3.o
+ 
+-ifeq ($(CONFIG_PAGE_POOL), y)
+-ccflags-y += -DRX_PAGE_POOL
+-ccci_dpmaif-y += ccci_dpmaif_page_pool.o
+-endif
++# The vendor CMA pool is not compatible with the mainline page-pool lifetime.
++# Use the existing standard RX allocator independently of CONFIG_PAGE_POOL.
++# Do not re-enable until allocation, recycling and teardown are validated.
+ obj-$(CONFIG_MTK_ECCCI_DRIVER) += ccci_dpmaif.o
+ 
+ # ccci_cldma.ko
