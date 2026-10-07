@@ -1,4 +1,4 @@
-# Port summary, 2026-09-22
+# Port summary, 2026-10-07
 
 ## Canonical sources and installed device
 
@@ -7,18 +7,24 @@
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `a55dc63befc0ec97bd946e412d6c14d3a82b9cc9`.
 - Installed clean kernel: `7.2.1-r167`, Linux `6.18.0 #168`, CI
-  `35729169169`, source `ff4433f1515a4f29529d7f14684b5aea9c62858a`.
+  `35746976417`, source `7c0ce0389c03d2820155bde72192aca95281de8f`.
 - Installed loader: `bf75c572e16079a36ab43a032be3360c3e93250c`, CI
   `35718518185`, slot A only; stock slot B retained. Master has the same
   runtime code, plus documentation and reservation-order CI coverage.
-- The r17 startup helper and desktop sensor backend were installed separately
-  for live validation. They are now packaged in main, but that complete new
-  image has not yet been clean-installed and tested.
+- The complete main CI image was clean-installed on 2026-10-07 to `super`
+  and `userdata`; device package `8-r17` and the sensor backend came from
+  the image, with no runtime implementation replacement. Root expanded to
+  104.5 GiB. Display/touch were visually confirmed and USB transfer gates
+  passed before and after starting the packaged sensor service.
+- All five physical sensor classes and SensorProxy light updates passed
+  after one supervised service start. Startup remains opt-in; automatic
+  cold start from this installation is pending. See the exact
+  [clean-install evidence](SENSOR_INTEGRATION_PATCH.md#clean-ci-installation-2026-10-07).
 - CI at this checkpoint: pmOS sensor package `35746976387` passed; full image
-  `35746976417` passed (rechecked 2026-10-01; clean installation still unverified).
+  `35746976417` passed (rechecked and installed 2026-10-07).
   U-Boot ordinary `35747798350` and explicit SCP
-  profile `35747862279` both passed. No local build or new flash was performed
-  for source consolidation.
+  profile `35747862279` both passed. The existing verified loader was retained;
+  neither LK slot nor factory/calibration partitions were changed.
 
 ## Hardware summary
 

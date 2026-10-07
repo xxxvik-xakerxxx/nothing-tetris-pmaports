@@ -121,13 +121,44 @@ SHA256 of `kernel-after`:
 of `service-journal`:
 `ed7e129dbfd482f95d1f46df5784ae20e0c9f06f871b6fe97d92cfa5fd944efc`.
 
+## Clean CI installation, 2026-10-07
+
+CI `35746976417`, source `7c0ce0389c03d2820155bde72192aca95281de8f`,
+was installed to `super` and clean `userdata` after artifact verification.
+Boot `97c3978a-d0f7-47d7-b377-cf554a327261` runs device `8-r17`, kernel
+`7.2.1-r167` / Linux #168, and the packaged backend without host-side
+implementation replacement. The existing `bf75c572e160` loader was retained.
+
+The opt-in service was initially disabled. One supervised service start
+reported firmware ready, 24 entries and physical mask 31. Five-second
+captures returned accelerometer 125, gyro 123, magnetic 124, light 42 and
+proximity 1 sample; rates were approximately 25/25/25/8.33 Hz, with proximity
+on-change. The packaged SensorProxy was active and emitted light updates.
+Display/touch were visually confirmed; zero failed units and both pre/post
+32 MiB USB transfer gates passed. No BUG/Oops was found in the saved journal.
+
+The journal is not error-free: SCP reports missing optional resources and
+skips CHRE; Wi-Fi firmware logs `scif_WFSYS_notify_SCP timeout`. Sensor data
+continues, but connectivity/SCP coexistence is not validated by this test.
+Phone wall-clock time was stale; correlate evidence by boot ID and monotonic
+timestamps, not its calendar date.
+
+Evidence: `local/live-logs/20261007-clean-ci35746976417/`.
+SHA256 `kernel-final`:
+`f327d348406c79fc36c15d3b18d11dcb154891e9ff555fe833aa811ae8b6d152`;
+`services`:
+`e667a70b3c2ff7e10fe6659fd544470621b817c2290d48fc00656edaca5fbf4d`.
+USB gates: `20261007T072853Z` and `20261007T073403Z` under `local/live-logs`.
+The packaged service was subsequently enabled for a controlled cold-start
+test. Its result is pending; manual service start is not automatic startup.
+
 ## Current integration boundary
 
 The helper and desktop backend are now in main. CI/package state is tracked
 only in [PORT_SUMMARY.md](PORT_SUMMARY.md); the live-installed helper/backend
 must not be confused with clean testing of the complete image.
 
-Still required: clean packaged installation, repeated automatic cold starts,
+Still required: automatic startup from the clean installation, repeated cold starts,
 safe warm ownership, calibration, suspend/resume, clock/resource lifetime,
 idle power and another handset. Rotation, light response and proximity UI
 are already demonstrated in [desktop evidence](SENSOR_DESKTOP_INTEGRATION.md).
