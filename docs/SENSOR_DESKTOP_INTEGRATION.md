@@ -38,8 +38,22 @@ near/far states in our HF adapter. It preserves timestamp/error validation,
 the first sample deadline, all transitions and the first value after every
 new claim. Accelerometer delivery, sampling periods and upstream desktop
 code are unchanged. ABI tests include zero light, negative-value rejection
-handoff, proximity transitions and claim reset. CI/runtime validation is
-pending; no battery or frame-rate improvement has been measured.
+handoff, proximity transitions and claim reset. CI `37589615272` passed for
+source `c82813f02d0662beac0865d5b99da2976a27107c`. The verified `3.9-r1` APK
+was installed on boot `6266d1ef-9e48-4959-8d33-27e14a74f2e1`; only the
+userspace proxy was restarted, with no vendor-module reload. Standard APK
+triggers regenerated initramfs/FIT from the unchanged installed kernel.
+The user confirmed rotation and automatic brightness. The bounded D-Bus
+capture also observed normal/right-up/left-up orientation, light/backlight
+changes and proximity transitions. There were zero failed system units.
+Post-update 32 MiB USB transfer gate `20261007T075248Z` passed.
+No battery or frame-rate improvement has been measured, and this is a live
+package update rather than clean-image validation of r1.
+
+APK SHA256:
+`bb4bb92549552f0d82166f37f93fcbf7ead835c6c561da3ab0b8ffb5ce472152`.
+Evidence `local/live-logs/20261007-proxy-r1.jsonl`, SHA256:
+`eec72abefc8cdb32ebdef6f5401424417c9c0d0e68c9010a684ff36227c9995f`.
 
 ### Original behavior verification
 

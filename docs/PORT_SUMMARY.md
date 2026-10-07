@@ -28,6 +28,22 @@
 
 ## Hardware summary
 
+2026-10-07 follow-up: our SensorProxy `3.9-r1` from CI `37589615272`
+is live-installed, with rotation and automatic brightness confirmed again.
+It skips duplicate scalar callbacks, not hardware sampling or validation.
+No measured battery/FPS gain is claimed. Full CI `37589615268` for source
+`c82813f` is building; its preliminary modem/GPU/GNSS/camera checks passed.
+The new separate kernel-export artifact is for dependency analysis, not
+runtime enablement. Current live modem handoff remains `no-fdt`; there is
+no modem, render node or camera node. GNSS transport is inactive.
+
+A 60-second USB-attached idle capture passed on the same boot
+(`local/live-logs/20261007T074856Z-172.16.42.1-idle-delta`). CPU idle counters
+advance, but the phone is charging: this is not a battery-discharge test.
+Our display-unblank service took 11.034 seconds and connectivity 6.311
+seconds on that boot. These durations alone do not identify CPU cost or
+justify removing initialization waits.
+
 Works below refers to the demonstrated basic function, not every lifecycle
 or hardware variant. Partial does not mean production-ready.
 
