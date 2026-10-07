@@ -57,7 +57,7 @@ coverage and an atomic 32-block limit; full CI `37603138572` passed.
 the audited ATF maps 512 MiB in 32 MiB pages, not only the ROM's 480 MiB
 declaration. Full CI `37604538052` passed, including native bounds tests.
 `1167c6c1d9` additionally encodes EMI range arguments and raw readbacks without
-silent ATF address truncation; CI `37608301896` is running. Offline execution
+silent ATF address truncation; full CI `37608301896` passed. Offline execution
 of the pinned ATF handler passes 64 emulated scenarios, including one-shot
 slot rejection and permission-preset writes. This does not test physical
 protection or activate a modem boot path.
@@ -66,7 +66,7 @@ protection SMC is executed. The exact stock LK skips separate DRDI loading in mo
 but still marks DRDI memory windows. These are unactivated loader
 prerequisites, not modem boot: device-root/rollback policy, physical reservations,
 remapping, secure reset/protection and CCCI publication remain unresolved.
-See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/b9d96e38da/doc/board/mediatek/mt6878-tetris.rst)
+See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/1167c6c1d9/doc/board/mediatek/mt6878-tetris.rst)
 and the [exact ATF/LK memory-contract trace](MODEM_SIM_EVIDENCE_PLAN.md#2026-10-07-remap-and-protection-contract).
 Neither these U-Boot candidates nor r168 have been flashed on the phone.
 
