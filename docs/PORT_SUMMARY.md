@@ -18,7 +18,8 @@
   the image, with no runtime implementation replacement. Root expanded to
   104.5 GiB. Display/touch were visually confirmed and a 32 MiB USB transfer
   passed. Sensor startup was disabled in the fresh image; its opt-in was
-  restored without starting modules. The r168 cold-start check is pending.
+  restored without starting modules. One subsequent r168 cold start passed,
+  including SensorProxy light readings and the 32 MiB USB transfer.
 - On the previous r167 installation, all five physical sensor classes and SensorProxy light updates passed
   after one supervised service start and a subsequent automatic cold start
   after user-confirmed 10-second poweroff. Startup remains opt-in. See the exact
@@ -74,8 +75,17 @@ SHA256:
 
 The packaged sensor service was disabled on the fresh rootfs. It was enabled
 for the next boot, without a module load/reload on this warm boot, then the
-phone was powered off. Cold startup and sensor behavior remain pending;
-this is not evidence of zero-configuration sensor startup. Local logs are in
+phone was powered off. After the user's full poweroff/on, cold boot
+`9cb06d3b-0b5c-4b65-ba95-e0763d448647` automatically reported firmware ready,
+24 inventory entries and physical mask 31 at 16.760 seconds. SensorProxy
+started at 17.128 seconds. Its standard D-Bus interface advertised accelerometer,
+ambient light and proximity; a bounded 20-second capture received real light
+updates (52-55 lux). Rotation and proximity transitions were not observed in
+that capture, and desktop behavior confirmation is pending. No system units
+were failed, no critical kernel fault was found in the captured journal, and
+a fresh 32 MiB USB transfer passed after sensor startup. This is one cold-start
+pass after explicit opt-in, not zero-configuration or lifecycle completion.
+Local logs and SensorProxy observations are in
 `local/ci-run-37614381947/` in the parent workspace. The LK slots and factory
 partitions were not flashed; both loader hashes matched before installation.
 
