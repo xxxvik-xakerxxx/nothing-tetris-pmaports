@@ -150,7 +150,20 @@ SHA256 `kernel-final`:
 `e667a70b3c2ff7e10fe6659fd544470621b817c2290d48fc00656edaca5fbf4d`.
 USB gates: `20261007T072853Z` and `20261007T073403Z` under `local/live-logs`.
 The packaged service was subsequently enabled for a controlled cold-start
-test. Its result is pending; manual service start is not automatic startup.
+test. After user-confirmed 10-second poweroff, boot
+`6266d1ef-9e48-4959-8d33-27e14a74f2e1` initialized the sensors automatically
+at 17.1 seconds, with 24 entries, physical mask 31, active SensorProxy and
+zero failed units. No manual module/service start was issued on this boot.
+Five-second captures returned 125/124/124/41/1 samples respectively for
+accelerometer/gyro/magnetic/light/proximity, at approximately
+25/25/25/8.33 Hz and on-change. This is one controlled cold repeat from the
+clean image, not three repeats or warm/suspend validation.
+Post-capture USB transfer gate `20261007T073829Z` passed. Saved journal has
+no BUG/Oops/Call trace match; the Wi-Fi-to-SCP notification timeout recurs.
+Evidence: `local/live-logs/20261007-cold-6266d1ef/`; SHA256 `kernel`:
+`027023c690eabefa767eb68b03bfa2a76ef5d013dcc2f96495ab3372f14e0f91`;
+`services`:
+`e6710c5b633e4b81e2b05c3a900c0aa762be87faeddd3d9a69d9d4c52206f792`.
 
 ## Current integration boundary
 
@@ -158,7 +171,7 @@ The helper and desktop backend are now in main. CI/package state is tracked
 only in [PORT_SUMMARY.md](PORT_SUMMARY.md); the live-installed helper/backend
 must not be confused with clean testing of the complete image.
 
-Still required: automatic startup from the clean installation, repeated cold starts,
+Still required: additional automatic cold starts from the clean installation,
 safe warm ownership, calibration, suspend/resume, clock/resource lifetime,
 idle power and another handset. Rotation, light response and proximity UI
 are already demonstrated in [desktop evidence](SENSOR_DESKTOP_INTEGRATION.md).

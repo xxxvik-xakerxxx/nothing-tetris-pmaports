@@ -17,8 +17,8 @@
   104.5 GiB. Display/touch were visually confirmed and USB transfer gates
   passed before and after starting the packaged sensor service.
 - All five physical sensor classes and SensorProxy light updates passed
-  after one supervised service start. Startup remains opt-in; automatic
-  cold start from this installation is pending. See the exact
+  after one supervised service start and a subsequent automatic cold start
+  after user-confirmed 10-second poweroff. Startup remains opt-in. See the exact
   [clean-install evidence](SENSOR_INTEGRATION_PATCH.md#clean-ci-installation-2026-10-07).
 - CI at this checkpoint: pmOS sensor package `35746976387` passed; full image
   `35746976417` passed (rechecked and installed 2026-10-07).
