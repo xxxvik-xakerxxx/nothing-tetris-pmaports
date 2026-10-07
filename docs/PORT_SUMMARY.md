@@ -7,15 +7,17 @@
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `fef0154b0404210799a6851ac2c07dcbc9e9c736` (optional RAM-only modem
   reservation diagnostic; CI `37643162425` passed and slot A was flashed).
-  First warm RAM-reservation check passed; cold sensor regression pending.
+  First warm reservation and one cold automatic sensor-start check passed;
+  repeated cold starts, lifecycle and current visual regression remain pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `fef0154b0404210799a6851ac2c07dcbc9e9c736`, explicit
   SCP + RAM-only modem diagnostic CI `37643162425`, slot A only; stock slot B
-  retained. Previous sensor-validated loader was `1d4cb6496b`, CI `37609012691`. The earlier
-  `bf75c572e160` loader is backed up locally for rollback. Warm boot and image
-  readback passed. One subsequent r167 cold sensor startup passed; greeter
-  sensor behavior remains unresolved. Display/touch were confirmed on r168.
+  retained. Previous sensor-validated loader `1d4cb6496b`, CI `37609012691`,
+  is backed up locally for rollback. Image readback and first warm/cold RAM
+  reservation checks passed. One cold automatic sensor startup passed with
+  live light readings; greeter sensor behavior remains unresolved.
+  Display/touch were confirmed on r168 before this loader change.
 - The complete main CI image was clean-installed on 2026-10-07 to `super`
   and `userdata`; device package `8-r17` and SensorProxy `3.9-r1` came from
   the image, with no runtime implementation replacement. Root expanded to
@@ -123,16 +125,21 @@ First warm boot `ab2d1b8f-c5a1-457a-b61e-a0e597400e3f` confirmed a 512 MiB
 no-map region plus memreserve entry, excluded by Linux; USB/SSH returned and
 stock slot B is unchanged. The observed base is not a board constant. No
 kernel WARNING/BUG/Oops/panic was found in the boot journal. Sensors report
-the known warm SCP handoff limitation; full cold-start and visual regression
-checks remain pending. Do not flash the default SCP-disabled
-artifact over the installed sensor-capable loader. Successful reservation
-would consume 512 MiB of Linux RAM without providing SIM functionality yet.
+the known warm SCP handoff limitation. Subsequent cold boot
+`2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4` retained the reservation and started
+sensors automatically at 15.52 seconds (24 records, physical mask 31), followed
+by SensorProxy at 15.86 seconds. A bounded privileged subscription received
+21-23 lux updates; USB/SSH remained available and no services failed. The
+CHRE memory-reserve diagnostic also exists in the earlier r168 baseline.
+Visual checks, repeated cold starts and lifecycle remain pending. Do not
+flash the default SCP-disabled artifact over this loader. The reservation
+consumes 512 MiB of Linux RAM without providing SIM functionality yet.
 
 U-Boot `791756c966` adds a checked two-stage remap executor with injectable
 transport, explicit consumed/failed state and verification of every owned
 register field. Native tests and full ARM64 CI `37639979367` passed.
-No production SMC adapter or boot caller was enabled, and this code
-was not flashed. Exclusive reservation, authenticated platform selection,
+No production SMC adapter or boot caller is enabled. Full validation of
+exclusive reservation, authenticated platform selection,
 reset ownership, complete EMI policy and Linux handoff remain prerequisites.
 
 U-Boot modem prerequisites now on `master`: `f7ed9f7f6b` accepts bounded
