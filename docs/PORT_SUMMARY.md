@@ -6,12 +6,13 @@
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `fef0154b0404210799a6851ac2c07dcbc9e9c736` (optional RAM-only modem
-  reservation diagnostic; CI `37643162425` pending, not flashed).
-  Installed loader remains `1d4cb6496b`; remap-only CI `37639979367` passed.
+  reservation diagnostic; CI `37643162425` passed and slot A was flashed).
+  First warm RAM-reservation check passed; cold sensor regression pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
-- Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
-  SCP-profile CI `37609012691`, slot A only; stock slot B retained. The earlier
+- Installed loader: `fef0154b0404210799a6851ac2c07dcbc9e9c736`, explicit
+  SCP + RAM-only modem diagnostic CI `37643162425`, slot A only; stock slot B
+  retained. Previous sensor-validated loader was `1d4cb6496b`, CI `37609012691`. The earlier
   `bf75c572e160` loader is backed up locally for rollback. Warm boot and image
   readback passed. One subsequent r167 cold sensor startup passed; greeter
   sensor behavior remains unresolved. Display/touch were confirmed on r168.
@@ -116,7 +117,14 @@ publication failures leave the original DT unchanged. No handset address is
 embedded, no firmware is copied and no modem SMC or startup is performed.
 The ordinary build leaves this disabled. Explicit CI `37643162425` enables
 `modem_reserve` and all three existing SCP inputs; compilation/native tests
-and hardware validation are pending. Do not flash the default SCP-disabled
+passed. The image was flashed to slot A and its exact 3277248-byte readback
+matches SHA256 `5597585ccb9f6eca23d0aa214b762eb062c04db0836653bc13746c6b9a1a55de`.
+First warm boot `ab2d1b8f-c5a1-457a-b61e-a0e597400e3f` confirmed a 512 MiB
+no-map region plus memreserve entry, excluded by Linux; USB/SSH returned and
+stock slot B is unchanged. The observed base is not a board constant. No
+kernel WARNING/BUG/Oops/panic was found in the boot journal. Sensors report
+the known warm SCP handoff limitation; full cold-start and visual regression
+checks remain pending. Do not flash the default SCP-disabled
 artifact over the installed sensor-capable loader. Successful reservation
 would consume 512 MiB of Linux RAM without providing SIM functionality yet.
 
