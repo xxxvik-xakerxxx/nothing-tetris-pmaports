@@ -93,6 +93,20 @@ partitions were not flashed; both loader hashes matched before installation.
 
 ### Loader prerequisites
 
+The next modem candidate, `0006-dpmaif-use-standard-allocation.patch.vendor`,
+removes automatic selection of the incompatible vendor CMA pool while leaving
+generic kernel page-pool support unchanged. CI `37641267429`, source `a88f8de`,
+passed all overlay/candidate tests, including twelve actual Makefile selection
+cases and rejection of a mutant restoring the unsafe default. The full image
+job was deliberately skipped via `validation_only=true`; no new kernel/module
+link or device installation is claimed. The candidate is outside APKBUILD.
+
+The hash-verified r168 native DTB declares separate `mediatek,md_mem_usage`
+fragments, not exclusive ownership of the complete 512 MiB remap window.
+These inherited fragments cannot authorize the new loader's full-window
+mapping. Contiguous reservation before firmware copy/remap and kernel memory
+discovery remains necessary; no SMC was attempted on the running phone.
+
 U-Boot `791756c966` adds a checked two-stage remap executor with injectable
 transport, explicit consumed/failed state and verification of every owned
 register field. Native tests and full ARM64 CI `37639979367` passed.

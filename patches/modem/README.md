@@ -250,6 +250,11 @@ ARM64 link, modpost or DMA test. `check-candidates.sh` includes this gate and
 all six patch-application checks. Native harness compilation runs in CI only.
 The CI workflow accepts `validation_only=true` for this validation without
 building a kernel or install image; normal push/default dispatch is unchanged.
+CI `37641267429` (source `a88f8de`) passed all validation gates with the image
+job skipped. This includes the twelve Makefile cases and unsafe-pool mutant,
+the existing allocation/DMA harness and its mutants, and CCMNI tests. The
+patch applies to the exact pinned Makefile without fuzz. No local C compilation,
+new `.ko`, modem probe or firmware execution was performed.
 
 ### Configured r168 exports
 
