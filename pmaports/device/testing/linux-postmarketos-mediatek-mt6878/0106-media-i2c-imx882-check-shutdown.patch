@@ -1,0 +1,78 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: imx882 identity: settle DOVDD and report teardown errors
+
+Apply after the logical reset fix. Attempt every owned rail shutdown even
+after an error, report the first error, and never report a successful probe
+when teardown failed. Keep the first power/read error if cleanup also fails.
+This is an unenabled candidate, not camera capture support.
+
+--- a/drivers/media/i2c/imx882-identity.c
++++ b/drivers/media/i2c/imx882-identity.c
+@@ -106,25 +106,27 @@
+-static void imx882_disable_supply(struct imx882_identity *imx882,
++static int imx882_disable_supply(struct imx882_identity *imx882,
+ 				  int supply)
+ {
+-	regulator_disable(imx882->supplies[supply].consumer);
++	return regulator_disable(imx882->supplies[supply].consumer);
+ }
+ 
+-static void imx882_power_off(struct imx882_identity *imx882,
++static int imx882_power_off(struct imx882_identity *imx882,
+ 			     unsigned long enabled_supplies, bool clock_enabled)
+ {
++	int ret, err, supply;
++
+ 	/* Descriptor values are logical; assert reset before removing power. */
+ 	gpiod_set_value_cansleep(imx882->reset, 1);
+ 
+ 	if (clock_enabled)
+ 		clk_disable_unprepare(imx882->xclk);
+-	pinctrl_select_state(imx882->pinctrl, imx882->mclk_off);
++	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_off);
+ 
+-	if (enabled_supplies & BIT(IMX882_SUPPLY_DOVDD))
+-		imx882_disable_supply(imx882, IMX882_SUPPLY_DOVDD);
+-	if (enabled_supplies & BIT(IMX882_SUPPLY_DVDD))
+-		imx882_disable_supply(imx882, IMX882_SUPPLY_DVDD);
+-	if (enabled_supplies & BIT(IMX882_SUPPLY_AVDD))
+-		imx882_disable_supply(imx882, IMX882_SUPPLY_AVDD);
+-	if (enabled_supplies & BIT(IMX882_SUPPLY_AFVDD))
+-		imx882_disable_supply(imx882, IMX882_SUPPLY_AFVDD);
++	for (supply = IMX882_NUM_SUPPLIES - 1; supply >= 0; supply--) {
++		if (!(enabled_supplies & BIT(supply)))
++			continue;
++		err = imx882_disable_supply(imx882, supply);
++		if (!ret)
++			ret = err;
++	}
++	return ret;
+ }
+@@ -162,6 +164,7 @@
+ 	if (ret)
+ 		return ret;
+ 	*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);
++	usleep_range(1000, 1100);
+ 
+ 	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_4ma);
+ 	if (ret)
+@@ -190,6 +193,7 @@
+ 	u8 id_high;
+ 	u8 id_low;
+ 	int ret;
++	int cleanup_ret;
+ 	int i;
+ 
+ 	imx882 = devm_kzalloc(dev, sizeof(*imx882), GFP_KERNEL);
+@@ -247,5 +251,10 @@
+ 	dev_err_probe(dev, ret, "failed to read physical sensor ID\n");
+ power_off:
+-	imx882_power_off(imx882, enabled_supplies, clock_enabled);
++	cleanup_ret = imx882_power_off(imx882, enabled_supplies, clock_enabled);
++	if (cleanup_ret) {
++		dev_err(dev, "failed to shut down sensor: %d\n", cleanup_ret);
++		if (!ret)
++			ret = cleanup_ret;
++	}
+ 	return ret;
+ }

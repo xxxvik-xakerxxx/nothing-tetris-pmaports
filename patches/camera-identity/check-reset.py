@@ -62,16 +62,24 @@ def main():
         run("git", "apply", "--check", str(candidate), cwd=root)
         run("git", "apply", str(candidate), cwd=root)
         source = target.read_text()
+        target.write_text(original)
+        run("git", "apply", str(REPO / PACKAGE / "0050-media-i2c-imx882-honor-active-low-reset.patch"), cwd=root)
+        assert target.read_text() == source, "packaged reset fix differs from tested candidate"
         assert 'devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH)' in source
         assert source.count("gpiod_set_value_cansleep") == 3
         cleanup = HERE / "0002-imx882-identity-check-shutdown.patch"
         run("git", "apply", "--check", str(cleanup), cwd=root)
         run("git", "apply", str(cleanup), cwd=root)
         complete = target.read_text()
+        assert (REPO / PACKAGE / "0106-media-i2c-imx882-check-shutdown.patch").read_bytes() == cleanup.read_bytes()
         assert "cleanup_ret = imx882_power_off" in complete
         assert "ret = cleanup_ret;" in complete
+        run("git", "apply", str(REPO / PACKAGE / "0107-media-i2c-imx882-hold-clock-rate.patch"), cwd=root)
+        clock_source = target.read_text()
+        assert "clk_set_rate_exclusive" in clock_source
+        assert "clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE" in clock_source
         if args.check_only:
-            print("PASS: reset + shutdown patches apply; no local compilation")
+            print("PASS: reset + shutdown + clock patches apply; no local compilation")
             return
         compiler = shlex.split(os.environ.get("CC", "cc"))
         for label, code in (("fixed", source), ("baseline", original)):
@@ -104,6 +112,26 @@ def main():
             run(*compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
                 "-DTEST_CLEANUP", "-I", str(root), str(HERE / "reset-test.c"),
                 "-o", str(binary))
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
+            if label == "fixed":
+                assert result.returncode == 0, result.stderr
+                print(result.stdout.strip())
+            else:
+                assert result.returncode != 0, f"mutant survived: {label}"
+                assert "Assertion" in result.stderr or "assertion" in result.stderr
+                print(f"PASS: rejected {label}")
+        power = power_source(clock_source)
+        for label, code in {
+            "fixed": power,
+            "missing-clock-put": power.replace("clk_rate_exclusive_put(imx882->xclk);", "(void)imx882->xclk;"),
+            "ignore-clock-rounding": power.replace("clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE", "clk_get_rate(imx882->xclk) == 0"),
+        }.items():
+            assert label == "fixed" or code != power
+            (root / "identity-under-test.h").write_text(code)
+            binary = root / ("clock-" + label)
+            run(*compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
+                "-DTEST_CLEANUP", "-DTEST_CLOCK", "-I", str(root),
+                str(HERE / "reset-test.c"), "-o", str(binary))
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             if label == "fixed":
                 assert result.returncode == 0, result.stderr

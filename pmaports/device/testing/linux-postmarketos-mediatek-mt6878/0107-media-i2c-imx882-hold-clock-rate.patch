@@ -1,0 +1,42 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: imx882 identity: hold and verify xclk rate
+
+Keep the rate protected until reset is asserted and all owned power has
+been released. Reject clock rounding before powering the sensor. This
+does not establish board-level ownership of the shared camera rails.
+
+--- a/drivers/media/i2c/imx882-identity.c
++++ b/drivers/media/i2c/imx882-identity.c
+@@ -55,6 +55,7 @@
+ 	struct pinctrl_state *mclk_4ma;
+ 	struct pinctrl_state *mclk_off;
+ 	struct regulator_bulk_data supplies[IMX882_NUM_SUPPLIES];
++	bool rate_exclusive;
+ };
+ 
+ static int imx882_read_reg(struct i2c_client *client, u16 reg, u8 *value)
+@@ -129,6 +130,10 @@
+ 		if (!ret)
+ 			ret = err;
+ 	}
++	if (imx882->rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk);
++		imx882->rate_exclusive = false;
++	}
+ 	return ret;
+ }
+ 
+@@ -139,9 +144,12 @@
+ {
+ 	int ret;
+ 
+-	ret = clk_set_rate(imx882->xclk, IMX882_XCLK_RATE);
++	ret = clk_set_rate_exclusive(imx882->xclk, IMX882_XCLK_RATE);
+ 	if (ret)
+ 		return ret;
++	imx882->rate_exclusive = true;
++	if (clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE)
++		return -EINVAL;
+ 
+ 	gpiod_set_value_cansleep(imx882->reset, 1);
+ 

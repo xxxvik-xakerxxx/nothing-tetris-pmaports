@@ -4,11 +4,15 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
-2026-10-07: the separate `patches/camera-identity/0002` candidate adds the
-missing DOVDD settling delay and makes shutdown failures visible while
-continuing reverse-order cleanup. CI now tests 384 mocked startup/shutdown
-combinations and two negative mutants; new results are pending. It follows
-the logical reset candidate and is not packaged or enabled. On the current
+2026-10-07: r169 integrates shutdown patch `0106` and clock patch `0107`
+after the already packaged logical reset fix `0050`. The shutdown tests
+(384 combinations and two negative mutants) passed CI run 37655704824.
+The clock fix atomically requests exclusive 24 MHz rate control, rejects
+rounding before enabling rails, and releases the rate reference on every
+shutdown path. An additional 416-case CI test covers ownership and rounding;
+its results and the complete patched driver's kernel ABI build are pending.
+The normal kernel build compiles the identity object but still ships no
+enabled camera driver or DT client. On the current
 r168 cold boot `2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`, neither video4linux nor
 media class devices exist. No I2C transaction or camera power change was made.
 

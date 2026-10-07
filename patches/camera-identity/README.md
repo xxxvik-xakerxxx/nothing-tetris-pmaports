@@ -1,6 +1,16 @@
 # IMX882 logical reset prerequisite
 
-Status: Untested on hardware; host regression passed. Not packaged or enabled.
+Status: Untested on hardware. Reset is packaged as `0050`; r169 adds shutdown
+as `0106` and exclusive clock control as `0107`. Camera probing remains disabled.
+
+## Exclusive clock control
+
+`0107` uses `clk_set_rate_exclusive()` and verifies `clk_get_rate()` is exactly
+24 MHz before enabling any supply. The reference is released after shutdown,
+including power-on, rounded-rate and teardown errors. CI exercises 416 cases
+and rejects mutants that omit the release or ignore rounding. These new tests
+and the full patched driver's kernel ABI build are pending. Software rate
+readback is not a physical frequency measurement or proof of board ownership.
 
 ## Shutdown candidate, 2026-10-07
 
@@ -17,18 +27,15 @@ It checks that failed disables are not reported as successful, no later
 cleanup is skipped, reset remains asserted, and DOVDD settles before MCLK.
 Mutants removing the delay or swallowing the shutdown result must fail.
 Native tests run only in CI. `check-reset.py --check-only` validates both
-patch applications without local compilation and has passed. The new native
-tests and full-driver kernel ABI validation are not yet claimed as passed.
+patch applications without local compilation and has passed. The shutdown
+native tests passed CI run 37655704824. Full-driver kernel ABI validation of
+the newly packaged shutdown/clock combination remains pending.
 
-Both patches remain outside APKBUILD; no camera node, rail, driver or service
-is enabled. Shared-rail ownership, exclusive clock control and physical
-shutdown behavior still require proof before a live identity probe.
-
-Authoritative integration baseline: aecf4f44f4170952709a7dd514538f0d75b55e22.
-This worktree is at 5944ffd1300e6ce1ebc2be54a377be29b3bec2a9, a divergent
-camera-clock commit. Its 0049 identity driver and 0055 disabled fixture are
-byte-identical to the baseline; the test verifies both before proceeding.
-No history rewrite or integration worktree edits were performed.
+No camera node, rail, driver or service is enabled. Shared-rail ownership,
+physical clock and shutdown behavior still require proof before a live probe.
+The runner checks the packaged reset result matches the historical candidate
+and the packaged shutdown patch is identical to its tested candidate, then
+applies the packaged clock patch. Base 0049 and fixture 0055 remain hash-pinned.
 
 ## Missing prerequisite and source evidence
 
@@ -77,14 +84,14 @@ The unmodified baseline must fail the same executable regression test.
 
 This is not a kernel ABI build, GPIO electrical measurement, I2C test or
 proof that power-off operations cannot fail. No complete kernel build is
-needed for this reset-only step. The candidate must follow 0049 if later
-integrated; APKBUILD, its checksums, DT, I2C8 and kernel config are untouched.
+needed for the original reset-only step. r169 integrates both subsequent fixes
+into APKBUILD and its checksums. DT, I2C8 and kernel config remain untouched.
 
 ## Remaining blockers and next live gate
 
 Before authorizing identity: verify complete shared DOVDD/AFVDD consumer
-ownership, exclusive CAMTG2 rate control and actual 24 MHz; validate the new
-DOVDD-delay and teardown-error candidate above. Compile the complete driver
+ownership and actual 24 MHz; validate the new clock ownership behavior on
+hardware. Compile the complete driver
 against the pinned kernel and review the final DT. This reset candidate
 alone does not make the baseline identity probe ready for a phone.
 

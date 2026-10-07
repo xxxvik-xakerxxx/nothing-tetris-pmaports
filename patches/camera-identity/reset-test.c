@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <errno.h>
 
 #define BIT(n) (1UL << (n))
 struct clk { bool enabled; };
@@ -14,6 +15,13 @@ struct regulator_bulk_data { struct regulator *consumer; };
 static struct gpio_desc reset;
 static struct clk clock;
 static int step, fail_at, releases, last_disabled, off_selected;
+#ifdef TEST_CLOCK
+#define STARTUP_CASES 13
+static bool rate_owned, rounded_rate;
+static int rate_puts;
+#else
+#define STARTUP_CASES 12
+#endif
 #ifdef TEST_CLEANUP
 static int off_step, off_mask, first_off_error, dovdd_settled, last_enabled;
 static bool disable_failed[4];
@@ -43,11 +51,35 @@ static void gpiod_set_value_cansleep(struct gpio_desc *gpio, int logical)
 	}
 }
 
+#ifdef TEST_CLOCK
+static int clk_set_rate_exclusive(struct clk *clk, unsigned long rate)
+{
+	assert(!clk->enabled && !rate_owned && rate == 24000000);
+	int ret = fail();
+	if (!ret)
+		rate_owned = true;
+	return ret;
+}
+
+static unsigned long clk_get_rate(struct clk *clk)
+{
+	assert(!clk->enabled && rate_owned);
+	return rounded_rate ? 23999999 : 24000000;
+}
+
+static inline void clk_rate_exclusive_put(struct clk *clk)
+{
+	assert(!clk->enabled && rate_owned && off_selected);
+	rate_owned = false;
+	rate_puts++;
+}
+#else
 static int clk_set_rate(struct clk *clk, unsigned long rate)
 {
 	assert(!clk->enabled && rate == 24000000);
 	return fail();
 }
+#endif
 
 static int regulator_set_voltage(struct regulator *reg, int min, int max)
 {
@@ -142,12 +174,12 @@ int main(void)
 
 	for (int scenario = 0; scenario <
 #ifdef TEST_CLEANUP
-	     12 * 32
+	     STARTUP_CASES * 32
 #else
-	     12
+	     STARTUP_CASES
 #endif
 	     ; scenario++) {
-		int failure = scenario % 12;
+		int failure = scenario % STARTUP_CASES;
 		unsigned long enabled = 0;
 		bool clock_enabled = false;
 		int ret;
@@ -158,8 +190,14 @@ int main(void)
 		step = releases = off_selected = 0;
 		last_disabled = IMX882_NUM_SUPPLIES;
 		fail_at = failure;
+#ifdef TEST_CLOCK
+		rounded_rate = failure == 12;
+		rate_owned = false;
+		rate_puts = 0;
+		assert(!sensor.rate_exclusive);
+#endif
 #ifdef TEST_CLEANUP
-		off_mask = scenario / 12;
+		off_mask = scenario / STARTUP_CASES;
 		off_step = first_off_error = dovdd_settled = 0;
 		last_enabled = -1;
 		for (int i = 0; i < 4; i++)
@@ -171,8 +209,15 @@ int main(void)
 			assert(imx882_supply_names[i]);
 		}
 		ret = imx882_power_on(&sensor, &enabled, &clock_enabled);
+#ifdef TEST_CLOCK
+		assert(ret == (rounded_rate ? -EINVAL : failure ? -123 : 0));
+		assert(step == (rounded_rate ? 1 : failure ? failure : 11));
+		if (rounded_rate)
+			assert(!enabled && !clock_enabled);
+#else
 		assert(ret == (failure ? -123 : 0));
 		assert(step == (failure ? failure : 11));
+#endif
 		assert(releases == (failure ? 0 : 1));
 		assert(reset.physical == (failure ? 0 : 1));
 		if (!failure)
@@ -185,6 +230,10 @@ int main(void)
 		imx882_power_off(&sensor, enabled, clock_enabled);
 #endif
 		assert(reset.physical == 0 && !clock.enabled && off_selected == 1);
+#ifdef TEST_CLOCK
+		assert(!rate_owned && !sensor.rate_exclusive);
+		assert(rate_puts == (failure == 1 ? 0 : 1));
+#endif
 		for (int i = 0; i < IMX882_NUM_SUPPLIES; i++)
 #ifdef TEST_CLEANUP
 			assert(regs[i].enabled == disable_failed[i]);
@@ -192,7 +241,9 @@ int main(void)
 			assert(!regs[i].enabled);
 #endif
 	}
-#ifdef TEST_CLEANUP
+#ifdef TEST_CLOCK
+	puts("PASS: 416 startup/shutdown combinations, exclusive clock balance and rounding rejection");
+#elif defined(TEST_CLEANUP)
 	puts("PASS: 384 startup/shutdown combinations, first error and DOVDD settling");
 #else
 	puts("PASS: success + 11 power-on failures; reset and reverse shutdown");
