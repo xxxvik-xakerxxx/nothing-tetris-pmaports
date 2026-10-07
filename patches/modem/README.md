@@ -14,8 +14,9 @@ identity, release, System.map and native DTB into the separate
 The manifest binds every file to its SHA256 and the workflow source commit.
 The collector rejects ambiguous/missing builds. This supplies configured
 export evidence for a subsequent modem dependency comparison; it is not a
-complete external-module SDK or a successful modem modpost. First artifact
-generation is still pending CI. The live 2026-10-07 boot still publishes
+complete external-module SDK or a successful modem modpost. Artifact generation
+passed in CI `37614381947`; see the configured-export comparison below.
+The recorded pre-update 2026-10-07 boot publishes
 `no-fdt` / `invalid` / `not-checked`, with no detected modem.
 
 0001 adapts the cellular network interface to size-aware sysctl registration
@@ -233,6 +234,32 @@ matching kernel modpost, memory ownership, DMA isolation and actual radio
 functionality remain required gates.
 
 ## CMA pool ownership finding
+
+### Configured r168 exports
+
+The six kernel-evidence files from CI `37614381947`, source
+`6576019bea1d31e7ff15e2c28870329a7bce6be4`, passed manifest SHA256 checks.
+`Module.symvers` SHA256 is
+`2e58e05288219f07094e88da49b9f12b1c06d2bf5875e87e1f557bc36c4e7cf3`.
+Comparison with both historical composite inventories leaves these symbols
+outside the configured kernel exports:
+
+- `__this_module`, supplied during module generation, not a missing driver API.
+- `ccci_get_adc_mV`, `ccci_get_adc_num`, `ccci_get_adc_val`.
+- `ccmni_clr_flush_timer`, `ccmni_ops`, `ccmni_set_cur_speed`,
+  `ccmni_set_init_rps`, `set_ccmni_rps`.
+- Only the page-pool inventory additionally requires `cma_alloc`. It is not
+  exported by r168, nor by the pinned upstream `mm/cma.c`.
+
+The eight CCCI/CCMNI symbols require their vendor components and export checks.
+This is a comparison of historical object requirements to real r168 exports,
+not a rebuild, CRC match, namespace/license check or successful modpost.
+Generic kernel `CONFIG_PAGE_POOL=y` currently enables the vendor CMA pool in
+the HIF Makefile; these are not interchangeable implementations. The ordinary
+DPMAIF allocation path has no `cma_alloc` dependency. Do not export a private
+allocator or suppress unresolved symbols merely to link the unsafe pool.
+
+### Unresolved lifetime
 
 Further exact-source review found no caller of
 ccci_dpmaif_destroy_page_pool() and no cma_release() in the ECCCI subtree.

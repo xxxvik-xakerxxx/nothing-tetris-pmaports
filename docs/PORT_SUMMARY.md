@@ -5,7 +5,8 @@
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `1d4cb6496b02971dbdb537e92f921d036f29ec7a`.
+  `791756c966e2b40f3d190c77de00ed7710e2f1e5` (new remap transaction;
+  CI `37639979367` in progress; installed loader remains `1d4cb6496b`).
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
@@ -81,7 +82,8 @@ phone was powered off. After the user's full poweroff/on, cold boot
 started at 17.128 seconds. Its standard D-Bus interface advertised accelerometer,
 ambient light and proximity; a bounded 20-second capture received real light
 updates (52-55 lux). Rotation and proximity transitions were not observed in
-that capture, and desktop behavior confirmation is pending. No system units
+that capture. The user subsequently confirmed both desktop autorotation and
+automatic brightness. No system units
 were failed, no critical kernel fault was found in the captured journal, and
 a fresh 32 MiB USB transfer passed after sensor startup. This is one cold-start
 pass after explicit opt-in, not zero-configuration or lifecycle completion.
@@ -90,6 +92,13 @@ Local logs and SensorProxy observations are in
 partitions were not flashed; both loader hashes matched before installation.
 
 ### Loader prerequisites
+
+U-Boot `791756c966` adds a checked two-stage remap executor with injectable
+transport, explicit consumed/failed state and verification of every owned
+register field. Native CI tests passed; full CI `37639979367` remains in
+progress. No production SMC adapter or boot caller was enabled, and this code
+was not flashed. Exclusive reservation, authenticated platform selection,
+reset ownership, complete EMI policy and Linux handoff remain prerequisites.
 
 U-Boot modem prerequisites now on `master`: `f7ed9f7f6b` accepts bounded
 zero-tail 48-byte stock v3 descriptors; `b2917cce8f` verifies signed modem
