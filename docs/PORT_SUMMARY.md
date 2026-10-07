@@ -5,8 +5,8 @@
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `7231449a30f303c62dedeb019079083c595a4c87` (bounded modem partition
-  reader; CI `37651088677` pending, not installed). Installed loader remains
+  `e0399e8a9d8552aebdb6ce9869dd7352d5506088` (temporary modem staging
+  lifetime; CI `37655372236` pending, not installed). Installed loader remains
   `fef0154b04`: first warm reservation and one cold automatic sensor-start
   check passed; repeated cold starts, lifecycle and visual regression pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
@@ -117,7 +117,18 @@ Each observed partition is 200 MiB, larger than U-Boot's 32 MiB malloc arena;
 an exclusive temporary LMB staging allocation is required before integration.
 No boot caller, modem destination writes, SMC or activation is enabled.
 Native reader tests for 512/4096-byte blocks, exact read addresses, short reads
-and malformed geometry are in CI `37651088677`; validation is pending.
+and malformed geometry passed with full ARM64 CI `37651088677`.
+
+U-Boot `e0399e8a9d` adds scoped LMB staging, sized from the validated partition
+extent and aligned to 64 KiB. The diagnostic combines allocate, read,
+authenticate and release without allocating the snapshot on the malloc heap.
+Every successful acquisition gets one release attempt, including failure
+paths; release failure suppresses success output. Only a pointer-free layout
+is returned after cleanup, never references to freed firmware data. The
+separate modem window and outgoing Linux DT are not changed. No boot caller,
+slot inference or root pin is installed; execution and device policy gates
+remain open. Local Python reference checks passed (7 executed, 8 skipped);
+native lifetime tests and ARM64 compilation are pending in CI `37655372236`.
 
 The next modem candidate, `0006-dpmaif-use-standard-allocation.patch.vendor`,
 removes automatic selection of the incompatible vendor CMA pool while leaving
