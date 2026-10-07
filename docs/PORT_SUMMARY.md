@@ -56,6 +56,11 @@ coverage and an atomic 32-block limit; full CI `37603138572` passed.
 `b9d96e38da` adds full-window remap bounds and masked register expectations:
 the audited ATF maps 512 MiB in 32 MiB pages, not only the ROM's 480 MiB
 declaration. Full CI `37604538052` passed, including native bounds tests.
+`1167c6c1d9` additionally encodes EMI range arguments and raw readbacks without
+silent ATF address truncation; CI `37608301896` is running. Offline execution
+of the pinned ATF handler passes 64 emulated scenarios, including one-shot
+slot rejection and permission-preset writes. This does not test physical
+protection or activate a modem boot path.
 No memory is allocated/freed and no
 protection SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
 but still marks DRDI memory windows. These are unactivated loader

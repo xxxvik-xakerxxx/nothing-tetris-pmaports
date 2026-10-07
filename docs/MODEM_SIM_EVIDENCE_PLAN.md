@@ -774,15 +774,54 @@ bit 1 selects the extra `0x7ee38` call. That wrapper issues `0x82000415`
 command 6 with slot and logical ID. The common `0x7ef84` path forms the
 start/end range; its platform-type-2 branch issues `0x82000415` command 0
 with start/end shifted by 12 and the slot. The other platform branch writes
-registers directly. LK's loop does not check these helper return values.
+registers directly, but the pinned LK selector at `0x16ea0` returns constant
+2: this image takes the SMC path. LK's loop does not check these helper return
+values.
 
-Still required: trace the installed ATF's `0x82000415` handler, establish the
-active platform selector and endpoint semantics, permission presets, locks,
-and failure/readback behavior. Do not copy the unchecked LK loop into a
-boot-time caller. No reservation, padding reclamation, protection programming,
-firmware start or CCCI publication has been enabled. Local emulator execution
-aborted in the emulator process and supplies no validation evidence; native
-U-Boot code tests and builds run only in CI. This remains `Untested` modem
+The installed ATF's `0x82000415` handler is `0x2f750`; command 0 reaches
+`0x2f618`. The range helper at `0x10300` masks both page inputs to 24 bits,
+checks ordering and subtracts the `0x40000000` origin. The writer `0x2d61c`
+keeps only 23 relative page bits. Callers must reject truncation, not trust
+successful return. The slot guard at `0x10380` consumes modem slots before
+writing: repeat attempts return `-4`, while invalid bounds/slots return `-3`.
+Exceptions 8/10/11/19 are not in the modem's 32..43 table. Command 2
+subcommands 0/1/3 report start, raw end and enable state. The raw end getter
+includes its register bit-31 marker shifted to result bit 43.
+
+U-Boot `1167c6c1d9` encodes aligned, nonempty modem ranges and exact raw
+readback expectations, rejecting unrepresentable endpoints before any SMC.
+It follows LK's `start + size` endpoint convention; it does not establish
+whether hardware treats that endpoint as inclusive or exclusive. No boot-time
+caller, reservation or protection transaction is enabled.
+
+Command 6 reaches `0x2f5c4`; `0x5aa8` allows only slot 40 with preset 0..3.
+The table at `0x5a2b0` selects domain/value pairs: preset 0 is (35,2)/(47,2);
+1 is (35,3)/(47,3)/(93,3); 2 is (35,3)/(47,2)/(93,2); 3 is
+(35,2)/(47,3)/(93,3). `0x2d9c4` applies these through `0x4f28`, which
+ORs the requested permission bits into the selected readback. It does not
+replace an arbitrary prior policy. Domain labels and permission meanings are
+not inferred from these numeric values. Fresh-state and permission readback
+checks remain necessary before a hardware transaction.
+
+`patches/modem/test-atf-emi-contract.py` now runs the pinned instructions with
+Unicorn 2.1.4, synthetic stack/state and emulated register storage. All 64
+scenarios pass: exact range writes, address endpoints, readbacks, one-shot
+rejection, malformed requests, truncation and each allowed preset with zero
+and preexisting permission bits. Unexpected execution/writes stop the test.
+The prior emulator crash was resolved by permitting local JIT execution;
+no C compilation or phone access was involved. Reproduce with:
+
+```sh
+python3 -B patches/modem/test-atf-emi-contract.py /path/to/atf-declared-image.bin
+```
+
+Dependencies are Unicorn 2.1.4 and the private, exact 900752-byte header/payload
+snapshot identified above; its hash is checked before execution. No proprietary
+image is committed or uploaded to CI. These tests cover an internal handler,
+not SMC dispatch on real hardware. Native U-Boot compilation/tests run in CI.
+Still required: hardware endpoint semantics,
+initial permission state/readback, full table construction and reservation
+ownership, shared memory and modem release. This remains `Untested` modem
 bring-up infrastructure, not working SIM/calls.
 
 ## Completion criteria
