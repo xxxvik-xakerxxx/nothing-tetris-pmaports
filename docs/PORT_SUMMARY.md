@@ -31,8 +31,13 @@
 2026-10-07 follow-up: our SensorProxy `3.9-r1` from CI `37589615272`
 is live-installed, with rotation and automatic brightness confirmed again.
 It skips duplicate scalar callbacks, not hardware sampling or validation.
-No measured battery/FPS gain is claimed. Full CI `37589615268` for source
-`c82813f` is building; its preliminary modem/GPU/GNSS/camera checks passed.
+No measured battery/FPS gain is claimed. The current shared candidate is
+kernel r168, source `d4eba5e`, CI `37592121416`; preliminary checks passed
+and the full image is building. It includes driver fixes for active GPU-rail
+voltage readback and GNSS clock-read error propagation, not GPU acceleration
+or navigation enablement. The first r168 validation run failed on an obsolete
+literal blocker-string assertion; the assertion was updated without removing
+the runtime activation boundary. The installed phone remains on r167.
 The new separate kernel-export artifact is for dependency analysis, not
 runtime enablement. Current live modem handoff remains `no-fdt`; there is
 no modem, render node or camera node. GNSS transport is inactive.
