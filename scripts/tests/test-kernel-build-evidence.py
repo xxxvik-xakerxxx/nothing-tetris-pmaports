@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
     "collector", Path(__file__).parents[1] / "collect-kernel-build-evidence.py")
@@ -16,7 +17,8 @@ class EvidenceTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "build"
         self.out = Path(self.temp.name) / "out"
-        self.kernel = self.root / "linux"
+        self.sources = self.root / "chroot_native/home/pmos/build/src"
+        self.kernel = self.sources / "linux"
         for name in collector.FILES:
             path = self.kernel / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,7 +43,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(self.out.exists())
 
     def test_ambiguous(self):
-        other = self.root / "other"
+        other = self.sources / "other"
         (other / "include/config").mkdir(parents=True)
         (other / "Module.symvers").write_text("fixture")
         (other / "include/config/kernel.release").write_text("fixture")
@@ -51,6 +53,27 @@ class EvidenceTests(unittest.TestCase):
     def test_wrong_config(self):
         (self.kernel / ".config").write_text("# CONFIG_ARM64 is not set\n")
         with self.assertRaises(ValueError):
+            self.run_collect()
+
+    def test_no_recursive_chroot_scan(self):
+        # The old collector fails before finding the kernel on live procfs.
+        with patch.object(Path, "rglob", side_effect=OSError(22, "Invalid argument")):
+            self.assertEqual(len(self.run_collect()["sha256"]), len(collector.FILES))
+
+    def test_ignore_mounted_trees(self):
+        for directory in ("proc/72/task/72/net", "sys", "dev", "mnt/pmbootstrap"):
+            other = self.root / "chroot_native" / directory / "linux"
+            (other / "include/config").mkdir(parents=True)
+            (other / "Module.symvers").write_text("decoy")
+            (other / "include/config/kernel.release").write_text("decoy")
+        self.run_collect()
+
+    def test_cross_chroot_ambiguity(self):
+        other = self.root / "chroot_buildroot_aarch64/home/pmos/build/src/linux"
+        (other / "include/config").mkdir(parents=True)
+        (other / "Module.symvers").write_text("fixture")
+        (other / "include/config/kernel.release").write_text("fixture")
+        with self.assertRaisesRegex(ValueError, "found 2"):
             self.run_collect()
 
     def test_invalid_exports(self):

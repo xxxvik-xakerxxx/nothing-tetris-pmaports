@@ -17,7 +17,10 @@ FILES = (
 def collect(root, output, commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected exact source commit")
-    candidates = sorted({p.parent.resolve() for p in root.rglob("Module.symvers")
+    # pmbootstrap keeps abuild output here. Never recurse through mounted
+    # proc/sys/dev or /mnt/pmbootstrap inside a chroot.
+    candidates = sorted({p.parent.resolve() for p in
+                         root.glob("chroot_*/home/pmos/build/src/*/Module.symvers")
                          if (p.parent / "include/config/kernel.release").is_file()})
     if len(candidates) != 1:
         raise ValueError(f"expected one configured kernel, found {len(candidates)}")
