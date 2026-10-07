@@ -6,7 +6,7 @@
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
   `791756c966e2b40f3d190c77de00ed7710e2f1e5` (new remap transaction;
-  CI `37639979367` in progress; installed loader remains `1d4cb6496b`).
+  CI `37639979367` passed; installed loader remains `1d4cb6496b`).
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `1d4cb6496b02971dbdb537e92f921d036f29ec7a`, explicit
@@ -95,8 +95,8 @@ partitions were not flashed; both loader hashes matched before installation.
 
 U-Boot `791756c966` adds a checked two-stage remap executor with injectable
 transport, explicit consumed/failed state and verification of every owned
-register field. Native CI tests passed; full CI `37639979367` remains in
-progress. No production SMC adapter or boot caller was enabled, and this code
+register field. Native tests and full ARM64 CI `37639979367` passed.
+No production SMC adapter or boot caller was enabled, and this code
 was not flashed. Exclusive reservation, authenticated platform selection,
 reset ownership, complete EMI policy and Linux handoff remain prerequisites.
 
