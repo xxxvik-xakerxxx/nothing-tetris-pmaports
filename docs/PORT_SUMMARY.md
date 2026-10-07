@@ -5,8 +5,8 @@
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `7b45fdbc6200b748edf19b618f1e7a189043cb96` (authenticated modem bundle
-  preflight; CI `37650077659` running, not installed). Installed loader remains
+  `7231449a30f303c62dedeb019079083c595a4c87` (bounded modem partition
+  reader; CI `37651088677` pending, not installed). Installed loader remains
   `fef0154b04`: first warm reservation and one cold automatic sensor-start
   check passed; repeated cold starts, lifecycle and visual regression pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
@@ -104,8 +104,20 @@ pass; corrupt or incomplete input leaves output unchanged. This is not yet
 a partition reader or RAM-copy/boot path. Independent device root trust,
 slot/SKU/rollback and component-version policy, reset and complete memory
 protection remain required. Local Python reference tests passed (7 executed,
-5 native/optional tests skipped); native C and ARM64 CI `37650077659` is
-pending. No phone change or new SIM capability is claimed.
+5 native/optional tests skipped); native C and full ARM64 CI `37650077659`
+passed. No phone change or new SIM capability is claimed.
+
+U-Boot `7231449a30` adds the explicit-slot GPT/block reader: partition bounds
+and staging capacity are checked before payload reads; reads use 64 KiB
+chunks and short reads fail without retry. Only a complete snapshot reaches
+bundle authentication. The selected names are `modem_a/b`, as established by
+the B4.1 LK platform table (see `patches/modem-stock-audit/PRODUCER.md`) and
+confirmed against this phone's GPT, not the generic `md1img` fallback.
+Each observed partition is 200 MiB, larger than U-Boot's 32 MiB malloc arena;
+an exclusive temporary LMB staging allocation is required before integration.
+No boot caller, modem destination writes, SMC or activation is enabled.
+Native reader tests for 512/4096-byte blocks, exact read addresses, short reads
+and malformed geometry are in CI `37651088677`; validation is pending.
 
 The next modem candidate, `0006-dpmaif-use-standard-allocation.patch.vendor`,
 removes automatic selection of the incompatible vendor CMA pool while leaving
