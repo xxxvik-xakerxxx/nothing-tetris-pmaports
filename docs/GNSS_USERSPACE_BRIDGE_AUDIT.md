@@ -2,6 +2,15 @@
 
 ## Scope and source identity
 
+r168 candidate: packaged patch `1005` fixes the source-confirmed clock-query
+bug in `gps_dl_clock_mng_get_platform_clock()`. A failed MT6685 regmap read
+now returns its negative error through the existing ioctl rather than a
+fabricated 26 MHz result. Successful 26/52 MHz enums and missing-map behavior
+are unchanged. CI exercises the actual patched function with every 8-bit
+selector, failed reads and a swallowed-error mutant. No new GNSS command,
+firmware download or navigation provider is enabled; CI/live verification is
+pending. This supersedes the historical "not packaged" clock-query note below.
+
 This audit used local sources only. The authoritative connectivity source is
 Nothing OS 4.1 Tetris commit
 `e96f60dc081ae3525ef43d4bcf0ee5ee97e53835` from the local

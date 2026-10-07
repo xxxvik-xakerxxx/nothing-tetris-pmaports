@@ -19,8 +19,13 @@ The VGPU readback prerequisite is enforced by
 `scripts/check-panthor-vgpu-readback.py`. It compiles the pinned Nothing OS 4.1
 MT6315 callback and the pinned mainline regulator helper into a host-only fake
 regmap test, then proves that an enabled VBUCK2 rail is read from DBG0 by the
-vendor path and ELR2 by mainline. This is source evidence for a blocker, not a
-runtime rail measurement or permission to register the GPU regulator provider.
+vendor path and ELR2 by unpatched mainline. Patch `0105` now implements the
+vendor active/off readback contract in the mainline MT6315 driver: DBG4 bit 0
+selects DBG0 versus ELR; either read error is propagated. Voltage writes,
+enable/mode operations and DT availability are unchanged. The source harness
+also exercises the actual patched callback and rejects stale-selector/error
+mutants. r168 CI/runtime verification remains pending. This is a driver
+implementation change, not a runtime rail measurement or a working GPU.
 
 Candidate `c8f02ca` additionally stages a compile-only MT6363 VSRAM_CPUM
 descriptor and enables the existing MT6319-compatible regulator provider
@@ -111,8 +116,8 @@ clock, reset, SRAM and firmware ownership are complete.
 
 ## Blocking dependencies
 
-1. **Safe genpd policy.** A later patch must add
-   `MTK_SCPD_KEEP_DEFAULT_OFF` for MFG0 and prove that registering the domain
+1. **Safe genpd policy.** Patch `0035` already supplies
+   `MTK_SCPD_KEEP_DEFAULT_OFF` for MFG0; still prove that registering the domain
    leaves SPM `MFG0_PWR_CON` unchanged before any GPU consumer is added.
 2. **GPU regulator.** Mainline DT still has no MT6319 USID 6 VBUCK2 GPU supply.
    The candidate enables the compatible provider module and inventories

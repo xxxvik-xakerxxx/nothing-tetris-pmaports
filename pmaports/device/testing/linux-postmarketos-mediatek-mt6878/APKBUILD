@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=167
+pkgrel=168
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -136,11 +136,13 @@ source="
 	0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch
 	0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
 	0104-arm64-dts-mt6878-scp-infracfg.patch
+	0105-regulator-mt6315-read-active-voltage-selector.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
 	1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 	1004-vendor-gnss-finalize-fsm-records.patch.vendor
+	1005-vendor-gnss-propagate-clock-read-error.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
 	1103-vendor-audio-mt6685-clock.patch.vendor
@@ -197,6 +199,9 @@ prepare() {
 		< "$srcdir"/1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/1004-vendor-gnss-finalize-fsm-records.patch.vendor
+	sed -i 's/\r$//' "$_connmods_dir"/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1005-vendor-gnss-propagate-clock-read-error.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -906,6 +911,8 @@ package() {
 }
 
 sha512sums="
+7ffc4ead61098019cb5f1a7993089aa91856dbe9568bdda18146f118214155ea60bee94ee23c457bedb8c7eb22f39b62a5c34e3c4fa5b562718111305ebddae3  1005-vendor-gnss-propagate-clock-read-error.patch.vendor
+2ade30fa9285f4c4db55f39f94c1b61f07e354dc95ec2bde8e9e324cced9bb20659a8c435385a5c4a331fa91179195903ee92713b64c0ef212ad755d37583fcb  0105-regulator-mt6315-read-active-voltage-selector.patch
 b9f322b40fbd2bf5d686d24b3679c31c5f7543f5c3deee2d498a7e225ba89c86a10e33898f660e9c89de1599a6204f585c652a3270bd368cf7ef1d225e43e126  0103-vendor-scp-share-infracfg-syscon.patch.vendor
 3bc84cb9687fb63eafc6b53307393643045796df5bb1214cd1d1241eefa187f23cafaff16191bd83035c388360b3b9a9a8600356bcf697cc8b8939446059c84c  0104-arm64-dts-mt6878-scp-infracfg.patch
 5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c  linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz

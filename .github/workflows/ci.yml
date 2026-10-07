@@ -91,6 +91,14 @@ jobs:
         run: python3 patches/camera-identity/check-reset.py
       - name: Validate GNSS boot protocol gate
         run: python3 scripts/check-gnss-boot-protocol.py
+      - name: Validate GNSS clock readback implementation
+        run: |
+          git init upstream/connectivity-modules
+          git -C upstream/connectivity-modules remote add origin \
+            https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git
+          git -C upstream/connectivity-modules fetch --filter=blob:none --depth=1 origin \
+            e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+          python3 scripts/check-gnss-clock-readback.py upstream/connectivity-modules
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
       - name: Validate kernel package layout
@@ -113,6 +121,7 @@ jobs:
           fi
 
   build-pmaports:
+    needs: validate-overlay
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     container:

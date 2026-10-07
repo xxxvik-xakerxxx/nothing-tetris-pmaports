@@ -1,0 +1,37 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] gps: propagate MT6685 clock selector read errors
+
+The clock query initializes value to zero and ignores the regmap_read()
+result, turning a bus error into a valid 26 MHz result. Return the error
+instead. The existing ioctl returns the helper result directly, so no UAPI
+number, layout or success enum changes. Keep missing-regmap behavior.
+Normalize this source file's CRLF endings before applying this patch.
+
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c b/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c
+--- a/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c
++++ b/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c
+@@ -99,8 +99,8 @@
+ int gps_dl_clock_mng_get_platform_clock(void)
+ {
+ 	struct regmap *map = gps_dl_clock_mng_get_regmap();
+-	int value = 0;
++	unsigned int value;
+ 	int retval = 0;
+ 
+ 	if (!map) {
+ 		GDL_LOGE("failed to get regmap.\n");
+@@ -108,7 +108,11 @@
+ 	}
+ 
+-	regmap_read(map, DCXO_DIGCLK_ELR, &value);
++	retval = regmap_read(map, DCXO_DIGCLK_ELR, &value);
++	if (retval) {
++		GDL_LOGE("failed to read platform clock: %d\n", retval);
++		return retval;
++	}
+ 	if (value & 0x1)
+ 		retval = 1; /*52M*/
+ 	else
+ 		retval = 0; /*26M*/

@@ -9,11 +9,12 @@
 #define dev_notice(...) ((void)0)
 #define dev_err(...) ((void)0)
 #define ffs(value) __builtin_ffs(value)
+#define BIT(n) (1U << (n))
 
 struct regulator_desc { unsigned int vsel_reg, vsel_mask; };
 struct mt6315_regulator_info {
 	struct regulator_desc desc;
-	unsigned int da_vsel_reg, da_reg, qi;
+	unsigned int da_vsel_reg, da_reg, qi, status_reg;
 };
 struct regmap {
 	unsigned int elr, actual, enabled, trace[2], reads, fail_at;
@@ -51,6 +52,7 @@ int main(void)
 		.da_vsel_reg = MT6315_VBUCK2_DBG0,
 		.da_reg = MT6315_VBUCK2_DBG4,
 		.qi = 1,
+		.status_reg = MT6315_VBUCK2_DBG4,
 	};
 	struct regmap map = {0};
 	struct regulator_dev rdev = { &info.desc, &map };
@@ -71,6 +73,13 @@ int main(void)
 				assert(map.trace[1] == (enabled ? MT6315_VBUCK2_DBG0 :
 								MT6315_BUCK_TOP_ELR2));
 				map.reads = 0;
+				assert(mt6315_get_voltage_sel(&rdev) ==
+				       (int)(enabled ? actual : elr));
+				assert(map.reads == 2);
+				assert(map.trace[0] == MT6315_VBUCK2_DBG4);
+				assert(map.trace[1] == (enabled ? MT6315_VBUCK2_DBG0 :
+								MT6315_BUCK_TOP_ELR2));
+				map.reads = 0;
 				assert(regulator_get_voltage_sel_regmap(&rdev) == (int)elr);
 				assert(map.reads == 1);
 				assert(map.trace[0] == MT6315_BUCK_TOP_ELR2);
@@ -81,6 +90,9 @@ int main(void)
 		for (fail = 1; fail <= 2; fail++) {
 			map = (struct regmap){ .enabled = enabled, .fail_at = fail };
 			assert(mt6315_regulator_get_voltage_sel(&rdev) == -5);
+			assert(map.reads == fail);
+			map.reads = 0;
+			assert(mt6315_get_voltage_sel(&rdev) == -5);
 			assert(map.reads == fail);
 		}
 	}

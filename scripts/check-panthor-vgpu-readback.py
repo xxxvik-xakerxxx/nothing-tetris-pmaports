@@ -52,6 +52,7 @@ def main():
     parser.add_argument("device_modules", type=Path,
                         help="git repository containing the pinned Nothing 4.1 object")
     parser.add_argument("--cc", default="cc", help="host C compiler (no target build)")
+    parser.add_argument("--apply-only", action="store_true")
     args = parser.parse_args()
 
     def vendor(path):
@@ -95,6 +96,24 @@ def main():
     fixture = Path(__file__).parent / "tests/panthor-vgpu-readback.c"
     with tempfile.TemporaryDirectory(prefix="panthor-vgpu-host-") as temporary:
         directory = Path(temporary)
+        driver = directory / DRIVER
+        driver.parent.mkdir(parents=True)
+        driver.write_text(upstream)
+        patch = (Path(__file__).resolve().parents[1] /
+                 "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/"
+                 "0105-regulator-mt6315-read-active-voltage-selector.patch")
+        applied = subprocess.run(["patch", "--batch", "--fuzz=0", "-p1", "-i", str(patch)],
+                                 cwd=directory, check=True, text=True, capture_output=True)
+        require("offset" not in applied.stdout and "fuzz" not in applied.stdout,
+                "candidate patch relocated")
+        fixed = driver.read_text()
+        require(re.search(r"\.get_voltage_sel\s*=\s*mt6315_get_voltage_sel\s*,", fixed),
+                "fixed callback not wired")
+        require(".da_vsel_reg = _bid##_DBG0" in fixed, "missing actual-selector mapping")
+        generated += function(fixed, "static int mt6315_get_voltage_sel(")
+        if args.apply_only:
+            print("GPU readback patch applies without offset/fuzz; no compilation performed")
+            return
         source_header = directory / "readback-source.h"
         source_header.write_text(generated)
         binary = directory / "readback-test"
@@ -106,6 +125,8 @@ def main():
             ("wrong enabled readback register", "reg_addr = info->da_vsel_reg;",
              "reg_addr = rdev->desc->vsel_reg;"),
             ("swallowed read errors", "return ret;", "return 0;"),
+            ("candidate uses stale selector", "info->da_vsel_reg : rdev->desc->vsel_reg",
+             "rdev->desc->vsel_reg : rdev->desc->vsel_reg"),
         ):
             require(old in generated, f"mutation anchor missing: {name}")
             source_header.write_text(generated.replace(old, new))
@@ -118,7 +139,7 @@ def main():
     for name, source in ((DRIVER, upstream), (HEADER, upstream_header),
                          ("drivers/regulator/helpers.c", helpers)):
         print(f"Kernel SHA256 {name}: {hashlib.sha256(source.encode()).hexdigest()}")
-    print("BLOCKER: enabled-rail ELR2/DBG0 equivalence is unproven; no runtime approval.")
+    print("PASS: candidate matches vendor active/off readback; no runtime GPU approval.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,66 @@
+From: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+Subject: [PATCH] regulator: mt6315: read active selector when the buck is on
+
+The Nothing OS 4.1 driver reads DBG0 when DBG4 bit 0 reports an active
+buck, and reads the programmed ELR selector otherwise. Reading ELR
+unconditionally can report a stale software request instead of the active
+voltage after firmware control. Follow the same readback contract while
+leaving voltage programming, mode selection and rail enablement unchanged.
+
+No regulator or GPU DT consumer is enabled by this change.
+
+Link: https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878/blob/ee2be53cb75670b548948636a0db1d1ff112bf12/drivers/regulator/mt6315-regulator.c
+Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+---
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -18,6 +18,7 @@
+ struct mt6315_regulator_info {
+ 	struct regulator_desc desc;
+ 	u32 status_reg;
++	u32 da_vsel_reg;
+ 	u32 lp_mode_mask;
+ 	u32 lp_mode_shift;
+ };
+@@ -51,6 +52,7 @@
+ 		.of_map_mode = mt6315_map_mode,			\
+ 	},							\
+ 	.status_reg = _bid##_DBG4,				\
++	.da_vsel_reg = _bid##_DBG0,				\
+ 	.lp_mode_mask = BIT(_bid),				\
+ 	.lp_mode_shift = _bid,					\
+ }
+@@ -175,11 +177,31 @@
+ 	return (regval & BIT(0)) ? REGULATOR_STATUS_ON : REGULATOR_STATUS_OFF;
+ }
+ 
++static int mt6315_get_voltage_sel(struct regulator_dev *rdev)
++{
++	const struct mt6315_regulator_info *info;
++	unsigned int status, selector, reg;
++	int ret;
++
++	info = container_of(rdev->desc, struct mt6315_regulator_info, desc);
++	ret = regmap_read(rdev->regmap, info->status_reg, &status);
++	if (ret)
++		return ret;
++
++	/* Firmware can own the active selector while the buck is enabled. */
++	reg = status & BIT(0) ? info->da_vsel_reg : rdev->desc->vsel_reg;
++	ret = regmap_read(rdev->regmap, reg, &selector);
++	if (ret)
++		return ret;
++
++	return selector & rdev->desc->vsel_mask;
++}
++
+ static const struct regulator_ops mt6315_volt_range_ops = {
+ 	.list_voltage = regulator_list_voltage_linear_range,
+ 	.map_voltage = regulator_map_voltage_linear_range,
+ 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
+-	.get_voltage_sel = regulator_get_voltage_sel_regmap,
++	.get_voltage_sel = mt6315_get_voltage_sel,
+ 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
+ 	.enable = regulator_enable_regmap,
+ 	.disable = regulator_disable_regmap,
