@@ -50,11 +50,15 @@ U-Boot modem prerequisites now on `master`: `f7ed9f7f6b` accepts bounded
 zero-tail 48-byte stock v3 descriptors; `b2917cce8f` verifies signed modem
 headers/payloads (full CI `37597316422` passed). `bbbc3b06c5` adds a bounded
 relative ROM/DSP layout planner for the observed v6/DRDI-mode-3 profile; native
-tests passed in CI `37601037773`, with the full build still running. The exact
-stock LK skips separate DRDI loading in mode 3. These are unactivated loader
+full CI `37601037773` passed. `b510cbb875` adds the initial physical block-map
+planner: region/DSP/padding flags, overflow-safe base arithmetic, full reservation
+coverage and an atomic 32-block limit. Native tests passed in CI `37603138572`;
+its full build is still running. No memory is allocated/freed and no protection
+SMC is executed. The exact stock LK skips separate DRDI loading in mode 3,
+but still marks DRDI memory windows. These are unactivated loader
 prerequisites, not modem boot: device-root/rollback policy, physical reservations,
 remapping, secure reset/protection and CCCI publication remain unresolved.
-See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/bbbc3b06c5/doc/board/mediatek/mt6878-tetris.rst).
+See the [U-Boot implementation notes](https://github.com/xxxvik-xakerxxx/u-boot/blob/b510cbb875/doc/board/mediatek/mt6878-tetris.rst).
 Neither these U-Boot candidates nor r168 have been flashed on the phone.
 
 A 60-second USB-attached idle capture passed on the same boot
