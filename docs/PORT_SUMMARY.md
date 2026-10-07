@@ -5,10 +5,10 @@
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
 - U-Boot: `xxxvik-xakerxxx/u-boot`, branch `master`, source
-  `fef0154b0404210799a6851ac2c07dcbc9e9c736` (optional RAM-only modem
-  reservation diagnostic; CI `37643162425` passed and slot A was flashed).
-  First warm reservation and one cold automatic sensor-start check passed;
-  repeated cold starts, lifecycle and current visual regression remain pending.
+  `7b45fdbc6200b748edf19b618f1e7a189043cb96` (authenticated modem bundle
+  preflight; CI `37650077659` running, not installed). Installed loader remains
+  `fef0154b04`: first warm reservation and one cold automatic sensor-start
+  check passed; repeated cold starts, lifecycle and visual regression pending.
 - Installed clean kernel: `7.2.1-r168`, Linux `6.18.0 #169`, CI
   `37614381947`, source `6576019bea1d31e7ff15e2c28870329a7bce6be4`.
 - Installed loader: `fef0154b0404210799a6851ac2c07dcbc9e9c736`, explicit
@@ -96,6 +96,16 @@ Local logs and SensorProxy observations are in
 partitions were not flashed; both loader hashes matched before installation.
 
 ### Loader prerequisites
+
+U-Boot `7b45fdbc62` connects bounded container parsing, adjacent certificate
+pairing, verification of all ROM/DRDI/DSP signatures and signed ROM layout
+validation. It publishes offsets and the load plan only after all checks
+pass; corrupt or incomplete input leaves output unchanged. This is not yet
+a partition reader or RAM-copy/boot path. Independent device root trust,
+slot/SKU/rollback and component-version policy, reset and complete memory
+protection remain required. Local Python reference tests passed (7 executed,
+5 native/optional tests skipped); native C and ARM64 CI `37650077659` is
+pending. No phone change or new SIM capability is claimed.
 
 The next modem candidate, `0006-dpmaif-use-standard-allocation.patch.vendor`,
 removes automatic selection of the incompatible vendor CMA pool while leaving
