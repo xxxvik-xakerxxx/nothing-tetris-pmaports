@@ -10,6 +10,7 @@ git -C "$1" archive ee2be53cb75670b548948636a0db1d1ff112bf12 \
     drivers/misc/mediatek/rps/rps_perf.c \
     drivers/misc/mediatek/eccci/fsm/ap_md_mem.c \
     drivers/misc/mediatek/eccci/hif/Makefile \
+    drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c \
     drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.h \
     drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c > "$tmp/source.tar"
 tar -xf "$tmp/source.tar" -C "$tmp"
@@ -19,14 +20,22 @@ for candidate in \
     0003-mdss-optional-mrdump.patch.vendor \
     0004-dpmaif-page-pool-linux-6.18.patch.vendor \
     0005-dpmaif-page-pool-dma-length.patch.vendor \
-    0006-dpmaif-use-standard-allocation.patch.vendor
+    0006-dpmaif-use-standard-allocation.patch.vendor \
+    0109-vendor-eccci-cldma-timer-api.patch.vendor
 do
     source="$packaged/$candidate"
     case "$candidate" in 0004-*|0005-*) source="$here/$candidate" ;; esac
     (cd "$tmp" && git apply --check "$source")
     (cd "$tmp" && git apply "$source")
 done
-echo 'PASS: six modem candidates apply to exact B4.1 files; no hardware execution'
+grep -Fq 'timer_container_of(md_ctrl, t, traffic_monitor);' \
+    "$tmp/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c"
+if grep -Eq '^[[:space:]]*struct .*from_timer\(' \
+    "$tmp/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c"; then
+    echo 'FAIL: CLDMA still uses the removed timer API' >&2
+    exit 1
+fi
+echo 'PASS: seven modem patches apply to exact B4.1 files; no hardware execution'
 python3 "$here/check-dpmaif-allocation.py" "$tmp/drivers/misc/mediatek/eccci/hif/Makefile"
 file=drivers/misc/mediatek/eccci/hif/ccci_dpmaif_page_pool.c
 awk '/^int skb_alloc_from_pool\(/ { active=1 }

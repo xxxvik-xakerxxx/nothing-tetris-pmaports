@@ -2,6 +2,16 @@
 
 ## Current integration
 
+r170 CI `37744399850` failed compiling `ccci_hif_cldma.c:519`: the newly
+included CLDMA module still used `from_timer`, removed in Linux 6.18.
+r172 adds `0109`, replacing it with `timer_container_of`, as already done
+for CCIF. Callback behavior and timer ownership are unchanged. The pinned
+modem source has no other active `from_timer` calls after these two patches
+(CCMNI retains only a commented-out historical line). The patch-application
+gate now checks CLDMA too. Full linkage remains pending a successful CI run;
+the failed r170 run produced no install image. r172 also retains r171's
+GPU/camera PMIC phase-mask patch, whose separate native tests passed.
+
 r170 moves 0001, 0002, 0003 and 0006 into the kernel package's source and
 prepare sequence. Their canonical files now live in
 `pmaports/device/testing/linux-postmarketos-mediatek-mt6878/`; the candidate
