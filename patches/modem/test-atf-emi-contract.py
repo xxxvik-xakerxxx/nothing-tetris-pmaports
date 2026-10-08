@@ -31,6 +31,12 @@ def extract(path):
         raise ValueError("unexpected ATF container header")
     if hashlib.sha256(data[512:]).hexdigest() != SHA:
         raise ValueError("unrecognized ATF payload; re-audit before use")
+    image = data[512:]
+    fid32, fid64, name, _, handler = struct.unpack_from("<IIQQQ", image, 0x58e68)
+    if (fid32, fid64, handler) != (0x8200050b, 0xc200050b, BASE + 0x2f750):
+        raise ValueError("EMIDBG SIP table does not select the audited handler")
+    if image[name - BASE:].split(b"\0", 1)[0] != b"MTK_SIP_EMIDBG_CONTROL":
+        raise ValueError("unexpected SIP interface name")
     return data[512:]
 
 
@@ -127,7 +133,8 @@ def check(data):
             commits = [value for addr, _, value in h.writes if addr == MMIO + 0x800]
             assert commits == [1] * len(expected)
             count += 1
-    print(f"PASS: {count} pinned ATF EMI scenarios; bounds, readback, one-shot state")
+    print(f"PASS: {count} pinned ATF EMIDBG scenarios; bounds, readback, one-shot state")
+    print("Interface: 0x8200050b / 0xc200050b, NOT BL_EMIMPU_CONTROL 0x82000415")
     print("Raw end readback includes bit 43; oversized page input is truncated")
     print("Preset writes preserve existing permission bits (OR), not replacement")
     print("No hardware access; physical permissions and endpoint semantics remain untested")
