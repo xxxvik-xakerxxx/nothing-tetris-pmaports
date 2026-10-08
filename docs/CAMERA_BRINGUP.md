@@ -4,6 +4,11 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
+Do not use global clock debugfs reads for the camera baseline: the current
+r168 image rebooted with an external abort while reading `clk_summary`.
+See the [captured clock-gate trace](GPU_BRINGUP.md#2026-10-08-clock-observation-failure).
+An absent camera GPIO consumer is not proof that a shared rail is safe to switch.
+
 2026-10-08: r171 adds the shared MT6319 VMM/GPU prerequisite `0108`.
 VBUCK1 forced-PWM phase selection can now describe the board's independent
 phase instead of the USID-6 default that also selects VGPU/VCORE bits.

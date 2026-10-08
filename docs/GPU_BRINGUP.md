@@ -2,6 +2,11 @@
 
 ## Current status
 
+**Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
+files on the current image.** The 2026-10-08 observation below caused an
+external abort and reboot. Clock enumeration is not a passive hardware read.
+The existing `check-live-idle-delta.sh` already avoids this operation.
+
 2026-10-08: r171 adds board-described VBUCK1 forced-PWM phase selection
 (`0108`), after the active-voltage-selector correction. Nothing B4.1
 `ee2be53cb75670b548948636a0db1d1ff112bf12`, `mt6878.dts`'s
@@ -17,7 +22,43 @@ before a provider/consumer DT can be enabled, not proof of rail ownership.
 `scripts/check-mt6315-mode-mask.py` applies `0105` then `0108` and extracts
 the actual selection helper for CI tests of all 16 USIDs, valid/invalid masks
 and property-read failures. No DT node or PMIC write is introduced. Static
-patch application passed; native tests and kernel ABI build are pending.
+patch application passed. CI `37746161064` at `eb05019` passed 2464 native
+helper cases and three mutation checks. The full kernel ABI build and actual
+PMIC phase/rail behavior remain untested; this validation-only run produced
+no install image.
+
+### 2026-10-08 clock observation failure
+
+Installed r168, kernel `6.18.0 #169`, boot
+`2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`, retained loader `fef0154b`:
+reading SPMI device links and GPIO ownership completed. SPMI exposed USIDs
+4, 5 and 9, not 6. GPIO ownership listed no requested main-camera GPIO1,
+23, 25 or 93; absence of a Linux owner does not prove electrical safety.
+The following filtered read of `/sys/kernel/debug/clk/clk_summary` aborted
+before its USB post-check. No module, regulator, GPIO or DT write was issued.
+
+`systemd-pstore` archived the evidence in
+`/var/lib/systemd/pstore/console-ramoops-0` (the live pstore directory was
+empty). At monotonic 57890.530823 it records a synchronous external abort
+`0x96000010`, task `grep`, with this stack:
+
+```
+regmap_mmio_read32le -> _regmap_bus_reg_read -> _regmap_read
+-> regmap_read -> mtk_cg_bit_is_cleared -> clk_core_is_enabled
+-> clk_summary_show_subtree -> clk_summary_show -> seq_read
+```
+
+The register argument is `0xe00`. The pinned MT6878 IMP IIC wrapper gate
+tables use that status offset. The trace does not identify which wrapper or
+its physical mapping, and does not implicate MFG PLL rate readback. Resolve
+the actual provider/mapping and its power/access ownership before changing
+clock callbacks; do not return fabricated enabled states or turn on unrelated
+power domains to suppress the abort. No second read was attempted.
+
+The phone rebooted to `890665d4-245f-4e72-88d2-14a3bf438dc6`; USB NCM/SSH
+recovered and systemd reported no failed units. Visual display/touch/sensor
+confirmation is pending. No new image was flashed. Device wall time lagged
+the host date, so boot IDs and monotonic timestamps identify this incident.
 
 GPU acceleration is `Broken`. The stable image intentionally has no Mali
 platform device, so Panthor cannot probe and no render node is expected.
