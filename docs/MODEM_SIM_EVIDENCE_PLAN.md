@@ -862,6 +862,18 @@ This proves the readback ABI, not domain names, hardware policy correctness or
 which selectors correspond to implemented domains. Full-width replies may be
 all ones, so interface/stage admission cannot be inferred from that value.
 
+Independent source cross-check: local Nothing device-module snapshot
+`957dac185efe46cbf6336b0fff9516d84c8cd78f`,
+`include/soc/mediatek/emi.h`, defines `MTK_EMIMPU_READ_AID` as 4.
+`drivers/memory/mediatek/emi-mpu-test-v2.c` calls the selector an AID and
+decodes each two-bit value as 0 = No, 1 = WO, 2 = RO, 3 = RW, with the first
+AID in the low two bits. This corroborates the packed ABI and permission
+labels, not the hardware identity behind each AID or the correct modem policy.
+The driver obtains AID count and group size from DT; the 256-selector emulator
+coverage must not be reported as a measured count of implemented domains.
+U-Boot CI `37739687406` passed for policy verification commit `9bc8195573`;
+no hardware protection transaction has been issued.
+
 ## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
