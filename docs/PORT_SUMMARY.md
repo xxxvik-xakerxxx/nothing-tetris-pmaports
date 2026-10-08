@@ -1,6 +1,46 @@
-# Port summary, 2026-10-07
+# Port summary, 2026-10-08
 
-## Canonical sources and installed device
+## Latest installed checkpoint: r172
+
+CI [37753866853](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37753866853),
+attempt 2, source `17fbac0fbef455c1feb33526cf12eceee1e96e81`, passed and
+was clean-installed to `super` and `userdata` on 2026-10-08. The archive
+SHA256 matched GitHub's API digest; all image hashes and the complete sparse
+structure passed verification. Expanded root image size was 2,783,969,280
+bytes. Installed kernel is `7.2.1-r172`, Linux `6.18.0 #173`.
+
+The first boot `ad734d5d-d70c-4fd6-9e5f-403a46db5abc` passed USB/SSH,
+32 MiB USB transfer, root expansion to 104.5 GiB and installed FIT hash
+verification. No systemd units were failed. DSI was connected/enabled;
+the user confirmed normal display and touch. Wi-Fi and Bluetooth devices
+enumerated; association and pairing were not tested. No critical kernel
+fault was found in the captured log; vendor Wi-Fi scan warnings remain.
+U-Boot `fef0154b0404210799a6851ac2c07dcbc9e9c736` in slot A was retained,
+with slot B and factory/calibration partitions untouched. Fastboot lost USB
+status during the reboot command; the subsequent successful Linux boot was
+verified separately.
+
+Sensor startup was disabled on the fresh image. Its previous opt-in was
+restored for the next cold boot without loading modules on this warm boot.
+**r172 cold-start sensor validation is pending.** This is not evidence of
+zero-configuration sensor startup or completed lifecycle testing.
+
+The complete nine-module modem build/link gate now passes, but those modules
+remain evidence artifacts, not installed/autoloaded runtime support. Modem
+DT stays disabled. SIM/calls, GNSS navigation, GPU acceleration and cameras
+are not established by this installation.
+
+Image SHA256:
+
+- Boot: `e5046b8c484b379e88e88cd2eb3b3a145a41ed9acb7e6b30bdcfb1b90b78f68d`.
+- Sparse root: `d123990135f7a4543d278afcf406c15a7a7fec05743624f97e3104d96b90b0ff`.
+- FIT: `cc05868c69d2595b8e89b79cb757a1cdf478d87a5d02e3861040ece037cbd7a3`.
+
+Private local evidence: `local/ci-run-37753866853/validation/` in the parent
+workspace. The r168 checkpoints below are historical baselines, superseded
+by this installed version; subsystem research boundaries still apply.
+
+## Previous r168 Baseline
 
 - pmOS: `xxxvik-xakerxxx/nothing-tetris-pmaports`, branch `main`, integrated
   source `6576019` (before this documentation update).
