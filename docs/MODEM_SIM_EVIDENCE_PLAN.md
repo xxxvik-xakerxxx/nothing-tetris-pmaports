@@ -929,7 +929,7 @@ test. The diagnostic magic changes logging only. This establishes an AEE
 normal/abnormal branch, not a cold/warm profile or known permission reset state.
 An inverted branch in a synthetic image copy is rejected by the same test.
 U-Boot commit `04b9a0c10d3c832f6d45043e4b494b5cc02a7216` contains the shared
-policy planner and native fault-injection tests; CI `37771457999` is pending.
+policy planner and native fault-injection tests; CI `37771457999` passed.
 No local C/U-Boot build was run and this loader is not installed.
 
 U-Boot's `tetris_modem_plan_emi_policy()` produces a strict candidate for slots
@@ -952,6 +952,23 @@ offline verification. Linking alone does not authorize loading this stack.
 The source cross-check above also has `mt6878.dts` `nsmpu@10351000` with
 `sr-cnt=63`, `aid-cnt=256`, `aid-num-per-set=32`, corroborating the shape of
 the audited readback. This is source evidence, not a measurement on all SKUs.
+
+### CCCI table producer
+
+U-Boot `36ee5fcae52ebd7a68b80bd6e8e915e7c6793d50` adds bounded v2 tag
+serialization, matching the pinned B4.1 `ccci_util_lib_fo.c` consumer's 64-byte
+name and three little-endian 32-bit fields. The producer rejects duplicate or
+unterminated names, empty payloads, oversized tables, pointer wrap and aliases
+before changing output. It emits no native pointers or struct padding.
+Native CI `37773917358` is pending; tests cover exact bytes, guards, boundaries
+and a full synthetic payload passed through the real CCCI validator.
+
+This does not publish `ccci,modem_info_v2`, mark firmware ready or start the
+modem. The current `no-fdt` reports absence of a previous-stage FDT; it is not
+the sole missing operation. Building a new handoff also requires the complete
+validated shared-memory layout, applied/read-back protection, remapping and
+reset ownership. Advertising tags before those gates would be false readiness.
+The installed loader and r172 phone are unchanged by this source-only work.
 
 ## Completion criteria
 
