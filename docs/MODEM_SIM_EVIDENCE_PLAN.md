@@ -841,13 +841,26 @@ initial permission state/readback, full table construction and reservation
 ownership, shared memory and modem release. This remains `Untested` modem
 bring-up infrastructure, not working SIM/calls.
 
-U-Boot now includes a transport-injected, range-only EMI transaction: reject
-already enabled slots, write the range once, verify start/raw-end/enable, and
-stop on the first error without retry. It validates reservation bounds before
-any callback. The emulator above also checks the initial disabled-state read
-without MMIO writes. Native fault-injection tests run in U-Boot CI. There is
-still no production SMC adapter or boot caller; range verification is not a
-complete permission policy and does not advance the modem's hardware status.
+U-Boot's transport-injected EMI transaction now requires an independently
+established expected policy. It rejects enabled slots, compares all eight
+packed policy words before the sole range write, verifies start/raw-end/enable,
+then compares policy again. It stops on the first error without retry and
+validates reservation bounds before any callback. Native fault injection
+covers all 21 results, including missing outputs with zero/all-ones policies.
+There is still no production SMC adapter or boot caller. Expected policy
+values remain unresolved; never accept current readback as their replacement.
+
+The pinned ATF exposes permission readback through operation 2, query 4:
+arguments are `(2, 4, slot, group)`. Handler `0x2f464` selects 32 consecutive
+domain indices, reads the slot's two-bit field and packs them into x0.
+Groups 0..7 cover selectors 0..255; first selector occupies bits 1:0. Access
+uses selector register `0x103519bc`, a `dsb sy`, then slot-dependent read word
+`0x103519e4 + 4*((slot-1)/16)`. No permission commit is performed, but selector
+access must be serialized. The emulator adds 96 independently varied cases
+covering all modem slots/groups and checks that only selector writes occur.
+This proves the readback ABI, not domain names, hardware policy correctness or
+which selectors correspond to implemented domains. Full-width replies may be
+all ones, so interface/stage admission cannot be inferred from that value.
 
 ## Completion criteria
 

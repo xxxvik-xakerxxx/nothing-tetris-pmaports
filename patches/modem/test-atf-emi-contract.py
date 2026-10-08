@@ -4,8 +4,10 @@ import argparse
 import hashlib
 from pathlib import Path
 import struct
+import random
 
-from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE, UC_HOOK_MEM_WRITE
+from unicorn import (Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE,
+                     UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ)
 from unicorn.arm64_const import (
     UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X2, UC_ARM64_REG_X3,
     UC_ARM64_REG_X4, UC_ARM64_REG_X5, UC_ARM64_REG_LR, UC_ARM64_REG_PC,
@@ -16,7 +18,7 @@ SHA = "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
 BASE, STACK, STOP = 0x48800000, 0x70000000, 0x70002000
 MMIO, OUTPUT = 0x10351000, STACK + 0x1000
 ALLOWED = ((0x2f750, 0x2f7e4), (0x2f618, 0x2f69c), (0x10300, 0x103d0),
-           (0x2d61c, 0x2d670), (0x2f510, 0x2f618), (0x2f428, 0x2f464),
+           (0x2d61c, 0x2d670), (0x2f510, 0x2f618), (0x2f428, 0x2f510),
            (0x5aa8, 0x5adc), (0x2d9c4, 0x2da20), (0x4f28, 0x4fcc))
 REGS = (UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X2,
         UC_ARM64_REG_X3, UC_ARM64_REG_X4, UC_ARM64_REG_X5)
@@ -41,15 +43,25 @@ def extract(path):
 
 
 class Handler:
-    def __init__(self, data):
+    def __init__(self, data, permission_words=None):
         self.uc = Uc(UC_ARCH_ARM64, UC_MODE_ARM)
         self.uc.mem_map(BASE, 0x100000)
         self.uc.mem_write(BASE, data)
         self.uc.mem_map(STACK, 0x3000)
         self.uc.mem_map(MMIO, 0x1000)
         self.writes = []
+        self.permission_words = permission_words
+        self.selector = None
         self.uc.hook_add(UC_HOOK_CODE, self.guard)
         self.uc.hook_add(UC_HOOK_MEM_WRITE, self.record)
+        self.uc.hook_add(UC_HOOK_MEM_READ, self.read_window)
+
+    def read_window(self, uc, access, address, size, value, context):
+        if self.permission_words is not None and MMIO + 0x9e0 <= address < MMIO + 0x9f4:
+            assert size == 4 and address % 4 == 0
+            assert self.selector is not None and 0 <= self.selector < 256
+            word = (address - MMIO - 0x9e0) // 4
+            uc.mem_write(address, struct.pack("<I", self.permission_words[self.selector][word]))
 
     def guard(self, uc, address, size, context):
         if not any(start <= address - BASE < end for start, end in ALLOWED):
@@ -58,6 +70,9 @@ class Handler:
     def record(self, uc, access, address, size, value, context):
         if MMIO <= address < MMIO + 0x1000:
             self.writes.append((address, size, value))
+            if address == MMIO + 0x9bc:
+                assert size == 4
+                self.selector = value
         elif not (STACK <= address and address + size <= STACK + 0x2000 or
                   BASE + 0xf7a25 <= address < BASE + 0xf7a65 and size == 1):
             raise RuntimeError(f"unmodeled write {address:#x}")
@@ -142,11 +157,38 @@ def check(data):
     print("No hardware access; physical permissions and endpoint semantics remain untested")
 
 
+def check_permission_readback(data):
+    # Each selector has one slot-zero word and four words of 16 two-bit slots.
+    # Distinct per-slot/domain values detect swapped indices and packed ordering.
+    words = []
+    rng = random.Random(0x415)
+    permissions = [[rng.randrange(4) for slot in range(64)] for domain in range(256)]
+    for domain in range(256):
+        row = [permissions[domain][0], 0, 0, 0, 0]
+        for slot in range(1, 64):
+            row[1 + (slot - 1) // 16] |= permissions[domain][slot] << (2 * ((slot - 1) % 16))
+        words.append(row)
+    h = Handler(data, words)
+    count = 0
+    for slot in range(32, 44):
+        for group in range(8):
+            expected = sum(permissions[domain][slot] << (2 * index)
+                           for index, domain in enumerate(range(group * 32, (group + 1) * 32)))
+            assert h.call(2, 4, slot, group) == expected
+            assert h.writes == [(MMIO + 0x9bc, 4, domain)
+                                for domain in range(group * 32, (group + 1) * 32)]
+            count += 1
+    print(f"PASS: {count} permission-readback cases; query 2/4, all modem slots, groups 0..7")
+    print("Only selector writes occurred; no permission commit or range write")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", type=Path)
     args = parser.parse_args()
-    check(extract(args.image))
+    data = extract(args.image)
+    check(data)
+    check_permission_readback(data)
 
 
 if __name__ == "__main__":
