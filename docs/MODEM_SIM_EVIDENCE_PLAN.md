@@ -911,16 +911,43 @@ Writer `0x0207d310` reads the current selected policy, ORs the requested field,
 commits, then clears staging words. Clearing staging does NOT clear the
 committed policy. These lists therefore establish requested rights, not a
 proof that all unlisted AIDs start denied. Caller `0x0207d594` chooses different
-paths; do not simply concatenate the lists or call them universal cold/warm
-profiles before tracing the mode predicate.
+paths; do not concatenate the lists or call them universal cold/warm profiles.
+
+The extended test executes that caller and the real predicate at `0x0207beb8`,
+including the `aee_enable` comparisons at `0x0207bd40`. It passes 180 cases:
+unset/mini/full/no/unknown configuration, six watchdog words, exception values
+0/1/127 and diagnostic magic absent/present. The hardware exception read is
+emulated at `0x1c00a024` (bits 10:4); watchdog input is synthetic state at
+`0x020f6f30`. No phone MMIO is read. Hardware helpers and policy writes are
+intercepted, with their order checked; unexpected code/writes fail the test.
+
+`aee_enable=no` forces the first list. Otherwise, a nonzero exception field or
+watchdog status outside {0, 2, 0x800} selects the second list, after the separate
+helper at `0x020068c8`. The first list follows the reset/setup helpers and is
+followed by commit/lock setup. These helper bodies are not validated by this
+test. The diagnostic magic changes logging only. This establishes an AEE
+normal/abnormal branch, not a cold/warm profile or known permission reset state.
+An inverted branch in a synthetic image copy is rejected by the same test.
+U-Boot commit `04b9a0c10d3c832f6d45043e4b494b5cc02a7216` contains the shared
+policy planner and native fault-injection tests; CI `37771457999` is pending.
+No local C/U-Boot build was run and this loader is not installed.
 
 U-Boot's `tetris_modem_plan_emi_policy()` produces a strict candidate for slots
-32..38 only, gated by the exact declared-image digest. Unlisted AIDs must read
+32..38 and normal-path shared slots 41..43, gated by the exact declared-image
+digest. Shared slots use the first list only; AID 240 remains denied.
+Unlisted AIDs must read
 as denied; that is an acceptance requirement, not an inferred reset default.
 Its existing transaction checks all fields before and after the range write.
-Unknown digests and slots 39..43 fail without changing output. Slot 40 requires
+Unknown digests and slots 39/40 fail without changing output. Slot 40 requires
 the separate ATF preset; shared memory still needs its phase/ownership chain.
 No automatic selector or boot caller is enabled, and SIM status is unchanged.
+
+On installed r172 boot `4377a6ee-a2a3-48f5-bd41-f03dd9b12006`, a read-only DT
+check still reports `failure=no-fdt`, observation `invalid`, payload
+`not-checked`. The diagnostic reservation exists but does not provide a valid
+CCCI handoff. No modem module, SMC or register probe was executed; USB/SSH and
+system services stayed healthy. The nine exact r172 CI module hashes passed
+offline verification. Linking alone does not authorize loading this stack.
 
 The source cross-check above also has `mt6878.dts` `nsmpu@10351000` with
 `sr-cnt=63`, `aid-cnt=256`, `aid-num-per-set=32`, corroborating the shape of

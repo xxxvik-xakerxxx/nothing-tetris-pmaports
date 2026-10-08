@@ -8,8 +8,10 @@ r172 adds `0109`, replacing it with `timer_container_of`, as already done
 for CCIF. Callback behavior and timer ownership are unchanged. The pinned
 modem source has no other active `from_timer` calls after these two patches
 (CCMNI retains only a commented-out historical line). The patch-application
-gate now checks CLDMA too. Full linkage remains pending a successful CI run;
-the failed r170 run produced no install image. r172 also retains r171's
+gate now checks CLDMA too. CI `37753866853` attempt 2 passed the full link;
+all nine module hashes from its evidence artifact were verified against the
+manifest for source `17fbac0`. The failed r170 run produced no install image.
+r172 also retains r171's
 GPU/camera PMIC phase-mask patch, whose separate native tests passed.
 
 r170 moves 0001, 0002, 0003 and 0006 into the kernel package's source and
@@ -24,7 +26,8 @@ CLDMA and SCP sync), CCMNI and RPS. It uses the actual kernel/SCP export tables
 and the same LLVM toolchain, checks all nine output modules and their kernel
 release, and treats unresolved symbols as errors. The legacy CLDMA component
 is included by the vendor Makefile; compiling it does not select it at runtime.
-This integration is awaiting CI; it is not yet a successful link result.
+This link gate passed in r172. The r172 image is installed, but the linked
+modem modules are deliberately absent from its rootfs.
 
 The resulting modules are **not installed or autoloaded**, and the modem DT
 remains disabled. Loading them is unsafe before bootloader memory/firmware
