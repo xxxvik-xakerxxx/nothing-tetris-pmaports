@@ -81,6 +81,8 @@ def check(data):
         start, end = 0x80000000 + (slot - 32) * 0x200000, 0x80200000 + (slot - 32) * 0x200000
         enable = MMIO + 0x2a4 + ((slot - 1) // 32) * 4
         enabled = struct.unpack("<I", h.uc.mem_read(enable, 4))[0]
+        # U-Boot range transaction preflight must be a read-only disabled result.
+        assert h.call(2, 3, slot) == 0 and not h.writes
         assert h.call(0, start >> 12, end >> 12, slot) == 0
         assert h.writes == [
             (MMIO + (slot - 1) * 8, 4, (start - 0x40000000) >> 12),

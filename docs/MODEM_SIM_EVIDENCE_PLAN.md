@@ -841,6 +841,14 @@ initial permission state/readback, full table construction and reservation
 ownership, shared memory and modem release. This remains `Untested` modem
 bring-up infrastructure, not working SIM/calls.
 
+U-Boot now includes a transport-injected, range-only EMI transaction: reject
+already enabled slots, write the range once, verify start/raw-end/enable, and
+stop on the first error without retry. It validates reservation bounds before
+any callback. The emulator above also checks the initial disabled-state read
+without MMIO writes. Native fault-injection tests run in U-Boot CI. There is
+still no production SMC adapter or boot caller; range verification is not a
+complete permission policy and does not advance the modem's hardware status.
+
 ## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
