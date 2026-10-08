@@ -1,0 +1,51 @@
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_md_mem.c b/drivers/misc/mediatek/ccci_util/ccci_util_md_mem.c
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_md_mem.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_md_mem.c
+@@ -16,7 +16,8 @@
+ #include <linux/slab.h>
+ #include <linux/kobject.h>
+ #include <linux/atomic.h>
+ #include <linux/of.h>
++#include <linux/mm.h>
+ #include <linux/of_fdt.h>
+ #include <linux/of_irq.h>
+ #include <linux/of_address.h>
+@@ -586,6 +587,27 @@ static int map_and_update_tbl(struct rt_smem_region_lk_fmt *tbl, u32 start, u32 end,
+ {
+ 	void __iomem *vir_addr;
+ 	u32 i;
++	u32 span = 0;
++	u64 delta;
++
++	if (!size || start > end || (base & (PAGE_SIZE - 1)))
++		return -EINVAL;
++
++	/* LK padding contributes to the physical span, not the summed sizes. */
++	for (i = start; i <= end; i++) {
++		if (tbl[i].ap_phy < base ||
++		    tbl[i].inf.ap_offset < tbl[start].inf.ap_offset)
++			return -ERANGE;
++		delta = tbl[i].ap_phy - base;
++		if (delta > U32_MAX || delta != span ||
++		    delta != tbl[i].inf.ap_offset - tbl[start].inf.ap_offset ||
++		    tbl[i].inf.size > U32_MAX - delta)
++			return -ERANGE;
++		span = delta + tbl[i].inf.size;
++	}
++	if (!span)
++		return -EINVAL;
++	size = span;
+ 
+ 	vir_addr = ccci_map_phy_addr(base, size);
+ 	if (!vir_addr) {
+@@ -619,6 +641,10 @@ static int map_phy_to_kernel(struct rt_smem_region_lk_fmt *tbl, u32 num)
+ 	unsigned int state = 0; //0: find start, 1: find end
+ 	int ret;
+ 
++	for (i = 0; i < num; i++)
++		if (tbl[i].inf.id < 0)
++			return -EINVAL;
++
+ 	for (i = 0; i < num; i++) {
+ 
+ 		if (tbl[i].inf.flags & SMEM_ATTR_PADDING)

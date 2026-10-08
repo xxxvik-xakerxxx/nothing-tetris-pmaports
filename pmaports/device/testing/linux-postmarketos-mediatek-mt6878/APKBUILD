@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=172
+pkgrel=173
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -94,6 +94,7 @@ source="
 	0102-vendor-scp-bootstrap-resource-diagnostic.patch.vendor
 	0103-vendor-scp-share-infracfg-syscon.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
+	0173-vendor-ccci-smem-map-span.patch.vendor
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	0089-vendor-eccci-modem-common-compile-only.patch.vendor
@@ -245,6 +246,8 @@ prepare() {
 		< "$srcdir"/0103-vendor-scp-share-infracfg-syscon.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0039-vendor-ccci-util-linux-6.18-api.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0173-vendor-ccci-smem-map-span.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -975,6 +978,7 @@ package() {
 }
 
 sha512sums="
+6bc374697a03337674951fc8a007f2b0fa692bb88a5e32035f6e21bc1a86f7f120a201ac8553a928ca79c5c7895b12b7a58a8407a05685fb115f561ea1d89452  0173-vendor-ccci-smem-map-span.patch.vendor
 4fe03ca717a5d781350d17a5aaa5dd0f4f6815a635b9d46791a9a7bed6e2b7c2a42f3f80d9dbde43958df52a657683779ee98fdcd5b10e94dd28e0956c70453a  0109-vendor-eccci-cldma-timer-api.patch.vendor
 05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch
 7fe1ee2efe91966f42c7915dec31f40592d681128e11049520acb013cae7ddfa34a9716309a6f01f6ea1219ed991f6e4509ea53d552c29c737f9e85ba3d2414e  modem-link.Kbuild

@@ -1050,11 +1050,47 @@ passed all native and handoff tests, the ARM64 build and image packaging for
 `b55c53989fba751b122122948f06736c5b26ebd9`. No local C build was run.
 Phone and installed r172/loader remain unchanged.
 
-Next integration gate: obtain these inputs from authenticated firmware and
-establish the exact profile, then wire reservation, shared-content initialization,
-protection/readback, remapping and boot/reset ownership into the boot path.
-Only then publish a ready CCCI handoff and test modem boot, SIM detection and
-registration on the phone. GPU/GNSS/camera hardware status is unchanged.
+### Authenticated service metadata and kernel mapping
+
+U-Boot now prepares one result containing the authenticated ROM/DRDI/DSP
+members, validated load layout, header-derived service inputs and both service
+plans. The effective CCB gear remains explicit boot policy. Failed signatures,
+unsupported metadata, oversized banks and output aliasing leave the result
+unchanged. No boot caller or ready handoff is enabled yet.
+
+Actual LK publication `0x24370..0x243e8` copies v6 header fields CONSYS
+`+0x180`, UDC `+0x184`, NVRAM cache `+0x18c` and DRDI `+0x190` into four-byte
+tags. `test-lk-smem-plan.py --modem` executed this code with the local ROM
+header and confirmed all four values. The container hash is
+`b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5`.
+Offline signature consistency passed independently; image-derived trust in
+that check is not a device trust anchor.
+
+Real metadata is DRDI 3, UDC 0, CONSYS `0xd80000`, NVRAM `0x16a040`.
+Effective gear 1 produces six cache runtime rows and `0x2560000` capacity,
+including a `0x15fc0` gap before CCB. The reference oracle now covers 42 input
+sets / 84 actual LK bank plans, including these field values.
+
+The pinned kernel's mapper sums non-padding sizes while using offsets for
+virtual addresses. The real cache gap exceeds page-rounding slack and would
+leave the final region partly unmapped. r173 packages
+`0173-vendor-ccci-smem-map-span.patch.vendor`: validate a contiguous physical
+and offset span, include padding in mapping length, reject misaligned starts,
+inconsistent rows and overflow before mapping. Negative IDs are rejected
+before hash-table registration. NO_MAP boundaries and zero-size optional rows
+are preserved. The new CI test extracts and executes the actual patched
+functions, checking the real cache gap, boundaries and failure paths.
+
+Local patch application, overlay validation, Python syntax and private LK
+checks passed. U-Boot native/ARM64 and pmOS C/kernel/image builds are pending;
+all compilation remains in CI. The installed phone is still r172.
+
+Next integration gate: establish the span-mapping consumer contract (the old
+U-Boot observation validator still rejects this large gap), reserve and
+initialize the planned RAM, apply/read back protection and remapping, and own
+boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
+detection and network registration still need live evidence. GPU/GNSS/camera
+hardware status is unchanged.
 
 ## Completion criteria
 

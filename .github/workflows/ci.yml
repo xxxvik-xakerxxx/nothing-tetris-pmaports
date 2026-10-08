@@ -81,6 +81,7 @@ jobs:
         run: |
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
+          python3 patches/modem/check-smem-mapping.py upstream/device-modules
       - name: Validate Panthor VGPU readback gate
         run: |
           python3 scripts/check-panthor-vgpu-readback.py \
