@@ -994,18 +994,17 @@ U-Boot `1d3b2cae4cb41ae90ac684aa81c25a7b2c807b8e` implements the matching
 byte encoder, with stricter bounds, duplicate-ID and unknown-flag rejection,
 overflow/alias checks and atomic failure. Native tests and the ARM64 build
 passed CI `37779916561`.
-This consumes already resolved placements; real SKU-specific service sizing,
-alignment selection, reservation and protection ownership remain unresolved.
+This encoder consumes already resolved placements; the B4.1 planner below
+supplies those from explicit inputs. Profile selection, metadata acquisition,
+reservation and protection ownership remain integration gates.
 U-Boot `eb0595920ee094edf499976cfbe285f172f8e5c5` reconciles the validator
 with the pinned B4.1 consumer's `map_phy_to_kernel()` behavior. Padding may
 repeat the following ID; zero-size ordinary rows may belong to a nonempty
 mapping run. Contiguous AP offsets/physical addresses, reserved DRAM, known
-flags and unique real IDs across NC/cache tables are required. Padding inside
-a continuing mapped run is rejected: the consumer sums sizes excluding padding
-but derives virtual addresses from offsets, which can otherwise under-map the
-run. Leading padding and NO_MAP-separated gaps are accepted; empty mapping
-runs are rejected. This conservative producer profile is not universal stock
-table compatibility.
+flags and unique real IDs across NC/cache tables are required. That revision
+conservatively rejected every internal mapping gap; the real-profile work below
+refines this using the consumer's page rounding. Empty mapping runs remain
+invalid. This producer profile is not universal stock table compatibility.
 
 Twelve producer/validator scenarios plus a cross-table ID conflict regression
 are included in CI
@@ -1015,13 +1014,47 @@ and checkpatch checks passed; no local build was run.
 No new boot caller, DT activation, module load or phone flash was added.
 Modem/SIM/calls remain unavailable; these are source-level handoff prerequisites.
 
-Next integration gate: derive the actual NC/cache service sizes, alignment and
-optional-region selection from the matching LK callers and firmware metadata.
-The encoder only accepts resolved placements; synthetic layout tests do not
-establish these inputs. Validate the resulting plan against LK before adding
-reservation, initialization, protection/readback, remapping and boot/reset
-ownership to the boot path. Only then publish a ready CCCI handoff and test
-modem boot, SIM detection and registration on the phone.
+### B4.1 service layout planner
+
+U-Boot `b55c53989f` adds the actual B4.1 service profile: 18 NC regions and
+5 cache regions, per-region alignment, explicit padding count and 64 KiB
+reservation rounding (160 MiB NC / 128 MiB cache limits). Its explicit inputs
+are DRDI version 3, UDC enable, CONSYS size, NVRAM cache size and effective
+CCB gear after boot-policy resolution. Unknown gears fail rather than silently
+disabling CCB. Zero NVRAM size selects the stock 3 MiB default. No actual
+device allocation or universal SKU/profile selection is implied.
+
+Evidence uses the same pinned LK hash above: tables `0x198318`/`0x198558`,
+callbacks `0x21b1c..0x21fdc`, placement `0x223cc..0x22568` and
+`0x22a94..0x22bec`. `patches/modem/test-lk-smem-plan.py` executes these actual
+callbacks and loops with synthetic tag/environment responses. All 56 bank
+calculations across 28 parameter combinations completed without hardware
+access. Generated synthetic rows/capacities/counts are committed as the U-Boot
+CI oracle; no firmware bytes or per-device data are included.
+
+The NC profile exposes a real 2 KiB alignment gap that the previous validator
+rejected. Pinned B4.1 `ccci_map_phy_addr()` masks the physical base to a page;
+`vmap_reserved_mem()` rounds the byte count up to pages. The validator now
+requires a 4 KiB-aligned mapping start and checks that the rounded mapping
+covers all ordinary rows and remains in reserved DRAM. It accepts this exact
+stock gap but still rejects an uncovered page-sized gap, empty mappings,
+unaligned starts and rounding outside the reservation. This models the 4 KiB
+consumer profile, not every kernel page-size configuration.
+
+CI adds exact C-planner/oracle comparisons, overflow/unknown-input rejection
+with unchanged output, serialization and a planner-to-encoder-to-validator
+test for the real NC table and a small synthetic cache configuration. Local
+Python syntax, JSON and checkpatch checks passed. CI
+[37794393803](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37794393803)
+passed all native and handoff tests, the ARM64 build and image packaging for
+`b55c53989fba751b122122948f06736c5b26ebd9`. No local C build was run.
+Phone and installed r172/loader remain unchanged.
+
+Next integration gate: obtain these inputs from authenticated firmware and
+establish the exact profile, then wire reservation, shared-content initialization,
+protection/readback, remapping and boot/reset ownership into the boot path.
+Only then publish a ready CCCI handoff and test modem boot, SIM detection and
+registration on the phone. GPU/GNSS/camera hardware status is unchanged.
 
 ## Completion criteria
 
