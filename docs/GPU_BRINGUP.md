@@ -56,8 +56,8 @@ clock callbacks; do not return fabricated enabled states or turn on unrelated
 power domains to suppress the abort. No second read was attempted.
 
 The phone rebooted to `890665d4-245f-4e72-88d2-14a3bf438dc6`; USB NCM/SSH
-recovered and systemd reported no failed units. Visual display/touch/sensor
-confirmation is pending. No new image was flashed. Device wall time lagged
+recovered and systemd reported no failed units. The user confirmed that the
+display, touch and autorotation work after recovery. No new image was flashed. Device wall time lagged
 the host date, so boot IDs and monotonic timestamps identify this incident.
 
 GPU acceleration is `Broken`. The stable image intentionally has no Mali
