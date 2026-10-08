@@ -874,6 +874,58 @@ coverage must not be reported as a measured count of implemented domains.
 U-Boot CI `37739687406` passed for policy verification commit `9bc8195573`;
 no hardware protection transaction has been issued.
 
+### Preloader policy recovered from boot LUN
+
+Read-only acquisition on boot `2fd66df3-f3ac-47e5-8fcf-fe368b22f3f4`:
+UFS boot LUN `/dev/sda`, 4194304 bytes, SHA256
+`0be9c0df9c5d5db641744996630b95920f6e69dcb1ca340511f7d75886676f00`.
+The GFH image begins at LUN offset `0x1000`, declares size `0xd0b9c` and
+load address `0x02000f00`; its declared-image SHA256 is
+`5d2bedd00049fced983d3ae53989616c5c9f46c4eddd32a01a1ad46ff8d2c50f`.
+No partition or register was written. The private binary is not committed.
+Reading this LUN does not independently prove the boot ROM selected it.
+
+The table at image VA `0x020bf058` contains 64 rows of `0x410` bytes:
+name pointer at +0, slot byte at +8, AID/permission byte pairs at +9 and
++0x209. Walkers `0x0207d3f0` and `0x0207d478` select these two pair lists.
+`patches/modem/test-preloader-emi-policy.py` verifies the image hash and
+executes both complete walkers, intercepting the writer before MMIO. Each
+observed call must exactly match the independently parsed table.
+
+| Slot | Stock label | First-list AID:permission | Second list |
+| --- | --- | --- | --- |
+| 32 | md_mem_mcu_rom | 35:RO, 47:RO | empty |
+| 33 | md_mem_dsp_ro | 35:RO, 47:RO | empty |
+| 34 | md_mem_dsp_rw | 35:RW, 47:RW | empty |
+| 35 | md_mem_mcu_drdi | 35:RW, 47:RO | empty |
+| 36 | md_mem_mcurw_hwrw | 35:RW, 47:RW, 93:RW | empty |
+| 37 | md_mem_mcurw_hwro | 35:RW, 47:RO, 93:RO | empty |
+| 38 | md_mem_mcuro_hwrw | 35:RO, 47:RW, 93:RW | empty |
+| 39 | empty label | 47:RW, 240:RO, 241:RO | 240:RO, 241:RO |
+| 40 | md_mem_mcu_padding | empty | empty |
+| 41 | md_consys_smem | 35:RW, 37:RW, 47:RW, 241:RW | 240:RO, 241:RO |
+| 42 | ap_md_nc_smem | 35/38/39/42/43/44/45/47/241:RW | 241:RW |
+| 43 | ap_md_c_smem | 35:RW, 40:RW, 47:RW, 241:RW | 240:RW, 241:RW |
+
+Writer `0x0207d310` reads the current selected policy, ORs the requested field,
+commits, then clears staging words. Clearing staging does NOT clear the
+committed policy. These lists therefore establish requested rights, not a
+proof that all unlisted AIDs start denied. Caller `0x0207d594` chooses different
+paths; do not simply concatenate the lists or call them universal cold/warm
+profiles before tracing the mode predicate.
+
+U-Boot's `tetris_modem_plan_emi_policy()` produces a strict candidate for slots
+32..38 only, gated by the exact declared-image digest. Unlisted AIDs must read
+as denied; that is an acceptance requirement, not an inferred reset default.
+Its existing transaction checks all fields before and after the range write.
+Unknown digests and slots 39..43 fail without changing output. Slot 40 requires
+the separate ATF preset; shared memory still needs its phase/ownership chain.
+No automatic selector or boot caller is enabled, and SIM status is unchanged.
+
+The source cross-check above also has `mt6878.dts` `nsmpu@10351000` with
+`sr-cnt=63`, `aid-cnt=256`, `aid-num-per-set=32`, corroborating the shape of
+the audited readback. This is source evidence, not a measurement on all SKUs.
+
 ## Completion criteria
 
 Compile success is `Untested`, a bound driver is `Partial`, and a modem boot is
