@@ -22,8 +22,16 @@ verified separately.
 
 Sensor startup was disabled on the fresh image. Its previous opt-in was
 restored for the next cold boot without loading modules on this warm boot.
-**r172 cold-start sensor validation is pending.** This is not evidence of
-zero-configuration sensor startup or completed lifecycle testing.
+After user-confirmed poweroff, 10 seconds off and physical power-on, boot
+`4377a6ee-a2a3-48f5-bd41-f03dd9b12006` automatically reported firmware ready,
+24 inventory entries and physical mask 31 at 17.187 seconds. SensorProxy
+started at 17.571 seconds and advertised accelerometer, light and proximity.
+A bounded root-authorized D-Bus capture received real light updates of
+169-172 lux; the remote unprivileged claim was correctly denied by PolicyKit.
+No orientation/proximity transition was exercised in this capture. No systemd
+units failed, no critical kernel fault appeared in the captured log, and
+another 32 MiB USB transfer passed. This is one cold-start pass after opt-in,
+not zero-configuration startup or completed lifecycle testing.
 
 The complete nine-module modem build/link gate now passes, but those modules
 remain evidence artifacts, not installed/autoloaded runtime support. Modem
