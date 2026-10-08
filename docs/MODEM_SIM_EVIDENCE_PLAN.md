@@ -756,13 +756,14 @@ Offsets are relative to each payload, excluding the 512-byte container header.
 The ATF container file hash `ee71f42f...` recorded above includes that header;
 it is not a different ATF version. Neither input was executed on the phone.
 
-Correction (2026-10-08): ATF table entry `0x58ba8` binds `0xc2000505`
-(KERNEL_CCCI_CONTROL) to `0xbe28`, not `0xc200040b`. The latter maps through
-`0x58bc8` to the distinct LK_CCCI_CONTROL handler at `0x20d90`.
-The pinned LK uses `0xc200040b`, so its calling convention cannot be combined
-with the kernel handler's replies. U-Boot's unenabled candidate now uses the
-audited kernel ID; permission to call it from the boot stage remains unproven.
-The kernel dispatcher sends commands 1/2 to `0x1bbe0`
+Correction (2026-10-08): SIP registration at `0x23cb0` proves a `<QIIQQ>`
+record: handler, SMC32 ID, SMC64 ID, name pointer, writable index pointer.
+The previous `<IIQQQ>` parse started eight bytes late and selected the NEXT
+handler. Entry `0x58bc0` binds LK_CCCI_CONTROL `0xc200040b` to `0xbe28`,
+matching stock LK. KERNEL_CCCI_CONTROL `0xc2000505` instead binds to `0xbf2c`.
+U-Boot's unenabled candidate again uses the correct LK ID. The earlier
+claimed LK/ATF mismatch was an audit error, not a firmware incompatibility.
+The LK dispatcher sends commands 1/2 to `0x1bbe0`
 and `0x1bcf0`. They encode sixteen consecutive 32 MiB pages into six bank-0
 remap registers, using ten bits per physical page. They check only whether
 the base lies inside the reported DRAM, returning `-7` otherwise; a dispatcher
@@ -784,11 +785,10 @@ registers directly, but the pinned LK selector at `0x16ea0` returns constant
 2: this image takes the SMC path. LK's loop does not check these helper return
 values.
 
-The installed ATF's `0x82000415` handler is `0x308ac`, accepting only commands
-0/1 and rejecting command 6 with -2. The separate EMIDBG interface
-`0x8200050b` / `0xc200050b` maps through entry `0x58e68` to `0x2f750`.
-The following command-2/6 results belong to EMIDBG, not BL_EMIMPU_CONTROL.
-Both interfaces' command 0 reaches
+The pinned ATF's BL_EMIMPU_CONTROL `0x82000415` / `0xc2000415` maps through
+entry `0x58e80` to `0x2f750`. The following command-2/6 results belong to this
+bootloader interface. EMIDBG instead uses handler `0x2f6f8`; `0x308ac` is
+TEE_EMI_MPU_CONTROL (`0x82000048`), not BL_EMIMPU. Command 0 reaches
 `0x2f618`. The range helper at `0x10300` masks both page inputs to 24 bits,
 checks ordering and subtracts the `0x40000000` origin. The writer `0x2d61c`
 keeps only 23 relative page bits. Callers must reject truncation, not trust
@@ -829,6 +829,13 @@ Dependencies are Unicorn 2.1.4 and the private, exact 900752-byte header/payload
 snapshot identified above; its hash is checked before execution. No proprietary
 image is committed or uploaded to CI. These tests cover an internal handler,
 not SMC dispatch on real hardware. Native U-Boot compilation/tests run in CI.
+U-Boot's `tools/tetris-sip-dispatch-contract.py` separately executes actual SIP
+registration and outer routing, stopping before subsystem handlers. All 64
+synthetic-state cases pass. With a non-secure caller and policy word
+`0x5aea4 == 1`, state byte `0xf796a == 0` routes LK CCCI/BL EMI; state 1 routes
+kernel CCCI/EMIDBG instead. Opposite-stage calls do not reach their handlers.
+Policy word 0 reaches a rejection diagnostic. No hardware state was modified;
+these payload-relative offsets do not establish the phone's current state.
 Still required: hardware endpoint semantics,
 initial permission state/readback, full table construction and reservation
 ownership, shared memory and modem release. This remains `Untested` modem
