@@ -2,6 +2,7 @@
 set -eu
 test "$#" -eq 1 || { echo "usage: $0 B4.1-device-modules-repository" >&2; exit 2; }
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+packaged="$here/../../pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 git -C "$1" archive ee2be53cb75670b548948636a0db1d1ff112bf12 \
@@ -20,8 +21,10 @@ for candidate in \
     0005-dpmaif-page-pool-dma-length.patch.vendor \
     0006-dpmaif-use-standard-allocation.patch.vendor
 do
-    (cd "$tmp" && git apply --check "$here/$candidate")
-    (cd "$tmp" && git apply "$here/$candidate")
+    source="$packaged/$candidate"
+    case "$candidate" in 0004-*|0005-*) source="$here/$candidate" ;; esac
+    (cd "$tmp" && git apply --check "$source")
+    (cd "$tmp" && git apply "$source")
 done
 echo 'PASS: six modem candidates apply to exact B4.1 files; no hardware execution'
 python3 "$here/check-dpmaif-allocation.py" "$tmp/drivers/misc/mediatek/eccci/hif/Makefile"

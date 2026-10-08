@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=169
+pkgrel=170
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -35,6 +35,11 @@ source="
 	android-kernel-modules-$_connmods_commit.tar.gz::https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878/archive/$_connmods_commit.tar.gz
 	android-kernel-device-modules-$_devmods_commit.tar.gz::https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878/archive/$_devmods_commit.tar.gz
 	$_config
+	modem-link.Kbuild
+	0001-ccmni-linux-6.18.patch.vendor
+	0002-rps-linux-6.18-headers.patch.vendor
+	0003-mdss-optional-mrdump.patch.vendor
+	0006-dpmaif-use-standard-allocation.patch.vendor
 	0001-input-touchscreen-ft3519t-tetris.patch
 	0002-mfd-mt6369-spmi-pmic.patch
 	0003-mfd-mt6363-keys-mt6375-telemetry.patch
@@ -246,6 +251,14 @@ prepare() {
 		< "$srcdir"/0089-vendor-eccci-modem-common-compile-only.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0001-ccmni-linux-6.18.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0002-rps-linux-6.18-headers.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0003-mdss-optional-mrdump.patch.vendor
+	patch -p1 -d "$_devmods_dir" \
+		< "$srcdir"/0006-dpmaif-use-standard-allocation.patch.vendor
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/0051-vendor-camera-tetris-compile-only-audit.patch.vendor
 }
@@ -691,6 +704,50 @@ _build_ccci_fsm_port_dpmaif_compile_only() {
 	fi
 }
 
+_build_modem_link() {
+	local root="$_devmods_dir/drivers/misc/mediatek"
+	local linkdir="$srcdir/tetris-modem-link"
+	local jobs="${JOBS:-$(nproc)}" component module release
+	local symbols="$_devmods_dir/drivers/soc/mediatek/Module.symvers"
+	symbols="$symbols $_devmods_dir/drivers/rpmsg/Module.symvers"
+	symbols="$symbols $root/scp/rv/Module.symvers"
+	for component in "$builddir/Module.symvers" $symbols; do
+		test -s "$component" || die "Missing modem link dependency: $component"
+	done
+	mkdir -p "$linkdir"
+	cp "$srcdir/modem-link.Kbuild" "$linkdir/Kbuild"
+	for component in ccci_util eccci ccmni rps; do
+		ln -sfn "../${_devmods_dir##*/}/drivers/misc/mediatek/$component" \
+			"$linkdir/$component"
+	done
+	# Build all vendor composites together. Never downgrade modpost failures.
+	make -j"$jobs" -C "$builddir" M="$linkdir" \
+		ARCH="$_carch" LLVM=1 KERNEL_SRC="$builddir" KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" \
+		CONFIG_ARM64=y CONFIG_MTK_ECCCI_DRIVER=m \
+		CONFIG_MTK_NET_CCMNI=m CONFIG_MTK_NET_RPS=m \
+		CONFIG_DEVICE_MODULES_MEDIATEK_MT6577_AUXADC=m \
+		CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n CONFIG_MTK_AEE_IPANIC=n \
+		KBUILD_EXTRA_SYMBOLS="$symbols" KBUILD_MODPOST_WARN= \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types -Werror=int-conversion \
+			-I$_devmods_dir/include $(_vendor_kcflags)" modules
+	release="$(cat "$builddir/include/config/kernel.release")"
+	for module in ccci_util/ccci_util_lib eccci/ccci_md_all \
+		eccci/ccci_auxadc eccci/hif/ccci_ccif eccci/hif/ccci_dpmaif \
+		eccci/hif/ccci_cldma eccci/fsm/ccci_fsm_scp ccmni/ccmni rps/rps_perf; do
+		test -s "$linkdir/$module.ko" || die "Missing modem module: $module"
+		test "$(modinfo -F name "$linkdir/$module.ko")" = "${module##*/}" ||
+			die "Unexpected modem module identity: $module"
+		case "$(modinfo -F vermagic "$linkdir/$module.ko")" in
+			"$release "*) ;;
+			*) die "Modem module ABI mismatch: $module" ;;
+		esac
+	done
+	test -s "$linkdir/Module.symvers" || die "Missing modem export table"
+}
+
 _build_mt6375_bc12_compile_only() {
 	_decode_object="$builddir/drivers/power/supply/mt6375-bc12-decode.o"
 	_lifecycle_object="$builddir/drivers/power/supply/mt6375-bc12-lifecycle.o"
@@ -842,6 +899,7 @@ build() {
 	_build_connectivity_modules
 	_build_audio_modules
 	_build_sensor_modules
+	_build_modem_link
 }
 
 package() {
@@ -913,6 +971,11 @@ package() {
 }
 
 sha512sums="
+7fe1ee2efe91966f42c7915dec31f40592d681128e11049520acb013cae7ddfa34a9716309a6f01f6ea1219ed991f6e4509ea53d552c29c737f9e85ba3d2414e  modem-link.Kbuild
+969971d8f5c84f88828443a8240a25b8b05980b05edb9294df3ee70dbc90374885a08232608738a6abc2d6a8599481b596b35b3a9bc1526122004e91d8413edc  0001-ccmni-linux-6.18.patch.vendor
+0a8ddb67c5deb213af7f1ad3df4fe7c73455664786613eae024cc7ca99be61d662c2b45a6f9bfe2d7f25b7bfc4f5c1d5b8610d34746289fec4020ae06153521e  0002-rps-linux-6.18-headers.patch.vendor
+58b2c974991d4a87bfc91fcefe5c731e9ae35ca0a16b89ca76d38eeb4f3b92f1ee73f753cc589fd8bfc7f927b978e14f92e773dd053562acecfeb89b311b8ef5  0003-mdss-optional-mrdump.patch.vendor
+f7b1a8693477460d23c1320a8c95a7db6efaddf2af3bf3fe533f9927ce6581d65d278fe3071379c19bc06afc30fe2e688d4e7aca6649f68125feefc3eb6eb443  0006-dpmaif-use-standard-allocation.patch.vendor
 cb2c6258dd70518d6467f5664243117c689425421db002fb8db314d0ec539e4cc8c5ac768e568983f2555ed99ac063e9c9e3bb16042ea14ae933ba5f217f647f  0106-media-i2c-imx882-check-shutdown.patch
 742e8b8a18127a2838e6530ee021645ff4005cb9831486de22afdfe0350043a787476e8abe93f4e7fa005a78216b295d99b47271296cc87e4927d7dd9e668fc4  0107-media-i2c-imx882-hold-clock-rate.patch
 7ffc4ead61098019cb5f1a7993089aa91856dbe9568bdda18146f118214155ea60bee94ee23c457bedb8c7eb22f39b62a5c34e3c4fa5b562718111305ebddae3  1005-vendor-gnss-propagate-clock-read-error.patch.vendor

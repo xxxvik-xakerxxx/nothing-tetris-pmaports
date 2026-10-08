@@ -45,6 +45,8 @@ jobs:
         run: python3 ci/test-drm-sequence.py
       - name: Test kernel export evidence collector
         run: python3 scripts/tests/test-kernel-build-evidence.py
+      - name: Test integrated modem link gate
+        run: python3 scripts/tests/test-modem-link.py
       - name: Test greeter rootfs gate
         run: python3 ci/test-greetd-rootfs.py
       - name: Fetch native display source
@@ -217,7 +219,7 @@ jobs:
       - name: Preserve configured kernel exports and DTB
         run: |
           python3 /work/scripts/collect-kernel-build-evidence.py \
-            /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA"
+            /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA" --modem
       - name: Upload configured kernel evidence
         uses: actions/upload-artifact@v7
         with:

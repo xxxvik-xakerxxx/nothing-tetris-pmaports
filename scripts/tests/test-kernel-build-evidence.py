@@ -44,6 +44,56 @@ class EvidenceTests(unittest.TestCase):
             self.run_collect()
         self.assertFalse(self.out.exists())
 
+    def prepare_modem(self):
+        linkdir = self.sources / "tetris-modem-link"
+        for name in collector.MODEM_FILES:
+            path = linkdir / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Synthetic ELF header for the collector, not a loadable module.
+            data = bytearray(64)
+            data[:6] = b"\x7fELF\x02\x01"
+            data[18:20] = (183).to_bytes(2, "little")
+            path.write_bytes(data if name.endswith(".ko") else b"fixture\n")
+        return linkdir
+
+    def test_modem_collected(self):
+        self.prepare_modem()
+        result = collector.collect(self.root, self.out, "a" * 40, modem=True)
+        self.assertEqual(len(result["sha256"]),
+                         len(collector.FILES) + len(collector.MODEM_FILES))
+        self.assertIn("NOT runtime validated", result["scope"])
+
+    def test_modem_wrong_architecture(self):
+        linkdir = self.prepare_modem()
+        (linkdir / "eccci/ccci_md_all.ko").write_bytes(b"not an ARM64 module")
+        with self.assertRaisesRegex(ValueError, "AArch64"):
+            collector.collect(self.root, self.out, "a" * 40, modem=True)
+        self.assertFalse(self.out.exists())
+
+    def test_modem_missing(self):
+        linkdir = self.prepare_modem()
+        (linkdir / "ccmni/ccmni.ko").unlink()
+        with self.assertRaises(FileNotFoundError):
+            collector.collect(self.root, self.out, "a" * 40, modem=True)
+        self.assertFalse(self.out.exists())
+
+    def test_modem_symlink_escape(self):
+        linkdir = self.prepare_modem()
+        module = linkdir / "ccmni/ccmni.ko"
+        outside = self.root / "outside.ko"
+        module.replace(outside)
+        module.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "invalid modem"):
+            collector.collect(self.root, self.out, "a" * 40, modem=True)
+        self.assertFalse(self.out.exists())
+
+    def test_modem_vendor_symlink(self):
+        linkdir = self.prepare_modem()
+        original = linkdir / "eccci"
+        original.rename(self.sources / "vendor-eccci")
+        original.symlink_to("../vendor-eccci", target_is_directory=True)
+        collector.collect(self.root, self.out, "a" * 40, modem=True)
+
     def test_ambiguous(self):
         other = self.sources / "other"
         (other / "include/config").mkdir(parents=True)

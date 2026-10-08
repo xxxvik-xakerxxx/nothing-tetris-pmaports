@@ -1,7 +1,33 @@
 # Modem network candidates
 
-These candidates are not in APKBUILD, emit no installed module and do not
-enable modem, SIM, IRQ, DMA, firmware, regulator or secure-call execution.
+## Current integration
+
+r170 moves 0001, 0002, 0003 and 0006 into the kernel package's source and
+prepare sequence. Their canonical files now live in
+`pmaports/device/testing/linux-postmarketos-mediatek-mt6878/`; the candidate
+tests use those files directly. 0004/0005 remain research-only because the
+vendor CMA page-pool path is excluded from the integrated build.
+
+After the existing kernel and SCP builds, `_build_modem_link()` invokes one
+external Kbuild/modpost for CCCI util, ECCCI (including AUXADC, CCIF, DPMAIF,
+CLDMA and SCP sync), CCMNI and RPS. It uses the actual kernel/SCP export tables
+and the same LLVM toolchain, checks all nine output modules and their kernel
+release, and treats unresolved symbols as errors. The legacy CLDMA component
+is included by the vendor Makefile; compiling it does not select it at runtime.
+This integration is awaiting CI; it is not yet a successful link result.
+
+The resulting modules are **not installed or autoloaded**, and the modem DT
+remains disabled. Loading them is unsafe before bootloader memory/firmware
+handoff, MD power/clock ownership and SCP coordination are validated. The
+remaining userspace work includes modem filesystem/calibration requests,
+SIM/control transport, network registration and the voice/audio path. No
+working SIM or calls are claimed.
+
+## Historical candidate evidence
+
+The records below describe earlier isolated tests, before r170 integration.
+Statements that patches were outside APKBUILD apply to those historical runs.
+These tests do not enable modem, SIM, IRQ, DMA, firmware, regulator or secure-call execution.
 They target Nothing B4.1 device modules
 `ee2be53cb75670b548948636a0db1d1ff112bf12` and Linux 6.18
 `d84b264a54a37611f2f46bc19363cb9b41606205`.
