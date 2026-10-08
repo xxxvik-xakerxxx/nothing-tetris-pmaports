@@ -960,7 +960,7 @@ serialization, matching the pinned B4.1 `ccci_util_lib_fo.c` consumer's 64-byte
 name and three little-endian 32-bit fields. The producer rejects duplicate or
 unterminated names, empty payloads, oversized tables, pointer wrap and aliases
 before changing output. It emits no native pointers or struct padding.
-Native CI `37773917358` is pending; tests cover exact bytes, guards, boundaries
+Native CI `37773917358` passed, including the ARM64 build; tests cover exact bytes, guards, boundaries
 and a full synthetic payload passed through the real CCCI validator.
 
 This does not publish `ccci,modem_info_v2`, mark firmware ready or start the
@@ -969,6 +969,35 @@ the sole missing operation. Building a new handoff also requires the complete
 validated shared-memory layout, applied/read-back protection, remapping and
 reset ownership. Advertising tags before those gates would be false readiness.
 The installed loader and r172 phone are unchanged by this source-only work.
+
+### Shared-memory runtime table builder
+
+The pinned LK container SHA256 is
+`29669b7a19dcb75b410cd8e35376c98892c0629cefd9eff7a5b01022f5667a1f`.
+Payload helper `0x235c4..0x237f4` takes resolved 32-byte input rows and emits
+40-byte runtime entries, matching B4.1 `rt_smem_region_lk_fmt`. The AP virtual
+pointer and output alignment stay zero. AP physical address is allocated base
+plus running offset; MD offset is a separate supplied base plus running offset.
+When the next input offset is ahead, LK emits a padding row with that input's
+ID, the gap size and flag 4, then emits the actual region. The output count
+includes inserted padding; empty region rows are preserved. There is no row
+for unused reservation tail.
+
+`patches/modem/test-lk-smem-builder.py` checks the exact private image hash,
+executes that helper with synthetic input and intercepts calloc, physical
+allocation and logging. Sixteen scenarios passed: continuous/gapped/empty
+regions, below/above-4-GiB AP addresses and MD view bases 0/0x08000000. Unexpected
+code or writes fail. Neither allocations nor register operations occur on the
+phone. The proprietary input is not committed or uploaded.
+
+U-Boot `1d3b2cae4cb41ae90ac684aa81c25a7b2c807b8e` implements the matching
+byte encoder, with stricter bounds, duplicate-ID and unknown-flag rejection,
+overflow/alias checks and atomic failure. Native CI `37779916561` is pending.
+This consumes already resolved placements; real SKU-specific service sizing,
+alignment selection, reservation and protection ownership remain unresolved.
+The previous CCCI validator rejects zero-size and repeated padding IDs; do not
+publish this new producer's tables until consumer mapping rules and validation
+are reconciled. No new boot caller, DT activation or module load was added.
 
 ## Completion criteria
 
