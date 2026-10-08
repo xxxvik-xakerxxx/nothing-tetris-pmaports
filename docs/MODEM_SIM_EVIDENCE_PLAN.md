@@ -1010,9 +1010,18 @@ table compatibility.
 Twelve producer/validator scenarios plus a cross-table ID conflict regression
 are included in CI
 [37781309347](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37781309347)
-(pending). Local whitespace and checkpatch checks passed; no local build was
-run. No new boot caller, DT activation, module load or phone flash was added.
+(passed, including native handoff tests and the ARM64 build). Local whitespace
+and checkpatch checks passed; no local build was run.
+No new boot caller, DT activation, module load or phone flash was added.
 Modem/SIM/calls remain unavailable; these are source-level handoff prerequisites.
+
+Next integration gate: derive the actual NC/cache service sizes, alignment and
+optional-region selection from the matching LK callers and firmware metadata.
+The encoder only accepts resolved placements; synthetic layout tests do not
+establish these inputs. Validate the resulting plan against LK before adding
+reservation, initialization, protection/readback, remapping and boot/reset
+ownership to the boot path. Only then publish a ready CCCI handoff and test
+modem boot, SIM detection and registration on the phone.
 
 ## Completion criteria
 
