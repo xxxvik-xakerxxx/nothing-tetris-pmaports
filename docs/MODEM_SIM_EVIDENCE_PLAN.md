@@ -992,12 +992,27 @@ phone. The proprietary input is not committed or uploaded.
 
 U-Boot `1d3b2cae4cb41ae90ac684aa81c25a7b2c807b8e` implements the matching
 byte encoder, with stricter bounds, duplicate-ID and unknown-flag rejection,
-overflow/alias checks and atomic failure. Native CI `37779916561` is pending.
+overflow/alias checks and atomic failure. Native tests and the ARM64 build
+passed CI `37779916561`.
 This consumes already resolved placements; real SKU-specific service sizing,
 alignment selection, reservation and protection ownership remain unresolved.
-The previous CCCI validator rejects zero-size and repeated padding IDs; do not
-publish this new producer's tables until consumer mapping rules and validation
-are reconciled. No new boot caller, DT activation or module load was added.
+U-Boot `eb0595920ee094edf499976cfbe285f172f8e5c5` reconciles the validator
+with the pinned B4.1 consumer's `map_phy_to_kernel()` behavior. Padding may
+repeat the following ID; zero-size ordinary rows may belong to a nonempty
+mapping run. Contiguous AP offsets/physical addresses, reserved DRAM, known
+flags and unique real IDs across NC/cache tables are required. Padding inside
+a continuing mapped run is rejected: the consumer sums sizes excluding padding
+but derives virtual addresses from offsets, which can otherwise under-map the
+run. Leading padding and NO_MAP-separated gaps are accepted; empty mapping
+runs are rejected. This conservative producer profile is not universal stock
+table compatibility.
+
+Twelve producer/validator scenarios plus a cross-table ID conflict regression
+are included in CI
+[37781309347](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37781309347)
+(pending). Local whitespace and checkpatch checks passed; no local build was
+run. No new boot caller, DT activation, module load or phone flash was added.
+Modem/SIM/calls remain unavailable; these are source-level handoff prerequisites.
 
 ## Completion criteria
 
