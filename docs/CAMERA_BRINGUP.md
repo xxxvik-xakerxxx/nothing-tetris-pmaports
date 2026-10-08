@@ -4,6 +4,13 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
+2026-10-08: r171 adds the shared MT6319 VMM/GPU prerequisite `0108`.
+VBUCK1 forced-PWM phase selection can now describe the board's independent
+phase instead of the USID-6 default that also selects VGPU/VCORE bits.
+See [GPU supply evidence](GPU_BRINGUP.md#current-status). The property does
+not change PMIC coupling or enable a camera supply. Identity, stream-on and
+capture remain untested; this is not camera support.
+
 2026-10-07: r169 integrates shutdown patch `0106` and clock patch `0107`
 after the already packaged logical reset fix `0050`. The shutdown tests
 (384 combinations and two negative mutants) passed CI run 37655704824.

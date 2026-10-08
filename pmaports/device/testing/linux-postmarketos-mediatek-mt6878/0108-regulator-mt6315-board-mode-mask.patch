@@ -1,0 +1,112 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: describe board-specific VBUCK1 mode phases
+
+Nothing B4.1 ee2be53cb75670b548948636a0db1d1ff112bf12 describes MT6319
+USID 6 with buck1-modeset-mask 0x1, not the mainline USID-6 default 0xb.
+VBUCK1 supplies camera VMM, VBUCK2 GPU and VBUCK4 VCORE. Preserve existing
+boards' defaults and allow explicit phase topology without changing PMIC
+coupling or touching registers during mask setup. No device is enabled
+here.
+
+diff --git a/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml b/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
+index fa6743b..277f764 100644
+--- a/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
++++ b/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
+@@ -25,6 +25,15 @@ properties:
+   reg:
+     maxItems: 1
+ 
++  mediatek,buck1-mode-mask:
++    $ref: /schemas/types.yaml#/definitions/uint32
++    enum: [1, 3, 5, 7, 9, 11, 13, 15]
++    description:
++      Phase bits controlled together when selecting VBUCK1 forced PWM mode.
++      Bit zero must be set. Describe the board's existing phase configuration;
++      this property does not configure phase coupling. If absent, retain the
++      historical SPMI USID mapping (6 selects 11, 3 and 7 select 3, others 1).
++
+   regulators:
+     type: object
+     description: List of regulators and its properties
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+index 2608a66..13c8b12 100644
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -212,6 +212,43 @@ static const struct of_device_id mt6315_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, mt6315_of_match);
+ 
++static int mt6315_init_mode_masks(struct device *dev, unsigned int usid,
++				  struct mt_regulator_init_data *init_data)
++{
++	u32 mask;
++	int i, ret;
++
++	switch (usid) {
++	case MT6315_PP:
++		mask = BIT(MT6315_VBUCK1) | BIT(MT6315_VBUCK2) |
++		       BIT(MT6315_VBUCK4);
++		break;
++	case MT6315_SP:
++	case MT6315_RP:
++		mask = BIT(MT6315_VBUCK1) | BIT(MT6315_VBUCK2);
++		break;
++	default:
++		mask = BIT(MT6315_VBUCK1);
++		break;
++	}
++
++	/* Some boards use independent phases despite sharing the same USID. */
++	if (of_find_property(dev->of_node, "mediatek,buck1-mode-mask", NULL)) {
++		ret = of_property_read_u32(dev->of_node, "mediatek,buck1-mode-mask", &mask);
++		if (ret)
++			return ret;
++		if (!(mask & BIT(MT6315_VBUCK1)) ||
++		    (mask & ~GENMASK(MT6315_VBUCK_MAX - 1, 0)))
++			return -EINVAL;
++	}
++
++	init_data->modeset_mask[MT6315_VBUCK1] = mask;
++	for (i = MT6315_VBUCK2; i < MT6315_VBUCK_MAX; i++)
++		init_data->modeset_mask[i] = BIT(i);
++
++	return 0;
++}
++
+ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -220,7 +257,7 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	struct mt_regulator_init_data *init_data;
+ 	struct regulator_config config = {};
+ 	struct regulator_dev *rdev;
+-	int i;
++	int i, ret;
+ 
+ 	regmap = devm_regmap_init_spmi_ext(pdev, &mt6315_regmap_config);
+ 	if (IS_ERR(regmap))
+@@ -234,21 +271,9 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	if (!init_data)
+ 		return -ENOMEM;
+ 
+-	switch (pdev->usid) {
+-	case MT6315_PP:
+-		init_data->modeset_mask[MT6315_VBUCK1] = BIT(MT6315_VBUCK1) | BIT(MT6315_VBUCK2) |
+-							 BIT(MT6315_VBUCK4);
+-		break;
+-	case MT6315_SP:
+-	case MT6315_RP:
+-		init_data->modeset_mask[MT6315_VBUCK1] = BIT(MT6315_VBUCK1) | BIT(MT6315_VBUCK2);
+-		break;
+-	default:
+-		init_data->modeset_mask[MT6315_VBUCK1] = BIT(MT6315_VBUCK1);
+-		break;
+-	}
+-	for (i = MT6315_VBUCK2; i < MT6315_VBUCK_MAX; i++)
+-		init_data->modeset_mask[i] = BIT(i);
++	ret = mt6315_init_mode_masks(dev, pdev->usid, init_data);
++	if (ret)
++		return dev_err_probe(dev, ret, "Invalid BUCK mode mask\n");
+ 
+ 	chip->dev = dev;
+ 	chip->regmap = regmap;

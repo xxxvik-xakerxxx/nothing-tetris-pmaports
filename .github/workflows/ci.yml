@@ -24,7 +24,7 @@ env:
   NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.validation_only && 'validation' || 'images' }}
   cancel-in-progress: true
 
 jobs:
@@ -88,6 +88,8 @@ jobs:
             upstream/device-modules
       - name: Validate sensor reply gate
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
+      - name: Validate GPU and camera PMIC phase ownership
+        run: python3 scripts/check-mt6315-mode-mask.py upstream/linux
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py

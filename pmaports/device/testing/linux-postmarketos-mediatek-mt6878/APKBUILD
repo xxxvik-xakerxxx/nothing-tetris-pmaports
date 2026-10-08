@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=170
+pkgrel=171
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -142,6 +142,7 @@ source="
 	0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch
 	0104-arm64-dts-mt6878-scp-infracfg.patch
 	0105-regulator-mt6315-read-active-voltage-selector.patch
+	0108-regulator-mt6315-board-mode-mask.patch
 	0106-media-i2c-imx882-check-shutdown.patch
 	0107-media-i2c-imx882-hold-clock-rate.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
@@ -971,6 +972,7 @@ package() {
 }
 
 sha512sums="
+05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch
 7fe1ee2efe91966f42c7915dec31f40592d681128e11049520acb013cae7ddfa34a9716309a6f01f6ea1219ed991f6e4509ea53d552c29c737f9e85ba3d2414e  modem-link.Kbuild
 969971d8f5c84f88828443a8240a25b8b05980b05edb9294df3ee70dbc90374885a08232608738a6abc2d6a8599481b596b35b3a9bc1526122004e91d8413edc  0001-ccmni-linux-6.18.patch.vendor
 0a8ddb67c5deb213af7f1ad3df4fe7c73455664786613eae024cc7ca99be61d662c2b45a6f9bfe2d7f25b7bfc4f5c1d5b8610d34746289fec4020ae06153521e  0002-rps-linux-6.18-headers.patch.vendor

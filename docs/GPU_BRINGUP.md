@@ -2,6 +2,23 @@
 
 ## Current status
 
+2026-10-08: r171 adds board-described VBUCK1 forced-PWM phase selection
+(`0108`), after the active-voltage-selector correction. Nothing B4.1
+`ee2be53cb75670b548948636a0db1d1ff112bf12`, `mt6878.dts`'s
+`mt6319_6_regulator`, sets `buck1-modeset-mask = <0x1>`. Mainline derives
+`0xb` from USID 6 alone. The vendor board uses VBUCK1 for camera VMM,
+VBUCK2 for GPU and VBUCK4 for VCORE; using `0xb` for a VBUCK1 mode change
+would update all three force-PWM bits. The new optional binding property
+`mediatek,buck1-mode-mask` describes existing board phase topology, never
+configures coupling, preserves old defaults when absent and rejects invalid
+masks before publishing them. No global descriptor is mutated. This is needed
+before a provider/consumer DT can be enabled, not proof of rail ownership.
+
+`scripts/check-mt6315-mode-mask.py` applies `0105` then `0108` and extracts
+the actual selection helper for CI tests of all 16 USIDs, valid/invalid masks
+and property-read failures. No DT node or PMIC write is introduced. Static
+patch application passed; native tests and kernel ABI build are pending.
+
 GPU acceleration is `Broken`. The stable image intentionally has no Mali
 platform device, so Panthor cannot probe and no render node is expected.
 `CONFIG_DRM_PANTHOR=m`, `CONFIG_MTK_IOMMU=y`, and the MFG clock foundation
