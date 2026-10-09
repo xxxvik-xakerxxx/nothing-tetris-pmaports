@@ -90,6 +90,9 @@ def camera_staging(root):
 
 
 CAMERA_SOURCES, CAMERA_OBJECTS, CAMERA_ENABLE = camera_staging(Path(__file__).resolve().parents[1])
+# Hidden vb2 helpers need an upstream selector in the isolated config. The
+# virtual driver is neither compiled nor installed by this object-only harness.
+CAMERA_SELECTORS = ("MEDIA_TEST_SUPPORT", "VIDEO_VIVID")
 RESEARCH_SOURCES.update(CAMERA_SOURCES)
 RESEARCH_OBJECTS += CAMERA_OBJECTS
 
@@ -226,7 +229,7 @@ def main():
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
     options = [kernel / "scripts/config", "--file", output / ".config"]
-    enabled = ENABLE + (CAMERA_ENABLE if args.research_owners else ())
+    enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE if args.research_owners else ())
     for symbol in enabled:
         options.extend(["-e", symbol])
     for symbol in MODULES:

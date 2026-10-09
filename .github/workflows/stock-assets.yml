@@ -55,7 +55,9 @@ jobs:
           git -C upstream/linux sparse-checkout init --no-cone
           git -C upstream/linux sparse-checkout set \
             /drivers/gpu/drm/panthor/ /drivers/mailbox/mtk-gpueb-mailbox.c \
-            /include/linux/dma-buf.h
+            /include/linux/dma-buf.h /include/linux/asn1.h \
+            /include/linux/asn1_decoder.h /include/linux/asn1_ber_bytecode.h \
+            /scripts/asn1_compiler.c /lib/asn1_decoder.c
           git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
             d84b264a54a37611f2f46bc19363cb9b41606205
           git -C upstream/linux checkout --detach FETCH_HEAD
@@ -68,6 +70,16 @@ jobs:
       - name: Verify modem raw RSA and strict PSS32 error handling
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_pss32_backend.py --native-ci
+      - name: Verify pinned MTK certificate delegation with real ASN.1 decoder
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/modem/check_mtk_cert.py --native-ci --kernel upstream/linux
+          python3 patches/modem/test_signed_ram_ci.py
+      - name: Verify bounded GPUEB MMIO transaction and quarantine logic
+        if: ${{ !cancelled() }}
+        env:
+          TETRIS_DEVICE_MODULES_TREE: ${{ github.workspace }}/upstream/device-modules
+        run: sh patches/gpu/run_gpueb_mmio_scope_ci.sh
       - uses: actions/upload-artifact@v7
         with:
           name: tetris-b41-selected-stock-port-assets
@@ -94,6 +106,14 @@ jobs:
         run: |
           sh patches/gnss-navigation-audit/run_runtime_integration_ci.sh \
             out/stock-port-assets/vendor/etc/MNL_Config.xml
+      - name: Verify actual GPS registration layout and retained argument copies
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_engine_registration_shape.py \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
+          python3 patches/gnss-navigation-audit/test_b41_engine_config_copy.py \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
+          sh patches/gnss-navigation-audit/run_engine_arguments_ci.sh
       - name: Verify scoped modem startup and immutable handoff boundaries
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_startup_scope.py --native-ci --vendor upstream/device-modules

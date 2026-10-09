@@ -1,0 +1,1 @@
+Fields ::= SEQUENCE OF ANY ({ mt6878_md_mtk_note_field })

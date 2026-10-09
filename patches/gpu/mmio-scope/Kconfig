@@ -1,0 +1,8 @@
+# Not sourced by shipping Kconfig.
+config MTK_MT6878_GPUEB_IO_SCOPE
+	bool "MT6878 GPUEB bounded parent MMIO scope (candidate)"
+	depends on MTK_MT6878_GPUEB_ADOPTION
+	default n
+	help
+	  Bounded 32-bit transport engine and resource lifetime. Hardware power
+	  ownership and IRQ activation are unproven and remain inaccessible.
