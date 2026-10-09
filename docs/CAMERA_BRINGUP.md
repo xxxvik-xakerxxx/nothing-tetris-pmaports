@@ -25,7 +25,9 @@ probe-off/shutdown and regulator-core cleanup still need evidence.
 The same r175 bundle adds shared PMIC shutdown correction `0111`: failed
 unlock prevents the protected write, both key clears are attempted, and the
 first errno survives cleanup. Its actual-helper CI gate covers all 32 fault
-combinations and two negative mutants; native CI for this addition is pending.
+combinations and two negative mutants; native CI `37894001985` passed at
+`a5d72a1`, including the earlier mode/rail gates. Full r175 image and live
+testing remain pending.
 This is a power-provider prerequisite, not camera enumeration or capture.
 
 Do not use global clock debugfs reads for the camera baseline: the current

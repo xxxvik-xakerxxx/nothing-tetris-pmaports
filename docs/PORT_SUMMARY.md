@@ -2,6 +2,17 @@
 
 ## Latest installed checkpoint: r173
 
+Candidate status, 2026-10-09: r174 full kernel/image CI
+[37886195992](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37886195992)
+passed but was not installed. The combined r175 GPU/camera power-provider
+bundle (`0110`, `0111`) and GNSS host-boundary checks passed native CI
+[37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
+at `a5d72a1`: 16,384 mode/fault cases, 512 rail/reference cases, 32 shutdown
+fault combinations and 262 pinned GNSS vectors, including negative mutants.
+Full r175 image and live testing remain pending. These changes do not enable
+GPU/cameras, produce a GNSS fix or establish modem/SIM/calls. Installed state
+below is unchanged.
+
 CI [37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235),
 source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`, passed and was
 clean-installed to `super` and `userdata`. The archive matched GitHub's

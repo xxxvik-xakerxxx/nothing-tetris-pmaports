@@ -39,8 +39,11 @@ the first failed unlock, always attempt to clear both protection keys, and
 return the first error instead of combining errno values with bitwise OR.
 Successful register values/order are unchanged. The CI gate executes the
 actual helper over all 32 fault combinations and rejects unguarded-write and
-overwritten-error mutants. Native CI is pending for this addition; it does not
-instantiate USID 6 or enable GPU rails.
+overwritten-error mutants. Native CI
+[37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
+passed these tests and the earlier mode/rail gates at `a5d72a1`. It does not
+instantiate USID 6 or enable GPU rails. Full r175 image and live testing remain
+pending.
 
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
 files on the current image.** The 2026-10-08 observation below caused an

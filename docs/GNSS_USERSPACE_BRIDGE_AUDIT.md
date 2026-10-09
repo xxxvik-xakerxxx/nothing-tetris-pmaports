@@ -347,6 +347,7 @@ frame-sync and borrowed-output C helpers into native CI. It compares all 262
 callback vectors against the pinned emulation digest, checks the required
 24-slot callback table and bounded output copy, and rejects three mutants
 (missing low-byte mask, missing required callbacks, discarded output bytes).
-CI is pending for this gate. These helpers do not supply the Bionic runtime,
+Native CI `37894001985` passed this gate at `a5d72a1`, including all three
+negative mutants. These helpers do not supply the Bionic runtime,
 complete startup configuration, firmware download or a position provider;
 they are not installed on the phone and do not establish a GNSS fix.
