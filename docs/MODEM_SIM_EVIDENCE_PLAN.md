@@ -1092,8 +1092,24 @@ passed native tests, ARM64 build and packaging for
 pmOS [CI 37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235)
 passed the actual patched-function C tests, kernel/module build and r173 image
 packaging for `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
-All compilation remained in CI. The installed phone is still r172 pending
-download/integrity checks and clean installation.
+All compilation remained in CI. r173 was subsequently clean-installed after
+archive/image/sparse verification. Its first boot and subsequent automatic
+sensor cold start passed; display, touch, desktop rotation and auto-brightness
+were user-confirmed. See [the installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
+
+U-Boot `30e73368db6477708cad54148c70ce33ab621bd7` now connects the explicit
+partition reader to signed B4.1 metadata planning and ROM/DSP placement.
+`tetris_modem_load_slot_b41()` performs scoped LMB staging, all three signature
+checks, load/service planning, placement, snapshot cleanup and payload cache
+synchronization. The output contains no references to freed staging RAM and
+is published only after cleanup and synchronization succeed. Metadata failures
+are before destination writes; cleanup/cache failures can follow verified
+writes but must never authorize execution. Short reads, signed-invalid service
+metadata, wrong root, invalid geometry/gear, allocation/release errors and RAM
+aliases are covered. Native tests, ARM64 build and packaging passed in
+[CI 37883464473](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37883464473).
+This entry point has no boot caller or activation side effects. The new loader
+artifact was not installed; the sensor-validated loader remains in use.
 
 Next integration gate: establish the span-mapping consumer contract (the old
 U-Boot observation validator still rejects this large gap), reserve and
