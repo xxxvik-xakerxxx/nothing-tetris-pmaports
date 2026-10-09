@@ -12,6 +12,7 @@ RELEASE = "Tetris_B4.1-260415-1709"
 ARCHIVE = f"{RELEASE}-image-firmware.7z"
 ARCHIVE_SIZE = 59168898
 ARCHIVE_SHA256 = "2336875d0b1e7364f87690701706e0d8cd7149bcf8f05c6d295f6082cf949811"
+IMAGE_SHA256 = "b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5"
 BASE = f"https://github.com/spike0en/nothing_archive/releases/download/{RELEASE}"
 MAX_IMAGE = 256 * 1024 * 1024
 
@@ -27,7 +28,7 @@ def select_image(listing):
         fields = dict(line.split(" = ", 1) for line in block.splitlines() if " = " in line)
         name = fields.get("Path", "")
         path = Path(name)
-        if path.name not in ("md1img.img", "md1img.bin"):
+        if path.name != "modem.img":
             continue
         size = int(fields.get("Size", "0"))
         if (path.is_absolute() or ".." in path.parts or "\\" in name or
@@ -57,8 +58,8 @@ def main():
         image = output / "md1img.bin"
         with image.open("xb") as stream:
             subprocess.run(["7z", "e", "-so", str(archive), name], stdout=stream, check=True)
-        if image.stat().st_size != size:
-            raise ValueError("stock modem extracted size mismatch")
+        if image.stat().st_size != size or digest(image) != IMAGE_SHA256:
+            raise ValueError("stock modem extracted identity mismatch")
         manifest = {
             "release": RELEASE, "source_commit": os.environ["GITHUB_SHA"],
             "archive": ARCHIVE, "archive_sha256": ARCHIVE_SHA256,

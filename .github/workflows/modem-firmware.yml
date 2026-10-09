@@ -50,7 +50,7 @@ jobs:
             --native-ci --kernel upstream/linux --uboot upstream/u-boot \
             --stock-container out/stock-modem/md1img.bin
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && hashFiles('out/stock-modem/BUILD-MANIFEST.json') != '' }}
         with:
           name: tetris-stock-modem-caller-manifest
           path: out/stock-modem/BUILD-MANIFEST.json
