@@ -1,0 +1,263 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef MT6878_SENINF_MUX_H
+#define MT6878_SENINF_MUX_H
+
+#ifdef __KERNEL__
+#include <linux/errno.h>
+#else
+#include <errno.h>
+#endif
+
+/* Nothing 4.1 modules e96f60dc081ae3525ef43d4bcf0ee5ee97e53835:
+ * isp7sp/cam/mtk_csi_phy_3_1/mtk_cam-seninf-hw_phy_3_1.c:
+ * csirx_phyA_power_on, mtk_cam_seninf_set_mux_ctrl,
+ * mtk_cam_seninf_set_top_mux_ctrl, mtk_cam_seninf_mux and poweroff.
+ * Layout/counts: device ee2be53cb75670b548948636a0db1d1ff112bf12.
+ * This is a partial backend, NOT complete PHY/DMA initialization. There is
+ * deliberately no live MMIO adapter or invocation from graph probe/stream.
+ */
+enum mt6878_seninf_region { MT6878_SENINF_BASE, MT6878_SENINF_ANALOG };
+enum mt6878_seninf_action { MT6878_ANALOG_ON, MT6878_MUX_SETUP, MT6878_RECEIVER_OFF };
+
+struct mt6878_seninf_plan {
+	unsigned int port;       /* Full physical port 0/1, never split ports. */
+	unsigned int intf;       /* Allocated SENINF instance, zero based. */
+	unsigned int mux;        /* Allocated SENINF mux, zero based. */
+	unsigned int group;      /* Proven vendor VC_CH_GROUP 0..3. */
+	unsigned int pixel_mode; /* Proven route value, not inferred from width. */
+};
+
+struct mt6878_seninf_backend {
+	/* check must prove mapped ownership, core lock, held CAM_MAIN/CSI_RX,
+	 * actual clock/VCORE/calibration state and a stopped sensor. For ON,
+	 * all preceding csirx_phy_setting writes must already be complete.
+	 * For MUX, full PHY/MAC setup and allocated route must be complete.
+	 * For OFF, all associated CAMMUX and DMA users must already be quiesced.
+	 * No generic successful stub is a legitimate production implementation.
+	 */
+	int (*check)(void *context, enum mt6878_seninf_action action,
+		     const struct mt6878_seninf_plan *plan);
+	int (*read)(void *context, enum mt6878_seninf_region region,
+		    unsigned int offset, unsigned int *value);
+	int (*write)(void *context, enum mt6878_seninf_region region,
+		     unsigned int offset, unsigned int value);
+	int (*delay_us)(void *context, unsigned int delay);
+	void *context;
+	unsigned long base_size, analog_size;
+};
+
+struct mt6878_seninf_transaction {
+	unsigned int analog_attempted, mux_attempted, off_attempted;
+	unsigned int step;
+	int first_error;
+	unsigned int plan_bound;
+	struct mt6878_seninf_plan plan;
+};
+
+static inline int mt6878_seninf_error(struct mt6878_seninf_transaction *tx, int ret)
+{
+	if (ret && !tx->first_error)
+		tx->first_error = ret;
+	return ret;
+}
+
+static inline int mt6878_seninf_bind_plan(struct mt6878_seninf_transaction *tx,
+					const struct mt6878_seninf_plan *plan)
+{
+	if (tx->plan_bound &&
+	    (tx->plan.port != plan->port || tx->plan.intf != plan->intf ||
+	     tx->plan.mux != plan->mux || tx->plan.group != plan->group ||
+	     tx->plan.pixel_mode != plan->pixel_mode))
+		return -EINVAL;
+	tx->plan = *plan;
+	tx->plan_bound = 1;
+	return 0;
+}
+
+static inline int mt6878_seninf_validate_backend(
+	const struct mt6878_seninf_backend *io, const struct mt6878_seninf_plan *plan)
+{
+	if (!io || !plan || !io->check || !io->read || !io->write || !io->delay_us ||
+	    io->base_size < 0x18000 || io->analog_size < 0x30000 ||
+	    plan->port > 1 || plan->intf >= 12 || plan->mux >= 13 ||
+	    plan->group > 3 || plan->pixel_mode > 7)
+		return -EINVAL;
+	return 0;
+}
+
+static inline int mt6878_seninf_update(
+	const struct mt6878_seninf_backend *io, struct mt6878_seninf_transaction *tx,
+	enum mt6878_seninf_region region, unsigned int offset,
+	unsigned int mask, unsigned int value)
+{
+	unsigned long size = region == MT6878_SENINF_BASE ? io->base_size : io->analog_size;
+	unsigned int old;
+	int ret;
+
+	if (offset & 3 || size < 4 || offset > size - 4 || value & ~mask)
+		return mt6878_seninf_error(tx, -EINVAL);
+	tx->step++;
+	ret = io->read(io->context, region, offset, &old);
+	if (ret)
+		return mt6878_seninf_error(tx, ret);
+	ret = io->write(io->context, region, offset, (old & ~mask) | value);
+	return mt6878_seninf_error(tx, ret);
+}
+
+static inline int mt6878_seninf_delay(const struct mt6878_seninf_backend *io,
+	struct mt6878_seninf_transaction *tx, unsigned int microseconds)
+{
+	tx->step++;
+	return mt6878_seninf_error(tx, io->delay_us(io->context, microseconds));
+}
+
+static inline int mt6878_seninf_analog_half(
+	const struct mt6878_seninf_backend *io, struct mt6878_seninf_transaction *tx,
+	unsigned int offset, unsigned int enable)
+{
+	unsigned int bit;
+	int ret;
+
+	/* Keep the vendor's individual RMW order, not a guessed combined write. */
+	for (bit = 16; bit <= 21; bit++) {
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG,
+					 offset + 0x20, 1U << bit, 0);
+		if (ret)
+			return ret;
+	}
+	ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG, offset, 2, 0);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG, offset, 1, 0);
+	if (!ret)
+		ret = mt6878_seninf_delay(io, tx, 200);
+	if (ret || !enable)
+		return ret;
+	ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG, offset, 1, 1);
+	if (!ret)
+		ret = mt6878_seninf_delay(io, tx, 30);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG, offset, 2, 2);
+	if (!ret)
+		ret = mt6878_seninf_delay(io, tx, 1);
+	if (ret)
+		return ret;
+	for (bit = 16; bit <= 21; bit++) {
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_ANALOG,
+					 offset + 0x20, 1U << bit, 1U << bit);
+		if (ret)
+			return ret;
+	}
+	return mt6878_seninf_delay(io, tx, 1);
+}
+
+static inline int mt6878_seninf_analog_on(
+	const struct mt6878_seninf_backend *io, const struct mt6878_seninf_plan *plan,
+	struct mt6878_seninf_transaction *tx)
+{
+	int ret;
+
+	if (!tx)
+		return -EINVAL;
+	if (tx->analog_attempted || tx->off_attempted || tx->first_error)
+		return -EBUSY;
+	ret = mt6878_seninf_validate_backend(io, plan);
+	if (!ret)
+		ret = mt6878_seninf_bind_plan(tx, plan);
+	if (ret)
+		return ret;
+	tx->analog_attempted = 1;
+	ret = io->check(io->context, MT6878_ANALOG_ON, plan);
+	if (!ret)
+		ret = mt6878_seninf_analog_half(io, tx, plan->port * 0x8000, 1);
+	if (!ret)
+		ret = mt6878_seninf_analog_half(io, tx, plan->port * 0x8000 + 0x1000, 1);
+	return mt6878_seninf_error(tx, ret);
+}
+
+static inline int mt6878_seninf_mux_setup(
+	const struct mt6878_seninf_backend *io, const struct mt6878_seninf_plan *plan,
+	struct mt6878_seninf_transaction *tx)
+{
+	unsigned int base, old, shift;
+	int ret;
+
+	if (!tx)
+		return -EINVAL;
+	if (tx->mux_attempted || tx->off_attempted || tx->first_error)
+		return -EBUSY;
+	ret = mt6878_seninf_validate_backend(io, plan);
+	if (!ret)
+		ret = mt6878_seninf_bind_plan(tx, plan);
+	if (ret)
+		return ret;
+	tx->mux_attempted = 1;
+	ret = io->check(io->context, MT6878_MUX_SETUP, plan);
+	if (ret)
+		return mt6878_seninf_error(tx, ret);
+	base = 0x0d00 + 0x1000 * plan->mux;
+	/* get_mux: _mux -> _set_mux_ctrl -> _set_top_mux_ctrl. */
+	ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE, base, 1, 1);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE,
+					 base + 4, 0xf, 8 + plan->group);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE,
+					 base + 4, 0x700, plan->pixel_mode << 8);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE, base + 8, 8, 8);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE, base + 8, 0x10000, 0);
+	if (!ret)
+		ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE, base + 8, 0x20000, 0);
+	if (ret)
+		return ret;
+	tx->step++;
+	ret = io->read(io->context, MT6878_SENINF_BASE, base, &old);
+	if (!ret)
+		ret = io->write(io->context, MT6878_SENINF_BASE, base, old | 6);
+	if (!ret)
+		ret = io->write(io->context, MT6878_SENINF_BASE, base, old & ~6U);
+	if (ret)
+		return mt6878_seninf_error(tx, ret);
+	shift = (plan->mux % 4) * 8;
+	ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE,
+		0x10 + (plan->mux / 4) * 4, 0x1fU << shift, plan->intf << shift);
+	/* Caller still owes VC split, TSREC, CAMMUX routing and DMA. */
+	return ret;
+}
+
+static inline int mt6878_seninf_receiver_off(
+	const struct mt6878_seninf_backend *io, const struct mt6878_seninf_plan *plan,
+	struct mt6878_seninf_transaction *tx)
+{
+	int ret;
+
+	if (!tx)
+		return -EINVAL;
+	if (tx->off_attempted)
+		return -EBUSY;
+	ret = mt6878_seninf_validate_backend(io, plan);
+	if (!ret)
+		ret = mt6878_seninf_bind_plan(tx, plan);
+	if (ret)
+		return ret;
+	tx->off_attempted = 1;
+	ret = io->check(io->context, MT6878_RECEIVER_OFF, plan);
+	if (ret)
+		return mt6878_seninf_error(tx, ret);
+	/* disable_mux's local bit only: caller must already quiesce its CAMMUXes. */
+	ret = mt6878_seninf_update(io, tx, MT6878_SENINF_BASE,
+		0x0d00 + 0x1000 * plan->mux, 1, 0);
+	if (!ret) {
+		tx->step++;
+		ret = io->write(io->context, MT6878_SENINF_BASE,
+				0x0a00 + 0x1000 * plan->intf, 0);
+	}
+	if (!ret)
+		ret = mt6878_seninf_analog_half(io, tx, plan->port * 0x8000, 0);
+	if (!ret)
+		ret = mt6878_seninf_analog_half(io, tx, plan->port * 0x8000 + 0x1000, 0);
+	return mt6878_seninf_error(tx, ret);
+}
+
+#endif

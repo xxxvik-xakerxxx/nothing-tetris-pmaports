@@ -4,7 +4,7 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
-r176 adds a separate native V4L2 streaming candidate, patch `0112`, with
+r177 includes a separate native V4L2 streaming candidate, patch `0112`, with
 mechanically copied B4.1 init, 4000x3000 preview and 4096x2304 video tables.
 It implements short exposure, analogue gain, VBLANK, HBLANK, pixel-array rate,
 C-PHY endpoint validation and checked stream/power cleanup. Source and fault
@@ -13,6 +13,12 @@ config. No module or enabled sensor client is installed. The next runtime
 boundary is per-module identity/calibration and owned power plus a SENINF
 C-PHY receiver with IOMMU-backed capture buffers, not another identity-only
 probe. Preview and capture remain unavailable.
+
+The same candidate adds SENINF resource/media-graph validation and exact
+vendor analog-power/mux transactions in `patches/camera-seninf/`. CI compiles
+the graph object in isolation and tests transaction faults with ASan/UBSan.
+No live receiver adapter is connected: calibrated PHY/MAC setup, VC/TSREC/
+CAMMUX routing and downstream DMA must precede sensor stream forwarding.
 
 2026-10-09, installed r175, Linux `6.18.0 #176`, boot
 `aa136f81-1539-4455-a2f9-7eed5ffacc91`: a new read-only check finds no video/media device

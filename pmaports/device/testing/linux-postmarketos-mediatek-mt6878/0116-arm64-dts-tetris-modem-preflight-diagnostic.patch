@@ -1,0 +1,51 @@
+From: Tetris port maintainers
+Subject: [PATCH] arm64: dts: tetris: add isolated modem preflight DT targets
+
+Keep the shipping native DT unchanged. Build a disabled baseline and a
+separate diagnostic target enabling only the five-read preflight handler.
+Do not include the modem power-provider fixture, attach modem consumers,
+enable NEMICFG as a device, or activate the independent GPU experiment.
+
+Compare the two compiled DTBs before selecting the diagnostic artifact. A
+complete baseline with disabled nodes makes phandle identity stable across
+the single observer-status delta. Depends on modem preflight patch 0115.
+
+diff --git a/arch/arm64/boot/dts/mediatek/Makefile b/arch/arm64/boot/dts/mediatek/Makefile
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -9,3 +9,5 @@
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-x20-dev.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris-modem-preflight-off.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris-modem-preflight.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris-native.dtb
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight-off.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight-off.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight-off.dts
+@@ -0,0 +1,5 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Diagnostic comparison baseline; the shipping native DT is unchanged. */
++#include "mt6878-nothing-tetris-native.dts"
++#include "mt6878-disabled-modem-preflight.dtsi"
++/* Never include mt6878-disabled-modem-power.dtsi in this experiment. */
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-modem-preflight.dts
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Single experiment: bounded modem-state reads, not a modem/GPU enable. */
++#include "mt6878-nothing-tetris-modem-preflight-off.dts"
++
++/ {
++	model = "Nothing CMF Phone 1 (modem read-only preflight)";
++};
++
++&{/chosen} {
++	tetris,modem-preflight-diagnostic;
++};
++
++&md_preflight {
++	status = "okay";
++};

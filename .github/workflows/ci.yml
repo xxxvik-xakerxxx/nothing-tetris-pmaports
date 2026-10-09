@@ -30,11 +30,13 @@ concurrency:
 jobs:
   validate-overlay:
     runs-on: ubuntu-latest
-    container: alpine:3.23.3
     steps:
       - uses: actions/checkout@v6
       - name: Install tools
-        run: apk add --no-cache build-base coreutils findutils git python3 shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential coreutils findutils git python3 shellcheck
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
@@ -56,17 +58,24 @@ jobs:
           git -C upstream/linux remote add origin https://github.com/MT6878-mainline/linux.git
           git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
             d84b264a54a37611f2f46bc19363cb9b41606205
-          git -C upstream/linux checkout FETCH_HEAD -- \
-            arch/arm64/boot/dts/mediatek \
-            Documentation/devicetree/bindings/display/mediatek \
-            Documentation/devicetree/bindings/power \
-            Documentation/devicetree/bindings/regulator \
-            MAINTAINERS \
-            drivers/gpu/drm/mediatek \
-            drivers/media/i2c \
-            drivers/pmdomain/mediatek \
-            drivers/regulator \
-            drivers/soc/mediatek
+          git -C upstream/linux sparse-checkout init --no-cone
+          git -C upstream/linux sparse-checkout set --no-cone \
+            /arch/arm64/boot/dts/mediatek/ \
+            /Documentation/devicetree/bindings/display/mediatek/ \
+            /Documentation/devicetree/bindings/power/ \
+            /Documentation/devicetree/bindings/regulator/ \
+            /MAINTAINERS \
+            /drivers/gpu/drm/mediatek/ \
+            /drivers/media/i2c/ \
+            /drivers/media/platform/mediatek/Kconfig \
+            /drivers/media/platform/mediatek/Makefile \
+            /drivers/pmdomain/mediatek/ \
+            /drivers/regulator/ \
+            /drivers/soc/mediatek/ \
+            /include/linux/regulator/mt6315-regulator.h
+          git -C upstream/linux checkout --detach FETCH_HEAD
+          test "$(git -C upstream/linux rev-parse HEAD)" = \
+            d84b264a54a37611f2f46bc19363cb9b41606205
       - name: Validate native display prereq gates
         run: |
           sh patches/native-display/check-postmask.sh upstream/linux
@@ -90,6 +99,10 @@ jobs:
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
       - name: Validate isolated modem power sequencing
         run: python3 scripts/check-mt6878-modem-power.py upstream/linux --native-ci
+      - name: Validate read-only modem preflight
+        run: |
+          python3 scripts/check-mt6878-modem-preflight.py upstream/linux --native-ci
+          python3 patches/modem/test_preflight_dt.py
       - name: Validate Panthor VGPU readback gate
         run: |
           python3 scripts/check-panthor-vgpu-readback.py \
@@ -104,6 +117,8 @@ jobs:
           export TETRIS_KERNEL_TREE=upstream/linux
           python3 patches/gpu/test_supply_inventory.py
           python3 patches/gpu/test_readonly_vgpu.py
+          python3 patches/gpu/test_diagnostic_dt.py
+          python3 patches/gpu/test_diagnostic_boot.py
           TETRIS_GPU_OBSERVER_TESTS=1 sh patches/gpu/run_native.sh
       - name: Validate sensor startup and sample ABI
         run: |
@@ -128,12 +143,24 @@ jobs:
           python3 patches/camera-imx882/check.py \
             --vendor-repo upstream/connectivity-modules --kernel-tree upstream/linux
           sh patches/camera-imx882/run-core-tests.sh
+      - name: Validate SENINF resources and graph contracts
+        run: |
+          python3 patches/camera-seninf/check.py \
+            --device-repo upstream/device-modules \
+            --modules-repo upstream/connectivity-modules --kernel-tree upstream/linux
+          sh patches/camera-seninf/run-contract-tests.sh
+          python3 patches/camera-seninf/check-mux.py \
+            --device-repo upstream/device-modules \
+            --modules-repo upstream/connectivity-modules
+          sh patches/camera-seninf/run-mux-tests.sh
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
       - name: Validate GNSS host callback and borrowed-output contracts
         run: python3 scripts/check-gnss-host-boundary.py
       - name: Validate typed GNSS startup adapter
-        run: sh patches/gnss-navigation-audit/run_startup_adapter_ci.sh
+        run: |
+          sh patches/gnss-navigation-audit/run_startup_adapter_ci.sh
+          sh patches/gnss-navigation-audit/run_first_config_ci.sh
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
@@ -154,7 +181,6 @@ jobs:
           fi
 
   build-gnss-bionic-adapter:
-    needs: validate-overlay
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -173,15 +199,26 @@ jobs:
             patches/gnss-navigation-audit/b41_startup_adapter.c \
             patches/gnss-navigation-audit/test_b41_startup_adapter.c \
             -o out/b41-startup-adapter-test
-          "$ndk/llvm-readelf" -h out/b41-startup-adapter-test | grep 'Machine:.*AArch64'
-          "$ndk/llvm-readelf" -d out/b41-startup-adapter-test > out/DYNAMIC
-          if grep -q 'NEEDED.*libmnl' out/DYNAMIC; then
-            echo 'Callback tests must not start the vendor navigation engine'
-            exit 1
-          fi
+          "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
+            patches/gnss-navigation-audit/b41_first_config.c \
+            patches/gnss-navigation-audit/test_b41_first_config.c \
+            -o out/b41-first-config-test
+          "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
+            patches/gnss-navigation-audit/b41_first_config.c \
+            patches/gnss-navigation-audit/b41_first_queries.c \
+            patches/gnss-navigation-audit/test_b41_first_queries.c \
+            -o out/b41-first-queries-test
+          for binary in out/b41-*-test; do
+            "$ndk/llvm-readelf" -h "$binary" | grep 'Machine:.*AArch64'
+            "$ndk/llvm-readelf" -d "$binary" > "$binary.DYNAMIC"
+            if grep -q 'NEEDED.*libmnl' "$binary.DYNAMIC"; then
+              echo 'Standalone tests must not start the vendor navigation engine'
+              exit 1
+            fi
+          done
           printf 'commit=%s\nndk=r27d\nmode=callback-tests-no-vendor-engine\n' \
             "$GITHUB_SHA" > out/BUILD-MANIFEST
-          (cd out && sha256sum b41-startup-adapter-test > SHA256SUMS)
+          (cd out && sha256sum b41-*-test > SHA256SUMS)
       - uses: actions/upload-artifact@v7
         with:
           name: gnss-bionic-adapter-tests
@@ -208,7 +245,7 @@ jobs:
             build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
             dtc file findutils git kmod linux-headers mtools multipath-tools openssl \
             openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
-            util-linux xz zstd
+            u-boot-tools util-linux xz zstd
       - name: Fetch upstream pmaports and pmbootstrap
         run: |
           cd /work
@@ -732,6 +769,37 @@ jobs:
           EOF
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
+      - name: Build isolated read-only diagnostic boot artifacts
+        run: |
+          rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
+          native="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
+          diagnostics="$rootfs/usr/share/nothing-tetris/diagnostic-dtbs"
+          builder=/work/patches/gpu/build_diagnostic_boot.py
+          its=/work/pmaports/device/testing/device-nothing-tetris/boot_image.its
+          python3 "$builder" --mode vgpu-observe \
+            --normal-fit /work/out/boot_image.itb \
+            --boot-image /work/out/nothing-tetris-boot.img \
+            --normal-dtb "$native" \
+            --diagnostic-dtb "$diagnostics/mt6878-nothing-tetris-vgpu-observe.dtb" \
+            --its "$its" --require-boot-image \
+            --output-dir /work/out/readonly-diagnostics/vgpu-observe
+          python3 "$builder" --mode modem-preflight \
+            --normal-fit /work/out/boot_image.itb \
+            --boot-image /work/out/nothing-tetris-boot.img \
+            --normal-dtb "$native" \
+            --baseline-dtb "$diagnostics/mt6878-nothing-tetris-modem-preflight-off.dtb" \
+            --diagnostic-dtb "$diagnostics/mt6878-nothing-tetris-modem-preflight.dtb" \
+            --its "$its" --require-boot-image \
+            --output-dir /work/out/readonly-diagnostics/modem-preflight
+          cp /work/out/BUILD-MANIFEST /work/out/readonly-diagnostics/BUILD-MANIFEST
+          cd /work/out
+          sha256sum --check SHA256SUMS
+      - name: Upload isolated read-only diagnostics
+        uses: actions/upload-artifact@v7
+        with:
+          name: nothing-tetris-readonly-diagnostics
+          path: /work/out/readonly-diagnostics/
+          if-no-files-found: error
       - name: Collect pmbootstrap logs
         if: always()
         run: |

@@ -1,0 +1,45 @@
+From: Tetris port maintainers
+Subject: [PATCH] arm64: dts: tetris: add isolated VGPU observer diagnostic DTB
+
+Keep the shipped native DT disabled. Add an explicitly selected diagnostic
+target that changes only the USID-6 observer parent's status. Both supply
+children stay disabled, no Panthor/power-domain/clock/OPP consumer is added.
+Requires the read-only observer implementation in 0114; selecting a DTB
+against another kernel does not establish that contract.
+
+diff --git a/arch/arm64/boot/dts/mediatek/Makefile b/arch/arm64/boot/dts/mediatek/Makefile
+--- a/arch/arm64/boot/dts/mediatek/Makefile
++++ b/arch/arm64/boot/dts/mediatek/Makefile
+@@ -9,6 +9,7 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-evb.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6797-x20-dev.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris-native.dtb
++dtb-$(CONFIG_ARCH_MEDIATEK) += mt6878-nothing-tetris-vgpu-observe.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-rfb1.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7622-bananapi-bpi-r64.dtb
+ dtb-$(CONFIG_ARCH_MEDIATEK) += mt7981b-cudy-wr3000-v1.dtb
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-vgpu-observe.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-vgpu-observe.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-vgpu-observe.dts
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++/* Diagnostic only: boot with the matching CI kernel, not a stock kernel. */
++#include "mt6878-nothing-tetris-native.dts"
++
++/ {
++	model = "Nothing CMF Phone 1 (VGPU read-only diagnostic)";
++};
++
++&{/chosen} {
++	tetris,vgpu-observe-diagnostic;
++};
++
++&mt6319_gpu {
++	/* Required even if a diagnostic include accidentally loses the flag. */
++	mediatek,observe-vgpu-only;
++	status = "okay";
++};
++
++/* VBUCK2 and VSRAM_CPUM children remain disabled through the native include. */
++

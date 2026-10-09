@@ -1,22 +1,30 @@
 # Port summary, 2026-10-09
 
-## Combined candidate: r176
+## Combined candidate: r177
 
 Prepared together, not yet installed or advertised as working:
 
 - Modem: dedicated power-domain sequencing with checked bus protection,
   isolation after shutdown acknowledgement, inherited-state rejection and
   first-error latching. No reset release or ready CCCI handoff is enabled.
+  A separate opt-in five-register diagnostic exits before genpd registration
+  and any power transition. Its shipping fixture remains unincluded.
 - Camera: native IMX882 V4L2 stream candidate with exact B4.1 init/mode tables,
   exposure/gain/frame timing controls and checked start/stop. Runtime DT stays
-  disabled; SENINF receiver and capture DMA remain missing.
+  disabled. SENINF resource/media graph and partial analog/mux transactions
+  are now prepared; calibrated receiver setup and capture DMA remain missing.
 - GPU: disabled VGPU/VSRAM inventory, disabled-child filtering and rejection
-  of phase masks that reach unowned rails. Panthor remains inactive.
+  of phase masks that reach unowned rails. A separately selected read-only
+  diagnostic DT enables only the VGPU observer. Panthor remains inactive.
 - GNSS: typed host configuration and callbacks with bounded copied-output
   queues. Missing engine/transport contracts still prevent navigation startup.
 
-CI validates native fault tests and compiles the camera candidate with an
-isolated Media config. The install manifest now records the actually tested
+The r176 run [37925684468](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37925684468)
+stopped at native-test linking: Alpine GCC's ASan library had an unresolved
+`__sanitizer::struct_sock_fprog_sz` symbol. No new image was produced or
+flashed. Native fault tests move to Ubuntu, retaining ASan/UBSan; the pmOS
+image build stays on Alpine. CI compiles camera candidates with an isolated
+Media config. The install manifest now records the actually tested
 U-Boot `dcb20ce71f`, not the older loader pin. Local checks do not replace
 hardware qualification: SIM/calls, GPS fixes, accelerated rendering and
 camera capture are still not available.

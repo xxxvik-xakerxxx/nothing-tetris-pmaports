@@ -1,0 +1,501 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/* Resource and media-graph contract only; no receiver register programming. */
+#include <linux/clk.h>
+#include <linux/io.h>
+#include <linux/module.h>
+#include <linux/nvmem-consumer.h>
+#include <linux/of.h>
+#include <linux/platform_device.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
+#include <media/v4l2-async.h>
+#include <media/v4l2-device.h>
+#include <media/v4l2-fwnode.h>
+
+#include "mt6878-seninf-contract.h"
+
+enum { SENINF_SINK, SENINF_SOURCE, SENINF_PADS };
+
+static const char * const mt6878_seninf_clock_names[] = {
+	"clk_cam_seninf", "clk_cam_cam", "clk_cam_camtg",
+	"clk_top_seninf", "clk_top_seninf1", "clk_top_seninf2",
+	"clk_top_seninf3", "clk_top_camtm", "clk_top_ap_step0",
+	"clk_top_ap_step1", "clk_top_ap_step2", "clk_top_ap_step3",
+};
+
+static const char * const mt6878_seninf_domain_names[] = {
+	"cam-main", "csi-rx",
+};
+
+struct mt6878_seninf {
+	struct v4l2_subdev sd;
+	struct v4l2_async_notifier notifier;
+	struct media_pad pads[SENINF_PADS];
+	/* Active-state and graph lifetime lock, never held across sensor calls. */
+	struct mutex lock;
+	struct v4l2_subdev *sensor;
+	unsigned int sensor_pad;
+	struct v4l2_mbus_config_mipi_csi2 cphy;
+	struct clk_bulk_data clocks[ARRAY_SIZE(mt6878_seninf_clock_names)];
+	struct device *domains[ARRAY_SIZE(mt6878_seninf_domain_names)];
+	struct regulator *vcore;
+	struct nvmem_cell *csi_efuse;
+	void __iomem *base;
+	void __iomem *analog;
+	int irq, tsrec_irq;
+	unsigned int csi_port;
+};
+
+static struct mt6878_seninf *to_seninf(struct v4l2_subdev *sd)
+{
+	return container_of(sd, struct mt6878_seninf, sd);
+}
+
+static int mt6878_seninf_init_state(struct v4l2_subdev *sd,
+				  struct v4l2_subdev_state *state)
+{
+	struct v4l2_mbus_framefmt *sink;
+
+	sink = v4l2_subdev_state_get_format(state, SENINF_SINK);
+	*sink = (struct v4l2_mbus_framefmt) {
+		.width = 4000, .height = 3000, .code = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.field = V4L2_FIELD_NONE, .colorspace = V4L2_COLORSPACE_RAW,
+	};
+	*v4l2_subdev_state_get_format(state, SENINF_SOURCE) = *sink;
+	return 0;
+}
+
+static int mt6878_seninf_set_format(struct v4l2_subdev *sd,
+	struct v4l2_subdev_state *state, struct v4l2_subdev_format *format)
+{
+	struct v4l2_mbus_framefmt *sink;
+
+	if (format->pad >= SENINF_PADS || format->stream)
+		return -EINVAL;
+	sink = v4l2_subdev_state_get_format(state, SENINF_SINK);
+	if (format->pad == SENINF_SINK) {
+		if (format->format.code != MEDIA_BUS_FMT_SRGGB10_1X10 ||
+		    !((format->format.width == 4000 && format->format.height == 3000) ||
+		      (format->format.width == 4096 && format->format.height == 2304)))
+			return -EINVAL;
+		*sink = format->format;
+		sink->field = V4L2_FIELD_NONE;
+		sink->colorspace = V4L2_COLORSPACE_RAW;
+		*v4l2_subdev_state_get_format(state, SENINF_SOURCE) = *sink;
+	}
+	format->format = *sink;
+	return 0;
+}
+
+static int mt6878_seninf_check_sensor(struct mt6878_seninf *receiver,
+				    struct v4l2_subdev *sensor, unsigned int pad,
+				    struct v4l2_mbus_framefmt *format)
+{
+	struct v4l2_subdev_format sensor_format = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE, .pad = pad,
+	};
+	struct v4l2_mbus_config bus;
+	struct v4l2_mbus_frame_desc desc;
+	struct mt6878_seninf_packet packets[2];
+	unsigned int i;
+	int ret;
+
+	ret = v4l2_subdev_call_state_active(sensor, pad, get_fmt, &sensor_format);
+	if (ret)
+		return ret;
+	if (sensor_format.format.code != MEDIA_BUS_FMT_SRGGB10_1X10 ||
+	    sensor_format.format.field != V4L2_FIELD_NONE)
+		return -EINVAL;
+	ret = v4l2_subdev_call(sensor, pad, get_mbus_config, pad, &bus);
+	if (ret)
+		return ret;
+	if (bus.type != V4L2_MBUS_CSI2_CPHY || bus.bus.mipi_csi2.num_data_lanes != 3)
+		return -EINVAL;
+	if (bus.bus.mipi_csi2.flags != receiver->cphy.flags ||
+	    bus.bus.mipi_csi2.lane_polarities[0] || receiver->cphy.lane_polarities[0])
+		return -EINVAL;
+	for (i = 0; i < 3; i++) {
+		if (bus.bus.mipi_csi2.data_lanes[i] != receiver->cphy.data_lanes[i] ||
+		    bus.bus.mipi_csi2.line_orders[i] != receiver->cphy.line_orders[i] ||
+		    bus.bus.mipi_csi2.lane_polarities[i + 1] !=
+		    receiver->cphy.lane_polarities[i + 1])
+			return -EINVAL;
+	}
+	ret = v4l2_subdev_call(sensor, pad, get_frame_desc, pad, &desc);
+	if (ret)
+		return ret;
+	if (desc.type != V4L2_MBUS_FRAME_DESC_TYPE_CSI2 || desc.num_entries != 2)
+		return -EINVAL;
+	for (i = 0; i < 2; i++) {
+		if (!(desc.entry[i].flags & V4L2_MBUS_FRAME_DESC_FL_LEN_MAX))
+			return -EINVAL;
+		if (desc.entry[i].stream)
+			return -EINVAL;
+		if (desc.entry[i].bus.csi2.dt == 0x2b &&
+		    ((desc.entry[i].flags & V4L2_MBUS_FRAME_DESC_FL_BLOB) ||
+		     desc.entry[i].pixelcode != MEDIA_BUS_FMT_SRGGB10_1X10))
+			return -EINVAL;
+		if (desc.entry[i].bus.csi2.dt == 0x30 &&
+		    !(desc.entry[i].flags & V4L2_MBUS_FRAME_DESC_FL_BLOB))
+			return -EINVAL;
+		packets[i] = (struct mt6878_seninf_packet) {
+			.vc = desc.entry[i].bus.csi2.vc,
+			.dt = desc.entry[i].bus.csi2.dt,
+			.length = desc.entry[i].length,
+		};
+	}
+	ret = mt6878_seninf_check_packets(sensor_format.format.width,
+					sensor_format.format.height, 2, packets);
+	if (!ret)
+		*format = sensor_format.format;
+	return ret;
+}
+
+static int mt6878_seninf_link_validate(struct media_link *link)
+{
+	struct v4l2_mbus_framefmt format, sink;
+	struct v4l2_subdev *sensor, *sd;
+	struct v4l2_subdev_state *state;
+	int ret;
+
+	if (link->sink->index != SENINF_SINK)
+		return -EINVAL;
+	if (!is_media_entity_v4l2_subdev(link->source->entity))
+		return -EINVAL;
+	sd = media_entity_to_v4l2_subdev(link->sink->entity);
+	sensor = media_entity_to_v4l2_subdev(link->source->entity);
+	/* Do not use generic link_validate's both-state lock: the sensor's
+	 * non-state get_frame_desc callback acquires its own control/state lock.
+	 */
+	ret = mt6878_seninf_check_sensor(to_seninf(sd), sensor,
+					link->source->index, &format);
+	if (ret)
+		return ret;
+	state = v4l2_subdev_lock_and_get_active_state(sd);
+	sink = *v4l2_subdev_state_get_format(state, SENINF_SINK);
+	v4l2_subdev_unlock_state(state);
+	return format.width == sink.width && format.height == sink.height &&
+		format.code == sink.code && format.field == sink.field ? 0 : -EPIPE;
+}
+
+static int mt6878_seninf_bound(struct v4l2_async_notifier *notifier,
+			     struct v4l2_subdev *sensor,
+			     struct v4l2_async_connection *connection)
+{
+	struct mt6878_seninf *receiver = container_of(notifier,
+		struct mt6878_seninf, notifier);
+	struct v4l2_subdev_state *state;
+	struct v4l2_mbus_framefmt format;
+	int pad, ret;
+
+	pad = media_entity_get_fwnode_pad(&sensor->entity,
+		connection->match.fwnode, MEDIA_PAD_FL_SOURCE);
+	if (pad < 0)
+		return pad;
+	ret = mt6878_seninf_check_sensor(receiver, sensor, pad, &format);
+	if (ret)
+		return dev_err_probe(receiver->sd.dev, ret,
+				     "sensor C-PHY/RAW10/PDAF contract mismatch\n");
+	ret = media_create_pad_link(&sensor->entity, pad, &receiver->sd.entity,
+				   SENINF_SINK, MEDIA_LNK_FL_IMMUTABLE |
+				   MEDIA_LNK_FL_ENABLED);
+	if (ret)
+		return ret;
+	state = v4l2_subdev_lock_and_get_active_state(&receiver->sd);
+	*v4l2_subdev_state_get_format(state, SENINF_SINK) = format;
+	*v4l2_subdev_state_get_format(state, SENINF_SOURCE) = format;
+	receiver->sensor = sensor;
+	receiver->sensor_pad = pad;
+	v4l2_subdev_unlock_state(state);
+	return 0;
+}
+
+static void mt6878_seninf_unbound(struct v4l2_async_notifier *notifier,
+				struct v4l2_subdev *sensor,
+				struct v4l2_async_connection *connection)
+{
+	struct mt6878_seninf *receiver = container_of(notifier,
+		struct mt6878_seninf, notifier);
+
+	mutex_lock(&receiver->lock);
+	receiver->sensor = NULL;
+	mutex_unlock(&receiver->lock);
+}
+
+static const struct v4l2_async_notifier_operations mt6878_seninf_notifier_ops = {
+	.bound = mt6878_seninf_bound,
+	.unbind = mt6878_seninf_unbound,
+};
+
+static int mt6878_seninf_stream(struct v4l2_subdev *sd, int enable)
+{
+	/* Do not forward stream-on to a sensor without PHY/mux/DMA programming. */
+	return enable ? -EOPNOTSUPP : 0;
+}
+
+static const struct v4l2_subdev_pad_ops mt6878_seninf_pad_ops = {
+	.get_fmt = v4l2_subdev_get_fmt,
+	.set_fmt = mt6878_seninf_set_format,
+};
+
+static const struct v4l2_subdev_video_ops mt6878_seninf_video_ops = {
+	.s_stream = mt6878_seninf_stream,
+};
+
+static const struct v4l2_subdev_ops mt6878_seninf_ops = {
+	.pad = &mt6878_seninf_pad_ops,
+	.video = &mt6878_seninf_video_ops,
+};
+
+static const struct v4l2_subdev_internal_ops mt6878_seninf_internal_ops = {
+	.init_state = mt6878_seninf_init_state,
+};
+
+static const struct media_entity_operations mt6878_seninf_entity_ops = {
+	.link_validate = mt6878_seninf_link_validate,
+	.get_fwnode_pad = v4l2_subdev_get_fwnode_pad_1_to_1,
+};
+
+static void mt6878_seninf_disable_pm(void *data)
+{
+	pm_runtime_disable(data);
+}
+
+static void mt6878_seninf_detach_domain(void *data)
+{
+	/* Resource-only attachment must not request domain power-off on cleanup. */
+	dev_pm_domain_detach(data, false);
+}
+
+static int mt6878_seninf_probe(struct platform_device *pdev)
+{
+	struct device *dev = &pdev->dev;
+	struct mt6878_seninf *receiver;
+	struct resource *resource;
+	struct fwnode_handle *endpoint;
+	struct fwnode_handle *source_endpoint, *remote;
+	struct v4l2_async_connection *connection;
+	struct v4l2_fwnode_endpoint ep = { .bus_type = V4L2_MBUS_CSI2_CPHY };
+	u32 lanes[3];
+	const char *csi_port;
+	unsigned int i;
+	int ret;
+
+	if (of_count_phandle_with_args(dev->of_node, "power-domains",
+				      "#power-domain-cells") != 2 ||
+	    device_property_string_array_count(dev, "power-domain-names") != 2)
+		return dev_err_probe(dev, -EINVAL, "requires CAM_MAIN and CSI_RX owners\n");
+	/* SENINF routes packets; downstream RAW/CAMSV own the DMA/IOMMU ports. */
+	if (device_property_present(dev, "iommus"))
+		return dev_err_probe(dev, -EINVAL, "unexpected SENINF DMA ownership\n");
+	/* genpd attachment can apply a required OPP even without power-on.
+	 * The graph-only node must not request performance states yet.
+	 */
+	if (device_property_present(dev, "required-opps") ||
+	    device_property_present(dev, "operating-points-v2"))
+		return dev_err_probe(dev, -EOPNOTSUPP, "SENINF DVFS ownership not implemented\n");
+	if (!device_property_present(dev, "dvfsrc-vcore-supply"))
+		return dev_err_probe(dev, -EINVAL, "missing explicit VCORE supplier\n");
+	ret = device_property_read_string(dev, "csi-port", &csi_port);
+	if (ret || (strcmp(csi_port, "0") && strcmp(csi_port, "1")))
+		return dev_err_probe(dev, -EINVAL, "only full CSI ports 0/1 audited\n");
+	if (fwnode_graph_get_endpoint_count(dev_fwnode(dev), 0) != 2)
+		return dev_err_probe(dev, -EINVAL, "requires one sensor and one capture link\n");
+	receiver = devm_kzalloc(dev, sizeof(*receiver), GFP_KERNEL);
+	if (!receiver)
+		return -ENOMEM;
+	receiver->csi_port = csi_port[0] - '0';
+	resource = platform_get_resource_byname(pdev, IORESOURCE_MEM, "base");
+	if (!resource || resource_size(resource) != 0x18000)
+		return -EINVAL;
+	receiver->base = devm_ioremap_resource(dev, resource);
+	if (IS_ERR(receiver->base))
+		return PTR_ERR(receiver->base);
+	resource = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ana-rx");
+	if (!resource || resource_size(resource) != 0x30000)
+		return -EINVAL;
+	receiver->analog = devm_ioremap_resource(dev, resource);
+	if (IS_ERR(receiver->analog))
+		return PTR_ERR(receiver->analog);
+	receiver->irq = platform_get_irq_byname(pdev, "seninf-irq");
+	if (receiver->irq < 0)
+		return receiver->irq;
+	receiver->tsrec_irq = platform_get_irq_byname(pdev, "tsrec-irq");
+	if (receiver->tsrec_irq < 0)
+		return receiver->tsrec_irq;
+	if (receiver->irq == receiver->tsrec_irq)
+		return -EINVAL;
+	/* IRQs are not requested until an audited acknowledge path exists. */
+	if (device_property_string_array_count(dev, "clock-names") !=
+	    ARRAY_SIZE(mt6878_seninf_clock_names))
+		return -EINVAL;
+	if (of_count_phandle_with_args(dev->of_node, "clocks", "#clock-cells") !=
+	    ARRAY_SIZE(mt6878_seninf_clock_names))
+		return dev_err_probe(dev, -EINVAL, "unnamed SENINF clocks not supported\n");
+	for (i = 0; i < ARRAY_SIZE(mt6878_seninf_clock_names); i++)
+		receiver->clocks[i].id = mt6878_seninf_clock_names[i];
+	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(receiver->clocks), receiver->clocks);
+	if (ret)
+		return dev_err_probe(dev, ret, "required SENINF clock unavailable\n");
+	receiver->vcore = devm_regulator_get(dev, "dvfsrc-vcore");
+	if (IS_ERR(receiver->vcore))
+		return dev_err_probe(dev, PTR_ERR(receiver->vcore), "VCORE owner unavailable\n");
+	receiver->csi_efuse = devm_nvmem_cell_get(dev, "rg_csi");
+	if (IS_ERR(receiver->csi_efuse))
+		return dev_err_probe(dev, PTR_ERR(receiver->csi_efuse), "CSI efuse unavailable\n");
+	for (i = 0; i < ARRAY_SIZE(receiver->domains); i++) {
+		receiver->domains[i] = dev_pm_domain_attach_by_name(dev,
+						mt6878_seninf_domain_names[i]);
+		if (IS_ERR_OR_NULL(receiver->domains[i]))
+			return dev_err_probe(dev, receiver->domains[i] ?
+				PTR_ERR(receiver->domains[i]) : -ENODEV,
+				"SENINF domain %s unavailable\n", mt6878_seninf_domain_names[i]);
+		ret = devm_add_action_or_reset(dev, mt6878_seninf_detach_domain,
+					     receiver->domains[i]);
+		if (ret)
+			return ret;
+	}
+	endpoint = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), SENINF_SINK, 0, 0);
+	if (!endpoint)
+		return -EINVAL;
+	source_endpoint = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev),
+							 SENINF_SOURCE, 0, 0);
+	if (!source_endpoint) {
+		ret = -EINVAL;
+		goto put_endpoint;
+	}
+	remote = fwnode_graph_get_remote_endpoint(source_endpoint);
+	fwnode_handle_put(source_endpoint);
+	if (!remote) {
+		ret = -EINVAL;
+		goto put_endpoint;
+	}
+	fwnode_handle_put(remote);
+	ret = fwnode_property_count_u32(endpoint, "data-lanes");
+	if (ret != ARRAY_SIZE(lanes)) {
+		ret = -EINVAL;
+		goto put_endpoint;
+	}
+	ret = fwnode_property_read_u32_array(endpoint, "data-lanes", lanes,
+					   ARRAY_SIZE(lanes));
+	if (!ret)
+		ret = mt6878_seninf_check_trios(ARRAY_SIZE(lanes), lanes);
+	if (!ret)
+		ret = v4l2_fwnode_endpoint_parse(endpoint, &ep);
+	if (ret)
+		goto put_endpoint;
+	if (ep.bus_type != V4L2_MBUS_CSI2_CPHY || ep.bus.mipi_csi2.num_data_lanes != 3) {
+		ret = -EINVAL;
+		goto put_endpoint;
+	}
+	receiver->cphy = ep.bus.mipi_csi2;
+	mutex_init(&receiver->lock);
+	v4l2_subdev_init(&receiver->sd, &mt6878_seninf_ops);
+	receiver->sd.owner = THIS_MODULE;
+	receiver->sd.dev = dev;
+	receiver->sd.fwnode = dev_fwnode(dev);
+	receiver->sd.state_lock = &receiver->lock;
+	receiver->sd.internal_ops = &mt6878_seninf_internal_ops;
+	receiver->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	receiver->sd.entity.function = MEDIA_ENT_F_VID_IF_BRIDGE;
+	receiver->sd.entity.ops = &mt6878_seninf_entity_ops;
+	snprintf(receiver->sd.name, sizeof(receiver->sd.name), "mt6878-seninf %s",
+		 dev_name(dev));
+	platform_set_drvdata(pdev, receiver);
+	receiver->pads[SENINF_SINK].flags = MEDIA_PAD_FL_SINK;
+	receiver->pads[SENINF_SOURCE].flags = MEDIA_PAD_FL_SOURCE;
+	ret = media_entity_pads_init(&receiver->sd.entity, SENINF_PADS, receiver->pads);
+	if (ret)
+		goto destroy_lock;
+	ret = v4l2_subdev_init_finalize(&receiver->sd);
+	if (ret)
+		goto clean_entity;
+	v4l2_async_subdev_nf_init(&receiver->notifier, &receiver->sd);
+	receiver->notifier.ops = &mt6878_seninf_notifier_ops;
+	connection = v4l2_async_nf_add_fwnode_remote(&receiver->notifier, endpoint,
+						  struct v4l2_async_connection);
+	if (IS_ERR(connection)) {
+		ret = PTR_ERR(connection);
+		goto clean_notifier;
+	}
+	ret = v4l2_async_nf_register(&receiver->notifier);
+	if (ret)
+		goto clean_notifier;
+	ret = v4l2_async_register_subdev(&receiver->sd);
+	if (ret)
+		goto unregister_notifier;
+	ret = pm_runtime_set_suspended(dev);
+	if (ret) {
+		v4l2_async_unregister_subdev(&receiver->sd);
+		goto unregister_notifier;
+	}
+	pm_runtime_enable(dev);
+	ret = devm_add_action_or_reset(dev, mt6878_seninf_disable_pm, dev);
+	if (ret) {
+		v4l2_async_unregister_subdev(&receiver->sd);
+		goto unregister_notifier;
+	}
+	fwnode_handle_put(endpoint);
+	dev_info(dev, "resource/graph candidate registered; hardware streaming unavailable\n");
+	return 0;
+unregister_notifier:
+	v4l2_async_nf_unregister(&receiver->notifier);
+clean_notifier:
+	v4l2_async_nf_cleanup(&receiver->notifier);
+	v4l2_subdev_cleanup(&receiver->sd);
+clean_entity:
+	media_entity_cleanup(&receiver->sd.entity);
+destroy_lock:
+	mutex_destroy(&receiver->lock);
+put_endpoint:
+	fwnode_handle_put(endpoint);
+	return ret;
+}
+
+static void mt6878_seninf_remove(struct platform_device *pdev)
+{
+	struct mt6878_seninf *receiver = platform_get_drvdata(pdev);
+
+	v4l2_async_unregister_subdev(&receiver->sd);
+	v4l2_async_nf_unregister(&receiver->notifier);
+	v4l2_async_nf_cleanup(&receiver->notifier);
+	v4l2_subdev_cleanup(&receiver->sd);
+	media_entity_cleanup(&receiver->sd.entity);
+	mutex_destroy(&receiver->lock);
+}
+
+static int mt6878_seninf_runtime_resume(struct device *dev)
+{
+	/* The graph skeleton cannot power a PHY without audited DVFS/mux logic. */
+	return -EOPNOTSUPP;
+}
+
+static int mt6878_seninf_runtime_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static const struct dev_pm_ops mt6878_seninf_pm = {
+	RUNTIME_PM_OPS(mt6878_seninf_runtime_suspend,
+		       mt6878_seninf_runtime_resume, NULL)
+};
+
+static const struct of_device_id mt6878_seninf_match[] = {
+	{ .compatible = "mediatek,mt6878-seninf-graph" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, mt6878_seninf_match);
+
+static struct platform_driver mt6878_seninf_driver = {
+	.probe = mt6878_seninf_probe,
+	.remove = mt6878_seninf_remove,
+	.driver = {
+		.name = "mt6878-seninf-graph",
+		.of_match_table = mt6878_seninf_match,
+		.pm = pm_ptr(&mt6878_seninf_pm),
+	},
+};
+module_platform_driver(mt6878_seninf_driver);
+MODULE_DESCRIPTION("MT6878 SENINF resource and V4L2 graph candidate");
+MODULE_LICENSE("GPL");

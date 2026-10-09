@@ -1,0 +1,219 @@
+From: Tetris port maintainers
+Subject: [PATCH] pmdomain: mediatek: add opt-in read-only MT6878 modem preflight
+
+Use a dedicated diagnostic compatible and return before generic scpsys
+allocation, domain initialization, provider registration or cleanup. Validate
+the three exact Nothing OS 4.1 resources before resolving any regmaps. There
+are no clock/reset/hwlock properties, children, consumers or transition ops.
+Consume one attempt before mapping/reading, retain the first error and log the
+stage before each MMIO read so an external abort has a last-stage breadcrumb.
+
+Source: Nothing device modules ee2be53cb75670b548948636a0db1d1ff112bf12,
+mt6878.dts and mtk-scpsys-mt6878.c. Resource identity does not prove non-secure
+read permission or electrical accessibility: booting the diagnostic still
+requires an explicit controlled experiment with USB/SSH recovery available.
+
+The disabled fixture is not included by any shipping or diagnostic DTB.
+
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -708,3 +708,4 @@
+ #include "mt6878-modem-pm.h"
++#include "mt6878-modem-preflight.h"
+ 
+ static struct
+@@ -1123,2 +1124,5 @@
+ static const struct of_device_id scpsys_of_match[] = {
++	{
++		.compatible = "mediatek,mt6878-modem-preflight",
++	},
+ 	{
+@@ -1187,3 +1192,6 @@
+ 	int ret;
+ 
++	if (of_device_is_compatible(np, "mediatek,mt6878-modem-preflight"))
++		return mt6878_modem_preflight(pdev);
++
+ 	soc = of_device_get_match_data(&pdev->dev);
+diff --git a/drivers/pmdomain/mediatek/mt6878-modem-preflight.h b/drivers/pmdomain/mediatek/mt6878-modem-preflight.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-modem-preflight.h
+@@ -0,0 +1,125 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/atomic.h>
++#include <linux/of_address.h>
++
++static atomic_t mt6878_md_preflight_attempted = ATOMIC_INIT(0);
++
++static int mt6878_md_preflight_resource(struct device_node *node,
++				       const char *compatible, resource_size_t start)
++{
++	struct resource resource, extra;
++	int ret;
++
++	if (!node || !of_device_is_compatible(node, compatible) ||
++	    !of_device_is_compatible(node, "syscon"))
++		return -EINVAL;
++	/* Mapping must not introduce an implicit reset or clock operation. */
++	if (of_property_present(node, "clocks") ||
++	    of_property_present(node, "resets") ||
++	    of_property_present(node, "hwlocks"))
++		return -EINVAL;
++	ret = of_address_to_resource(node, 0, &resource);
++	if (ret)
++		return ret;
++	if (resource.start != start || resource_size(&resource) != 0x1000 ||
++	    !of_address_to_resource(node, 1, &extra))
++		return -EINVAL;
++	return 0;
++}
++
++static int mt6878_modem_preflight(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np = dev->of_node, *parent, *ifr = NULL, *nemi = NULL;
++	struct device_node *child;
++	struct regmap *maps[3];
++	static const struct {
++		u32 map, offset;
++		const char *name;
++	} reads[] = {
++		{ 0, 0x0e00, "spm-md-power" },
++		{ 0, 0x0f24, "spm-md-isolation" },
++		{ 1, 0x0c5c, "ifr-md-protect-1" },
++		{ 1, 0x0c4c, "ifr-md-protect-0" },
++		{ 2, 0x008c, "nemi-md-protect" },
++	};
++	u32 values[ARRAY_SIZE(reads)];
++	unsigned int index;
++	const char *stage = "single-attempt";
++	int ret;
++
++	if (atomic_cmpxchg(&mt6878_md_preflight_attempted, 0, 1))
++		return dev_err_probe(dev, -EALREADY, "modem preflight already attempted\n");
++	stage = "topology";
++	if (!dev->parent) {
++		ret = -ENODEV;
++		goto fault;
++	}
++	parent = dev->parent->of_node;
++	for_each_available_child_of_node(np, child) {
++		of_node_put(child);
++		ret = -EINVAL;
++		goto fault;
++	}
++	if (of_property_present(np, "power-domains") ||
++	    of_property_present(np, "#power-domain-cells") ||
++	    of_count_phandle_with_args(np, "access-controllers", NULL) != 2) {
++		ret = -EINVAL;
++		goto fault;
++	}
++	ifr = of_parse_phandle(np, "access-controllers", 0);
++	nemi = of_parse_phandle(np, "access-controllers", 1);
++	stage = "spm-resource";
++	ret = mt6878_md_preflight_resource(parent, "mediatek,mt6878-scpsys", 0x1c001000);
++	if (ret)
++		goto fault;
++	stage = "ifr-resource";
++	ret = mt6878_md_preflight_resource(ifr, "mediatek,mt6878-infracfg-ao", 0x10001000);
++	if (ret)
++		goto fault;
++	stage = "nemi-resource";
++	ret = mt6878_md_preflight_resource(nemi,
++			"mediatek,mt6878-nemicfg_ao_mem_reg_bus", 0x10270000);
++	if (ret)
++		goto fault;
++	stage = "spm-map";
++	maps[0] = syscon_node_to_regmap(parent);
++	if (IS_ERR(maps[0])) {
++		ret = PTR_ERR(maps[0]);
++		goto fault;
++	}
++	stage = "ifr-map";
++	maps[1] = device_node_to_regmap(ifr);
++	if (IS_ERR(maps[1])) {
++		ret = PTR_ERR(maps[1]);
++		goto fault;
++	}
++	stage = "nemi-map";
++	maps[2] = device_node_to_regmap(nemi);
++	if (IS_ERR(maps[2])) {
++		ret = PTR_ERR(maps[2]);
++		goto fault;
++	}
++	for (index = 0; index < ARRAY_SIZE(reads); index++) {
++		stage = reads[index].name;
++		dev_info(dev, "modem preflight read-begin stage=%u/%zu %s offset=%#x\n",
++			 index + 1, ARRAY_SIZE(reads), stage, reads[index].offset);
++		ret = regmap_read(maps[reads[index].map], reads[index].offset, &values[index]);
++		if (ret)
++			goto fault;
++		dev_info(dev, "modem preflight read-done stage=%u value=%#010x\n",
++			 index + 1, values[index]);
++	}
++	dev_info(dev, "modem preflight complete off-isolated-protected=%u; no start authorized\n",
++		 !(values[0] & (GENMASK(31, 30) | BIT(2))) &&
++		 (values[1] & 3) == 3 && (values[2] & BIT(9)) &&
++		 (values[3] & BIT(11)) && (values[4] & (BIT(6) | BIT(7))) == (BIT(6) | BIT(7)));
++	ret = 0;
++	goto out;
++fault:
++	dev_err(dev, "modem preflight first-fault stage=%s error=%d; no retry\n", stage, ret);
++out:
++	of_node_put(ifr);
++	of_node_put(nemi);
++	return ret;
++}
+diff --git a/Documentation/devicetree/bindings/power/mediatek,mt6878-modem-preflight.yaml b/Documentation/devicetree/bindings/power/mediatek,mt6878-modem-preflight.yaml
+new file mode 100644
+--- /dev/null
++++ b/Documentation/devicetree/bindings/power/mediatek,mt6878-modem-preflight.yaml
+@@ -0,0 +1,25 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/power/mediatek,mt6878-modem-preflight.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++title: MediaTek MT6878 read-only modem preflight diagnostic
++maintainers:
++  - Tetris port maintainers <xxxviktor.lyskoxxx@gmail.com>
++description: |
++  Explicit diagnostic child of the MT6878 SPM syscon. Reads five power,
++  isolation and bus-protection registers once. Never registers a power-domain
++  provider, owns reset, enables clocks or starts modem firmware.
++properties:
++  compatible:
++    const: mediatek,mt6878-modem-preflight
++  access-controllers:
++    minItems: 2
++    maxItems: 2
++    items:
++      - description: MT6878 IFR syscon at 0x10001000
++      - description: MT6878 NEMICFG AO memory syscon at 0x10270000
++required:
++  - compatible
++  - access-controllers
++additionalProperties: false
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-disabled-modem-preflight.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-disabled-modem-preflight.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-disabled-modem-preflight.dtsi
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Unincluded fixture. Include/enable only for an approved diagnostic boot. */
++&soc {
++	nemicfg_md_preflight: syscon@10270000 {
++		compatible = "mediatek,mt6878-nemicfg_ao_mem_reg_bus", "syscon";
++		reg = <0x10270000 0x1000>;
++		status = "disabled";
++	};
++};
++&scpsys {
++	md_preflight: modem-preflight {
++		compatible = "mediatek,mt6878-modem-preflight";
++		access-controllers = <&infracfg_ao>, <&nemicfg_md_preflight>;
++		status = "disabled";
++	};
++};

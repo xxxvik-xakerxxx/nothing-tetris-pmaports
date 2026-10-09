@@ -2,12 +2,19 @@
 
 ## Current status
 
-r176 candidate describes disabled USID-6 VBUCK2/VGPU and MT6363 VSRAM_CPUM
+r177 candidate describes disabled USID-6 VBUCK2/VGPU and MT6363 VSRAM_CPUM
 without attaching a GPU consumer. The existing MT6363 registration loop now
 honours disabled children. A partial MT6315 provider cannot register VBUCK1
 with a phase mask that also writes unowned GPU/VCORE outputs. Source/patch
 tests are in `patches/gpu/`; live rail ownership is not established and no
 render node or acceleration is claimed.
+
+The separate VGPU observer diagnostic obtains one uncached, write-blocked
+snapshot without regulator registration or voltage changes. CI builds a
+separate boot artifact and checks its compiled DT delta, unchanged kernel
+and initramfs, and all non-FIT boot-file contents. This is prepared for a
+controlled test on the identified handset, not proof of GPU ownership,
+electrical voltage, variant identity or acceleration.
 
 2026-10-09, installed r175, Linux `6.18.0 #176`, boot
 `aa136f81-1539-4455-a2f9-7eed5ffacc91`: fresh read-only inspection still finds display

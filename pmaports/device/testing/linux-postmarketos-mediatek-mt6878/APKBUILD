@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=176
+pkgrel=177
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -151,10 +151,15 @@ source="
 	0113-regulator-mt6315-reject-unowned-phase-mask.patch
 	0112-arm64-dts-tetris-disabled-gpu-supplies.patch
 	0114-regulator-mt6315-read-only-vgpu-observer.patch
+	0115-arm64-dts-tetris-vgpu-observer-diagnostic.patch
 	0113-pmdomain-mediatek-mt6878-modem-power.patch
+	0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch
+	0116-arm64-dts-tetris-modem-preflight-diagnostic.patch
 	0106-media-i2c-imx882-check-shutdown.patch
 	0107-media-i2c-imx882-hold-clock-rate.patch
 	0112-media-i2c-imx882-v4l2-controls.patch
+	0114-media-platform-mediatek-mt6878-seninf-graph.patch
+	0115-media-platform-mediatek-mt6878-seninf-transaction-backend.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -206,17 +211,22 @@ _build_imx882_stream_compile_only() (
 	"$builddir/scripts/config" --file "$_out/.config" \
 		-e MEDIA_SUPPORT -e MEDIA_CAMERA_SUPPORT -e VIDEO_DEV \
 		-e MEDIA_CONTROLLER -e VIDEO_V4L2_SUBDEV_API -e V4L2_FWNODE \
-		-m VIDEO_IMX882_TETRIS
+		-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH
 	make -j"$_jobs" -C "$builddir" O="$_out" \
 		ARCH="$_carch" LLVM=1 olddefconfig
 	grep -Fxq 'CONFIG_VIDEO_IMX882_TETRIS=m' "$_out/.config" || \
 		die "IMX882 stream dependencies were not enabled in isolated CI config"
+	grep -Fxq 'CONFIG_VIDEO_MT6878_SENINF_GRAPH=m' "$_out/.config" || \
+		die "SENINF graph dependencies were not enabled in isolated CI config"
 	make -j"$_jobs" -C "$builddir" O="$_out" \
-		ARCH="$_carch" LLVM=1 drivers/media/i2c/imx882-tetris-stream.o
+		ARCH="$_carch" LLVM=1 drivers/media/i2c/imx882-tetris-stream.o \
+		drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o
 	test -s "$_out/drivers/media/i2c/imx882-tetris-stream.o" || \
 		die "IMX882 stream compile-only object is missing"
 	test ! -e "$_out/drivers/media/i2c/imx882-tetris-stream.ko" || \
 		die "IMX882 stream gate must not produce a runtime module"
+	test -s "$_out/drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o" || \
+		die "SENINF graph compile-only object is missing"
 )
 
 prepare() {
@@ -920,7 +930,10 @@ build() {
 	make -j"$_jobs" ARCH="$_carch" LLVM=1 \
 		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor" \
 		Image.gz modules \
-		mediatek/mt6878-nothing-tetris-native.dtb
+		mediatek/mt6878-nothing-tetris-native.dtb \
+		mediatek/mt6878-nothing-tetris-vgpu-observe.dtb \
+		mediatek/mt6878-nothing-tetris-modem-preflight-off.dtb \
+		mediatek/mt6878-nothing-tetris-modem-preflight.dtb
 	grep -q 'clang version 21' include/generated/compile.h || \
 		die "kernel must be built with the hardware-tested LLVM 21 toolchain"
 	_build_tetris_camera_audit_compile_only
@@ -959,6 +972,12 @@ package() {
 	fi
 	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \
 		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
+	for _dtb in mt6878-nothing-tetris-vgpu-observe \
+		mt6878-nothing-tetris-modem-preflight-off \
+		mt6878-nothing-tetris-modem-preflight; do
+		install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/$_dtb.dtb" \
+			"$pkgdir/usr/share/nothing-tetris/diagnostic-dtbs/$_dtb.dtb"
+	done
 	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
 
 	_release="$(cat "$builddir"/include/config/kernel.release)"
@@ -1142,5 +1161,9 @@ b481284d373019763d2117a3d8208a8f3624cb0084ac35c59be97e5b8de20e31a4f5ac93957d78a7
 2656201fec02b789f1affb7371622134de53507c49d50f1173281d6fc3b78bcedc5e65ce90347215c65966a93841208ee19300f801c0deca282853b5a8b0e128  1102-vendor-audio-linux-6.18-api.patch.vendor
 e390543280ac810da413bbc629744ba9e418ab8a433ad523acce8679d9f334d273e01a6d54a0083e081d24773674e844ee425e979a68a81b01e560701cc7fbca  1103-vendor-audio-mt6685-clock.patch.vendor
 78497d14b8dac9f70a27318c80eb2143b5ffdf2bc1a678edd0e449db3de80a2c7e68371aa9f83a5ddbd4fbb4e6737cbe766f7022a53c99cf366b755ab6284fda  1200-vendor-sensor-framework-linux-6.18.patch.vendor
-
+35a24faefbba7fa8d432af07802a6aa2ea5279e8740bd9175540bdf7167c1a55456f01114b7848bceb056ae2bdc4594c324b6636eb103152eaf5a4f0d6dd0359  0114-media-platform-mediatek-mt6878-seninf-graph.patch
+b97c60cecb21686878dd90e02c9f82fadfd0f688a6125cf641d6d861dd199441195ddab65165c2b90ed281b3f7313f07c12a9de5b596b5afb9a45aa693b0f8e7  0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch
+b55ad61825e895db8fd6828943d6ec8a644d6d8a64318b6d2379d3e8e3e632a45b0e70a7a9bcf03ffd8bb998fdc49499f89c3d65eb63ffc478ffa2ec83429680  0115-arm64-dts-tetris-vgpu-observer-diagnostic.patch
+5ae8a2c4cf2536b4915a879e835186dc7c83651682ce832c6d3e06d79e91d3833b9d2015ba76e1f997c0e01126d4efb10c3ddbffa6330e9ecb2c40623fad7634  0115-media-platform-mediatek-mt6878-seninf-transaction-backend.patch
+792c90c30ca2cfb9bc4f375f87f72d2504e64d5c4b1eb4eaac5d21c708283893b857d1dca65804652f980df3f78daf13a8271a2979eed521495e464e50c8cbd4  0116-arm64-dts-tetris-modem-preflight-diagnostic.patch
 "
