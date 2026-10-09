@@ -14,7 +14,10 @@ XML_SHA = "7018751a6e20a12fb255f9dfd5f6b55a0c6c7966a87f047d427b885b62f9ee31"
 def decode(lib, asset, feature):
     raw = asset.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == XML_SHA
-    m = Machine(lib, LIB_SHA, [(0x4ff868, 0x500524)])
+    with Machine(lib, LIB_SHA, [(0x4ff868, 0x500524)]) as m:
+        return decode_machine(m, lib, raw, feature)
+
+def decode_machine(m, lib, raw, feature):
     # Machine's synthetic global GOT is inappropriate for immutable version strings.
     with lib.open("rb") as f:
         e = ELFFile(f)

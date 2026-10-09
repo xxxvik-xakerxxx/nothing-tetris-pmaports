@@ -34,15 +34,20 @@ jobs:
         run: |
           sh patches/gnss-navigation-audit/run_xml_config_ci.sh \
             out/stock-port-assets/vendor/etc/MNL_Config.xml
-      - name: Verify GPS runtime constructors and bounded host worker
+      - name: Verify GPS runtime producer instructions
         if: ${{ !cancelled() }}
         run: |
+          python3 patches/gnss-navigation-audit/test_b41_machine_lifetime.py \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
           python3 patches/gnss-navigation-audit/test_b41_runtime_producers.py \
             out/stock-port-assets/vendor/bin/mnld \
             out/stock-port-assets/vendor/lib64/mt6878/libmnl.so \
             out/stock-port-assets/vendor/etc/MNL_Config.xml
           python3 patches/gnss-navigation-audit/test_b41_bundle_producers.py \
             out/stock-port-assets/vendor/bin/mnld
+      - name: Verify GPS runtime constructors and bounded host worker
+        if: ${{ !cancelled() }}
+        run: |
           sh patches/gnss-navigation-audit/run_runtime_integration_ci.sh \
             out/stock-port-assets/vendor/etc/MNL_Config.xml
       - name: Verify scoped modem startup and immutable handoff boundaries

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Bounded pinned ARM64 slices; no native ELF loading, devices or solver."""
 import hashlib
+import gc
 from pathlib import Path
 import struct
 import sys
+import weakref
 from elftools.elf.elffile import ELFFile
 from unicorn import Uc, UC_ARCH_ARM64, UC_MODE_ARM, UC_HOOK_CODE
 from unicorn.arm64_const import *
@@ -32,18 +34,51 @@ class Machine:
         # Synthetic global storage: unique backing for each GOT slot.
         for got in range(0x6e6000, 0x6e9000, 8):
             self.q(got, self.global_at(got))
-        self.u.hook_add(UC_HOOK_CODE, self.hook)
+        # Do not retain Machine through Uc -> ctypes callback -> bound method.
+        owner = weakref.ref(self)
+        def dispatch(uc, address, size, user_data):
+            machine = owner()
+            if machine is None:
+                raise RuntimeError("orphaned emulation hook")
+            machine.hook(uc, address, size, user_data)
+        self.code_hook = self.u.hook_add(UC_HOOK_CODE, dispatch)
         self.set(UC_ARM64_REG_TPIDR_EL0, TLS)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+
+    def close(self):
+        """Detach callbacks before dropping Uc, using public binding APIs only."""
+        if self.u is None:
+            return
+        self.u.hook_del(self.code_hook)
+        self.hooks.clear()  # Mock closures may capture this Machine.
+        self.u = None
+        self.pages.clear()
+        # Bindings also retain internal ctypes/Uc cycles after hook deletion.
+        # Collect at this explicit ownership boundary, not after N test cases.
+        gc.collect()
 
     @staticmethod
     def global_at(got):
         return GLOBALS + (got - 0x6e6000) * 16
 
     def map(self, address, size):
-        for page in range(address & ~4095, (address + size + 4095) & ~4095, 4096):
-            if page not in self.pages:
-                self.u.mem_map(page, 4096)
-                self.pages.add(page)
+        # A mapping per page exhausts old QEMU physical-section tables even for
+        # a single ELF. Map contiguous missing runs, preserving overlap handling.
+        end = (address + size + 4095) & ~4095
+        run = None
+        for page in range(address & ~4095, end + 4096, 4096):
+            missing = page < end and page not in self.pages
+            if missing and run is None:
+                run = page
+            elif not missing and run is not None:
+                self.u.mem_map(run, page - run)
+                self.pages.update(range(run, page, 4096))
+                run = None
 
     def set(self, reg, value):
         self.u.reg_write(reg, value)

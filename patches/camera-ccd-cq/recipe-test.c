@@ -116,12 +116,16 @@ static void session_call(void)
 	struct mtkcam_ipi_img_output outputs[2] = { 0 };
 	struct mtkcam_ipi_frame_param *frame = calloc(1, sizeof(*frame));
 	struct mtkcam_ipi_frame_param *scratch = calloc(1, sizeof(*scratch));
+	union {
+		struct mt6878_ccd_composer_session session;
+		struct mtkcam_ipi_frame_param frame;
+	} *alias = calloc(1, sizeof(*alias));
 	unsigned char work[1024], before[1024];
 	unsigned int i;
 	const struct mt6878_camsv_dma_layout *layout;
 	const struct mt6878_camsv_buffer *buffer;
 
-	assert(frame && scratch);
+	assert(frame && scratch && alias);
 	setup(&job, &config, 4000, 3000, 5000);
 	mappings.workbuf.iova = 0x300000000ULL;
 	mappings.workbuf.ccd_fd = 10;
@@ -130,8 +134,8 @@ static void session_call(void)
 	mappings.msg_buf.size = sizeof(*frame);
 	assert(mt6878_ccd_composer_prepare(&session, 3, &mappings, work,
 		(unsigned char *)frame, frame, &resources, &job) == -EINVAL);
-	assert(mt6878_ccd_composer_prepare((void *)scratch, 3, &mappings, work,
-		(unsigned char *)frame, scratch, &resources, &job) == -EINVAL);
+	assert(mt6878_ccd_composer_prepare(&alias->session, 3, &mappings, work,
+		(unsigned char *)frame, &alias->frame, &resources, &job) == -EINVAL);
 	assert(!mt6878_ccd_composer_prepare(&session, 3, &mappings, work,
 		(unsigned char *)frame, scratch, &resources, &job));
 	assert(!mt6878_ccd_composer_prepare(&session, 3, &session.mappings, work,
@@ -211,6 +215,7 @@ static void session_call(void)
 	request.sbuf[5] = CAM_CMD_DESTROY_SESSION;
 	assert(mt6878_ccd_composer_dispatch(&session, &request, &reply) == 1);
 	assert(mt6878_ccd_composer_dispatch(&session, &request, &reply) == -ESTALE);
+	free(alias);
 	free(scratch);
 	free(frame);
 }
