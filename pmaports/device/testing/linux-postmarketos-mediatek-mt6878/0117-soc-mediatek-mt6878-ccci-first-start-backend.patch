@@ -330,7 +330,7 @@ new file mode 100644
 +	unsigned int i;
 +	int ret;
 +
-+#define STEP(stage, operation) do { s->result.stage = MT6878_CCCI_##stage; \
++#define STEP(stage_id, operation) do { s->result.stage = MT6878_CCCI_##stage_id; \
 +	ret = (operation); if (ret) return ret < 0 ? ret : -EPROTO; } while (0)
 +	STEP(AUTH, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_AUTHENTICATED_HANDOFF));
 +	STEP(PROFILE, mt6878_ccci_profile(s->dev));

@@ -377,6 +377,8 @@ def main():
                 subprocess.run(["git", "apply", "-"], cwd=out, input=selected, text=True, check=True)
         code = (out / SOURCE).read_text()
         assert "pm_runtime_resume_and_get(s->dev)" in code
+        assert "#define STEP(stage_id, operation)" in code
+        assert "#define STEP(stage, operation)" not in code
         assert "PWR_RST_B" not in code and "0xc200040b" not in code
         assert "pm_runtime_put" not in code and "module_platform_driver" not in code
         execute = code.split("static int mt6878_ccci_execute(", 1)[1].split("int mt6878_ccci_first_start(", 1)[0]
