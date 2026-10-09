@@ -1,0 +1,49 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: stop protected shutdown writes on failure
+
+The GPU/camera provider's shutdown sequence must not program a protected
+register after a failed key write. Always attempt both key clears, even on
+failure, and preserve the first errno rather than bitwise-combining errors.
+Successful write order and values are unchanged. No device is enabled.
+
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -319,15 +319,30 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	return 0;
+ }
+ 
++static int mt6315_prepare_poweroff(struct regmap *regmap)
++{
++	int ret, cleanup;
++
++	ret = regmap_write(regmap, MT6315_TOP_TMA_KEY_H, PROTECTION_KEY_H);
++	if (!ret)
++		ret = regmap_write(regmap, MT6315_TOP_TMA_KEY, PROTECTION_KEY);
++	if (!ret)
++		ret = regmap_update_bits(regmap, MT6315_TOP2_ELR7, 1, 1);
++	cleanup = regmap_write(regmap, MT6315_TOP_TMA_KEY, 0);
++	if (!ret)
++		ret = cleanup;
++	cleanup = regmap_write(regmap, MT6315_TOP_TMA_KEY_H, 0);
++	if (!ret)
++		ret = cleanup;
++
++	return ret;
++}
++
+ static void mt6315_regulator_shutdown(struct spmi_device *pdev)
+ {
+ 	struct mt6315_chip *chip = dev_get_drvdata(&pdev->dev);
+-	int ret = 0;
++	int ret;
+ 
+-	ret |= regmap_write(chip->regmap, MT6315_TOP_TMA_KEY_H, PROTECTION_KEY_H);
+-	ret |= regmap_write(chip->regmap, MT6315_TOP_TMA_KEY, PROTECTION_KEY);
+-	ret |= regmap_update_bits(chip->regmap, MT6315_TOP2_ELR7, 1, 1);
+-	ret |= regmap_write(chip->regmap, MT6315_TOP_TMA_KEY, 0);
+-	ret |= regmap_write(chip->regmap, MT6315_TOP_TMA_KEY_H, 0);
++	ret = mt6315_prepare_poweroff(chip->regmap);
+ 	if (ret < 0)
+ 		dev_err(&pdev->dev, "[%#x] Failed to enable power off sequence. %d\n",
+ 			   pdev->usid, ret);

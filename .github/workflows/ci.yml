@@ -111,6 +111,8 @@ jobs:
           python3 scripts/check-gnss-clock-readback.py upstream/connectivity-modules
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
+      - name: Validate GNSS host callback and borrowed-output contracts
+        run: python3 scripts/check-gnss-host-boundary.py
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD

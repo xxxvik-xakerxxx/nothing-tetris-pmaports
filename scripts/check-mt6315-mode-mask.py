@@ -30,7 +30,8 @@ def main():
         for name in ("0105-regulator-mt6315-read-active-voltage-selector.patch",
                      "0108-regulator-mt6315-board-mode-mask.patch",
                      "0109-regulator-mt6315-stop-mode-change-on-read-error.patch",
-                     "0110-regulator-mt6315-register-described-rails.patch"):
+                     "0110-regulator-mt6315-register-described-rails.patch",
+                     "0111-regulator-mt6315-fail-closed-shutdown.patch"):
             subprocess.run(["git", "apply", "--check", str(package / name)],
                            cwd=root, check=True)
             subprocess.run(["git", "apply", str(package / name)], cwd=root, check=True)
@@ -41,6 +42,9 @@ def main():
         mode = readback.function(source, "static unsigned int mt6315_regulator_get_mode(")
         mode += "\n" + readback.function(source, "static int mt6315_regulator_set_mode(")
         rails = readback.function(source, "static int mt6315_described_rails(")
+        poweroff = readback.function(source, "static int mt6315_prepare_poweroff(")
+        readback.require("ret = mt6315_prepare_poweroff(chip->regmap);" in source,
+                         "shutdown must call guarded transaction")
         probe = readback.function(source, "static int mt6315_regulator_probe(")
         readback.require(probe.index("mask = mt6315_described_rails(dev);") <
                          probe.index("devm_regmap_init_spmi_ext"),
@@ -93,6 +97,21 @@ def main():
             result = subprocess.run([str(binary)], cwd=root, capture_output=True)
             readback.require(result.returncode != 0, "accepted unsafe rail selection")
         print("PASS: disabled-rail and leaked-DT-reference mutants rejected")
+        generated = root / "poweroff-source.h"
+        generated.write_text(poweroff)
+        command = ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(root),
+                   str(HERE / "tests/mt6315-poweroff.c"), "-o", str(binary)]
+        subprocess.run(command, check=True)
+        subprocess.run([str(binary)], check=True)
+        for old, new in (("if (!ret)\n\t\tret = regmap_update_bits",
+                          "ret = regmap_update_bits"),
+                         ("if (!ret)\n\t\tret = cleanup;", "ret = cleanup;")):
+            readback.require(old in poweroff, "missing shutdown mutation anchor")
+            generated.write_text(poweroff.replace(old, new))
+            subprocess.run(command, check=True)
+            result = subprocess.run([str(binary)], cwd=root, capture_output=True)
+            readback.require(result.returncode != 0, "accepted unsafe shutdown transaction")
+        print("PASS: unguarded protected-write and overwritten-first-error mutants rejected")
 
 
 if __name__ == "__main__":

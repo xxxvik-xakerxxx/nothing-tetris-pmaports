@@ -16,8 +16,9 @@ that errors cannot produce PMIC writes or disturb other rails. Patch application
 and overlay checks pass. Validation-only CI
 [37885933479](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37885933479)
 passed the 16,384 actual-function mode/fault cases and rejected the
-read-error-swallowing mutant. Kernel/image CI and live PMIC behavior remain
-pending; this run produced no install image.
+read-error-swallowing mutant. Full r174 kernel/image CI
+[37886195992](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37886195992)
+also passed; it has not been installed. Live PMIC behavior remains untested.
 No supply or GPU consumer is enabled by this correction.
 
 r175 candidate adds `0110` to select only available BUCK children from an
@@ -32,6 +33,14 @@ passed, including the earlier 16,384 mode/fault cases. No r175 image was built.
 Registering the actual
 USID-6 provider still requires proving probe/shutdown and inherited rail
 ownership, including regulator-core cleanup behavior.
+
+The same r175 candidate includes `0111`: stop protected shutdown writes after
+the first failed unlock, always attempt to clear both protection keys, and
+return the first error instead of combining errno values with bitwise OR.
+Successful register values/order are unchanged. The CI gate executes the
+actual helper over all 32 fault combinations and rejects unguarded-write and
+overwritten-error mutants. Native CI is pending for this addition; it does not
+instantiate USID 6 or enable GPU rails.
 
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
 files on the current image.** The 2026-10-08 observation below caused an

@@ -10,7 +10,7 @@ transaction or camera GPIO/rail change was performed. The shared r174 PMIC
 candidate `0109` prevents GPU/camera mode writes after failed mode reads and
 accepts already-normal requests without writes. Actual-function native fault
 tests passed 16,384 cases in CI `37885933479`, including a negative mutant.
-The full kernel/image build is pending; runtime power ownership
+Full r174 kernel/image CI `37886195992` passed, but is not installed. Runtime power ownership
 and the missing receiver/capture pipeline remain open.
 
 The subsequent shared r175 candidate `0110` prevents registration of
@@ -21,6 +21,12 @@ The 512-case actual-helper/DT-reference gate passed native CI `37887268734`,
 including disabled-rail and leaked-reference negative mutants. No r175
 install image was built; runtime
 probe-off/shutdown and regulator-core cleanup still need evidence.
+
+The same r175 bundle adds shared PMIC shutdown correction `0111`: failed
+unlock prevents the protected write, both key clears are attempted, and the
+first errno survives cleanup. Its actual-helper CI gate covers all 32 fault
+combinations and two negative mutants; native CI for this addition is pending.
+This is a power-provider prerequisite, not camera enumeration or capture.
 
 Do not use global clock debugfs reads for the camera baseline: the current
 r168 image rebooted with an external abort while reading `clk_summary`.

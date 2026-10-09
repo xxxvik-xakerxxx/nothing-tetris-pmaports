@@ -341,3 +341,12 @@ silent regmap-read error conversion to the valid 26 MHz enum in host tests; it
 is not packaged or installed. Live metadata confirms MT6685 parent binding and
 an existing unbound GPS child while the GPS transport is absent; no duplicate
 DT child is required. Neither fact closes the hardware lifecycle gate.
+
+2026-10-09: `scripts/check-gnss-host-boundary.py` now integrates the research
+frame-sync and borrowed-output C helpers into native CI. It compares all 262
+callback vectors against the pinned emulation digest, checks the required
+24-slot callback table and bounded output copy, and rejects three mutants
+(missing low-byte mask, missing required callbacks, discarded output bytes).
+CI is pending for this gate. These helpers do not supply the Bionic runtime,
+complete startup configuration, firmware download or a position provider;
+they are not installed on the phone and do not establish a GNSS fix.
