@@ -336,9 +336,11 @@ Consequently this change does not send fragments, read raw payloads, start
 `gpsd`, expose GeoClue, autostart GNSS, or claim satellite acquisition or a
 fix. The next userspace step is to validate startup command ownership and
 navigation payload semantics against these exact inputs or a bounded known-good
-Android trace. A separate research clock-query patch reproduces and fixes
-silent regmap-read error conversion to the valid 26 MHz enum in host tests; it
-is not packaged or installed. Live metadata confirms MT6685 parent binding and
+Android trace. Clock-query patch `1005` reproduces and fixes silent regmap-read
+error conversion to the valid 26 MHz enum in host tests. It is applied to the
+vendor connectivity build since r168 (`bf7e2f8`) and retained in installed r175;
+that does not establish a live GPS clock query while the transport is absent.
+Live metadata confirms MT6685 parent binding and
 an existing unbound GPS child while the GPS transport is absent; no duplicate
 DT child is required. Neither fact closes the hardware lifecycle gate.
 
