@@ -14,7 +14,9 @@ shipping config and module packaging explicitly reject their activation.
 Native fixture success does not establish kernel API compatibility or hardware
 operation. The separate `kernel_smoke_only` workflow compiles the packaged
 candidate AArch64 translation units using the image's Alpine/LLVM 21 toolchain,
-after checksum verification and the ordered kernel patch stack. It retains the
+after checksum verification and the ordered kernel patch stack. Historical
+patches use package-default application rules; the new backends require zero
+fuzz. Patch diagnostics remain in the CI log. It retains the
 isolated config and manifest, never links/install modules or changes shipping DT.
 Its independent concurrency group does not cancel a full image build.
 

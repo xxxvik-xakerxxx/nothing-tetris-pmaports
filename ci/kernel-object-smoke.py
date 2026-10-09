@@ -31,6 +31,11 @@ OBJECTS = (
     "drivers/soc/mediatek/mt6878-ccci-start.o",
     "drivers/pmdomain/mediatek/mt6878-gpueb-power.o",
 )
+STRICT_PATCHES = frozenset((
+    "0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch",
+    "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
+    "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch",
+))
 
 
 def block(source, key):
@@ -69,6 +74,7 @@ def plan(package):
     return {"kernel_commit": commit, "archive": archive,
             "archive_sha512": hashes[archive], "patches": patches,
             "source_sha512": {name: hashes[name] for name in [CONFIG, *patches]},
+            "application": "package default for historical stack; fuzz=0 for new backends",
             "objects": OBJECTS, "module_options": MODULES}
 
 
@@ -107,7 +113,9 @@ def main():
         tar.extractall(args.work, filter="data")
     kernel = args.work / f'linux-{manifest["kernel_commit"]}'
     for patch in manifest["patches"]:
-        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel, "-i", package / patch])
+        # Match abuild default_prepare for legacy patches, not a different build.
+        flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
+        run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
