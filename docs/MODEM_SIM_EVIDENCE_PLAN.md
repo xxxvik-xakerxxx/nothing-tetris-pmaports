@@ -1184,8 +1184,32 @@ within bootm mapping bounds rather than growing the old buffer in place. CI
 passed native tests, both ARM64 builds and LK packaging. Image SHA256
 `71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967`
 was verified and flashed to `lk_a`; `lk_b` and factory data were not changed.
-The phone enumerates pmOS USB, but locked macOS created no network port.
-Its EMI result and regressions remain unverified until unlock/reconnect.
+User unlock/reconnect restored USB networking. Warm boot
+`dca02e3b-3d90-4b1f-9029-f2bfd22fd391` reports a complete successful snapshot:
+all 12 slots disabled, raw endpoints `0x40000000`, and every one of the 256
+permission fields in core slots 32..38 and shared slots 41..43 matches the
+independent pinned normal-path policy. Readback does not establish reset,
+one-shot ownership or permission to start the modem. Slots 39/40 remain outside
+the approved policy planner. The installed LK image hash matches CI; stock
+`lk_b` hash is unchanged.
+
+Confirmed physical poweroff, ten-second interval and power-on produced boot
+`e6f6e126-94ff-49a0-a9ea-a1ad9e4eb68a`: EMI snapshot is bit-for-bit identical;
+SCP prepare and modem RAM load both error zero. Sensors/SensorProxy start
+automatically, no failed units, no captured critical kernel-fault signature.
+User confirms display/touch, orientation and automatic brightness. A completed
+32 MiB USB transfer matches SHA256
+`83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
+One cold pass is recorded, not a lifecycle or portability claim.
+
+Production observer tests at U-Boot `a1325b5658` pass
+[CI37919013799](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37919013799):
+19 ASan/UBSan scenarios exercise independent FDT allocation, source-buffer
+preservation, first admission failure at each slot, ATF digest/device failures,
+LMB bounds, atomic snapshot and session guard. The initial harness-link failure
+in CI37918640961 was fixed by including the real layout dependency; no phone
+failure or additional flash occurred. Next gate is reset/slot ownership and
+complete range/remap programming before a ready CCCI handoff.
 GPS navigation, GPU acceleration, camera capture and SIM/calls remain absent.
 
 ## Completion criteria
