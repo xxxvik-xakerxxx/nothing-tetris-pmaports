@@ -243,7 +243,7 @@ static inline int mt6878_camsv_submit(const struct mt6878_camsv_backend *io,
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_START, 1);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 12, 1U << 12);
 	if (ret)
@@ -316,7 +316,7 @@ static inline int mt6878_camsv_stop(const struct mt6878_camsv_backend *io,
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_DMA, SV_DMA_RESET, 1);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = mt6878_camsv_poll_idle(io, tx, MT6878_SV_DMA, SV_DMA_RESET);
 	if (!ret)
@@ -330,19 +330,19 @@ static inline int mt6878_camsv_stop(const struct mt6878_camsv_backend *io,
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_CENTRAL, SV_SW_CTL, 0);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 0);
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 1);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = mt6878_camsv_poll_idle(io, tx, MT6878_SV_CQ, SV_CQ_RESET);
 	if (!ret)
 		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 0);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 16, 1U << 16);
 	if (!ret)
@@ -352,7 +352,7 @@ static inline int mt6878_camsv_stop(const struct mt6878_camsv_backend *io,
 	if (!ret)
 		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 16, 0);
 	if (!ret)
-		ret = io->barrier(io->context);
+		ret = (io->barrier)(io->context);
 	if (!ret)
 		ret = io->smi_clamp(io->context, 31, 0);
 	if (ret)

@@ -108,23 +108,33 @@ def native_ci(kernel):
         generated_c, generated_h = path / f"{PREFIX}.asn1.c", path / f"{PREFIX}.asn1.h"
         subprocess.run([str(path / "asn1_compiler"), str(HERE / f"{PREFIX}.asn1"),
                         str(generated_c), str(generated_h)], check=True)
-        text = (HERE / "test_pss32_native.c").read_text().split("/* PRODUCTION_INSERT */")[0]
-        text += ('\n#include <stdbool.h>\n#define unlikely(x) (x)\n'
+        support = ('\n#include <stdbool.h>\n#define unlikely(x) (x)\n'
                  '#define fallthrough __attribute__((fallthrough))\n'
                  '#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))\n'
                  '#define pr_debug(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)\n'
                  '#define pr_err(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)\n'
                  '#define MODULE_DESCRIPTION(x)\n')
+        # Keep kernel ASN.1 enums in their own translation unit: OpenSSL uses
+        # ASN1_NULL as a typedef. Neither upstream namespace is rewritten.
+        decoder = ('#include <stddef.h>\n#include <stdio.h>\n#include <errno.h>\n'
+                   '#define EXPORT_SYMBOL_GPL(x)\n#define MODULE_LICENSE(x)\n') + support
         for name in ("asn1.h", "asn1_decoder.h", "asn1_ber_bytecode.h"):
-            text += stripped(kernel / "include/linux" / name)
-        text += stripped(generated_h) + stripped(kernel / "lib/asn1_decoder.c") + stripped(generated_c)
+            decoder += stripped(kernel / "include/linux" / name)
+        decoder += stripped(generated_h) + stripped(kernel / "lib/asn1_decoder.c") + stripped(generated_c)
+        (path / "decoder.c").write_text(decoder)
+        subprocess.run([cc, "-std=gnu11", "-Wall", "-Werror",
+                        "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
+                        "-c", str(path / "decoder.c"), "-o", str(path / "decoder.o")], check=True)
+        text = (HERE / "test_pss32_native.c").read_text().split("/* PRODUCTION_INSERT */")[0]
+        text += support + stripped(kernel / "include/linux/asn1_decoder.h") + stripped(generated_h)
         for name in ("mt6878_md_pss32.h", "mt6878_md_pss32.c", "mt6878_md_mtk_cert.h", "mt6878_md_mtk_cert.c"):
             text += stripped(HERE / name)
         text += fixture_vectors() + "\n" + (HERE / "test_mtk_cert_native.c").read_text()
         (path / "test.c").write_text(text)
         subprocess.run([cc, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
                         "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
-                        str(path / "test.c"), "-lcrypto", "-o", str(path / "test")], check=True)
+                        str(path / "test.c"), str(path / "decoder.o"), "-lcrypto",
+                        "-o", str(path / "test")], check=True)
         subprocess.run([str(path / "test")], check=True)
 
 
