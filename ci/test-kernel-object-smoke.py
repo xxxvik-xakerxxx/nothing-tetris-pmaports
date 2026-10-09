@@ -71,6 +71,31 @@ class SmokeInputs(unittest.TestCase):
         self.assertGreater(len(plan["patches"]), 100)
         self.assertEqual(len(plan["objects"]), 5)
 
+    def test_research_staging_preserves_bytes_without_shipping_wiring(self):
+        root = Path(__file__).resolve().parents[1]
+        parent = self.package / "drivers/soc/mediatek"
+        parent.mkdir(parents=True)
+        (parent / "Makefile").write_text("# original parent\n")
+        smoke.stage_research_sources(self.package, root)
+        for source, destination in smoke.RESEARCH_SOURCES.items():
+            self.assertEqual((root / source).read_bytes(),
+                             (self.package / destination).read_bytes())
+        self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
+        self.assertFalse((parent / "Kconfig").exists())
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 4)
+        self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
+
+    def test_research_collision_fails_before_copying_other_sources(self):
+        root = Path(__file__).resolve().parents[1]
+        destinations = list(smoke.RESEARCH_SOURCES.values())
+        existing = self.package / destinations[-1]
+        existing.parent.mkdir(parents=True)
+        existing.write_text("original\n")
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            smoke.stage_research_sources(self.package, root)
+        self.assertFalse((self.package / destinations[0]).exists())
+        self.assertEqual(existing.read_text(), "original\n")
+
     def test_thin_lto_object_identity(self):
         target = self.package / "unit.o"
         for magic in (b"BC\xc0\xde", b"\xde\xc0\x17\x0b"):

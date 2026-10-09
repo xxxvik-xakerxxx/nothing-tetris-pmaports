@@ -36,6 +36,21 @@ STRICT_PATCHES = frozenset((
     "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
     "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch",
 ))
+RESEARCH_DIR = "drivers/soc/mediatek/tetris-owner-smoke"
+RESEARCH_SOURCES = {
+    "patches/gpu/sram-owner/mt6878-gpueb-sram.c": f"{RESEARCH_DIR}/mt6878-gpueb-sram.c",
+    "patches/gpu/sram-owner/mt6878-gpueb-sram.h": f"{RESEARCH_DIR}/mt6878-gpueb-sram.h",
+    "patches/gpu/sram-owner/mt6878-gpueb-sram-core.c": f"{RESEARCH_DIR}/mt6878-gpueb-sram-core.c",
+    "patches/gpu/sram-owner/mt6878-gpueb-sram-core.h": f"{RESEARCH_DIR}/mt6878-gpueb-sram-core.h",
+    "patches/modem/mt6878_md_startup_scope.c": f"{RESEARCH_DIR}/mt6878_md_startup_scope.c",
+    "patches/modem/mt6878_md_startup_scope.h": "include/linux/soc/mediatek/mt6878_md_startup_scope.h",
+    "patches/modem/mt6878_md_handoff_reservation.c": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.c",
+    "patches/modem/mt6878_md_handoff_reservation.h": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.h",
+}
+RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
+    "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
+    "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
+))
 
 
 def block(source, key):
@@ -83,6 +98,18 @@ def run(command):
     subprocess.run(list(map(str, command)), check=True)
 
 
+def stage_research_sources(kernel, root=Path(".")):
+    for destination in RESEARCH_SOURCES.values():
+        if (kernel / destination).exists():
+            raise ValueError(f"research destination already exists: {destination}")
+    for source, destination in RESEARCH_SOURCES.items():
+        target = kernel / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / source, target)
+    (kernel / RESEARCH_DIR / "Makefile").write_text(
+        "obj-y += " + " ".join(Path(name).name for name in RESEARCH_OBJECTS) + "\n")
+
+
 def object_identity(target):
     with target.open("rb") as stream:
         magic = stream.read(4)
@@ -102,10 +129,20 @@ def object_identity(target):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--research-owners", action="store_true",
+                        help="also compile frozen default-off owners without shipping wiring")
     parser.add_argument("--work", type=Path, default=Path("/tmp/tetris-kernel-smoke"))
     args = parser.parse_args()
     package = PACKAGE.resolve()
     manifest = plan(package)
+    objects = OBJECTS
+    if args.research_owners:
+        objects += RESEARCH_OBJECTS
+        manifest["objects"] = objects
+        manifest["research_source_sha256"] = {
+            name: hashlib.sha256(Path(name).read_bytes()).hexdigest()
+            for name in RESEARCH_SOURCES
+        }
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -132,6 +169,10 @@ def main():
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
         run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
+    if args.research_owners:
+        # Built-in translation units: no MODULE define, probe, parent Kbuild
+        # linkage or shipping Kconfig change. Preserve exact production bytes.
+        stage_research_sources(kernel)
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
@@ -148,9 +189,9 @@ def main():
     for symbol in MODULES:
         if f"CONFIG_{symbol}=m" not in config:
             raise ValueError(f"isolated dependency missing: {symbol}")
-    run([*make, "-k", *OBJECTS])
+    run([*make, "-k", *objects])
     identities = {}
-    for name in OBJECTS:
+    for name in objects:
         target = output / name
         if not target.is_file() or not target.stat().st_size:
             raise ValueError(f"missing object: {name}")
