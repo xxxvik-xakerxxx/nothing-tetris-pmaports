@@ -24,7 +24,10 @@
     "patches/camera-seninf/mt6878-seninf-contract.h",
     "patches/camera-direct/mt6878-camsv-direct.c",
     "patches/camera-direct/mt6878-camsv-direct.h",
-    "patches/camera-direct/direct-smoke.c"
+    "patches/camera-direct/direct-smoke.c",
+    "patches/camera-direct-platform/mt6878-camsv-platform.c",
+    "patches/camera-direct-platform/mt6878-camsv-platform.h",
+    "patches/camera-direct-platform/platform-smoke.c"
   ],
   "objects": [
     "mt6878-camera-pipeline-owner.o",
@@ -33,7 +36,9 @@
     "mt6878-camsv-vb2.o",
     "owner-smoke.o",
     "mt6878-camsv-direct.o",
-    "direct-smoke.o"
+    "direct-smoke.o",
+    "mt6878-camsv-platform.o",
+    "platform-smoke.o"
   ],
   "fault_object": "owner-kunit.o",
   "required_enabled": [

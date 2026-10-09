@@ -135,10 +135,19 @@ unverified. See [integration](../patches/gnss-navigation-audit/NAVIGATION_HOST_I
 The modem boot-stage candidate now implements concrete EMI/remap/lock,
 source-derived NS BL33 clock/isolation/power/bus ordering and four-word BROM
 completion. First-error reporting and finite stock-order failure shutdown are
-separate. Native fault CI is wired but pending; active EMI row production,
+separate. [CI 37991128306](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37991128306)
+passed all 37 native sanitizer fault cases plus the actual signed stock input.
+Active EMI row production,
 ARM64 compilation and physical startup remain incomplete. It is not enabled
 by a board hook and does not expose SIM/calls. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
+
+The camera platform consumer adds four source-derived IRQ handlers, native
+media-pipeline ownership, runtime-PM/clock references and controller-context
+stop. IRQ drain occurs outside the vb2 mutex. CAM_MAIN/SMI reset, calibrated
+SENINF/CAMMUX and TG/VF shutdown providers are still required; no video node
+is activated. Its two additional ARM64 objects are queued for CI. See
+[platform contract](../patches/camera-direct-platform/SOURCE-CONTRACT.md).
 
 ## Project rules
 

@@ -82,7 +82,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 13)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 15)
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
         for name in smoke.CAMERA_OBJECTS:
             makefile = self.package / Path(name).parent / "Makefile"
