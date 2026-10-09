@@ -9,7 +9,7 @@ Successful write order and values are unchanged. No device is enabled.
 diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
 --- a/drivers/regulator/mt6315-regulator.c
 +++ b/drivers/regulator/mt6315-regulator.c
-@@ -319,15 +319,30 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+@@ -319,16 +319,31 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
  	return 0;
  }
  

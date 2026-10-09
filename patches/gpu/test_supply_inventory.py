@@ -13,6 +13,55 @@ DRIVER = "drivers/regulator/mt6363-regulator.c"
 HEADER = "include/linux/mfd/mt6363/registers.h"
 NATIVE = "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts"
 SUPPLIES = "arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi"
+REGULATOR_STACK = (
+    "0105-regulator-mt6315-read-active-voltage-selector.patch",
+    "0108-regulator-mt6315-board-mode-mask.patch",
+    "0109-regulator-mt6315-stop-mode-change-on-read-error.patch",
+    "0110-regulator-mt6315-register-described-rails.patch",
+    "0111-regulator-mt6315-fail-closed-shutdown.patch",
+    "0113-regulator-mt6315-reject-unowned-phase-mask.patch",
+)
+
+
+def validate_hunk_counts(text, name):
+    """Count the complete body, including any lines beyond declared lengths."""
+    lines = text.splitlines()
+    hunks = 0
+    for index, line in enumerate(lines):
+        if not line.startswith("@@"):
+            continue
+        match = re.fullmatch(r"@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@.*", line)
+        if not match:
+            raise AssertionError(f"{name}:{index + 1}: invalid hunk header")
+        hunks += 1
+        old = new = 0
+        for offset, body in enumerate(lines[index + 1:], index + 2):
+            if body.startswith(("@@", "diff --git ", "--- a/", "+++ b/", "-- ")):
+                break
+            if not body:
+                # Unprefixed blanks separate diffs, never represent context.
+                following = next((item for item in lines[offset:] if item), "")
+                if following and not following.startswith(
+                        ("@@", "diff --git ", "--- a/", "+++ b/", "-- ")):
+                    raise AssertionError(f"{name}:{offset}: unexpected content after hunk")
+                break
+            if body.startswith(" "):
+                old += 1
+                new += 1
+            elif body.startswith("+"):
+                new += 1
+            elif body.startswith("-"):
+                old += 1
+            elif body == "\\ No newline at end of file":
+                continue
+            else:
+                raise AssertionError(f"{name}:{offset}: invalid hunk body {body!r}")
+        expected = tuple(int(value) if value is not None else 1 for value in match.groups())
+        if (old, new) != expected:
+            raise AssertionError(f"{name}:{index + 1}: {line}: declared {expected}, "
+                                 f"actual {(old, new)}")
+    if not hunks:
+        raise AssertionError(f"{name}: no hunks")
 
 
 def patch(name):
@@ -111,14 +160,7 @@ class SupplyInventory(unittest.TestCase):
             target = self.tree / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text((kernel / relative).read_text())
-        for name in (
-            "0105-regulator-mt6315-read-active-voltage-selector.patch",
-            "0108-regulator-mt6315-board-mode-mask.patch",
-            "0109-regulator-mt6315-stop-mode-change-on-read-error.patch",
-            "0110-regulator-mt6315-register-described-rails.patch",
-            "0111-regulator-mt6315-fail-closed-shutdown.patch",
-            "0113-regulator-mt6315-reject-unowned-phase-mask.patch",
-        ):
+        for name in REGULATOR_STACK:
             result = subprocess.run(["patch", "--batch", "--fuzz=0", "-p1"],
                                     cwd=self.tree, input=patch(name), text=True,
                                     capture_output=True)
@@ -149,28 +191,31 @@ class SupplyInventory(unittest.TestCase):
         self.assertGreater(providers, 0)
 
     def test_patch_hunk_counts(self):
-        for name in ("0030-regulator-mediatek-mt6878-gpu-rails.patch",
-                     "0112-arm64-dts-tetris-disabled-gpu-supplies.patch",
-                     "0113-regulator-mt6315-reject-unowned-phase-mask.patch"):
-            lines = patch(name).splitlines()
-            for index, line in enumerate(lines):
-                match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
-                if not match:
-                    continue
-                old = new = 0
-                for body in lines[index + 1:]:
-                    if not body or body.startswith(("@@", "diff ", "---", "-- ")):
-                        break
-                    if body.startswith(" "):
-                        old += 1
-                        new += 1
-                    elif body.startswith("+"):
-                        new += 1
-                    elif body.startswith("-"):
-                        old += 1
-                    else:
-                        break
-                self.assertEqual((old, new), (int(match[2]), int(match[4])), (name, line))
+        names = REGULATOR_STACK + (
+            "0030-regulator-mediatek-mt6878-gpu-rails.patch",
+            "0112-arm64-dts-tetris-disabled-gpu-supplies.patch",
+            "0114-regulator-mt6315-read-only-vgpu-observer.patch",
+            "0115-arm64-dts-tetris-vgpu-observer-diagnostic.patch",
+        )
+        for name in names:
+            with self.subTest(patch=name):
+                validate_hunk_counts(patch(name), name)
+
+    def test_hunk_validator_rejects_0111_trailing_context_mutant(self):
+        name = "0111-regulator-mt6315-fail-closed-shutdown.patch"
+        text = patch(name)
+        self.assertIn("@@ -319,16 +319,31 @@", text)
+        with self.assertRaisesRegex(AssertionError, "declared.*actual"):
+            validate_hunk_counts(text.replace("@@ -319,16 +319,31 @@",
+                                             "@@ -319,15 +319,30 @@"), name)
+
+    def test_hunk_validator_does_not_ignore_extra_body(self):
+        valid = "--- a/test\n+++ b/test\n@@ -1 +1 @@\n-old\n+new\n"
+        validate_hunk_counts(valid, "fixture")
+        for extra in (" context\n", "+extra\n", "-extra\n", "\n context\n",
+                      "unexpected body\n"):
+            with self.subTest(extra=extra), self.assertRaises(AssertionError):
+                validate_hunk_counts(valid + extra, "fixture")
 
 
 if __name__ == "__main__":
