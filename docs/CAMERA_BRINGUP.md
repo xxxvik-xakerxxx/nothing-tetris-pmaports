@@ -4,7 +4,8 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
-2026-10-09, installed r173: a new read-only check finds no video/media device
+2026-10-09, installed r175, Linux `6.18.0 #176`, boot
+`aa136f81-1539-4455-a2f9-7eed5ffacc91`: a new read-only check finds no video/media device
 or camera sensor I2C client. I2C adapters remain present; no bus scan, sensor
 transaction or camera GPIO/rail change was performed. The shared r174 PMIC
 candidate `0109` prevents GPU/camera mode writes after failed mode reads and
@@ -18,8 +19,8 @@ undescribed or disabled BUCK outputs when DT supplies an explicit regulator
 list. This is needed before selectively binding camera VMM without exposing
 unowned GPU/VCORE outputs. It does not turn on a camera supply or sensor.
 The 512-case actual-helper/DT-reference gate passed native CI `37887268734`,
-including disabled-rail and leaked-reference negative mutants. No r175
-install image was built; runtime
+including disabled-rail and leaked-reference negative mutants. This validation-only
+run built no install image; runtime
 probe-off/shutdown and regulator-core cleanup still need evidence.
 
 The same r175 bundle adds shared PMIC shutdown correction `0111`: failed
@@ -27,7 +28,8 @@ unlock prevents the protected write, both key clears are attempted, and the
 first errno survives cleanup. Its actual-helper CI gate covers all 32 fault
 combinations and two negative mutants; native CI `37894001985` passed at
 `a5d72a1`, including the earlier mode/rail gates. Full r175 CI `37894315052`
-passed at `ba605b03d8bf`; artifact verification and installation are in progress.
+passed at `ba605b03d8bf`; verified artifacts were clean-installed and first-boot
+USB/SSH, FIT identity and 32 MiB USB transfer passed. No camera supply was enabled.
 Camera sensor enumeration and capture remain untested.
 This is a power-provider prerequisite, not camera enumeration or capture.
 

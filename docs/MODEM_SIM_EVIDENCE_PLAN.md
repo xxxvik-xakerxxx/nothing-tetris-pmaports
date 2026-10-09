@@ -1095,7 +1095,7 @@ packaging for `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
 All compilation remained in CI. r173 was subsequently clean-installed after
 archive/image/sparse verification. Its first boot and subsequent automatic
 sensor cold start passed; display, touch, desktop rotation and auto-brightness
-were user-confirmed. See [the installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
+were user-confirmed. See [the installed checkpoint](PORT_SUMMARY.md#previous-installed-checkpoint-r173).
 
 U-Boot `30e73368db6477708cad54148c70ce33ab621bd7` now connects the explicit
 partition reader to signed B4.1 metadata planning and ROM/DSP placement.
@@ -1140,7 +1140,7 @@ reserves 512 MiB for firmware and `0x2690000` bytes separately for services;
 USB/SSH and a 32 MiB hash-verified transfer passed. This is a RAM-preparation
 pass, not modem execution; protection/remap and the CCCI handoff remain open.
 See the current
-[installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
+[installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r175).
 
 Next integration gate: repeat preparation on cold boot, establish the
 span-mapping consumer contract (the old U-Boot observation validator still

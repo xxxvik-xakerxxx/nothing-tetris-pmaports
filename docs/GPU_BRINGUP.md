@@ -2,7 +2,8 @@
 
 ## Current status
 
-2026-10-09, installed r173: fresh read-only inspection still finds display
+2026-10-09, installed r175, Linux `6.18.0 #176`, boot
+`aa136f81-1539-4455-a2f9-7eed5ffacc91`: fresh read-only inspection still finds display
 `card0` only, no render node, no Mali platform device and no VGPU/VSRAM_CPUM
 provider. SPMI currently instantiates USIDs 4, 5 and 9, not 6. No GPU MMIO,
 clock-debugfs read or PMIC mode/voltage write was attempted.
@@ -29,7 +30,7 @@ the container is absent. No new DT node or PMIC transaction is introduced.
 The actual helper has 512 presence/availability tests, reference-balance
 checks and negative mutants; native validation CI
 [37887268734](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37887268734)
-passed, including the earlier 16,384 mode/fault cases. No r175 image was built.
+passed, including the earlier 16,384 mode/fault cases. This validation-only run built no image.
 Registering the actual
 USID-6 provider still requires proving probe/shutdown and inherited rail
 ownership, including regulator-core cleanup behavior.
@@ -43,7 +44,8 @@ overwritten-error mutants. Native CI
 [37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
 passed these tests and the earlier mode/rail gates at `a5d72a1`. It does not
 instantiate USID 6 or enable GPU rails. Full r175 CI `37894315052` passed at
-`ba605b03d8bf`; artifact verification and installation are in progress.
+`ba605b03d8bf`; verified artifacts were clean-installed and first-boot USB/SSH,
+FIT identity and 32 MiB USB transfer passed. No USID-6 provider was instantiated.
 Runtime VGPU/VSRAM ownership and acceleration are still not established.
 
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs

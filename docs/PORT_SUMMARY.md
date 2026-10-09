@@ -1,6 +1,40 @@
 # Port summary, 2026-10-09
 
-## Latest installed checkpoint: r173
+## Latest installed checkpoint: r175
+
+Clean CI installation, 2026-10-09: full image run
+[37894315052](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894315052)
+at `ba605b03d8bff2b0db15cc03198948f0f16f756e` passed. Archive digest, all
+three image hashes and all 7,713 sparse chunks were verified before writing
+only `super` and `userdata`. Factory/NV/calibration and both LK slots were
+retained during this image installation.
+
+First boot `aa136f81-1539-4455-a2f9-7eed5ffacc91` reports kernel
+`7.2.1-r175`, Linux `6.18.0 #176`, device package `8-r17`, root 104.5 GiB.
+Installed FIT matches CI. USB/SSH and a hash-verified 32 MiB transfer passed
+after unlocking the Mac and reconnecting USB; before that, USB enumerated
+but macOS registered no BSD network interface. No failed systemd units or
+critical kernel crash signature was found; vendor warnings remain.
+DSI is connected; the user confirmed normal display and touch on this image.
+
+Retained U-Boot code `56de656803` from CI `37902382709` again reports
+`service-initialization`, zero error, `ram-loaded-not-started`. Separate
+512 MiB firmware and 39488 KiB service reservations are present. This is
+authenticated modem RAM preparation, not modem execution or SIM/calls.
+Sensor startup was disabled on the fresh image; previous opt-in was restored
+for the next cold boot without starting/reloading modules on this warm boot.
+Cold-start and lifecycle checks remain pending. GPU render nodes and camera
+video/media nodes remain absent; GNSS navigation is not established.
+
+Image SHA256:
+
+- Boot: `af81b9bc5692d94d344ba6cd8de03b600754c912d0695901317625b3bce178ad`.
+- Sparse root: `293d81906a30dc28c4d410fc8a0757e63216ad02537cfe787668f9e8e000322e`.
+- FIT: `8e4bf94f2705a7630f30acd5cf817e7fd5da7bdc0d4c47896d1b2569e6d24295`.
+
+Private evidence: `local/ci-run-37894315052/validation/` in the parent workspace.
+
+## Previous installed checkpoint: r173
 
 Live progress, 2026-10-09: the pinned B4.1 GNSS library loaded successfully
 through Bionic on r173 in a read-only, unprivileged sandbox with devices,
@@ -44,8 +78,8 @@ at `a5d72a1`: 16,384 mode/fault cases, 512 rail/reference cases, 32 shutdown
 fault combinations and 262 pinned GNSS vectors, including negative mutants.
 Full r175 image CI
 [37894315052](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894315052)
-passed at `ba605b03d8bff2b0db15cc03198948f0f16f756e`; artifact verification,
-installation and live testing remain pending. These changes do not enable
+passed at `ba605b03d8bff2b0db15cc03198948f0f16f756e`; installation and first-boot
+verification are recorded above. These changes do not enable
 GPU/cameras, produce a GNSS fix or establish modem/SIM/calls. Installed state
 below records the r173 rootfs/kernel checkpoint before the loader update above.
 
