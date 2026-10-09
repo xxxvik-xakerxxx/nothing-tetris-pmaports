@@ -1,0 +1,142 @@
+From: Tetris Linux bring-up
+Subject: [CANDIDATE] adopt MT6878 SRAM parent leases; hardware gate closed
+
+diff --git a/drivers/mailbox/mtk-gpueb-mailbox.c b/drivers/mailbox/mtk-gpueb-mailbox.c
+--- a/drivers/mailbox/mtk-gpueb-mailbox.c
++++ b/drivers/mailbox/mtk-gpueb-mailbox.c
+@@ -18,6 +18,7 @@
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
++#include <linux/soc/mediatek/mt6878-gpueb-adoption.h>
+ 
+ #define GPUEB_MBOX_CTL_TX_STS		0x00
+ #define GPUEB_MBOX_CTL_IRQ_SET		0x04
+@@ -76,6 +77,7 @@
+ 
+ struct mtk_gpueb_mbox_variant {
+ 	const u8 num_channels;
++	bool parent_owned;
+ 	const struct mtk_gpueb_mbox_chan_desc channels[] __counted_by(num_channels);
+ };
+ 
+@@ -207,6 +209,11 @@
+ 	.last_tx_done = mtk_gpueb_mbox_last_tx_done,
+ };
+ 
++static void mtk_gpueb_put_adopted_window(void *data)
++{
++	mt6878_gpueb_unadopt_window(data);
++}
++
+ static int mtk_gpueb_mbox_probe(struct platform_device *pdev)
+ {
+ 	struct mtk_gpueb_mbox_chan *ch;
+@@ -219,6 +226,31 @@
+ 
+ 	ebm->dev = &pdev->dev;
+ 	ebm->v = of_device_get_match_data(ebm->dev);
++
++	/* MT6878 SRAM must come from the explicit real remoteproc parent.
++	 * No fallback to an overlapping independent claim, and no clock/MMIO
++	 * operations until the real power/boot owner gate is implemented.
++	 */
++	if (ebm->v->parent_owned) {
++		struct mt6878_gpueb_adopted_window *window;
++		struct resource *resource;
++		int ret;
++
++		resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++		window = mt6878_gpueb_adopt_window(pdev->dev.parent, resource,
++						 GPUEB_WINDOW_MBOX);
++		if (IS_ERR(window))
++			return PTR_ERR(window);
++		ret = devm_add_action_or_reset(ebm->dev,
++					     mtk_gpueb_put_adopted_window, window);
++		if (ret)
++			return ret;
++		ret = mt6878_gpueb_adoption_io_gate(window);
++		/* The candidate gate always refuses: no actual MMIO backend yet.
++		 * Never fall through to devm_platform_ioremap_resource for MT6878.
++		 */
++		return ret ? ret : -EOPNOTSUPP;
++	}
+ 
+ 	ebm->irq = platform_get_irq(pdev, 0);
+ 	if (ebm->irq < 0)
+@@ -302,6 +334,7 @@
+ /* Exact MT6878 send/recv tables, cumulative 4-byte slots; ee2be53 source. */
+ static const struct mtk_gpueb_mbox_variant mtk_gpueb_mbox_mt6878 = {
+ 	.num_channels = 11,
++	.parent_owned = true,
+ 	.channels = {
+ 		{ "fast-dvfs-event", 0, 0x0000, 16, 0x00d8, 16 },
+ 		{ "gpufreq",         1, 0x0010, 32, 0x00e8, 32 },
+diff --git a/drivers/pmdomain/mediatek/mt6878-gpueb-session.c b/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
+--- a/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
++++ b/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
+@@ -19,6 +19,7 @@
+ #include <linux/remoteproc.h>
+ #include <linux/spinlock.h>
+ #include <linux/soc/mediatek/mt6878-gpueb-session.h>
++#include <linux/soc/mediatek/mt6878-gpueb-adoption.h>
+ 
+ #define GPUEB_GPR13 0x34
+ #define GPUEB_SHARED_SIZE 0x4000
+@@ -35,7 +36,8 @@
+ 	struct completion response;
+ 	spinlock_t rx_lock;
+ 	struct mutex request_lock;
+-	struct resource *gpr_claim, *shared_claim;
++	struct resource *shared_claim;
++	struct mt6878_gpueb_adopted_window *gpr_lease;
+ 	void __iomem *gpr, *shared;
+ 	phys_addr_t shared_pa;
+ 	u32 magic, reply[GPUEB_WORDS];
+@@ -244,8 +246,7 @@
+ 		iounmap(s->gpr);
+ 	if (s->shared_claim)
+ 		release_mem_region(s->shared_pa, GPUEB_SHARED_SIZE);
+-	if (s->gpr_claim)
+-		release_mem_region(s->gpr_claim->start, resource_size(s->gpr_claim));
++	mt6878_gpueb_unadopt_window(s->gpr_lease);
+ 	rproc_put(s->rproc);
+ 	put_device(s->dev);
+ 	kfree(s);
+@@ -352,20 +353,22 @@
+ 		goto fail;
+ 	}
+ 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpueb_gpr_base");
+-	if (!res || resource_size(res) < GPUEB_GPR13 + sizeof(u32)) {
+-		ret = -EINVAL;
+-		goto fail;
+-	}
+-	s->gpr_claim = request_mem_region(res->start, resource_size(res), dev_name(dev));
+-	if (!s->gpr_claim) {
+-		ret = -EBUSY;
+-		goto fail;
+-	}
+-	s->gpr = ioremap(res->start, resource_size(res));
+-	if (!s->gpr) {
+-		ret = -ENOMEM;
+-		goto fail;
+-	}
++	s->gpr_lease = mt6878_gpueb_adopt_window(s->rproc->dev.parent, res,
++					       GPUEB_WINDOW_GPR);
++	if (IS_ERR(s->gpr_lease)) {
++		ret = PTR_ERR(s->gpr_lease);
++		s->gpr_lease = NULL;
++		goto fail;
++	}
++	/* Parent lease replaces the conflicting GPR claim. Resource ownership
++	 * alone is NOT permission to map/touch powered hardware or start GPUEB.
++	 * The candidate gate is closed until an actual owner supplies that path.
++	 */
++	ret = mt6878_gpueb_adoption_io_gate(s->gpr_lease);
++	if (ret)
++		goto fail;
++	ret = -EOPNOTSUPP;
++	goto fail;
+ 	s->boot_attempted = true;
+ 	ret = rproc_boot(s->rproc);
+ 	if (ret)

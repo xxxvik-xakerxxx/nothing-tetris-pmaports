@@ -21,7 +21,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             p7zip-full e2fsprogs erofs-utils android-sdk-libsparse-utils \
-            python3 python3-pyelftools python3-unicorn build-essential pkg-config libxml2-dev libssl-dev git
+            python3 python3-pyelftools python3-unicorn python3-cryptography \
+            build-essential pkg-config libxml2-dev libssl-dev git
       - name: Extract pinned generic B4.1 vendor assets
         run: python3 ci/extract-stock-port-assets.py
       - name: Verify owned GPUEB SRAM and quarantined partial startup
@@ -45,6 +46,28 @@ jobs:
       - name: Verify immutable modem reservation owner
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_handoff_reservation.py --native-ci
+      - name: Fetch pinned kernel caller sources
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p upstream/linux
+          git -C upstream/linux init
+          git -C upstream/linux remote add origin https://github.com/MT6878-mainline/linux.git
+          git -C upstream/linux sparse-checkout init --no-cone
+          git -C upstream/linux sparse-checkout set \
+            /drivers/gpu/drm/panthor/ /drivers/mailbox/mtk-gpueb-mailbox.c \
+            /include/linux/dma-buf.h
+          git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
+            d84b264a54a37611f2f46bc19363cb9b41606205
+          git -C upstream/linux checkout --detach FETCH_HEAD
+      - name: Verify GPUEB parent adoption and real caller migration
+        if: ${{ !cancelled() }}
+        env:
+          TETRIS_KERNEL_TREE: ${{ github.workspace }}/upstream/linux
+          TETRIS_DEVICE_MODULES_TREE: ${{ github.workspace }}/upstream/device-modules
+        run: sh patches/gpu/run_gpueb_sram_adoption_ci.sh
+      - name: Verify modem raw RSA and strict PSS32 error handling
+        if: ${{ !cancelled() }}
+        run: python3 patches/modem/check_pss32_backend.py --native-ci
       - uses: actions/upload-artifact@v7
         with:
           name: tetris-b41-selected-stock-port-assets
@@ -96,14 +119,6 @@ jobs:
       - name: Verify matching GPU CSF format
         if: ${{ !cancelled() }}
         run: |
-          mkdir -p upstream/linux
-          git -C upstream/linux init
-          git -C upstream/linux remote add origin https://github.com/MT6878-mainline/linux.git
-          git -C upstream/linux sparse-checkout init --no-cone
-          git -C upstream/linux sparse-checkout set /drivers/gpu/drm/panthor/
-          git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
-            d84b264a54a37611f2f46bc19363cb9b41606205
-          git -C upstream/linux checkout --detach FETCH_HEAD
           python3 patches/gpu/csf_preflight.py \
             out/stock-port-assets/vendor/firmware/mali_csffw.bin --kernel-tree upstream/linux
           python3 patches/gpu/test_csf_preflight.py

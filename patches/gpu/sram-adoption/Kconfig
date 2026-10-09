@@ -1,0 +1,8 @@
+# Candidate only; not sourced by packaged Kconfig.
+config MTK_MT6878_GPUEB_ADOPTION
+	bool "MT6878 GPUEB explicit parent SRAM adoption (candidate)"
+	depends on MT6878_GPUEB_SRAM_OWNER
+	default n
+	help
+	  Parent-issued typed resource leases, with no hardware boot or IO gate.
+	  Leave disabled. Existing DT and bindings are not activated or changed.
