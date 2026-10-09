@@ -23,7 +23,8 @@ unload-time shutdown, retry, success-by-timeout or kernel firmware-ready claim.
 diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
 --- a/drivers/soc/mediatek/Kconfig
 +++ b/drivers/soc/mediatek/Kconfig
-@@ -7,3 +7,14 @@
+@@ -5,6 +5,17 @@
+ menu "MediaTek SoC drivers"
  	depends on ARCH_MEDIATEK || COMPILE_TEST
  
 +config MTK_MT6878_CCCI_FIRST_START
@@ -38,6 +39,8 @@ diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
 +	  Missing evidence rejects start. Failures require controlled cold recovery.
 +
  config MTK_CMDQ
+ 	tristate "MediaTek CMDQ Support"
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
 diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
 --- a/drivers/soc/mediatek/Makefile
 +++ b/drivers/soc/mediatek/Makefile
