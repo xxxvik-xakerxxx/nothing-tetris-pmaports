@@ -10,11 +10,17 @@ import unittest
 import test_lna_metadata_patch as metadata
 
 PATCH = metadata.HERE / "0002-gps-mcudl-query-owned-lna-metadata.patch"
+GATE = metadata.HERE / "0003-gps-refuse-unproven-lna-control.patch"
 
 
 class ContextTests(unittest.TestCase):
     def test_balanced_context_and_counts(self):
-        lines = PATCH.read_text().splitlines()
+        for patch, expected in ((PATCH, 9), (GATE, 1)):
+            with self.subTest(patch=patch.name):
+                self.check_context(patch, expected)
+
+    def check_context(self, patch, expected):
+        lines = patch.read_text().splitlines()
         count = 0
         for i, line in enumerate(lines):
             match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
@@ -37,7 +43,7 @@ class ContextTests(unittest.TestCase):
                 self.assertEqual(new_start, 1)
                 self.assertTrue(all(x.startswith("+") for x in body))
             count += 1
-        self.assertEqual(count, 9)
+        self.assertEqual(count, expected)
 
     def check_application(self, command):
         metadata.MetadataTests.setUpClass()
@@ -64,6 +70,13 @@ class ContextTests(unittest.TestCase):
                 expected = metadata.MetadataTests.stacked if stacked else metadata.MetadataTests.fixed
                 for name in changed + [metadata.HEADER]:
                     self.assertEqual((Path(directory) / name).read_text(), expected[name])
+                gate_command = [str(GATE) if entry == str(PATCH) else entry for entry in command]
+                result = subprocess.run(gate_command, cwd=directory, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                from test_lna_control_gate import helper, gated
+                fixed = (Path(directory) / metadata.PLAT).read_text()
+                self.assertEqual(fixed, gated(expected[metadata.PLAT]))
+                self.assertNotIn("pinctrl_select_state", helper(fixed))
 
     def test_git_apply_exact_output(self):
         self.check_application(["git", "apply", "--whitespace=error", str(PATCH)])

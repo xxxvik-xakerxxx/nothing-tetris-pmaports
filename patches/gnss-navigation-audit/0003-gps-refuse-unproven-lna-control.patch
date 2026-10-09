@@ -1,0 +1,68 @@
+From: Tetris pmOS GNSS audit
+Subject: [PATCH] gps: refuse board-unproven external LNA control
+
+The pinned v051 build disables GPS_DRV_CONTROL_LNA but the shared power
+helper still selects external LNA pinctrl states. Cached stock B4.1 base
+DT and all three DTBO candidates provide no such GPS states; the source
+reference GPIO143/144 block is disabled. State names or ioctl16 metadata
+are not board wiring authorization.
+
+Keep transport and the existing void helper ABI, but refuse every external
+LNA transition until a reviewed board-owned implementation exists. There
+is deliberately no DT property, metadata result or module parameter that
+can enable this path. This is a safety restriction, not successful RF
+startup. Apply after the ioctl16 metadata candidate (packaged1006).
+The refusal itself never consults metadata or depends on query success.
+
+diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+index f218e9d..f16eb56 100644
+--- a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
++++ b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+@@ -355,39 +355,16 @@ void gps_dl_pinctrl_context_init(void)
+ 
+ void gps_dl_lna_pin_ctrl(enum gps_dl_link_id_enum link_id, bool dsp_is_on, bool force_en)
+ {
+-	struct pinctrl_state *p_state = NULL;
+-	int ret;
+-
+ 	ASSERT_LINK_ID(link_id, GDL_VOIDF());
+ 
+-	if (GPS_DATA_LINK_ID0 == link_id) {
+-		if (dsp_is_on && force_en)
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L1_LNA_ENABLE];
+-		else if (dsp_is_on)
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L1_LNA_DSP_CTRL];
+-		else
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L1_LNA_DISABLE];
+-	}
+-
+-	if (GPS_DATA_LINK_ID1 == link_id) {
+-		if (dsp_is_on && force_en)
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L5_LNA_ENABLE];
+-		else if (dsp_is_on)
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L5_LNA_DSP_CTRL];
+-		else
+-			p_state = g_gps_dl_pinctrl_state_struct_list[GPS_DL_L5_LNA_DISABLE];
+-	}
+-
+-	if (p_state == NULL) {
+-		GDL_LOGXW(link_id, "on = %d, force = %d, state is null", dsp_is_on, force_en);
+-		return;
+-	}
+-
+-	ret = pinctrl_select_state(g_gps_dl_pinctrl_ptr, p_state);
+-	if (ret != 0)
+-		GDL_LOGXW(link_id, "on = %d, force = %d, select ret = %d", dsp_is_on, force_en, ret);
+-	else
+-		GDL_LOGXD(link_id, "on = %d, force = %d, select ret = %d", dsp_is_on, force_en, ret);
++	/*
++	 * Named DT states and pin metadata do not prove Tetris board wiring.
++	 * Refuse enable, DSP handover and disable alike: all select pins.
++	 * No validated board owner exists in this source/stock profile.
++	 */
++	(void)dsp_is_on;
++	(void)force_en;
++	pr_warn_once("gps: external LNA control refused: no validated board owner\n");
+ }
+ 
+ /* Cached metadata follows the existing singleton GPS platform owner. */

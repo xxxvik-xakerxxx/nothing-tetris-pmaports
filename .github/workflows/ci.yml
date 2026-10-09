@@ -177,6 +177,8 @@ jobs:
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
           export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
           sh patches/gnss-navigation-audit/run_lna_metadata_ci.sh
+          sh patches/gnss-navigation-audit/run_lna_control_gate_ci.sh
+          sh patches/gnss-navigation-audit/run_lna_query_plan_ci.sh
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
       - name: Validate GNSS host callback and borrowed-output contracts

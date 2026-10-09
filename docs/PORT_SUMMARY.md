@@ -2,6 +2,13 @@
 
 ## Combined candidate: r177
 
+Follow-on r179 packages the external-LNA control restriction after r178 metadata
+and corrects the disabled camera fixture's context after GNSS pin removal.
+The standalone GNSS query-plan distinguishes a successful query from the pinned
+OEM untouched-zero error branch; the latter never becomes a successful ioctl or
+physical wiring proof. Navigation startup remains blocked by missing config,
+host-service and stop contracts. Native control/query fixtures are CI-only.
+
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
 at `063734b` passed, including source checks and ASan/UBSan fault fixtures:

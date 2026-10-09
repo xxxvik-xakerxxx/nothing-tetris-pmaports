@@ -13,7 +13,7 @@ def check(source):
     declared = re.findall(r'^\s*([^\s"/]+\.patch\.vendor)\s*$', sources[1], re.M)
     body = prepare[1].replace("\\\n", " ")
     applied = re.findall(
-        r'^\s*patch\s+-p1\s+-d\s+"\$_(?:devmods|connmods)_dir"\s+'
+        r'^\s*patch\s+(?:--fuzz=0\s+)?-p1\s+-d\s+"\$_(?:devmods|connmods)_dir"\s+'
         r'<\s*"\$srcdir"/([^\s]+\.patch\.vendor)\s*$', body, re.M
     )
     errors = [name for name in declared if applied.count(name) != 1]

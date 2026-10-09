@@ -19,6 +19,15 @@ class ApplicationTests(unittest.TestCase):
     def test_applied(self):
         check(source)
 
+    def test_zero_fuzz_application(self):
+        check(source.replace("patch -p1", "patch --fuzz=0 -p1"))
+
+    def test_zero_fuzz_still_rejects_duplicate(self):
+        strict = source.replace("patch -p1", "patch --fuzz=0 -p1")
+        command = strict[strict.index("    patch"):strict.index("\n}")]
+        with self.assertRaises(ValueError):
+            check(strict.replace("\n}", "\n" + command + "\n}"))
+
     def test_missing_application(self):
         with self.assertRaises(ValueError):
             check(source[:source.index("prepare()")] + "prepare() {\n}\n")

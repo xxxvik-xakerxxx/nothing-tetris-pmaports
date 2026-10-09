@@ -952,6 +952,9 @@ validate_compile_only_boundaries() {
 	grep -Fq '_build_camera_clk_compile_only' "$kernel_apkbuild"
 	cmp -s "$kernel_pkg/1006-vendor-gnss-readonly-lna-metadata.patch.vendor" \
 		"$repo_root/patches/gnss-navigation-audit/0002-gps-mcudl-query-owned-lna-metadata.patch"
+	cmp -s "$kernel_pkg/1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor" \
+		"$repo_root/patches/gnss-navigation-audit/0003-gps-refuse-unproven-lna-control.patch"
+	grep -Fq '< "$srcdir"/1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor' "$kernel_apkbuild"
 	if grep -Eq '^\+.*(gps_l[15]_lna|PINMUX_GPIO14[34]|pinctrl-)' \
 		"$kernel_pkg/0020-arm64-dts-mt6878-gnss.patch"; then
 		echo "Tetris GNSS transport must not enable unproven external LNA wiring" >&2
