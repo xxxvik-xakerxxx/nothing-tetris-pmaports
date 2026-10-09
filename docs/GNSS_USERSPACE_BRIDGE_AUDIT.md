@@ -400,8 +400,16 @@ reservation. The phone invocation must use a bounded transient systemd unit
 with MemoryMax=128M, MemorySwapMax=0, TasksMax=4 and RuntimeMaxSec=25. Existing
 seccomp, device/network/privilege denial, read-only root and watchdog remain
 unchanged. The control must pass again in that same bounded unit before load.
-CI and phone results for this revision remain pending.
+CI `37898372984` passed at `2adc9cd94e7bcb6801b943990666fccf301ee1bd`.
+Its archive SHA256 was
+`647bb38280be748ce4f9407364f99aba2d5793d658c424f7727e2098bbd67003`,
+matching GitHub; all nine staged files matched on the phone. On the same r173
+cold boot, the bounded control passed all eight denials again. The single
+load attempt returned `LOAD_OK` and exit zero in 18 ms, with 1.1 MiB peak
+resident memory and no swap. Missing Android linker configuration remained
+a warning, not a load failure. USB/SSH, boot ID and zero failed system units
+were unchanged. No vendor API, destructor, device or network operation was
+permitted; the staged root is temporary, not part of clean-install support.
 
-LOAD_OK will establish library
-loadability only, not solver startup, transport ownership, firmware download,
+This establishes library loadability only, not solver startup, transport ownership, firmware download,
 satellite acquisition, gpsd/GeoClue or a fix.

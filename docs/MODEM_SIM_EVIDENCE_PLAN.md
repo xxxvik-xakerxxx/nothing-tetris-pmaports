@@ -1122,9 +1122,19 @@ passed at `a92dff3a69`, including invalid-input no-write, cache failure,
 firmware/prefix preservation and guard-byte tests. No automatic caller,
 reservation or reset release is added; installed U-Boot is unchanged.
 
-Next integration gate: establish the span-mapping consumer contract (the old
-U-Boot observation validator still rejects this large gap), reserve and
-map the planned RAM, connect its initialization, apply/read back protection and remapping, and own
+The opt-in U-Boot `c9a2ee3e67` profile now connects the slot-A reader,
+signature checks, RAM placement and service initialization to
+`board_prep_linux`, with one attempt and sanitized first-failure diagnostics.
+Native and both ARM64 configuration builds passed CI `37896667322`.
+The verified image was flashed to `lk_a`; stock `lk_b` was retained.
+The phone enumerated pmOS USB after reboot, but the Mac did not register its
+network interface. Live modem-load diagnostics cannot yet be read; neither
+RAM-load success nor modem execution is claimed. See the current
+[installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
+
+Next integration gate: read the live preparation result, establish the
+span-mapping consumer contract (the old U-Boot observation validator still
+rejects this large gap), apply/read back protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
 detection and network registration still need live evidence. GPU/GNSS/camera
 hardware status is unchanged.

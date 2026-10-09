@@ -2,6 +2,26 @@
 
 ## Latest installed checkpoint: r173
 
+Live progress, 2026-10-09: the pinned B4.1 GNSS library loaded successfully
+through Bionic on r173 in a read-only, unprivileged sandbox with devices,
+ioctl and networking denied. CI `37898372984` passed, all staged hashes
+matched, control returned zero failures and the single load returned
+`LOAD_OK`, exit zero, 1.1 MiB peak memory. USB/SSH and the cold boot ID were
+unchanged. This establishes loadability, not navigation or a GPS fix; see
+[the runtime evidence](GNSS_USERSPACE_BRIDGE_AUDIT.md).
+
+U-Boot `c9a2ee3e67f2ced75e3d7d2e9d8bbaa95e1dd790`, explicit SCP plus
+RAM-only modem-load profile from successful
+[CI 37896667322](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37896667322),
+was flashed to `lk_a` after archive/image/header verification. Stock `lk_b`
+was verified unchanged before the write and was not flashed. Reboot lost
+the fastboot status response; the phone subsequently enumerated its pmOS
+USB NCM interfaces. macOS has not registered a BSD network interface, so
+SSH and the new `/chosen` modem-load result remain unavailable. This is
+not a modem-load pass or a proven boot regression. Physical USB reconnect
+was requested; no further hardware experiment was attempted in this state.
+The previous SCP-enabled `fef0154b` CI image remains available for rollback.
+
 Candidate status, 2026-10-09: r174 full kernel/image CI
 [37886195992](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37886195992)
 passed but was not installed. The combined r175 GPU/camera power-provider
@@ -9,9 +29,10 @@ bundle (`0110`, `0111`) and GNSS host-boundary checks passed native CI
 [37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
 at `a5d72a1`: 16,384 mode/fault cases, 512 rail/reference cases, 32 shutdown
 fault combinations and 262 pinned GNSS vectors, including negative mutants.
-Full r175 image and live testing remain pending. These changes do not enable
+Full r175 image CI `37894315052` is still building the kernel; installation
+and live testing remain pending. These changes do not enable
 GPU/cameras, produce a GNSS fix or establish modem/SIM/calls. Installed state
-below is unchanged.
+below records the r173 rootfs/kernel checkpoint before the loader update above.
 
 CI [37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235),
 source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`, passed and was
