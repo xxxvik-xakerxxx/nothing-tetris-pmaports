@@ -1148,9 +1148,18 @@ report `service-initialization`, zero error, `ram-loaded-not-started` with
 separate reservations. Cold automatic sensor startup and a hash-verified
 32 MiB USB transfer also passed; no modem execution was attempted.
 
-Next integration gate: repeat cold preparation, establish the
-span-mapping consumer contract (the old U-Boot observation validator still
-rejects this large gap), apply/read back protection and remapping, and own
+U-Boot `c2dd8be930` now offers an explicit full-span mapping contract for
+consumers carrying patch `0173`; the observation caller retains the legacy
+default. CI
+[37912420528](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37912420528)
+passed CCCI host tests over both OTA/installed-partition NVRAM profiles,
+malformed tables, reserved-range escape and rounding overflow, plus ARM64
+builds and LK packaging. No new tags or modem startup are enabled, and the
+handset still uses verified loader `56de656803`.
+
+Next integration gate: repeat cold preparation, explicitly select the verified
+span-mapping consumer contract in a publishing caller, apply/read back
+protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
 detection and network registration still need live evidence. GPU/GNSS/camera
 hardware status is unchanged.
