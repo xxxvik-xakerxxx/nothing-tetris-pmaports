@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import copy
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -227,7 +228,8 @@ class PreflightDelta(unittest.TestCase):
             out = Path(directory)
             target = out / "arch/arm64/boot/dts/mediatek/Makefile"
             target.parent.mkdir(parents=True)
-            kernel = ROOT.parent / "linux-d84b264a54a37611f2f46bc19363cb9b41606205"
+            kernel = Path(os.environ.get("TETRIS_KERNEL_TREE", str(
+                ROOT.parent / "linux-d84b264a54a37611f2f46bc19363cb9b41606205")))
             target.write_text((kernel / "arch/arm64/boot/dts/mediatek/Makefile").read_text())
             for name in ["0072-arm64-dts-mediatek-add-Nothing-Tetris-native-display-DTB.patch",
                          "0116-arm64-dts-tetris-modem-preflight-diagnostic.patch"]:

@@ -102,7 +102,7 @@ jobs:
       - name: Validate read-only modem preflight
         run: |
           python3 scripts/check-mt6878-modem-preflight.py upstream/linux --native-ci
-          python3 patches/modem/test_preflight_dt.py
+          TETRIS_KERNEL_TREE=upstream/linux python3 patches/modem/test_preflight_dt.py
       - name: Validate Panthor VGPU readback gate
         run: |
           python3 scripts/check-panthor-vgpu-readback.py \
