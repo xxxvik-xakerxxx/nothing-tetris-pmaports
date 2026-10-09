@@ -93,8 +93,9 @@ source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
 Its archive, image hashes and complete sparse structure were verified before
 a clean installation. First boot, USB/SSH, root expansion and installed FIT
 verification passed. One subsequent automatic sensor cold start after opt-in
-passed with real light updates and another USB transfer. Visual confirmation
-and lifecycle testing remain pending;
+passed with real light updates and another USB transfer. The user confirmed
+normal display, touch, desktop rotation and automatic brightness after that
+cold boot. Lifecycle and other-unit testing remain pending;
 see the current [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
 Sensors are opt-in on a fresh image and require the matching SCP-enabled
 loader; the ordinary U-Boot artifact does not enable that profile.

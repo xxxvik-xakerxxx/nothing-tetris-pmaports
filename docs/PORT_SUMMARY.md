@@ -13,8 +13,9 @@ First boot `1f027cdd-380e-4347-b8a8-149a79cf295c` reports
 root expansion to 104.5 GiB and the installed FIT hash passed. No systemd
 units failed; no panic, Oops, lockup, refcount or use-after-free signature
 was found in the captured kernel journal. Existing vendor warnings remain.
-DSI is connected/enabled and touchscreen input is registered; visual
-confirmation remains pending.
+DSI is connected/enabled and touchscreen input is registered. After the
+cold boot below, the user confirmed normal display, touch, rotation in both
+directions and automatic brightness when covering/uncovering the sensor.
 
 The installed SCP-enabled U-Boot `fef0154b0404210799a6851ac2c07dcbc9e9c736`
 was retained. Neither LK slot nor factory/calibration partitions was written.
@@ -31,6 +32,8 @@ were not exercised in this capture. No systemd units failed, no critical
 kernel fault signature appeared in the captured journal, and a fresh
 hash-verified 32 MiB USB transfer passed. This is one cold-start pass after
 explicit opt-in, not zero-configuration startup or completed lifecycle testing.
+The subsequent user check confirmed desktop rotation and automatic brightness;
+proximity blanking during calls was not retested on this image.
 
 r173 fixes the vendor CCCI shared-memory mapping span, including the real
 `0x15fc0` cache padding gap, and rejects negative region IDs before indexing.
