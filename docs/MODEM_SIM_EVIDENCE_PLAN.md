@@ -1063,8 +1063,11 @@ Actual LK publication `0x24370..0x243e8` copies v6 header fields CONSYS
 tags. `test-lk-smem-plan.py --modem` executed this code with the local ROM
 header and confirmed all four values. The container hash is
 `b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5`.
-Offline signature consistency passed independently; image-derived trust in
-that check is not a device trust anchor.
+All three component signatures also passed verification against the independent
+LK-matched SPKI pin already used by the SCP loader:
+`e1b5235d9411473a358c754f84843801b91f05b8fb9dc4863393e378e41a115e`.
+This verification used the existing audited pin, not a pin selected from the
+modem image. Rollback/device policy and secure-reset ownership remain open.
 
 Real metadata is DRDI 3, UDC 0, CONSYS `0xd80000`, NVRAM `0x16a040`.
 Effective gear 1 produces six cache runtime rows and `0x2560000` capacity,
