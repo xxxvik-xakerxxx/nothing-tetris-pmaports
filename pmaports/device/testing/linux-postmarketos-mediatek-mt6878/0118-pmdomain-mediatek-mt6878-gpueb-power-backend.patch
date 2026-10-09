@@ -1,0 +1,314 @@
+From: Tetris port maintainers
+Subject: [PATCH] pmdomain: mediatek: add gated MT6878 GPUEB power backend
+
+Source: Nothing 4.1 device modules ee2be53cb75670b548948636a0db1d1ff112bf12.
+MT6878 delegates MFG-RPC sequencing to GPUEB; gpufreq_mt6878 has no AP
+power-control callback. Send only the audited POWER_CONTROL ABI, preserving
+the first failure and refusing to retry a possibly executed reference change.
+
+This is a transport-owner integration API, not an active hardware driver.
+No DT/provider registration, firmware handshake, regulator or clock writes.
+A proven GPUEB transport/session and held dependencies remain prerequisites.
+CSF firmware, Panthor activation and GPU performance states are not provided.
+
+diff --git a/include/linux/soc/mediatek/mt6878-gpueb-power-core.h b/include/linux/soc/mediatek/mt6878-gpueb-power-core.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878-gpueb-power-core.h
+@@ -0,0 +1,175 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_GPUEB_POWER_CORE_H
++#define _MT6878_GPUEB_POWER_CORE_H
++
++#include <linux/errno.h>
++#include <linux/types.h>
++
++/*
++ * Nothing 4.1 device-modules ee2be53cb75670b548948636a0db1d1ff112bf12:
++ * gpufreq/v2/{gpufreq_v2.c,include/gpufreq_ipi.h,include/gpufreq_v2.h}.
++ * MT6878 has no AP power_control backend: GPUEB owns nested MFG-RPC.
++ * ARM64 ABI: 32 bytes; union aligned at byte 16, not byte 12.
++ */
++#define MT6878_GPUEB_POWER_CMD 6U
++#define MT6878_GPUEB_POWER_WORDS 8U
++#define MT6878_GPUEB_TIMEOUT_MS 10000U
++
++/*
++ * Linux owner contract, NOT firmware bits. The transport owner must prove:
++ * completed GPR13/session + INIT_SHARED_MEM handshake, enabled power_control,
++ * exclusive command channel/power-count ownership, and lifetime-held MFG0,
++ * supplies and clocks. An inventory DT or readable PMIC is not proof.
++ */
++#define MT6878_GPUEB_SESSION_READY (1U << 0)
++#define MT6878_GPUEB_SHARED_READY (1U << 1)
++#define MT6878_GPUEB_POWER_ALLOWED (1U << 2)
++#define MT6878_GPUEB_EXCLUSIVE (1U << 3)
++#define MT6878_GPUEB_MFG0_HELD (1U << 4)
++#define MT6878_GPUEB_SUPPLIES_HELD (1U << 5)
++#define MT6878_GPUEB_CLOCKS_HELD (1U << 6)
++#define MT6878_GPUEB_REQUIRED ((1U << 7) - 1)
++
++struct mt6878_gpueb_observation {
++	u64 epoch;
++	u32 magic;
++	u32 proven;
++	int power_count;
++};
++
++/*
++ * snapshot must be coherent and read-only; no debug clock/GPU MMIO access.
++ * transfer sends exactly one bounded request, returns Linux errno or zero,
++ * and extracts signed return_value from a completion belonging to this request.
++ * No retry, fallback, abort(), handshake or firmware loading in callbacks.
++ * The adapter must translate IPI_ACTION_DONE to zero, not pass vendor codes.
++ * Vendor does not prove reply magic/target echo: do not invent such checks.
++ * Caller holds the exclusive session lock across snapshot/transfer/snapshot.
++ */
++struct mt6878_gpueb_power_ops {
++	int (*snapshot)(void *ctx, struct mt6878_gpueb_observation *observation);
++	int (*transfer)(void *ctx, const u32 *words, unsigned int count,
++			unsigned int timeout_ms, int *power_count);
++};
++
++struct mt6878_gpueb_power_state {
++	u64 epoch;
++	u32 magic;
++	bool armed;
++	bool on;
++	int first_error;
++};
++
++static inline int
++mt6878_gpueb_observation_valid(const struct mt6878_gpueb_observation *o)
++{
++	if (!o)
++		return -EINVAL;
++	if (!o->epoch || !o->magic)
++		return -ENOTCONN;
++	if ((o->proven & MT6878_GPUEB_REQUIRED) != MT6878_GPUEB_REQUIRED)
++		return -EACCES;
++	if (o->power_count < 0)
++		return -EPROTO;
++	return 0;
++}
++
++/* Only arm a fresh, zeroed state. Failure never resets a poisoned session. */
++static inline int
++mt6878_gpueb_power_arm(struct mt6878_gpueb_power_state *state,
++		      const struct mt6878_gpueb_power_ops *ops, void *ctx)
++{
++	struct mt6878_gpueb_observation o = {};
++	int ret;
++
++	if (!state)
++		return -EINVAL;
++	if (state->first_error)
++		return state->first_error;
++	if (state->armed)
++		return -EALREADY;
++	if (!ops || !ops->snapshot || !ops->transfer)
++		return -EINVAL;
++	ret = ops->snapshot(ctx, &o);
++	if (ret)
++		return ret < 0 ? ret : -EPROTO;
++	ret = mt6878_gpueb_observation_valid(&o);
++	if (ret)
++		return ret;
++	/* Never adopt a reference inherited from vendor/warm boot. */
++	if (o.power_count)
++		return -EBUSY;
++	state->epoch = o.epoch;
++	state->magic = o.magic;
++	state->armed = true;
++	return 0;
++}
++
++static inline int
++mt6878_gpueb_power_poison(struct mt6878_gpueb_power_state *state, int error)
++{
++	if (!state)
++		return -EINVAL;
++	if (!state->first_error)
++		state->first_error = error < 0 ? error : -EPROTO;
++	return state->first_error;
++}
++
++static inline int
++mt6878_gpueb_power_step(struct mt6878_gpueb_power_state *state,
++		       const struct mt6878_gpueb_power_ops *ops, void *ctx,
++		       bool on)
++{
++	struct mt6878_gpueb_observation o = {};
++	u32 words[MT6878_GPUEB_POWER_WORDS] = {};
++	int count = -EPROTO, ret;
++
++	if (!state)
++		return -EINVAL;
++	if (state->first_error)
++		return state->first_error;
++	if (!state->armed)
++		return -ENOTCONN;
++	if (!ops || !ops->snapshot || !ops->transfer)
++		return mt6878_gpueb_power_poison(state, -EINVAL);
++	ret = ops->snapshot(ctx, &o);
++	if (ret)
++		return mt6878_gpueb_power_poison(state, ret);
++	ret = mt6878_gpueb_observation_valid(&o);
++	if (ret)
++		return mt6878_gpueb_power_poison(state, ret);
++	if (o.epoch != state->epoch || o.magic != state->magic)
++		return mt6878_gpueb_power_poison(state, -ESTALE);
++	if (o.power_count != (int)state->on)
++		return mt6878_gpueb_power_poison(state, -EBUSY);
++	if (state->on == on)
++		return 0;
++
++	words[0] = state->magic;
++	words[1] = MT6878_GPUEB_POWER_CMD;
++	words[4] = on; /* GPU_PWR_OFF=0, GPU_PWR_ON=1; target/padding zero. */
++	ret = ops->transfer(ctx, words, MT6878_GPUEB_POWER_WORDS,
++			    MT6878_GPUEB_TIMEOUT_MS, &count);
++	if (ret)
++		return mt6878_gpueb_power_poison(state, ret);
++	if (count < 0)
++		return mt6878_gpueb_power_poison(state, count);
++	if (count != (int)on)
++		return mt6878_gpueb_power_poison(state, -EPROTO);
++
++	o = (struct mt6878_gpueb_observation) {};
++	ret = ops->snapshot(ctx, &o);
++	if (ret)
++		return mt6878_gpueb_power_poison(state, ret);
++	ret = mt6878_gpueb_observation_valid(&o);
++	if (ret)
++		return mt6878_gpueb_power_poison(state, ret);
++	if (o.epoch != state->epoch || o.magic != state->magic)
++		return mt6878_gpueb_power_poison(state, -ESTALE);
++	if (o.power_count != count)
++		return mt6878_gpueb_power_poison(state, -EPROTO);
++	state->on = on;
++	return 0;
++}
++
++#endif
+diff --git a/include/linux/soc/mediatek/mt6878-gpueb-power.h b/include/linux/soc/mediatek/mt6878-gpueb-power.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878-gpueb-power.h
+@@ -0,0 +1,29 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _LINUX_MT6878_GPUEB_POWER_H
++#define _LINUX_MT6878_GPUEB_POWER_H
++
++#include <linux/mutex.h>
++#include <linux/pm_domain.h>
++#include <linux/soc/mediatek/mt6878-gpueb-power-core.h>
++
++struct mt6878_gpueb_domain {
++	struct generic_pm_domain genpd;
++	struct mt6878_gpueb_power_state state;
++	const struct mt6878_gpueb_power_ops *ops;
++	void *ctx;
++	/* Owner's lock, shared with all GPUEB commands and reset handling. */
++	struct mutex *session_lock;
++};
++
++/*
++ * Prepare only; no provider registration, DT match, power writes or firmware
++ * loading. Caller owns object/ops/context/lock for the entire genpd lifetime.
++ * Must use a fresh zeroed object; may not reprepare after an uncertain transfer.
++ * On success owner may call pm_genpd_init(..., true), then attach the proven
++ * MFG0 parent and publish the provider. Never publish the 0052 raw RPC provider
++ * alongside this whole-GPU domain: that would create competing power owners.
++ */
++int mt6878_gpueb_domain_prepare(struct mt6878_gpueb_domain *domain,
++			       const struct mt6878_gpueb_power_ops *ops,
++			       void *ctx, struct mutex *session_lock);
++#endif
+diff --git a/drivers/pmdomain/mediatek/mt6878-gpueb-power.c b/drivers/pmdomain/mediatek/mt6878-gpueb-power.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-gpueb-power.c
+@@ -0,0 +1,52 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/export.h>
++#include <linux/module.h>
++#include <linux/soc/mediatek/mt6878-gpueb-power.h>
++
++static int mt6878_gpueb_domain_transition(struct generic_pm_domain *genpd, bool on)
++{
++	struct mt6878_gpueb_domain *domain =
++		container_of(genpd, struct mt6878_gpueb_domain, genpd);
++	int ret;
++
++	mutex_lock(domain->session_lock);
++	ret = mt6878_gpueb_power_step(&domain->state, domain->ops, domain->ctx, on);
++	mutex_unlock(domain->session_lock);
++	return ret;
++}
++
++static int mt6878_gpueb_domain_on(struct generic_pm_domain *genpd)
++{
++	return mt6878_gpueb_domain_transition(genpd, true);
++}
++
++static int mt6878_gpueb_domain_off(struct generic_pm_domain *genpd)
++{
++	return mt6878_gpueb_domain_transition(genpd, false);
++}
++
++int mt6878_gpueb_domain_prepare(struct mt6878_gpueb_domain *domain,
++			       const struct mt6878_gpueb_power_ops *ops,
++			       void *ctx, struct mutex *session_lock)
++{
++	int ret;
++
++	if (!domain || !session_lock)
++		return -EINVAL;
++	mutex_lock(session_lock);
++	ret = mt6878_gpueb_power_arm(&domain->state, ops, ctx);
++	if (!ret) {
++		domain->ops = ops;
++		domain->ctx = ctx;
++		domain->session_lock = session_lock;
++		domain->genpd.name = "mt6878-gpueb-mfg";
++		domain->genpd.power_on = mt6878_gpueb_domain_on;
++		domain->genpd.power_off = mt6878_gpueb_domain_off;
++	}
++	mutex_unlock(session_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_gpueb_domain_prepare);
++
++MODULE_DESCRIPTION("MT6878 GPUEB-owned whole-GPU power transaction backend");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/pmdomain/mediatek/Makefile b/drivers/pmdomain/mediatek/Makefile
+--- a/drivers/pmdomain/mediatek/Makefile
++++ b/drivers/pmdomain/mediatek/Makefile
+@@ -1,2 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_MTK_MT6878_GPUEB_POWER) += mt6878-gpueb-power.o
+ obj-$(CONFIG_MTK_SCPSYS)		+= mtk-scpsys.o
+diff --git a/drivers/pmdomain/mediatek/Kconfig b/drivers/pmdomain/mediatek/Kconfig
+--- a/drivers/pmdomain/mediatek/Kconfig
++++ b/drivers/pmdomain/mediatek/Kconfig
+@@ -1,7 +1,19 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ 
+ menu "MediaTek PM Domains"
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+ 
++config MTK_MT6878_GPUEB_POWER
++	tristate "MT6878 GPUEB power transaction backend"
++	depends on PM
++	depends on ARM64 || COMPILE_TEST
++	depends on !CPU_BIG_ENDIAN
++	select PM_GENERIC_DOMAINS
++	help
++	  Build the whole-GPU domain adapter for an audited GPUEB transport owner.
++	  Does not register a provider or access hardware by itself. The owner
++	  must establish exclusive firmware/session and power dependencies before
++	  publishing a domain. Leave disabled until those dependencies are proven.
++
+ config MTK_SCPSYS
+ 	bool "MediaTek SCPSYS Support"

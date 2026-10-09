@@ -1,0 +1,712 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: mediatek: prepare calibrated full-port CPHY/MAC transactions
+
+Exact audited IMX882 three-trio setup; caller retains power, IRQ,
+VC/TSREC and DMA ownership. No runtime adapter or DT activation.
+
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy.h b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy.h
+@@ -0,0 +1,241 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_SENINF_PHY_H
++#define MT6878_SENINF_PHY_H
++
++#include "mt6878-seninf-mux.h"
++
++/* No live MMIO adapter. Register programs are generated from PHY3.1 in
++ * modules e96f60dc081ae3525ef43d4bcf0ee5ee97e53835. Clock choices/layout
++ * are checked against device ee2be53cb75670b548948636a0db1d1ff112bf12.
++ * Only audited IMX882 preview/capture/video, full ports 0/1, identity trio
++ * mapping, non-legacy/no-LRTE/no-ULPS are supported. No DMA is configured.
++ */
++enum mt6878_phy_owner {
++	MT6878_PHY_POWER, /* Sensor stopped; CAM_MAIN/CSI_RX, clock/VCORE held under core lock. */
++	MT6878_PHY_IRQ,   /* Handler installed; MAC A/B and PHY pending bits owned. */
++	MT6878_PHY_ROUTE, /* Allocated SENINF VC/DT destinations; no stream yet. */
++	MT6878_PHY_TSREC, /* Separate TSREC owner has configured or disabled routes. */
++	MT6878_PHY_QUIESCED /* Sensor, CAMMUX/DMA stopped; IRQ masked/synchronized. */
++};
++
++struct mt6878_phy_inputs {
++	unsigned int rg_csi; /* Decoded per-port nvmem word, never a default. */
++	/* Successful read/decoding of the matched rg_csi cell, not word != 0.
++	 * Vendor treats zero as missing, but does not establish hardware-invalid
++	 * calibration codes. Provenance and the numeric payload are independent.
++	 */
++	unsigned int rg_csi_verified, rg_csi_port;
++	unsigned int csi_clock_hz; /* Actual held clock, not requested/default rate. */
++	unsigned int mipi_pixel_rate;
++	unsigned int dphy_trail_ns;
++	unsigned int cphy_settle_ns, not_fixed_trail_settle;
++	unsigned int lanes[3];
++	unsigned int mode; /* 0: 4000x3000 preview/capture, 1: 4096x2304 video. */
++	unsigned int legacy_phy, lrte, ulps;
++};
++
++struct mt6878_phy_backend {
++	struct mt6878_seninf_backend io;
++	/* Each owner must verify its resources independently, including the
++	 * exact per-device rg_csi provenance and per-module CSI parameters.
++	 * IRQ verification precedes any write, since vendor enables IRQ early.
++	 * IRQ must cover both MAC halves and PHY; ROUTE must validate this exact
++	 * VC/DT/mux/pixel plan; TSREC must prove its separate route ownership.
++	 * Unsupported paths return -EOPNOTSUPP here, before the first MMIO.
++	 * Checks must be bounded and must not access receiver MMIO or change
++	 * suppliers/rates/regulators. No successful placeholder is valid live.
++	 */
++	int (*verify)(void *context, enum mt6878_phy_owner owner,
++		      const struct mt6878_seninf_plan *plan,
++		      const struct mt6878_phy_inputs *inputs);
++};
++
++struct mt6878_phy_transaction {
++	struct mt6878_seninf_transaction bus;
++	struct mt6878_phy_inputs inputs;
++	unsigned int attempted, configured, off_attempted;
++};
++
++enum mt6878_phy_value {
++	MT6878_PHY_LITERAL, MT6878_PHY_WRITE, MT6878_PHY_EFUSE,
++	MT6878_PHY_SETTLE, MT6878_PHY_TRAIL
++};
++
++struct mt6878_phy_op {
++	enum mt6878_seninf_region region;
++	unsigned int offset, mask, shift;
++	enum mt6878_phy_value kind;
++	unsigned int value;
++};
++
++#include "mt6878-seninf-phy-data.h"
++
++static inline int mt6878_phy_validate(const struct mt6878_phy_backend *backend,
++	const struct mt6878_seninf_plan *plan, const struct mt6878_phy_inputs *in)
++{
++	int ret;
++
++	if (!backend || !backend->verify || !in)
++		return -EINVAL;
++	ret = mt6878_seninf_validate_backend(&backend->io, plan);
++	if (ret)
++		return ret;
++	if (in->rg_csi_verified != 1 || in->rg_csi_port != plan->port ||
++	    in->mipi_pixel_rate != 700800000 ||
++	    in->lanes[0] != 0 || in->lanes[1] != 1 || in->lanes[2] != 2 ||
++	    in->mode > 1 || in->dphy_trail_ns != (in->mode ? 0x31U : 0x47U) ||
++	    in->cphy_settle_ns || in->not_fixed_trail_settle ||
++	    in->legacy_phy || in->lrte || in->ulps)
++		return -EINVAL;
++	if (in->csi_clock_hz != 312000000 && in->csi_clock_hz != 343000000 &&
++	    in->csi_clock_hz != 416000000 && in->csi_clock_hz != 499000000)
++		return -EINVAL;
++	return 0;
++}
++
++static inline unsigned int mt6878_phy_settle(unsigned int clock)
++{
++	/* Vendor settle_formula: ceil(70ns * held CSI clock) - 6. */
++	return (unsigned int)((70ULL * clock + 999999999ULL) / 1000000000ULL) - 6;
++}
++
++static inline unsigned int mt6878_phy_trail(const struct mt6878_phy_inputs *in)
++{
++	/* Vendor DPHY_TRAIL_SPEC=224, data_rate=700800000*10/3.
++	 * This common register bank is used by CPHY too; trail enable remains 0.
++	 */
++	unsigned int ui = 224000 / ((in->mipi_pixel_rate * 10ULL / 3) / 1000000);
++
++	if (!in->dphy_trail_ns || in->dphy_trail_ns > ui)
++		return 0;
++	return (unsigned int)(((ui - in->dphy_trail_ns) *
++		(unsigned long long)in->csi_clock_hz + 999999999ULL) / 1000000000ULL);
++}
++
++static inline int mt6878_phy_program(const struct mt6878_phy_backend *backend,
++	struct mt6878_phy_transaction *tx, const struct mt6878_phy_op *ops,
++	unsigned int count, unsigned int half)
++{
++	const struct mt6878_seninf_backend *io = &backend->io;
++	const struct mt6878_seninf_plan *plan = &tx->bus.plan;
++	unsigned int i, value, offset;
++	int ret;
++
++	for (i = 0; i < count; i++) {
++		offset = ops[i].offset + half;
++		offset += ops[i].region == MT6878_SENINF_BASE ?
++			plan->intf * 0x1000 : plan->port * 0x8000;
++		value = ops[i].value;
++		if (ops[i].kind == MT6878_PHY_EFUSE)
++			value = (tx->inputs.rg_csi >> value) & 0x1f;
++		else if (ops[i].kind == MT6878_PHY_SETTLE)
++			value = mt6878_phy_settle(tx->inputs.csi_clock_hz);
++		else if (ops[i].kind == MT6878_PHY_TRAIL)
++			value = mt6878_phy_trail(&tx->inputs);
++		if (ops[i].kind == MT6878_PHY_WRITE) {
++			unsigned long size = ops[i].region == MT6878_SENINF_BASE ?
++				io->base_size : io->analog_size;
++
++			if ((offset & 3) || size < 4 || offset > size - 4)
++				return mt6878_seninf_error(&tx->bus, -EINVAL);
++			tx->bus.step++;
++			ret = io->write(io->context, ops[i].region, offset, value);
++		} else {
++			if (value > (ops[i].mask >> ops[i].shift))
++				return mt6878_seninf_error(&tx->bus, -ERANGE);
++			ret = mt6878_seninf_update(io, &tx->bus, ops[i].region,
++				offset, ops[i].mask, value << ops[i].shift);
++		}
++		if (ret)
++			return mt6878_seninf_error(&tx->bus, ret);
++	}
++	return 0;
++}
++
++#define MT6878_PHY_PROGRAM(name, half) do { \
++	ret = mt6878_phy_program(backend, tx, mt6878_phy_##name, \
++		sizeof(mt6878_phy_##name) / sizeof(mt6878_phy_##name[0]), half); \
++	if (ret) \
++		return ret; \
++} while (0)
++
++static inline int mt6878_phy_setup(const struct mt6878_phy_backend *backend,
++	struct mt6878_phy_transaction *tx, const struct mt6878_seninf_plan *plan,
++	const struct mt6878_phy_inputs *inputs)
++{
++	unsigned int owner, bit;
++	int ret;
++
++	if (!tx)
++		return -EINVAL;
++	if (tx->bus.first_error)
++		return tx->bus.first_error;
++	if (tx->attempted || tx->off_attempted || tx->bus.plan_bound)
++		return -EALREADY;
++	ret = mt6878_phy_validate(backend, plan, inputs);
++	if (ret)
++		return mt6878_seninf_error(&tx->bus, ret);
++	tx->attempted = 1;
++	mt6878_seninf_bind_plan(&tx->bus, plan);
++	tx->inputs = *inputs;
++	for (owner = MT6878_PHY_POWER; owner <= MT6878_PHY_TSREC; owner++) {
++		ret = backend->verify(backend->io.context, owner, plan, inputs);
++		if (ret)
++			return mt6878_seninf_error(&tx->bus, ret);
++	}
++	/* Preserve mtk_cam_seninf_set_csi_mipi's order, not an inferred order. */
++	MT6878_PHY_PROGRAM(init, 0);
++	MT6878_PHY_PROGRAM(init, 0x1000);
++	MT6878_PHY_PROGRAM(efuse, 0);
++	MT6878_PHY_PROGRAM(timing, 0);
++	MT6878_PHY_PROGRAM(post, 0);
++	MT6878_PHY_PROGRAM(mac_top, 0);
++	MT6878_PHY_PROGRAM(mac_fixed, 0);
++	MT6878_PHY_PROGRAM(mac, 0);
++	MT6878_PHY_PROGRAM(lrte_off, 0);
++	bit = 1U << plan->port;
++	ret = mt6878_seninf_update(&backend->io, &tx->bus, MT6878_SENINF_BASE,
++		MT6878_PHY_TOP_CTRL2, bit, bit);
++	if (ret)
++		return ret;
++	MT6878_PHY_PROGRAM(seninf, 0);
++	MT6878_PHY_PROGRAM(analog_setup, 0);
++	tx->bus.analog_attempted = 1;
++	ret = mt6878_seninf_analog_half(&backend->io, &tx->bus, plan->port * 0x8000, 1);
++	if (!ret)
++		ret = mt6878_seninf_analog_half(&backend->io, &tx->bus,
++			plan->port * 0x8000 + 0x1000, 1);
++	if (ret)
++		return ret;
++	MT6878_PHY_PROGRAM(trios, 0);
++	tx->configured = 1;
++	return 0; /* Configured receiver only: not a capture completion. */
++}
++
++#undef MT6878_PHY_PROGRAM
++
++static inline int mt6878_phy_off(const struct mt6878_phy_backend *backend,
++	struct mt6878_phy_transaction *tx)
++{
++	int ret;
++
++	if (!backend || !tx || !tx->attempted || !tx->bus.plan_bound)
++		return -EINVAL;
++	if (tx->off_attempted)
++		return tx->bus.first_error ? tx->bus.first_error : -EALREADY;
++	ret = mt6878_phy_validate(backend, &tx->bus.plan, &tx->inputs);
++	if (ret)
++		return ret;
++	tx->off_attempted = 1;
++	ret = backend->verify(backend->io.context, MT6878_PHY_QUIESCED,
++		&tx->bus.plan, &tx->inputs);
++	if (ret) {
++		mt6878_seninf_error(&tx->bus, ret);
++		return tx->bus.first_error;
++	}
++	ret = mt6878_seninf_receiver_off(&backend->io, &tx->bus.plan, &tx->bus);
++	tx->configured = 0;
++	return tx->bus.first_error ? tx->bus.first_error : ret;
++}
++
++#endif
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-data.h b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-data.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-data.h
+@@ -0,0 +1,427 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Register definitions: Copyright (c) 2020 MediaTek Inc. */
++/* Generated from Nothing modules e96f60dc081ae3525ef43d4bcf0ee5ee97e53835; do not edit. */
++static const struct mt6878_phy_op mt6878_phy_init[] = {
++	/* CDPHY_RX_ANA_1: RG_CSI0_BG_LPRX_VTL_SEL */
++	{ MT6878_SENINF_ANALOG, 0x4, 0x00000007U, 0, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_1: RG_CSI0_BG_LPRX_VTH_SEL */
++	{ MT6878_SENINF_ANALOG, 0x4, 0x00000070U, 4, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_BG_ALP_RX_VTL_SEL */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x07000000U, 24, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_BG_ALP_RX_VTH_SEL */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x70000000U, 28, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_1: RG_CSI0_BG_VREF_SEL */
++	{ MT6878_SENINF_ANALOG, 0x4, 0x00000f00U, 8, MT6878_PHY_LITERAL, 0x8 },
++	/* CDPHY_RX_ANA_1: RG_CSI0_CDPHY_EQ_DES_VREF_SEL */
++	{ MT6878_SENINF_ANALOG, 0x4, 0x00070000U, 16, MT6878_PHY_LITERAL, 0x2 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_BW */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000003U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_IS */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x0000000cU, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_DG0_EN */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_SR0 */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000f00U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0P_T0A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0N_T0B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x00001f00U, 8, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1P_T0C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0xc, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1N_T1A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0xc, 0x00001f00U, 8, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2P_T1B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x10, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2N_T1C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x10, 0x00001f00U, 8, MT6878_PHY_LITERAL, 0x10 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T0_CDR_FIRST_EDGE_EN */
++	{ MT6878_SENINF_ANALOG, 0x0, 0x00200000U, 21, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T1_CDR_FIRST_EDGE_EN */
++	{ MT6878_SENINF_ANALOG, 0x0, 0x00400000U, 22, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_CPHY_T0_CDR_SELF_CAL_EN */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x00010000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_CPHY_T1_CDR_SELF_CAL_EN */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x00020000U, 17, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x18, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x1c, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_AB_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x18, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_BC_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x18, 0x00001f00U, 8, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_CA_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x18, 0x001f0000U, 16, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_AB_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x1c, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_BC_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x1c, 0x00001f00U, 8, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_CA_WIDTH */
++	{ MT6878_SENINF_ANALOG, 0x1c, 0x001f0000U, 16, MT6878_PHY_LITERAL, 0xa },
++	/* CDPHY_RX_ANA_5: RG_CSI0_ULPS_IGNORE_EN */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x40000000U, 30, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_14: RG_CSI0_LDO_LP_EN */
++	{ MT6878_SENINF_ANALOG, 0x38, 0x01000000U, 24, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_8: RG_CSI0_RESERVE */
++	{ MT6878_SENINF_ANALOG, 0x20, 0x0000ffffU, 0, MT6878_PHY_LITERAL, 0x100 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_efuse[] = {
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0P_T0A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0x1b },
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0N_T0B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x8, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0x1b },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1P_T0C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0xc, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0x16 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1N_T1A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0xc, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0x16 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2P_T1B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x10, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0x11 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2N_T1C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x10, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0x11 },
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0P_T0A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x1008, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0xc },
++	/* CDPHY_RX_ANA_2: RG_CSI0_L0N_T0B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x1008, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0xc },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1P_T0C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x100c, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0x7 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_L1N_T1A_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x100c, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0x7 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2P_T1B_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x1010, 0x0000001fU, 0, MT6878_PHY_EFUSE, 0x2 },
++	/* CDPHY_RX_ANA_4: RG_CSI0_L2N_T1C_HSRT_CODE */
++	{ MT6878_SENINF_ANALOG, 0x1010, 0x00001f00U, 8, MT6878_PHY_EFUSE, 0x2 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_timing[] = {
++	/* DPHY_RX_DATA_LANE0_HS_PARAMETER: RG_CDPHY_RX_LD0_TRIO0_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2020, 0x03fc0000U, 18, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_DATA_LANE1_HS_PARAMETER: RG_CDPHY_RX_LD1_TRIO1_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2024, 0x03fc0000U, 18, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_DATA_LANE2_HS_PARAMETER: RG_CDPHY_RX_LD2_TRIO2_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2028, 0x03fc0000U, 18, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_DATA_LANE3_HS_PARAMETER: RG_CDPHY_RX_LD3_TRIO3_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x202c, 0x03fc0000U, 18, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_CLOCK_LANE0_HS_PARAMETER: RG_DPHY_RX_LC0_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2010, 0x00ff0000U, 16, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_CLOCK_LANE1_HS_PARAMETER: RG_DPHY_RX_LC1_HS_SETTLE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2014, 0x00ff0000U, 16, MT6878_PHY_SETTLE, 0x0 },
++	/* DPHY_RX_DATA_LANE0_HS_PARAMETER: RG_CDPHY_RX_LD0_TRIO0_HS_PREPARE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2020, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE1_HS_PARAMETER: RG_CDPHY_RX_LD1_TRIO1_HS_PREPARE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2024, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE2_HS_PARAMETER: RG_CDPHY_RX_LD2_TRIO2_HS_PREPARE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2028, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE3_HS_PARAMETER: RG_CDPHY_RX_LD3_TRIO3_HS_PREPARE_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x202c, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE0_HS_PARAMETER: RG_CDPHY_RX_LD0_TRIO0_HS_TRAIL_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2020, 0x0003ff00U, 8, MT6878_PHY_TRAIL, 0x0 },
++	/* DPHY_RX_DATA_LANE1_HS_PARAMETER: RG_CDPHY_RX_LD1_TRIO1_HS_TRAIL_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2024, 0x0003ff00U, 8, MT6878_PHY_TRAIL, 0x0 },
++	/* DPHY_RX_DATA_LANE2_HS_PARAMETER: RG_CDPHY_RX_LD2_TRIO2_HS_TRAIL_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x2028, 0x0003ff00U, 8, MT6878_PHY_TRAIL, 0x0 },
++	/* DPHY_RX_DATA_LANE3_HS_PARAMETER: RG_CDPHY_RX_LD3_TRIO3_HS_TRAIL_PARAMETER */
++	{ MT6878_SENINF_ANALOG, 0x202c, 0x0003ff00U, 8, MT6878_PHY_TRAIL, 0x0 },
++	/* DPHY_RX_DATA_LANE0_HS_PARAMETER: RG_CDPHY_RX_LD0_TRIO0_HS_TRAIL_EN */
++	{ MT6878_SENINF_ANALOG, 0x2020, 0x20000000U, 29, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE1_HS_PARAMETER: RG_CDPHY_RX_LD1_TRIO1_HS_TRAIL_EN */
++	{ MT6878_SENINF_ANALOG, 0x2024, 0x20000000U, 29, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE2_HS_PARAMETER: RG_CDPHY_RX_LD2_TRIO2_HS_TRAIL_EN */
++	{ MT6878_SENINF_ANALOG, 0x2028, 0x20000000U, 29, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_DATA_LANE3_HS_PARAMETER: RG_CDPHY_RX_LD3_TRIO3_HS_TRAIL_EN */
++	{ MT6878_SENINF_ANALOG, 0x202c, 0x20000000U, 29, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_CLOCK_LANE0_HS_PARAMETER: RG_DPHY_RX_LC0_HS_PREPARE_EN */
++	{ MT6878_SENINF_ANALOG, 0x2010, 0x10000000U, 28, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_CLOCK_LANE1_HS_PARAMETER: RG_DPHY_RX_LC1_HS_PREPARE_EN */
++	{ MT6878_SENINF_ANALOG, 0x2014, 0x10000000U, 28, MT6878_PHY_LITERAL, 0x0 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_post[] = {
++	/* CPHY_RX_DETECT_CTRL_POST: RG_CPHY_RX_DATA_VALID_POST_EN */
++	{ MT6878_SENINF_ANALOG, 0x3018, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x1 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_mac_top[] = {
++	/* CSIRX_MAC_TOP_CTRL: RG_8PIX_SHARE_16PIX_DATA */
++	{ MT6878_SENINF_ANALOG, 0x4000, 0x00010000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_TOP_PHY_CTRL_CSI0: PHY_SENINF_MUX0_DPHY_EN */
++	{ MT6878_SENINF_ANALOG, 0x4040, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_TOP_PHY_CTRL_CSI0: PHY_SENINF_MUX0_CPHY_EN */
++	{ MT6878_SENINF_ANALOG, 0x4040, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_TOP_PHY_CTRL_CSI0: RG_PHY_SENINF_MUX0_CPHY_MODE */
++	{ MT6878_SENINF_ANALOG, 0x4040, 0x00000300U, 8, MT6878_PHY_LITERAL, 0x0 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_mac_fixed[] = {
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_ECC_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_B2P_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_IMG_PACKET_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_SPEC_V2P0_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000020U, 5, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_MULTI_FRAME_VLD_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000080U, 7, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_MODE */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_LEN_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000200U, 9, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_DMY_EN */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x0000f000U, 12, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT_OPT */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x1f },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L0_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x50b8, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L1_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x50b8, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L2_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x50b8, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L3_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x50b8, 0x00000008U, 3, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_RAW8_PIXEL_DOUBLE */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00080000U, 19, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL2: RG_CSI2_DESKEW_BYPASS */
++	{ MT6878_SENINF_ANALOG, 0x5014, 0x01000000U, 24, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL2: RG_CSI2_SYNC_INIT_DESKEW_EN */
++	{ MT6878_SENINF_ANALOG, 0x5014, 0x02000000U, 25, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_SPARE: RG_CSI2_SPARE_0 */
++	{ MT6878_SENINF_ANALOG, 0x50f8, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_ECC_EN */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_B2P_EN */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_IMG_PACKET_EN */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_SPEC_V2P0_SEL */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000020U, 5, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_MULTI_FRAME_VLD_EN */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000080U, 7, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_MODE */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_LEN_SEL */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00000200U, 9, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_DMY_EN */
++	{ MT6878_SENINF_ANALOG, 0x6010, 0x0000f000U, 12, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT_OPT */
++	{ MT6878_SENINF_ANALOG, 0x6010, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT */
++	{ MT6878_SENINF_ANALOG, 0x6010, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x1f },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L0_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x60b8, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L1_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x60b8, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L2_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x60b8, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_G1_EN: RG_CSI2_DESKEW_FIFO_OVERFLOW_L3_IRQ_EN */
++	{ MT6878_SENINF_ANALOG, 0x60b8, 0x00000008U, 3, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_RAW8_PIXEL_DOUBLE */
++	{ MT6878_SENINF_ANALOG, 0x6004, 0x00080000U, 19, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL2: RG_CSI2_DESKEW_BYPASS */
++	{ MT6878_SENINF_ANALOG, 0x6014, 0x01000000U, 24, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL2: RG_CSI2_SYNC_INIT_DESKEW_EN */
++	{ MT6878_SENINF_ANALOG, 0x6014, 0x02000000U, 25, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_SPARE: RG_CSI2_SPARE_0 */
++	{ MT6878_SENINF_ANALOG, 0x60f8, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x0 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_mac[] = {
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_CPHY_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_EN: CSI2_LANE3_EN */
++	{ MT6878_SENINF_ANALOG, 0x5000, 0x00000008U, 3, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_EN: CSI2_LANE2_EN */
++	{ MT6878_SENINF_ANALOG, 0x5000, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_EN: CSI2_LANE1_EN */
++	{ MT6878_SENINF_ANALOG, 0x5000, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_EN: CSI2_LANE0_EN */
++	{ MT6878_SENINF_ANALOG, 0x5000, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_8_16_PIXEL_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00010000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_ECC_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_B2P_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_IMG_PACKET_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_SPEC_V2P0_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000020U, 5, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_MULTI_FRAME_VLD_EN */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000080U, 7, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_MODE */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_OPT: RG_CSI2_VS_OUTPUT_LEN_SEL */
++	{ MT6878_SENINF_ANALOG, 0x5004, 0x00000200U, 9, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x0000001fU, 0, MT6878_PHY_LITERAL, 0x1f },
++	/* CSIRX_MAC_CSI2_SIZE_CHK_CTRL0: full write */
++	{ MT6878_SENINF_ANALOG, 0x5300, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x2b0011 },
++	/* CSIRX_MAC_CSI2_SIZE_CHK_CTRL1: full write */
++	{ MT6878_SENINF_ANALOG, 0x5310, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x2b0111 },
++	/* CSIRX_MAC_CSI2_SIZE_CHK_CTRL2: full write */
++	{ MT6878_SENINF_ANALOG, 0x5320, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x2b0211 },
++	/* CSIRX_MAC_CSI2_SIZE_CHK_CTRL3: full write */
++	{ MT6878_SENINF_ANALOG, 0x5330, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x2c0011 },
++	/* CSIRX_MAC_CSI2_SIZE_CHK_CTRL4: full write */
++	{ MT6878_SENINF_ANALOG, 0x5340, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x2d0011 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_CYCLE_CNT_OPT */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_IRQ_EN: full write */
++	{ MT6878_SENINF_ANALOG, 0x50c0, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x80000000 },
++	/* CSIRX_MAC_CSI2_DBG_CTRL: RG_CSI2_DBG_PACKET_CNT_EN */
++	{ MT6878_SENINF_ANALOG, 0x50e0, 0x00020000U, 17, MT6878_PHY_LITERAL, 0x1 },
++	/* CSIRX_MAC_CSI2_HDR_MODE_0: RG_CSI2_HEADER_MODE */
++	{ MT6878_SENINF_ANALOG, 0x5008, 0x000000ffU, 0, MT6878_PHY_LITERAL, 0x2 },
++	/* CSIRX_MAC_CSI2_HDR_MODE_0: RG_CSI2_HEADER_LEN */
++	{ MT6878_SENINF_ANALOG, 0x5008, 0x00000700U, 8, MT6878_PHY_LITERAL, 0x4 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_DMY_CYCLE */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x0fff0000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_DMY_CNT */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0xf0000000U, 28, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_DMY_EN */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x0000f000U, 12, MT6878_PHY_LITERAL, 0x0 },
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_LRTE_EN */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x00000800U, 11, MT6878_PHY_LITERAL, 0x0 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_lrte_off[] = {
++	/* CSIRX_MAC_CSI2_RESYNC_MERGE_CTRL: RG_CSI2_RESYNC_LRTE_EN */
++	{ MT6878_SENINF_ANALOG, 0x5010, 0x00000800U, 11, MT6878_PHY_LITERAL, 0x0 },
++	/* CPHY_RX_CAL_ALP_CTRL: RG_CPHY_ALP_EN */
++	{ MT6878_SENINF_ANALOG, 0x3130, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x0 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_analog_setup[] = {
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_EN */
++	{ MT6878_SENINF_ANALOG, 0x0, 0x00100000U, 20, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_EN */
++	{ MT6878_SENINF_ANALOG, 0x1000, 0x00100000U, 20, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T0_HSMODE_EN */
++	{ MT6878_SENINF_ANALOG, 0x0, 0x00000040U, 6, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T1_HSMODE_EN */
++	{ MT6878_SENINF_ANALOG, 0x0, 0x00000080U, 7, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T0_HSMODE_EN */
++	{ MT6878_SENINF_ANALOG, 0x1000, 0x00000040U, 6, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_0: RG_CSI0_CPHY_T1_HSMODE_EN */
++	{ MT6878_SENINF_ANALOG, 0x1000, 0x00000080U, 7, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: full write */
++	{ MT6878_SENINF_ANALOG, 0x14, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x55 },
++	/* CDPHY_RX_ANA_5: full write */
++	{ MT6878_SENINF_ANALOG, 0x1014, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x55 },
++	/* CDPHY_RX_ANA_SETTING_0: full write */
++	{ MT6878_SENINF_ANALOG, 0xf0, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x322 },
++	/* CDPHY_RX_ANA_SETTING_0: full write */
++	{ MT6878_SENINF_ANALOG, 0x10f0, 0xffffffffU, 0, MT6878_PHY_WRITE, 0x322 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_EN */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_CSI0_ASYNC_OPTION */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x000000f0U, 4, MT6878_PHY_LITERAL, 0xc },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_PREPARE_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x000f0000U, 16, MT6878_PHY_LITERAL, 0x5 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x00f00000U, 20, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_NUM */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x00f00000U, 20, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_SETTING_1: AFIFO_DUMMY_VALID_GAP_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x3f000000U, 24, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_SETTING_0: CSR_ASYNC_FIFO_GATING_SEL */
++	{ MT6878_SENINF_ANALOG, 0xf0, 0x000000f0U, 4, MT6878_PHY_LITERAL, 0x2 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_EQ_DES_VREF_SEL */
++	{ MT6878_SENINF_ANALOG, 0xc, 0x03f00000U, 20, MT6878_PHY_LITERAL, 0x20 },
++	/* CDPHY_RX_ANA_3: RG_CSI0_EQ_DES_VREF_SEL */
++	{ MT6878_SENINF_ANALOG, 0x100c, 0x03f00000U, 20, MT6878_PHY_LITERAL, 0x20 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_BW */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000003U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_DG0_EN */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_SR0 */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x00000f00U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x18, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x14 },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x1c, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x14 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_IS */
++	{ MT6878_SENINF_ANALOG, 0x14, 0x0000000cU, 2, MT6878_PHY_LITERAL, 0x2 },
++	/* CDPHY_RX_ANA_14: RG_CSI0_CDPHY_EQ_OS_IS */
++	{ MT6878_SENINF_ANALOG, 0x38, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_BW */
++	{ MT6878_SENINF_ANALOG, 0x1014, 0x00000003U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_DG0_EN */
++	{ MT6878_SENINF_ANALOG, 0x1014, 0x00000010U, 4, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_SR0 */
++	{ MT6878_SENINF_ANALOG, 0x1014, 0x00000f00U, 8, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_6: RG_CSI0_CPHY_T0_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x1018, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x14 },
++	/* CDPHY_RX_ANA_7: RG_CSI0_CPHY_T1_CDR_CK_DELAY */
++	{ MT6878_SENINF_ANALOG, 0x101c, 0x1f000000U, 24, MT6878_PHY_LITERAL, 0x14 },
++	/* CDPHY_RX_ANA_5: RG_CSI0_CDPHY_EQ_IS */
++	{ MT6878_SENINF_ANALOG, 0x1014, 0x0000000cU, 2, MT6878_PHY_LITERAL, 0x2 },
++	/* CDPHY_RX_ANA_14: RG_CSI0_CDPHY_EQ_OS_IS */
++	{ MT6878_SENINF_ANALOG, 0x1038, 0x00000100U, 8, MT6878_PHY_LITERAL, 0x1 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_trios[] = {
++	/* CDPHY_RX_ANA_SETTING_1: RG_CSI0_ASYNC_OPTION */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x000000f0U, 4, MT6878_PHY_LITERAL, 0xc },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_EN */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x00f00000U, 20, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_SETTING_1: AFIFO_DUMMY_VALID_GAP_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x3f000000U, 24, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_PREPARE_NUM */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x000f0000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_SETTING_1: AFIFO_DUMMY_VALID_DESKEW_EN */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x40000000U, 30, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_SPLIT_EN */
++	{ MT6878_SENINF_ANALOG, 0xf4, 0x00000008U, 3, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_CSI0_ASYNC_OPTION */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x000000f0U, 4, MT6878_PHY_LITERAL, 0xc },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_EN */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_NUM */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x00f00000U, 20, MT6878_PHY_LITERAL, 0x4 },
++	/* CDPHY_RX_ANA_SETTING_1: AFIFO_DUMMY_VALID_GAP_NUM */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x3f000000U, 24, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ANA_SETTING_1: RG_AFIFO_DUMMY_VALID_PREPARE_NUM */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x000f0000U, 16, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ANA_SETTING_1: AFIFO_DUMMY_VALID_DESKEW_EN */
++	{ MT6878_SENINF_ANALOG, 0x10f4, 0x40000000U, 30, MT6878_PHY_LITERAL, 0x0 },
++	/* CDPHY_RX_ASYM_AFIFO_CTRL_0: L0_AFIFO_FLUSH_EN */
++	{ MT6878_SENINF_ANALOG, 0x100, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ASYM_AFIFO_CTRL_0: L2_AFIFO_FLUSH_EN */
++	{ MT6878_SENINF_ANALOG, 0x100, 0x00010000U, 16, MT6878_PHY_LITERAL, 0x1 },
++	/* CDPHY_RX_ASYM_AFIFO_CTRL_0: L0_AFIFO_FLUSH_EN */
++	{ MT6878_SENINF_ANALOG, 0x1100, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_VALID_PIPE_EN: CPHY_TRIO0_VALID_PIPE_EN */
++	{ MT6878_SENINF_ANALOG, 0x3168, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_VALID_PIPE_EN: CPHY_TRIO1_VALID_PIPE_EN */
++	{ MT6878_SENINF_ANALOG, 0x3168, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_VALID_PIPE_EN: CPHY_TRIO2_VALID_PIPE_EN */
++	{ MT6878_SENINF_ANALOG, 0x3168, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_RX_CTRL: CPHY_RX_TR0_LPRX_EN */
++	{ MT6878_SENINF_ANALOG, 0x3000, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_RX_CTRL: CPHY_RX_TR1_LPRX_EN */
++	{ MT6878_SENINF_ANALOG, 0x3000, 0x00000002U, 1, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_RX_CTRL: CPHY_RX_TR2_LPRX_EN */
++	{ MT6878_SENINF_ANALOG, 0x3000, 0x00000004U, 2, MT6878_PHY_LITERAL, 0x1 },
++	/* CPHY_RX_CTRL: CPHY_RX_TR3_LPRX_EN */
++	{ MT6878_SENINF_ANALOG, 0x3000, 0x00000008U, 3, MT6878_PHY_LITERAL, 0x0 },
++	/* DPHY_RX_SPARE0: full write */
++	{ MT6878_SENINF_ANALOG, 0x20f0, 0xffffffffU, 0, MT6878_PHY_WRITE, 0xf1 },
++	/* CPHY_RX_IRQ_EN: full write */
++	{ MT6878_SENINF_ANALOG, 0x30f0, 0xffffffffU, 0, MT6878_PHY_WRITE, 0xf },
++	/* CPHY_RX_IRQ_CLR: full write */
++	{ MT6878_SENINF_ANALOG, 0x30f4, 0xffffffffU, 0, MT6878_PHY_WRITE, 0xff0000 },
++};
++
++static const struct mt6878_phy_op mt6878_phy_seninf[] = {
++	/* SENINF_CSI2_CTRL: RG_SENINF_CSI2_EN */
++	{ MT6878_SENINF_BASE, 0x210, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++	/* SENINF_CTRL: SENINF_EN */
++	{ MT6878_SENINF_BASE, 0x200, 0x00000001U, 0, MT6878_PHY_LITERAL, 0x1 },
++};
++
++#define MT6878_PHY_TOP_CTRL2 0x4
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.c b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.c
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* CI targets this object explicitly in a temporary output tree. Never linked. */
++#include <linux/build_bug.h>
++#include <linux/compiler_attributes.h>
++#include <linux/kernel.h>
++
++#include "mt6878-seninf-phy.h"
++
++static_assert(ARRAY_SIZE(mt6878_phy_init) == 31);
++static_assert(ARRAY_SIZE(mt6878_phy_efuse) == 12);
++static_assert(ARRAY_SIZE(mt6878_phy_mac) == 28);
++static_assert(ARRAY_SIZE(mt6878_phy_trios) == 26);
++static_assert(sizeof(((struct mt6878_phy_inputs *)0)->lanes) ==
++	      3 * sizeof(unsigned int));
++
++static int __maybe_unused mt6878_seninf_phy_smoke_validate(
++	const struct mt6878_phy_backend *backend,
++	const struct mt6878_seninf_plan *plan,
++	const struct mt6878_phy_inputs *inputs)
++{
++	/* Pure validation only: no register, power, IRQ or sensor callbacks. */
++	return mt6878_phy_validate(backend, plan, inputs);
++}

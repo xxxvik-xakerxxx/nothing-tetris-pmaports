@@ -99,6 +99,8 @@ jobs:
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
       - name: Validate isolated modem power sequencing
         run: python3 scripts/check-mt6878-modem-power.py upstream/linux --native-ci
+      - name: Validate CCCI first-start backend
+        run: python3 patches/modem/check_first_start.py upstream/linux --vendor upstream/device-modules --native-ci
       - name: Validate read-only modem preflight
         run: |
           python3 scripts/check-mt6878-modem-preflight.py upstream/linux --native-ci
@@ -120,6 +122,11 @@ jobs:
           python3 patches/gpu/test_diagnostic_dt.py
           python3 patches/gpu/test_diagnostic_boot.py
           TETRIS_GPU_OBSERVER_TESTS=1 sh patches/gpu/run_native.sh
+      - name: Validate GPUEB-owned GPU power backend
+        run: |
+          export TETRIS_KERNEL_TREE="$PWD/upstream/linux"
+          export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
+          sh patches/gpu/run_gpueb_power_ci.sh
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py
@@ -153,6 +160,15 @@ jobs:
             --device-repo upstream/device-modules \
             --modules-repo upstream/connectivity-modules
           sh patches/camera-seninf/run-mux-tests.sh
+          python3 patches/camera-seninf/check-phy.py \
+            --device-repo upstream/device-modules \
+            --modules-repo upstream/connectivity-modules
+          sh patches/camera-seninf/run-phy-tests.sh
+      - name: Validate GNSS LNA metadata ownership
+        run: |
+          export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
+          export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
+          sh patches/gnss-navigation-audit/run_lna_metadata_ci.sh
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
       - name: Validate GNSS host callback and borrowed-output contracts

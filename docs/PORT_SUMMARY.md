@@ -2,6 +2,20 @@
 
 ## Combined candidate: r177
 
+Follow-on r178 is prepared locally for one combined CI qualification:
+dedicated CCCI first-start/runtime-PM and typed secure-call adapter, GPUEB-owned
+whole-GPU power transaction, calibrated SENINF PHY/MAC register program,
+and read-only GNSS LNA metadata. Hardware ownership/session validators and
+transport/DMA integration remain incomplete; none is automatic hardware support.
+All three new kernel backends are compiled in an isolated output tree only;
+shipping config and module packaging explicitly reject their activation.
+
+The GNSS DT no longer supplies unproven GPIO143/144 LNA states. Pinned B4.1
+sources and the cached stock base DT plus each of three stock DTBO choices
+provide no matching GPS wiring records. A successful metadata query is not
+physical wiring proof; without owned records it must fail, not return a default.
+See [stock DT audit](../patches/gnss-navigation-audit/STOCK_LNA_DT_PROVENANCE.md).
+
 Prepared together, not yet installed or advertised as working:
 
 - Modem: dedicated power-domain sequencing with checked bus protection,
@@ -21,12 +35,13 @@ Prepared together, not yet installed or advertised as working:
   AArch64 standalone first-config/query fixtures passed on the phone in a
   verified hardware-denying sandbox; these used synthetic inputs, not fixes.
 
-The r176 run [37925684468](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37925684468)
-stopped at native-test linking: Alpine GCC's ASan library had an unresolved
-`__sanitizer::struct_sock_fprog_sz` symbol. No new image was produced or
-flashed. Native fault tests move to Ubuntu, retaining ASan/UBSan; the pmOS
-image build stays on Alpine. CI compiles camera candidates with an isolated
-Media config. The install manifest now records the actually tested
+Current r177 CI [37930775277](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37930775277)
+at `0f60b775fa3848057579296dddac5027f4c590ab` passed native validation and
+AArch64 Bionic fixture builds; full kernel/image compilation is still pending.
+Earlier fixture path, patch hunk count and isolated Media parent-config errors
+were repaired without suppressing warnings or sanitizers. No r177 image has
+been flashed. Native fault tests use Ubuntu with ASan/UBSan; the pmOS image
+build stays on Alpine. The install manifest records the actually tested
 U-Boot `dcb20ce71f`, not the older loader pin. Local checks do not replace
 hardware qualification: SIM/calls, GPS fixes, accelerated rendering and
 camera capture are still not available.

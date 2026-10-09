@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=177
+pkgrel=178
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -155,17 +155,21 @@ source="
 	0113-pmdomain-mediatek-mt6878-modem-power.patch
 	0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch
 	0116-arm64-dts-tetris-modem-preflight-diagnostic.patch
+	0117-soc-mediatek-mt6878-ccci-first-start-backend.patch
+	0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch
 	0106-media-i2c-imx882-check-shutdown.patch
 	0107-media-i2c-imx882-hold-clock-rate.patch
 	0112-media-i2c-imx882-v4l2-controls.patch
 	0114-media-platform-mediatek-mt6878-seninf-graph.patch
 	0115-media-platform-mediatek-mt6878-seninf-transaction-backend.patch
+	0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
 	1003-vendor-gnss-v051-readonly-uapi.patch.vendor
 	1004-vendor-gnss-finalize-fsm-records.patch.vendor
 	1005-vendor-gnss-propagate-clock-read-error.patch.vendor
+	1006-vendor-gnss-readonly-lna-metadata.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
 	1103-vendor-audio-mt6685-clock.patch.vendor
@@ -212,22 +216,36 @@ _build_imx882_stream_compile_only() (
 		-e MEDIA_SUPPORT -e MEDIA_CAMERA_SUPPORT -e VIDEO_DEV \
 		-e MEDIA_PLATFORM_SUPPORT -e MEDIA_PLATFORM_DRIVERS \
 		-e MEDIA_CONTROLLER -e VIDEO_V4L2_SUBDEV_API -e V4L2_FWNODE \
-		-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH
+		-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH \
+		-m MTK_MT6878_CCCI_FIRST_START -m MTK_MT6878_GPUEB_POWER
 	make -j"$_jobs" -C "$builddir" O="$_out" \
 		ARCH="$_carch" LLVM=1 olddefconfig
 	grep -Fxq 'CONFIG_VIDEO_IMX882_TETRIS=m' "$_out/.config" || \
 		die "IMX882 stream dependencies were not enabled in isolated CI config"
 	grep -Fxq 'CONFIG_VIDEO_MT6878_SENINF_GRAPH=m' "$_out/.config" || \
 		die "SENINF graph dependencies were not enabled in isolated CI config"
+	grep -Fxq 'CONFIG_MTK_MT6878_CCCI_FIRST_START=m' "$_out/.config" || \
+		die "CCCI first-start dependencies were not enabled in isolated CI config"
+	grep -Fxq 'CONFIG_MTK_MT6878_GPUEB_POWER=m' "$_out/.config" || \
+		die "GPUEB dependencies were not enabled in isolated CI config"
 	make -j"$_jobs" -C "$builddir" O="$_out" \
 		ARCH="$_carch" LLVM=1 drivers/media/i2c/imx882-tetris-stream.o \
-		drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o
+		drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o \
+		drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.o \
+		drivers/soc/mediatek/mt6878-ccci-start.o \
+		drivers/pmdomain/mediatek/mt6878-gpueb-power.o
 	test -s "$_out/drivers/media/i2c/imx882-tetris-stream.o" || \
 		die "IMX882 stream compile-only object is missing"
 	test ! -e "$_out/drivers/media/i2c/imx882-tetris-stream.ko" || \
 		die "IMX882 stream gate must not produce a runtime module"
 	test -s "$_out/drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o" || \
 		die "SENINF graph compile-only object is missing"
+	for _object in drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke \
+		drivers/soc/mediatek/mt6878-ccci-start \
+		drivers/pmdomain/mediatek/mt6878-gpueb-power; do
+		test -s "$_out/$_object.o" || die "compile-only object missing: $_object"
+		test ! -e "$_out/$_object.ko" || die "unexpected runtime module: $_object"
+	done
 )
 
 prepare() {
@@ -237,6 +255,9 @@ prepare() {
 	_build_imx882_stream_compile_only
 	cp "$srcdir/config-$_flavor.$arch" .config
 	make ARCH="$_carch" LLVM=1 olddefconfig
+	if grep -Eq '^CONFIG_(MTK_MT6878_CCCI_FIRST_START|MTK_MT6878_GPUEB_POWER|VIDEO_MT6878_SENINF_GRAPH|VIDEO_IMX882_TETRIS)=(y|m)$' .config; then
+		die "unqualified bring-up backends must remain compile-only"
+	fi
 
 	mkdir -p "$_android_top"/vendor/mediatek/kernel_modules
 	ln -snf "$_connmods_dir"/connectivity \
@@ -253,6 +274,8 @@ prepare() {
 	sed -i 's/\r$//' "$_connmods_dir"/connectivity/gps/data_link/linux/gps_dl_linux_clock_mng.c
 	patch -p1 -d "$_connmods_dir" \
 		< "$srcdir"/1005-vendor-gnss-propagate-clock-read-error.patch.vendor
+	patch -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1006-vendor-gnss-readonly-lna-metadata.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -971,6 +994,12 @@ package() {
 		-print -quit | grep -q .; then
 		die "compile-only MT6878 camera clock module must not be packaged"
 	fi
+	for _module in mt6878-ccci-start mt6878-gpueb-power \
+		mt6878-seninf-graph mt6878-seninf-phy-smoke imx882-tetris-stream; do
+		if find "$pkgdir/lib/modules" -name "$_module.ko*" -print -quit | grep -q .; then
+			die "unqualified compile-only module must not be packaged: $_module"
+		fi
+	done
 	install -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \
 		"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
 	for _dtb in mt6878-nothing-tetris-vgpu-observe \
@@ -1028,6 +1057,10 @@ package() {
 }
 
 sha512sums="
+e1f76fc78c45dd52dc69c14b87bb9d38997663f2c58c8e6bb06c4f5e2e70564a78443d045259311a5c4bbcf1015acc70423e2dc5e830ff3508687bd5f8bdbfa0  0117-soc-mediatek-mt6878-ccci-first-start-backend.patch
+3e96a730f5f9aeda2d6c600ae262d446bce5e034c146899c9afb0300ce468f1243d78caa5fa7ded3d6f8ab88800a91482e9e016ba8a2d5d3de30f9cbb5b75e0b  1006-vendor-gnss-readonly-lna-metadata.patch.vendor
+7fa3f0839728031e7645e40ea5e1a868b3a7b8a4d78e305648084b4c909b1b7b7ce827152c95f9a7622c88c534dd39868583f83fa495b46200251f1d4d943b6f  0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch
+862ce461d6433a8136f639e401a2ca80e03e881ba3476cd208e2e2581b6a2b564cac95d0b98333dd19e64577bd55037929728f7e39bddccea57ad70688e568f8  0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch
 5a9621efc110bcc1dbea670573ebaddf764599d167b2836786bd34d2bc31a365556f15f6502ad558a1ac24f5b2c16ad6e12e8cf7df59a125828786cce0a4a139  0114-regulator-mt6315-read-only-vgpu-observer.patch
 3740247157560615aa7ea93231d5a653cee2fc834c23db3121be16a8d50824e74e4b6718d5b15a7c1d12872c7ba77b5e2ed8379de6f5edb5b9bbfa4ff52000ac  0112-arm64-dts-tetris-disabled-gpu-supplies.patch
 277b4c46fb3dcfee3be4e33a10e43ba2d19458f71920d89904a089961c14d10e0f94d6c2d8aaa0bbb669c0aad0ced76135d90a8c43afcd36311e90973d86148a  0113-regulator-mt6315-reject-unowned-phase-mask.patch
@@ -1075,7 +1108,7 @@ c5570f69e01ab1f423403357ab8baee4b495b0ddb3f203772ac5945212171b22e3f4d04dd86768da
 95e47b8f1036ae81358a8f2ade0c9350e7dc1e82195273149bf6b5cbe17f0e93b1f97a94fa36c12665ecfa490c0c90c23e2f4899ea6b7961871501796b1ba0fb  0018-pmdomain-mediatek-mt6878-audio.patch
 10f9e8f506bd2ae4f97e0d4326b660b7f428dff92fdac0827e8e9ceec51e68529190b0892ad0d7df911d7a99b9bcf021eeab002d757546081ae706538ffc0c24  0019-arm64-dts-mt6878-shallow-cpuidle.patch
 795b6e17a16b2534666ba006e1489edc377a4a0e67cb674ae6bfc850d936fd40567e75d8f44d9b09371d8003293ae49f0e3782dc3658a4dbc770326ef47946f9  0044-arm64-dts-mediatek-mt6878-cluster-cpuidle.patch
-13dc2cf84d6c1a5876a7d353dde9b07f5909111e511ec55d166f0966755206d3764b26c6897b4ff0d0da84b9252a3f0643dc545f2aae7971aa436b451f823b31  0020-arm64-dts-mt6878-gnss.patch
+84b5c997df129601c814645a55153ed1c059574ef563d6434372b50c5900f15dfbac32bd09f388a4cd06ed5d7360978d82220e7254618e564571eb3c7d47e864  0020-arm64-dts-mt6878-gnss.patch
 51e01558bf1ca92d17ad80540ebbea4bd684a1c2145123bd7163df03d61571bab924118858d42537225257c2c139ee17d5b2fd23373dbd4c30c79c8e45ed0760  0021-usb-mtu3-native-role-switch.patch
 34bf0f700863d0298d2105778bf0144ee9ed3cbbc6e622a5532b56aae711f40187531998032a91149402cd2e959282e7e7b4f4f2bd37b42978f3d3f72b27f6b9  0022-thermal-mediatek-mt6878-lvts.patch
 fcce5e11432c7226ae70bab8f9e660feacd62b01fb39699be471b1ff8a73390a1b6aa9cead1dad950021eaf52deaa49186d2ea6b47f51c80e9bdad045f665084  0040-thermal-mediatek-mt6878-read-latched-msr.patch

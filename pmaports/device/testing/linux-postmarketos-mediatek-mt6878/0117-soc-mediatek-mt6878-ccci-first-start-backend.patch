@@ -1,0 +1,417 @@
+From: Tetris port maintainers
+Subject: [PATCH] soc: mediatek: add disabled MT6878 CCCI first-start backend
+
+Source: Nothing B4.1 device modules ee2be53cb75670b548948636a0db1d1ff112bf12,
+md_sys1_platform.c, modem_sys1.c, modem_secure_base.h and mt6878.dts.
+Secure POWER semantics: declared ATF payload SHA256
+05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e,
+tested by patches/modem/test-atf-power-contract.py.
+
+Library only, default off, no probe/DT/autostart. A transport owner must
+provide real authenticated-handoff, exclusive-OFF/boot-inhibit and pre-release
+validators; no DT boolean or fabricated readiness tag is accepted here.
+Handle only the B4.1 gen99 default power flow. Additional source-clock/PLL
+options fail closed rather than executing unaudited SMC operations.
+
+Use the actual dedicated modem genpd through runtime PM, Linux regulator
+consumers and the typed kernel SiP boundary. POWER/2 a0 is flag data, not
+errno; POWER/3 is a done predicate. Omit selector-mutating POWER/4 and the
+no-op POWER/8. Never operate reset_b or LK POWER/5. Retain the first failure
+and any acquired runtime reference; there is no speculative rollback,
+unload-time shutdown, retry, success-by-timeout or kernel firmware-ready claim.
+
+diff --git a/drivers/soc/mediatek/Kconfig b/drivers/soc/mediatek/Kconfig
+--- a/drivers/soc/mediatek/Kconfig
++++ b/drivers/soc/mediatek/Kconfig
+@@ -7,3 +7,14 @@
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+ 
++config MTK_MT6878_CCCI_FIRST_START
++	tristate "MT6878 CCCI first-start transaction backend"
++	depends on ARCH_MEDIATEK && ARM64 && HAVE_ARM_SMCCC
++	depends on PM && REGULATOR && MTK_SCPSYS_PM_DOMAINS
++	help
++	  Disabled-by-default library for a future authenticated CCCI transport
++	  owner. Has no platform probe, DT enable or automatic start. Validators
++	  must prove authenticated memory, EMI/remap, secure profile/admission,
++	  exclusive OFF ownership, retained boot inhibition and transport readiness.
++	  Missing evidence rejects start. Failures require controlled cold recovery.
++
+ config MTK_CMDQ
+diff --git a/drivers/soc/mediatek/Makefile b/drivers/soc/mediatek/Makefile
+--- a/drivers/soc/mediatek/Makefile
++++ b/drivers/soc/mediatek/Makefile
+@@ -1,2 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_MTK_MT6878_CCCI_FIRST_START) += mt6878-ccci-start.o
+ obj-$(CONFIG_MTK_CMDQ) += mtk-cmdq-helper.o
+diff --git a/include/linux/soc/mediatek/mt6878_ccci_start.h b/include/linux/soc/mediatek/mt6878_ccci_start.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878_ccci_start.h
+@@ -0,0 +1,50 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_CCCI_START_H
++#define MT6878_CCCI_START_H
++#include <linux/types.h>
++struct device;
++struct mt6878_ccci_start;
++enum mt6878_ccci_start_gate {
++	/* Auth/EMI/remap, pinned ATF admission and safe NS SPM/IFR/NEMI/TOP access. */
++	MT6878_CCCI_AUTHENTICATED_HANDOFF,
++	/* Sole owner, settled physical OFF, no ATF repower; inhibit through release. */
++	MT6878_CCCI_EXCLUSIVE_OFF_BOOT_INHIBITED,
++	/* Exclusive rail/clock mutation authority and electrical sequencing proof. */
++	MT6878_CCCI_BEFORE_RESOURCES,
++	MT6878_CCCI_BEFORE_POWER,
++	MT6878_CCCI_BEFORE_EXECUTION,
++};
++enum mt6878_ccci_start_stage {
++	MT6878_CCCI_AUTH, MT6878_CCCI_PROFILE, MT6878_CCCI_BINDING,
++	MT6878_CCCI_BROM_DONE, MT6878_CCCI_BROM_FLAGS, MT6878_CCCI_OFF,
++	MT6878_CCCI_RESOURCES_GATE, MT6878_CCCI_RAILS, MT6878_CCCI_CLOCK, MT6878_CCCI_PREPOWER,
++	MT6878_CCCI_FLIGHT, MT6878_CCCI_POWER, MT6878_CCCI_POWER_ACK,
++	MT6878_CCCI_TRANSPORT, MT6878_CCCI_RELEASE_GATE,
++	MT6878_CCCI_RELEASE, MT6878_CCCI_COMPLETE,
++};
++struct mt6878_ccci_start_callbacks {
++	/* Trusted kernel validators, not DT flags or callbacks returning dummy success. */
++	/* Acquire exclusive ownership before success; retain it until cold recovery. */
++	/* BEFORE_POWER also proves flight callback effects/admission and no early boot. */
++	int (*verify)(struct device *dev, void *owner, enum mt6878_ccci_start_gate gate);
++	/* Allocate/validate host transport first; access powered MD registers only here. */
++	int (*prepare_transport)(struct device *dev, void *owner);
++};
++struct mt6878_ccci_start_result {
++	enum mt6878_ccci_start_stage stage;
++	int first_error;
++	u64 secure[4];
++	u32 power_state[5];
++	u8 power_reads; /* Valid prefix of the most recent five-read snapshot. */
++	bool runtime_reference;
++	bool execution_release_attempted; /* SMC failure can leave execution uncertain. */
++	bool execution_released;
++};
++/* Allocation does not acquire regulators, map MMIO, issue SMC or attach genpd. */
++struct mt6878_ccci_start *mt6878_ccci_start_alloc(struct device *dev, void *owner,
++				const struct mt6878_ccci_start_callbacks *callbacks);
++int mt6878_ccci_first_start(struct mt6878_ccci_start *start);
++/* Serialized snapshot: does not read hardware or re-execute the transaction. */
++void mt6878_ccci_start_result(struct mt6878_ccci_start *start,
++			     struct mt6878_ccci_start_result *result);
++#endif
+diff --git a/drivers/soc/mediatek/mt6878-ccci-start.c b/drivers/soc/mediatek/mt6878-ccci-start.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/soc/mediatek/mt6878-ccci-start.c
+@@ -0,0 +1,310 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/arm-smccc.h>
++#include <linux/atomic.h>
++#include <linux/err.h>
++#include <linux/limits.h>
++#include <linux/module.h>
++#include <linux/mfd/syscon.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/pm_runtime.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <linux/slab.h>
++#include <linux/soc/mediatek/mt6878_ccci_start.h>
++
++#define MT6878_CCCI_FID 0xc2000505
++#define MT6878_CCCI_POWER_REQUEST 6
++#define MT6878_CCCI_FLIGHT_REQUEST 7
++static atomic_t mt6878_ccci_attempted = ATOMIC_INIT(0);
++
++struct mt6878_ccci_start {
++	struct device *dev;
++	void *owner;
++	struct mt6878_ccci_start_callbacks callbacks;
++	struct mutex lock;
++	bool attempted;
++	struct mt6878_ccci_start_result result;
++	struct regmap *spm, *ifr, *nemi, *top;
++	struct regulator *rails[3];
++};
++
++static int mt6878_ccci_smc(struct mt6878_ccci_start *s, u32 request, u32 command)
++{
++	struct arm_smccc_res res;
++
++	/* No generic raw-SMC interface: exactly three power calls and flight OFF. */
++	if (!((request == MT6878_CCCI_POWER_REQUEST && (command == 0 || command == 2 || command == 3)) ||
++	      (request == MT6878_CCCI_FLIGHT_REQUEST && command == 0)))
++		return -EINVAL;
++	arm_smccc_smc(MT6878_CCCI_FID, request, command, 0, 0, 0, 0, 0, &res);
++	s->result.secure[0] = res.a0;
++	s->result.secure[1] = res.a1;
++	s->result.secure[2] = res.a2;
++	s->result.secure[3] = res.a3;
++	return 0;
++}
++
++static int mt6878_ccci_map(struct device_node *node, const char *compatible,
++			    resource_size_t address, struct regmap **map)
++{
++	struct resource resource, extra;
++	int ret;
++
++	if (!node || !of_device_is_compatible(node, compatible) ||
++	    !of_device_is_compatible(node, "syscon") ||
++	    of_property_present(node, "clocks") || of_property_present(node, "resets") ||
++	    of_property_present(node, "hwlocks"))
++		return -EINVAL;
++	ret = of_address_to_resource(node, 0, &resource);
++	if (ret)
++		return ret;
++	if (resource.start != address || resource_size(&resource) != 0x1000 ||
++	    !of_address_to_resource(node, 1, &extra))
++		return -EINVAL;
++	*map = device_node_to_regmap(node);
++	return IS_ERR(*map) ? PTR_ERR(*map) : 0;
++}
++
++static int mt6878_ccci_bind(struct mt6878_ccci_start *s)
++{
++	struct device_node *np = s->dev->of_node, *parent, *ifr, *nemi, *top;
++	struct of_phandle_args args;
++	int ret;
++
++	if (!s->dev->pm_domain || !pm_runtime_enabled(s->dev) ||
++	    !pm_runtime_status_suspended(s->dev) || atomic_read(&s->dev->power.usage_count))
++		return -EBUSY;
++	if (of_count_phandle_with_args(np, "power-domains", "#power-domain-cells") != 1)
++		return -EINVAL;
++	ret = of_parse_phandle_with_args(np, "power-domains", "#power-domain-cells", 0, &args);
++	if (ret)
++		return ret;
++	if (args.args_count != 1 || args.args[0] ||
++	    !of_device_is_compatible(args.np, "mediatek,mt6878-modem-power-controller") ||
++	    !of_device_is_available(args.np) ||
++	    of_count_phandle_with_args(args.np, "access-controllers", NULL) != 2) {
++		of_node_put(args.np);
++		return -EINVAL;
++	}
++	parent = of_get_parent(args.np);
++	ifr = of_parse_phandle(args.np, "access-controllers", 0);
++	nemi = of_parse_phandle(args.np, "access-controllers", 1);
++	top = of_parse_phandle(np, "ccci-topckgen", 0);
++	ret = mt6878_ccci_map(parent, "mediatek,mt6878-scpsys", 0x1c001000, &s->spm);
++	if (!ret)
++		ret = mt6878_ccci_map(ifr, "mediatek,mt6878-infracfg-ao", 0x10001000, &s->ifr);
++	if (!ret)
++		ret = mt6878_ccci_map(nemi, "mediatek,mt6878-nemicfg_ao_mem_reg_bus", 0x10270000, &s->nemi);
++	if (!ret)
++		ret = mt6878_ccci_map(top, "mediatek,mt6878-topckgen", 0x10000000, &s->top);
++	of_node_put(top);
++	of_node_put(nemi);
++	of_node_put(ifr);
++	of_node_put(parent);
++	of_node_put(args.np);
++	return ret;
++}
++
++static int mt6878_ccci_state(struct mt6878_ccci_start *s, bool powered)
++{
++	struct regmap *maps[] = {s->spm, s->spm, s->ifr, s->ifr, s->nemi};
++	static const u32 offsets[] = {0xe00, 0xf24, 0xc5c, 0xc4c, 0x8c};
++	u32 *values = s->result.power_state;
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(offsets); i++) {
++		s->result.power_reads = i;
++		ret = regmap_read(maps[i], offsets[i], &values[i]);
++		if (ret)
++			return ret;
++	}
++	s->result.power_reads = ARRAY_SIZE(offsets);
++	if ((values[0] & (GENMASK(31, 30) | BIT(2))) !=
++	    (powered ? GENMASK(31, 30) | BIT(2) : 0) ||
++	    (values[1] & 3) != (powered ? 0 : 3) ||
++	    (values[2] & BIT(9)) != (powered ? 0 : BIT(9)) ||
++	    (values[3] & BIT(11)) != (powered ? 0 : BIT(11)) ||
++	    (values[4] & (BIT(6) | BIT(7))) != (powered ? 0 : BIT(6) | BIT(7)))
++		return -EBUSY;
++	return 0;
++}
++
++static int mt6878_ccci_rails(struct mt6878_ccci_start *s)
++{
++	static const char * const names[] = {"md-vmodem", "md-vsram", "md-vdigrf"};
++	static const char * const supplies[] = {
++		"md-vmodem-supply", "md-vsram-supply", "md-vdigrf-supply"
++	};
++	static const u32 voltage[] = {800000, 800000, 700000};
++	struct device_node *supply;
++	u32 pair[2];
++	unsigned int i;
++	int ret;
++
++	/* Validate/acquire every rail before modifying any rail. */
++	for (i = 0; i < ARRAY_SIZE(names); i++) {
++		/* Do not permit regulator core dummy supplies to stand in for hardware. */
++		supply = of_parse_phandle(s->dev->of_node, supplies[i], 0);
++		if (!supply)
++			return -EINVAL;
++		of_node_put(supply);
++		if (of_property_count_u32_elems(s->dev->of_node, names[i]) != 2)
++			return -EINVAL;
++		ret = of_property_read_u32_array(s->dev->of_node, names[i], pair, 2);
++		if (ret)
++			return ret;
++		if (pair[0] != voltage[i] || pair[1] != voltage[i])
++			return -EOPNOTSUPP;
++		s->rails[i] = devm_regulator_get(s->dev, names[i]);
++		if (IS_ERR(s->rails[i]))
++			return PTR_ERR(s->rails[i]);
++	}
++	for (i = 0; i < ARRAY_SIZE(names); i++) {
++		ret = regulator_set_voltage(s->rails[i], voltage[i], voltage[i]);
++		if (ret)
++			return ret;
++		ret = regulator_sync_voltage(s->rails[i]);
++		if (ret)
++			return ret;
++	}
++	return 0;
++}
++
++static int mt6878_ccci_profile(struct device *dev)
++{
++	u32 value;
++	int ret;
++
++	if (!of_machine_is_compatible("nothing,tetris") ||
++	    !of_device_is_compatible(dev->of_node, "mediatek,mddriver"))
++		return -ENODEV;
++	ret = of_property_read_u32(dev->of_node, "mediatek,ap-plat-info", &value);
++	if (ret || value != 6878)
++		return ret ? ret : -EOPNOTSUPP;
++	ret = of_property_read_u32(dev->of_node, "mediatek,md-generation", &value);
++	if (ret || value != 6299)
++		return ret ? ret : -EOPNOTSUPP;
++	if (of_property_present(dev->of_node, "mediatek,power-flow-config")) {
++		ret = of_property_read_u32(dev->of_node, "mediatek,power-flow-config", &value);
++		if (ret || value)
++			return ret ? ret : -EOPNOTSUPP;
++	}
++	if (of_property_present(dev->of_node, "md-vnr-supply") ||
++	    of_property_present(dev->of_node, "md-vmdfe-supply"))
++		return -EOPNOTSUPP;
++	return 0;
++}
++
++struct mt6878_ccci_start *mt6878_ccci_start_alloc(struct device *dev, void *owner,
++				const struct mt6878_ccci_start_callbacks *callbacks)
++{
++	struct mt6878_ccci_start *s;
++
++	if (!dev || !callbacks || !callbacks->verify || !callbacks->prepare_transport)
++		return ERR_PTR(-EINVAL);
++	s = devm_kzalloc(dev, sizeof(*s), GFP_KERNEL);
++	if (!s)
++		return ERR_PTR(-ENOMEM);
++	s->dev = dev;
++	s->owner = owner;
++	s->callbacks = *callbacks;
++	mutex_init(&s->lock);
++	return s;
++}
++EXPORT_SYMBOL_GPL(mt6878_ccci_start_alloc);
++
++static int mt6878_ccci_execute(struct mt6878_ccci_start *s)
++{
++	u64 *secure = s->result.secure;
++	u32 clock;
++	unsigned int i;
++	int ret;
++
++#define STEP(stage, operation) do { s->result.stage = MT6878_CCCI_##stage; \
++	ret = (operation); if (ret) return ret < 0 ? ret : -EPROTO; } while (0)
++	STEP(AUTH, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_AUTHENTICATED_HANDOFF));
++	STEP(PROFILE, mt6878_ccci_profile(s->dev));
++	/* Ownership must precede mapping and every secure/MD-related read. */
++	STEP(OFF, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_EXCLUSIVE_OFF_BOOT_INHIBITED));
++	STEP(BINDING, mt6878_ccci_bind(s));
++	STEP(BROM_DONE, mt6878_ccci_smc(s, MT6878_CCCI_POWER_REQUEST, 3));
++	if (secure[0] != 0 || secure[1] != 1 || secure[2] != 1 || secure[3] != 1)
++		return secure[0] == 1 ? -EAGAIN : -EPROTO;
++	STEP(BROM_FLAGS, mt6878_ccci_smc(s, MT6878_CCCI_POWER_REQUEST, 2));
++	for (i = 0; i < 4; i++) {
++		if (secure[i] > U32_MAX)
++			return -EPROTO;
++		if (secure[i] != 1)
++			return -ENODATA; /* a0 is flag_1, including legitimate 0xffffffff. */
++	}
++	STEP(OFF, mt6878_ccci_state(s, false));
++	STEP(RESOURCES_GATE, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_BEFORE_RESOURCES));
++	STEP(RAILS, mt6878_ccci_rails(s));
++	STEP(CLOCK, regmap_clear_bits(s->top, 0, BIT(8) | BIT(9)));
++	STEP(CLOCK, regmap_read(s->top, 0, &clock));
++	if (clock & (BIT(8) | BIT(9)))
++		return -EIO;
++	STEP(PREPOWER, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_BEFORE_POWER));
++	STEP(FLIGHT, mt6878_ccci_smc(s, MT6878_CCCI_FLIGHT_REQUEST, 0));
++	if (secure[0])
++		return -EPROTO;
++	s->result.stage = MT6878_CCCI_POWER;
++	ret = pm_runtime_resume_and_get(s->dev);
++	if (ret < 0)
++		return ret;
++	s->result.runtime_reference = true;
++	STEP(POWER_ACK, mt6878_ccci_state(s, true));
++	STEP(TRANSPORT, s->callbacks.prepare_transport(s->dev, s->owner));
++	STEP(RELEASE_GATE, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_BEFORE_EXECUTION));
++	s->result.execution_release_attempted = true;
++	STEP(RELEASE, mt6878_ccci_smc(s, MT6878_CCCI_POWER_REQUEST, 0));
++	if (secure[0] || secure[1] > U32_MAX || secure[2] > U32_MAX || secure[3] != 1)
++		return -EPROTO;
++	s->result.execution_released = true;
++	s->result.stage = MT6878_CCCI_COMPLETE;
++	return 0;
++#undef STEP
++}
++
++int mt6878_ccci_first_start(struct mt6878_ccci_start *s)
++{
++	int ret;
++
++	if (IS_ERR_OR_NULL(s))
++		return -EINVAL;
++	mutex_lock(&s->lock);
++	if (s->attempted) {
++		ret = s->result.first_error ? s->result.first_error : -EALREADY;
++		goto out;
++	}
++	s->attempted = true;
++	if (atomic_cmpxchg(&mt6878_ccci_attempted, 0, 1)) {
++		ret = -EALREADY;
++	} else {
++		ret = mt6878_ccci_execute(s);
++	}
++	if (ret) {
++		s->result.first_error = ret;
++		dev_err(s->dev, "CCCI first-start first-fault stage=%u error=%d; cold recovery required\n",
++			s->result.stage, ret);
++	}
++out:
++	mutex_unlock(&s->lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_ccci_first_start);
++
++void mt6878_ccci_start_result(struct mt6878_ccci_start *s,
++			     struct mt6878_ccci_start_result *result)
++{
++	if (IS_ERR_OR_NULL(s) || !result)
++		return;
++	mutex_lock(&s->lock);
++	*result = s->result;
++	mutex_unlock(&s->lock);
++}
++EXPORT_SYMBOL_GPL(mt6878_ccci_start_result);
++MODULE_LICENSE("GPL");

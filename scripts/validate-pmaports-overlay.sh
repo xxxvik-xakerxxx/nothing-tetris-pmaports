@@ -950,6 +950,13 @@ validate_compile_only_boundaries() {
 		return 1
 	fi
 	grep -Fq '_build_camera_clk_compile_only' "$kernel_apkbuild"
+	cmp -s "$kernel_pkg/1006-vendor-gnss-readonly-lna-metadata.patch.vendor" \
+		"$repo_root/patches/gnss-navigation-audit/0002-gps-mcudl-query-owned-lna-metadata.patch"
+	if grep -Eq '^\+.*(gps_l[15]_lna|PINMUX_GPIO14[34]|pinctrl-)' \
+		"$kernel_pkg/0020-arm64-dts-mt6878-gnss.patch"; then
+		echo "Tetris GNSS transport must not enable unproven external LNA wiring" >&2
+		return 1
+	fi
 	_stream_config=$(sed -n '/^_build_imx882_stream_compile_only()/,/^)/p' "$kernel_apkbuild")
 	printf '%s\n' "$_stream_config" | grep -Fq -- '-e MEDIA_PLATFORM_SUPPORT -e MEDIA_PLATFORM_DRIVERS'
 	printf '%s\n' "$_stream_config" | grep -Fq -- '-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH'

@@ -1,0 +1,228 @@
+From: GNSS offline audit
+Subject: [PATCH] gps: answer mcudl LNA query from validated GPS DT metadata
+
+Implement ioctl16 as read-only metadata, not GPIO control. Use the actual
+GPS owner's named L1 DSP state and MT6878 pin-function binding. Reject
+absent, malformed, ambiguous and wrong-controller records. No fallback
+pin, pinctrl_select_state, GPIO request, rail or register write is added.
+
+The MT6878 reference LNA block is disabled in the pinned vendor DTS;
+do not enable it or assume its pin numbers describe every Tetris board.
+Missing records fail the query, not the pre-existing GPS probe.
+
+Base: android_kernel_modules_nothing_mt6878
+e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+Offline candidate; kernel compilation and hardware validation pending.
+Includes the matching standalone-tested metadata decoder header.
+
+diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+--- a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
++++ b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+@@ -9,3 +9,5 @@
+ #include <linux/pinctrl/consumer.h>
++#include <linux/mutex.h>
++#include "gps_dl_lna_metadata.h"
+ 
+ #include <linux/module.h>
+@@ -389,3 +391,117 @@
+ }
+ 
++/* Cached metadata follows the existing singleton GPS platform owner. */
++static DEFINE_MUTEX(gps_dl_lna_metadata_lock);
++static struct device *gps_dl_lna_metadata_owner;
++/* Only driver-wide unregister can clear an ambiguous-owner latch. */
++static bool gps_dl_lna_metadata_conflict;
++static unsigned int gps_dl_lna_metadata_pin;
++static int gps_dl_lna_metadata_error = -ENODEV;
++
++int gps_dl_get_lna_pin(unsigned int *pin)
++{
++	int ret;
++
++	if (!pin)
++		return -EINVAL;
++	mutex_lock(&gps_dl_lna_metadata_lock);
++	ret = gps_dl_lna_metadata_error;
++	if (!ret)
++		*pin = gps_dl_lna_metadata_pin;
++	mutex_unlock(&gps_dl_lna_metadata_lock);
++	return ret;
++}
++
++static int gps_dl_lna_metadata_read(struct device *dev, unsigned int *pin)
++{
++	struct device_node *state, *child;
++	char property[24];
++	unsigned int mux;
++	int index, count = 0, ret = -ENODATA;
++
++	if (!dev->of_node || !of_device_is_available(dev->of_node))
++		return -ENODEV;
++	if (!of_device_is_compatible(dev->of_node, "mediatek,mt6878-gps"))
++		return -EOPNOTSUPP;
++	if (IS_ERR_OR_NULL(g_gps_dl_pinctrl_ptr) ||
++	    !g_gps_dl_pinctrl_state_struct_list[GPS_DL_L1_LNA_DSP_CTRL])
++		return -ENODEV;
++	index = of_property_match_string(dev->of_node, "pinctrl-names",
++					"gps_l1_lna_dsp_ctrl");
++	if (index < 0)
++		return -ENODATA;
++	snprintf(property, sizeof(property), "pinctrl-%d", index);
++	if (of_property_count_u32_elems(dev->of_node, property) != 1)
++		return -EINVAL;
++	state = of_parse_phandle(dev->of_node, property, 0);
++	if (!state)
++		return -ENODATA;
++	if (!of_device_is_available(state) || !state->parent ||
++	    !of_device_is_available(state->parent) ||
++	    !of_device_is_compatible(state->parent, "mediatek,mt6878-pinctrl")) {
++		ret = -EINVAL;
++		goto out;
++	}
++	for_each_available_child_of_node(state, child) {
++		if (++count != 1 || of_property_count_u32_elems(child, "pinmux") != 1) {
++			ret = -EINVAL;
++			of_node_put(child);
++			goto out;
++		}
++		ret = of_property_read_u32(child, "pinmux", &mux);
++		if (!ret)
++			ret = gps_dl_lna_decode_pinmux(mux, pin);
++		if (ret) {
++			of_node_put(child);
++			goto out;
++		}
++	}
++out:
++	of_node_put(state);
++	return ret;
++}
++
++static void gps_dl_lna_metadata_init(struct device *dev)
++{
++	unsigned int pin = 0;
++	int ret = gps_dl_lna_metadata_read(dev, &pin);
++
++	mutex_lock(&gps_dl_lna_metadata_lock);
++	if (gps_dl_lna_metadata_owner && gps_dl_lna_metadata_owner != dev)
++		gps_dl_lna_metadata_conflict = true;
++	if (gps_dl_lna_metadata_conflict) {
++		ret = -EBUSY;
++		gps_dl_lna_metadata_error = ret;
++	} else {
++		gps_dl_lna_metadata_owner = dev;
++		gps_dl_lna_metadata_error = ret;
++		if (!ret)
++			gps_dl_lna_metadata_pin = pin;
++	}
++	mutex_unlock(&gps_dl_lna_metadata_lock);
++	if (ret)
++		GDL_LOGW_INI("LNA metadata unavailable: %d", ret);
++}
++
++static void gps_dl_lna_metadata_remove(struct device *dev)
++{
++	mutex_lock(&gps_dl_lna_metadata_lock);
++	if (gps_dl_lna_metadata_owner == dev) {
++		gps_dl_lna_metadata_error = gps_dl_lna_metadata_conflict ? -EBUSY : -ENODEV;
++		gps_dl_lna_metadata_owner = NULL;
++	}
++	mutex_unlock(&gps_dl_lna_metadata_lock);
++}
++
++/* Called only after platform_driver_unregister has removed every owner. */
++static void gps_dl_lna_metadata_reset(void)
++{
++	mutex_lock(&gps_dl_lna_metadata_lock);
++	gps_dl_lna_metadata_owner = NULL;
++	gps_dl_lna_metadata_conflict = false;
++	gps_dl_lna_metadata_error = -ENODEV;
++	gps_dl_lna_metadata_pin = 0;
++	mutex_unlock(&gps_dl_lna_metadata_lock);
++}
++
+ bool gps_dl_get_iomem_by_name(struct platform_device *pdev, const char *p_name,
+@@ -571,3 +687,4 @@
+ 	}
+ 
++	gps_dl_lna_metadata_init(&pdev->dev);
+ 	GDL_LOGW_INI("do gps_dl_probe");
+@@ -585,3 +702,4 @@
+ 	struct gps_each_device *p_each_dev = gps_dl_device_get(GPS_DATA_LINK_ID0);
+ 
++	gps_dl_lna_metadata_remove(&pdev->dev);
+ 	GDL_LOGW_INI("do gps_dl_remove");
+@@ -707,3 +825,4 @@
+ 	platform_driver_unregister(&gps_dl_dev_drv);
++	gps_dl_lna_metadata_reset();
+ 	gps_dl_wake_lock_deinit();
+ 
+diff --git a/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h b/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
+--- a/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
++++ b/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
+@@ -29,2 +29,3 @@
+ void gps_dl_lna_pin_ctrl(enum gps_dl_link_id_enum link_id, bool dsp_is_on, bool force_en);
++int gps_dl_get_lna_pin(unsigned int *pin);
+ void gps_dl_reserved_mem_show_info(void);
+diff --git a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
+--- a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
++++ b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
+@@ -17,2 +17,3 @@
+ #include "gps_mcudl_each_device.h"
++#include <linux/compat.h>
+ #include "gps_mcudl_each_link.h"
+@@ -336,3 +337,21 @@
+ 		break;
++	case GPSDL_IOC_GET_GPS_LNA_PIN: {
++#if GPS_DL_HAS_PLAT_DRV
++		unsigned int gps_lna_pin;
++
++		retval = gps_dl_get_lna_pin(&gps_lna_pin);
++		if (retval)
++			break;
++#ifdef CONFIG_COMPAT
++		if (is_compat)
++			arg = (unsigned long)compat_ptr(arg);
++#endif
++		if (copy_to_user((void __user *)arg, &gps_lna_pin, sizeof(gps_lna_pin)))
++			retval = -EFAULT;
++#else
++		retval = -EOPNOTSUPP;
++#endif
++		break;
++	}
+ #if 0
+ 	case GPSDL_IOC_GPS_HWVER:
+diff --git a/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h
+new file mode 100644
+--- /dev/null
++++ b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef GPS_DL_LNA_METADATA_H
++#define GPS_DL_LNA_METADATA_H
++#include <linux/errno.h>
++
++/* MT6878 binding GPS_L1_ELNA_EN alternatives, not a board default.
++ * The selected value must come from the GPS owner's actual DT state.
++ * This returns a SoC pin index, never a global Linux GPIO number.
++ */
++static inline int gps_dl_lna_decode_pinmux(unsigned int mux, unsigned int *pin)
++{
++	if (!pin)
++		return -EINVAL;
++	switch (mux) {
++	case (18u << 8) | 6u:
++	case (20u << 8) | 4u:
++	case (33u << 8) | 3u:
++	case (143u << 8) | 2u:
++	case (154u << 8) | 3u:
++	case (181u << 8) | 3u:
++	case (186u << 8) | 2u:
++		*pin = mux >> 8;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++#endif
