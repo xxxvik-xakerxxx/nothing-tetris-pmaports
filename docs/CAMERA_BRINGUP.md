@@ -9,7 +9,8 @@ or camera sensor I2C client. I2C adapters remain present; no bus scan, sensor
 transaction or camera GPIO/rail change was performed. The shared r174 PMIC
 candidate `0109` prevents GPU/camera mode writes after failed mode reads and
 accepts already-normal requests without writes. Actual-function native fault
-tests are wired into the existing GPU/camera CI gate; runtime power ownership
+tests passed 16,384 cases in CI `37885933479`, including a negative mutant.
+The full kernel/image build is pending; runtime power ownership
 and the missing receiver/capture pipeline remain open.
 
 Do not use global clock debugfs reads for the camera baseline: the current

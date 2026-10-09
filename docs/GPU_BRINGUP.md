@@ -13,7 +13,11 @@ no-op. This protects the shared camera VMM/GPU VGPU provider before runtime
 enablement. The CI harness executes the actual getter/setter over all four
 rails, phase/LP bit patterns, requested modes and read/write faults, asserting
 that errors cannot produce PMIC writes or disturb other rails. Patch application
-and overlay checks pass; native tests and kernel/image CI are pending.
+and overlay checks pass. Validation-only CI
+[37885933479](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37885933479)
+passed the 16,384 actual-function mode/fault cases and rejected the
+read-error-swallowing mutant. Kernel/image CI and live PMIC behavior remain
+pending; this run produced no install image.
 No supply or GPU consumer is enabled by this correction.
 
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
