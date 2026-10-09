@@ -127,9 +127,18 @@ support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
 GNSS output now uses the existing callback worker, with separate application
 and raw/NMEA sinks for standard consumers. Frame requests keep the same AGPS
 path; no second receiver reader or navigation parser was added. Native stream
-fault tests and AArch64 Bionic builds are wired into CI, pending their first
-result. Engine initialization, firmware readiness and a position fix remain
+fault tests and AArch64 Bionic builds passed
+[CI 37990623007](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37990623007).
+Engine initialization, firmware readiness and a position fix remain
 unverified. See [integration](../patches/gnss-navigation-audit/NAVIGATION_HOST_INTEGRATION.md).
+
+The modem boot-stage candidate now implements concrete EMI/remap/lock,
+source-derived NS BL33 clock/isolation/power/bus ordering and four-word BROM
+completion. First-error reporting and finite stock-order failure shutdown are
+separate. Native fault CI is wired but pending; active EMI row production,
+ARM64 compilation and physical startup remain incomplete. It is not enabled
+by a board hook and does not expose SIM/calls. See
+[boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
 ## Project rules
 
