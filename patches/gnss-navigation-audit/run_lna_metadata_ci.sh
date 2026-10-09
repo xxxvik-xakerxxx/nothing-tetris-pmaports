@@ -5,6 +5,7 @@ directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 temporary=$(mktemp -d)
 trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 PYTHONDONTWRITEBYTECODE=1 "${PYTHON:-python3}" "$directory/test_lna_metadata_patch.py"
+PYTHONDONTWRITEBYTECODE=1 "${PYTHON:-python3}" "$directory/test_lna_patch_context.py"
 "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -g \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     "$directory/test_lna_metadata.c" -o "$temporary/test-lna-metadata"

@@ -16,15 +16,20 @@ Offline candidate; kernel compilation and hardware validation pending.
 Includes the matching standalone-tested metadata decoder header.
 
 diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
+index 1eddedc..f218e9d 100644
 --- a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
 +++ b/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c
-@@ -9,3 +9,5 @@
+@@ -7,6 +7,8 @@
+ 
+ #if GPS_DL_HAS_PLAT_DRV
  #include <linux/pinctrl/consumer.h>
 +#include <linux/mutex.h>
 +#include "gps_dl_lna_metadata.h"
  
  #include <linux/module.h>
-@@ -389,3 +391,117 @@
+ #include <linux/kernel.h>
+@@ -388,6 +390,120 @@ void gps_dl_lna_pin_ctrl(enum gps_dl_link_id_enum link_id, bool dsp_is_on, bool
+ 		GDL_LOGXD(link_id, "on = %d, force = %d, select ret = %d", dsp_is_on, force_en, ret);
  }
  
 +/* Cached metadata follows the existing singleton GPS platform owner. */
@@ -142,59 +147,47 @@ diff --git a/connectivity/gps/data_link/linux/gps_dl_linux_plat_drv.c b/connecti
 +}
 +
  bool gps_dl_get_iomem_by_name(struct platform_device *pdev, const char *p_name,
-@@ -571,3 +687,4 @@
+ 	struct gps_dl_iomem_addr_map_entry *p_entry)
+ {
+@@ -570,6 +686,7 @@ static int gps_dl_probe(struct platform_device *pdev)
+ 		gps_dl_pinctrl_show_info();
  	}
  
 +	gps_dl_lna_metadata_init(&pdev->dev);
  	GDL_LOGW_INI("do gps_dl_probe");
-@@ -585,3 +702,4 @@
+ 	platform_set_drvdata(pdev, p_each_dev0);
+ 	p_each_dev0->private_data = (struct device *)&pdev->dev;
+@@ -584,6 +701,7 @@ static int gps_dl_remove(struct platform_device *pdev)
+ {
  	struct gps_each_device *p_each_dev = gps_dl_device_get(GPS_DATA_LINK_ID0);
  
 +	gps_dl_lna_metadata_remove(&pdev->dev);
  	GDL_LOGW_INI("do gps_dl_remove");
-@@ -707,3 +825,4 @@
+ 	platform_set_drvdata(pdev, NULL);
+ 	p_each_dev->private_data = NULL;
+@@ -705,6 +823,7 @@ int gps_dl_linux_plat_drv_unregister(void)
+ #endif
+ 	driver_remove_file(&gps_dl_dev_drv.driver, &driver_attr_flag);
  	platform_driver_unregister(&gps_dl_dev_drv);
 +	gps_dl_lna_metadata_reset();
  	gps_dl_wake_lock_deinit();
  
+ 	return 0;
 diff --git a/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h b/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
+index 8133297..c31aa44 100644
 --- a/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
 +++ b/connectivity/gps/data_link/linux/inc/gps_dl_linux_plat_drv.h
-@@ -29,2 +29,3 @@
+@@ -27,6 +27,7 @@ void __iomem *gps_dl_host_addr_to_virt(unsigned int host_addr);
+ void gps_dl_update_status_for_md_blanking(bool gps_is_on);
+ void gps_dl_tia_gps_ctrl(bool gps_is_on);
  void gps_dl_lna_pin_ctrl(enum gps_dl_link_id_enum link_id, bool dsp_is_on, bool force_en);
 +int gps_dl_get_lna_pin(unsigned int *pin);
  void gps_dl_reserved_mem_show_info(void);
-diff --git a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
---- a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
-+++ b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
-@@ -17,2 +17,3 @@
- #include "gps_mcudl_each_device.h"
-+#include <linux/compat.h>
- #include "gps_mcudl_each_link.h"
-@@ -336,3 +337,21 @@
- 		break;
-+	case GPSDL_IOC_GET_GPS_LNA_PIN: {
-+#if GPS_DL_HAS_PLAT_DRV
-+		unsigned int gps_lna_pin;
-+
-+		retval = gps_dl_get_lna_pin(&gps_lna_pin);
-+		if (retval)
-+			break;
-+#ifdef CONFIG_COMPAT
-+		if (is_compat)
-+			arg = (unsigned long)compat_ptr(arg);
-+#endif
-+		if (copy_to_user((void __user *)arg, &gps_lna_pin, sizeof(gps_lna_pin)))
-+			retval = -EFAULT;
-+#else
-+		retval = -EOPNOTSUPP;
-+#endif
-+		break;
-+	}
- #if 0
- 	case GPSDL_IOC_GPS_HWVER:
-diff --git a/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h
+ void gps_dl_wake_lock_init(void);
+ void gps_dl_wake_lock_deinit(void);
+diff --git b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h
 new file mode 100644
+index 0000000..b09bb52
 --- /dev/null
 +++ b/connectivity/gps/data_link/linux/inc/gps_dl_lna_metadata.h
 @@ -0,0 +1,28 @@
@@ -226,3 +219,40 @@ new file mode 100644
 +	}
 +}
 +#endif
+diff --git a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
+index 767fa45..1cd1667 100644
+--- a/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
++++ b/connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
+@@ -15,6 +15,7 @@
+ #include "gps_dl_hist_rec.h"
+ #include "gps_dl_linux_plat_drv.h"
+ #include "gps_mcudl_each_device.h"
++#include <linux/compat.h>
+ #include "gps_mcudl_each_link.h"
+ #include "gps_mcudl_link_state.h"
+ #include "gps_mcudl_log.h"
+@@ -334,6 +335,24 @@ static int gps_mcudl_each_device_ioctl_inner(struct file *filp, unsigned int cmd
+ 		retval = gps_dl_link_get_clock_flag();
+ 		MDL_LOGXD_ONF(dev->index, "gps clock flag = 0x%x", retval);
+ 		break;
++	case GPSDL_IOC_GET_GPS_LNA_PIN: {
++#if GPS_DL_HAS_PLAT_DRV
++		unsigned int gps_lna_pin;
++
++		retval = gps_dl_get_lna_pin(&gps_lna_pin);
++		if (retval)
++			break;
++#ifdef CONFIG_COMPAT
++		if (is_compat)
++			arg = (unsigned long)compat_ptr(arg);
++#endif
++		if (copy_to_user((void __user *)arg, &gps_lna_pin, sizeof(gps_lna_pin)))
++			retval = -EFAULT;
++#else
++		retval = -EOPNOTSUPP;
++#endif
++		break;
++	}
+ #if 0
+ 	case GPSDL_IOC_GPS_HWVER:
+ 		/*get combo hw version */
