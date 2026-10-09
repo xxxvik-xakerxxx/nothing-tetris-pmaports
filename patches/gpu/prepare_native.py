@@ -28,10 +28,12 @@ def main():
         check.test_partial_provider_cannot_write_unowned_phases()
         observer = os.environ.get("TETRIS_GPU_OBSERVER_TESTS", "0") == "1"
         if observer:
-            subprocess.run(["patch", "--batch", "--fuzz=0", "-p1"],
-                           cwd=SupplyInventory.tree,
-                           input=patch("0114-regulator-mt6315-read-only-vgpu-observer.patch"),
-                           text=True, capture_output=True, check=True)
+            name = "0114-regulator-mt6315-read-only-vgpu-observer.patch"
+            result = subprocess.run(["patch", "--batch", "--fuzz=0", "-p1"],
+                                    cwd=SupplyInventory.tree, input=patch(name),
+                                    text=True, capture_output=True)
+            if result.returncode:
+                raise AssertionError(f"{name}:\n{result.stdout}{result.stderr}")
         source = (SupplyInventory.tree / "drivers/regulator/mt6315-regulator.c").read_text()
         names = [
             "struct mt_regulator_init_data {",

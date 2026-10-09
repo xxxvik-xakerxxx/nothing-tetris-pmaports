@@ -1,5 +1,27 @@
 # GNSS v051 userspace bridge audit
 
+## Current r177 Boundary
+
+Standalone AArch64 Bionic config/query fixtures from successful job
+`build-gnss-bionic-adapter` in [CI 37928044937](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37928044937)
+passed on installed r175, boot `e6f6e126-94ff-49a0-a9ea-a1ad9e4eb68a`.
+The overall run failed a separate Python path test and produced no image.
+Config SHA256: `2f3e4b12c990a2492040ef906d3656bb6714d1ea7ecb0eb5e9fea69a2ff69d31`;
+queries SHA256: `26fbcaf863759adccf5d6178b4a974e5ac9b0698a4e7e52d9bee06508dea754d`.
+Both ran through the existing audited isolation launcher, with read-only
+roots, dropped privileges, denied devices/ioctl/network and 128 MiB memory
+limits. The eight-denial control returned zero failures. Config tested all
+256 clock flags; queries used synthetic responses, not real device ioctls.
+Both exited zero; peak memory was 880 KiB and 1.1 MiB. Boot ID, USB/SSH and
+sensor services were unchanged. Missing linkerconfig warnings were retained.
+Tar initially preserved the Mac directory owner; the launcher correctly
+refused execution until the two newly staged roots were root-owned.
+
+No vendor library was staged or engine initialized. Navigation/fix remains
+unavailable: 27 first-config bytes, XML policy, LNA query support, second
+configuration, transport lifecycle and mandatory host services remain open.
+See [typed producer/query contract](../patches/gnss-navigation-audit/FIRST_CONFIG_BUILDER.md).
+
 ## Scope and source identity
 
 r168 candidate: packaged patch `1005` fixes the source-confirmed clock-query

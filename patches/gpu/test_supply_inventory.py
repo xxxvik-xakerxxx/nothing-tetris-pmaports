@@ -112,6 +112,7 @@ class SupplyInventory(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text((kernel / relative).read_text())
         for name in (
+            "0105-regulator-mt6315-read-active-voltage-selector.patch",
             "0108-regulator-mt6315-board-mode-mask.patch",
             "0109-regulator-mt6315-stop-mode-change-on-read-error.patch",
             "0110-regulator-mt6315-register-described-rails.patch",
@@ -121,7 +122,8 @@ class SupplyInventory(unittest.TestCase):
             result = subprocess.run(["patch", "--batch", "--fuzz=0", "-p1"],
                                     cwd=self.tree, input=patch(name), text=True,
                                     capture_output=True)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.returncode, 0,
+                             f"{name}:\n{result.stdout}{result.stderr}")
         text = (self.tree / "drivers/regulator/mt6315-regulator.c").read_text()
         probe = text.split("static int mt6315_regulator_probe", 1)[1]
         guard = "mt6315_mode_mask_owned(dev, mask,"

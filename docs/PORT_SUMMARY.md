@@ -18,6 +18,8 @@ Prepared together, not yet installed or advertised as working:
   diagnostic DT enables only the VGPU observer. Panthor remains inactive.
 - GNSS: typed host configuration and callbacks with bounded copied-output
   queues. Missing engine/transport contracts still prevent navigation startup.
+  AArch64 standalone first-config/query fixtures passed on the phone in a
+  verified hardware-denying sandbox; these used synthetic inputs, not fixes.
 
 The r176 run [37925684468](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37925684468)
 stopped at native-test linking: Alpine GCC's ASan library had an unresolved
