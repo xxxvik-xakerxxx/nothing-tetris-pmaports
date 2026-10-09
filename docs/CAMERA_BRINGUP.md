@@ -17,7 +17,9 @@ The subsequent shared r175 candidate `0110` prevents registration of
 undescribed or disabled BUCK outputs when DT supplies an explicit regulator
 list. This is needed before selectively binding camera VMM without exposing
 unowned GPU/VCORE outputs. It does not turn on a camera supply or sensor.
-The 512-case actual-helper/DT-reference gate is pending native CI; runtime
+The 512-case actual-helper/DT-reference gate passed native CI `37887268734`,
+including disabled-rail and leaked-reference negative mutants. No r175
+install image was built; runtime
 probe-off/shutdown and regulator-core cleanup still need evidence.
 
 Do not use global clock debugfs reads for the camera baseline: the current

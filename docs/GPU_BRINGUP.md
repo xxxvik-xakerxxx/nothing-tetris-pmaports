@@ -26,7 +26,10 @@ children are not registered without constraints; an empty/disabled container
 fails with `-ENODEV`. The historical all-rail fallback is retained only when
 the container is absent. No new DT node or PMIC transaction is introduced.
 The actual helper has 512 presence/availability tests, reference-balance
-checks and negative mutants; native CI is pending. Registering the actual
+checks and negative mutants; native validation CI
+[37887268734](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37887268734)
+passed, including the earlier 16,384 mode/fault cases. No r175 image was built.
+Registering the actual
 USID-6 provider still requires proving probe/shutdown and inherited rail
 ownership, including regulator-core cleanup behavior.
 
