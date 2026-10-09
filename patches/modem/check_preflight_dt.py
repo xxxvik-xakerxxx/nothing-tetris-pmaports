@@ -2,6 +2,7 @@
 """Validate the compiled single-experiment modem preflight DTB pair."""
 import argparse
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -48,11 +49,58 @@ def phandle_owners(tree):
     return owners
 
 
+def reference_value(tree, owners, prop, data):
+    """Compare typed DT references by node path, never by incidental integers."""
+    arrays = {
+        "clocks": "#clock-cells", "resets": "#reset-cells",
+        "power-domains": "#power-domain-cells", "iommus": "#iommu-cells",
+        "phys": "#phy-cells", "io-channels": "#io-channel-cells",
+        "interrupts-extended": "#interrupt-cells",
+        "performance-domains": "#performance-domain-cells",
+        "thermal-sensors": "#thermal-sensor-cells", "sound-dai": "#sound-dai-cells",
+    }
+    plain = {"access-controllers", "affinity", "cpu", "cpus", "cpu-idle-states",
+             "interrupt-parent", "memory-region", "remote-endpoint", "nvmem-cells",
+             "nvmem", "monitored-battery", "power-supplies", "apmixedsys", "infracfg",
+             "topckgen", "hw-voter-regmap", "hwid-node", "mediatek,codec",
+             "mediatek,ipm", "mediatek,platform", "mediatek,hardware-voter",
+             "mediatek,infracfg", "mediatek,larbs", "mediatek,smi",
+             "mediatek,main-pmic", "mediatek,secondary-pmic"}
+    if prop.endswith("-gpios") or prop in {"gpio", "gpios"} or prop in {
+            "focaltech,dvdd-gpio", "focaltech,irq-gpio", "focaltech,reset-gpio"}:
+        args_property = "#gpio-cells"
+    else:
+        args_property = arrays.get(prop)
+    fixed_args = {"gpio-ranges": 3, "mediatek,syscon-wakeup": 2}
+    is_plain = prop in plain or prop.endswith("-supply") or re.fullmatch(r"pinctrl-\d+", prop)
+    if not (args_property or is_plain or prop in fixed_args):
+        return data
+    values = cells(data)
+    result = []
+    index = 0
+    while index < len(values):
+        handle = values[index]
+        require(handle in owners, "Unresolved typed reference: " + prop)
+        path = owners[handle]
+        count = fixed_args.get(prop, 0)
+        if args_property:
+            descriptor = tree[path].get(args_property)
+            # The pinned vendor USB PHY uses phy-cells instead of #phy-cells.
+            if descriptor is None and args_property == "#phy-cells":
+                descriptor = tree[path].get("phy-cells")
+            require(descriptor is not None, "Missing provider cells: " + path + "/" + args_property)
+            widths = cells(descriptor)
+            require(len(widths) == 1 and widths[0] <= 16, "Invalid provider cells: " + path)
+            count = widths[0]
+        require(index + count < len(values), "Truncated typed reference: " + prop)
+        result.append((path, tuple(values[index + 1:index + 1 + count])))
+        index += 1 + count
+    return tuple(result)
+
+
 def check_native_baseline(normal, off):
     """Permit only the exact two disabled fixture nodes, preserving shipping DT."""
     require(set(normal) <= set(off), "OFF baseline removes shipping nodes")
-    for path, props in normal.items():
-        require(off[path] == props, "OFF baseline changes existing properties: " + path)
     require({b"nothing,tetris", b"mediatek,mt6878"} <= set(compatible(normal.get("/", {}))),
             "Wrong shipping device compatible")
     spms = [path for path, props in normal.items()
@@ -63,6 +111,17 @@ def check_native_baseline(normal, off):
     nemi = spm.rsplit("/", 1)[0] + "/syscon@10270000"
     require(set(off) - set(normal) == {observer, nemi}, "Unexpected OFF baseline node additions")
     owners = phandle_owners(off)
+    normal_owners = phandle_owners(normal)
+    require(set(normal_owners.values()) == set(owners.values()) & set(normal),
+            "OFF baseline changes existing phandle ownership")
+    for path, props in normal.items():
+        require(off[path].keys() == props.keys(), "OFF baseline changes property inventory: " + path)
+        for prop, value in props.items():
+            if prop in ("phandle", "linux,phandle"):
+                continue
+            require(reference_value(normal, normal_owners, prop, value) ==
+                    reference_value(off, owners, prop, off[path][prop]),
+                    "OFF baseline changes existing properties: " + path + "/" + prop)
     references = cells(off[observer].get("access-controllers", b""))
     require(len(references) == 2 and references[0] != references[1], "Malformed IFR/NEMI references")
     require(all(ref in owners for ref in references), "Unresolved OFF access-controller phandle")

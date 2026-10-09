@@ -79,6 +79,8 @@ jobs:
             /drivers/media/platform/mediatek/Makefile \
             /drivers/mailbox/mtk-gpueb-mailbox.c \
             /drivers/remoteproc/remoteproc_core.c \
+            /drivers/remoteproc/Kconfig \
+            /drivers/remoteproc/Makefile \
             /Documentation/devicetree/bindings/mailbox/mediatek,mt8196-gpueb-mbox.yaml \
             /drivers/pmdomain/mediatek/ \
             /drivers/regulator/ \
@@ -202,7 +204,7 @@ jobs:
           python3 patches/camera-camsv/check.py \
             --modules-repo upstream/connectivity-modules --device-repo upstream/device-modules
           sh patches/camera-camsv/run-tests.sh
-          python3 patches/camera-composer/check.py
+          python3 patches/camera-composer/check.py --modules-repo upstream/connectivity-modules
           sh patches/camera-composer/run-tests.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
@@ -453,6 +455,7 @@ jobs:
             build --force --lax iio-sensor-proxy-tetris --arch aarch64 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
       - name: Build install images
+        id: install_images
         run: |
           cd /work/upstream/pmbootstrap
           ./pmbootstrap.py --as-root \
@@ -907,7 +910,7 @@ jobs:
           key: ${{ steps.pmbootstrap-cache.outputs.cache-primary-key }}
       - name: Upload install images
         uses: actions/upload-artifact@v7
-        if: success()
+        if: ${{ always() && steps.install_images.outcome == 'success' }}
         with:
           name: nothing-tetris-images
           path: |

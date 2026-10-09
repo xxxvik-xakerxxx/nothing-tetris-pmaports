@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-from check_preflight_dt import check_native_baseline, validate_trees
+from check_preflight_dt import check_native_baseline, validate_trees, reference_value, phandle_owners
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "pmaports/device/testing/linux-postmarketos-mediatek-mt6878"
@@ -70,7 +70,36 @@ class PreflightDelta(unittest.TestCase):
     def test_baseline_existing_phandle_renumbering(self):
         self.off[self.ifr]["phandle"] = cells(20)
         self.off[self.observer]["access-controllers"] = cells(20, 12)
+        self.assertEqual(check_native_baseline(self.normal, self.off), self.observer)
+
+    def test_baseline_reference_target_change(self):
+        for tree in (self.normal, self.off):
+            tree["/client"] = {"pinctrl-0": cells(11), "reg": cells(11)}
+        self.off["/client"]["pinctrl-0"] = cells(12)
         self.reject_baseline()
+
+    def test_baseline_raw_integer_not_phandle(self):
+        self.normal[self.ifr]["untyped-value"] = cells(11)
+        self.off[self.ifr]["untyped-value"] = cells(20)
+        self.off[self.ifr]["phandle"] = cells(20)
+        self.off[self.observer]["access-controllers"] = cells(20, 12)
+        self.reject_baseline()
+
+    def test_reference_specifier_args_preserved(self):
+        for tree, handle in ((self.normal, 11), (self.off, 20)):
+            tree[self.ifr]["phandle"] = cells(handle)
+            tree[self.ifr]["#clock-cells"] = cells(1)
+            tree["/client"] = {"clocks": cells(handle, 7)}
+        self.off[self.observer]["access-controllers"] = cells(20, 12)
+        self.assertEqual(check_native_baseline(self.normal, self.off), self.observer)
+        self.off["/client"]["clocks"] = cells(20, 8)
+        self.reject_baseline()
+
+    def test_typed_reference_malformed(self):
+        self.off[self.ifr]["#clock-cells"] = cells(1)
+        for data in (cells(11), cells(99, 1), b"\0"):
+            with self.subTest(data=data), self.assertRaises(ValueError):
+                reference_value(self.off, phandle_owners(self.off), "clocks", data)
 
     def test_baseline_new_phandle_on_existing_node(self):
         self.off[self.spm]["phandle"] = cells(99)
