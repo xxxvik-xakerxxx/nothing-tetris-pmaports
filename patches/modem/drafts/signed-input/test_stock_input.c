@@ -99,7 +99,7 @@ static void test_existing_loader_placement(struct mt6878_md_fw_metadata *owner,
 	assert(mt6878_md_fw_place_b41(owner, window, SIZE_MAX, 1, &plan) == -EINVAL);
 	assert(mt6878_md_fw_place_b41(owner, window, size, 1,
 		(struct tetris_modem_boot_plan *)window) == -EINVAL);
-	assert(mt6878_md_fw_place_b41(owner, owner->verified_source,
+	assert(mt6878_md_fw_place_b41(owner, (void *)owner->verified_source,
 		identity->source_size, 1, &plan) == -EINVAL);
 	assert(window[0] == 0xab && window[identity->dsp_offset] == 0xcd);
 	assert(!memcmp(&plan, &untouched, sizeof(plan)));

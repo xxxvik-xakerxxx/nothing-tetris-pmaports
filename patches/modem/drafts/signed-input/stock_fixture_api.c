@@ -22,7 +22,7 @@ static void *kvmalloc(size_t size, int flags)
 	(void)flags;
 	return snapshot_fault ? NULL : allocate(size);
 }
-static void kvfree(void *p) { kfree_sensitive(p); }
+static void kvfree(const void *p) { kfree_sensitive((void *)p); }
 struct device { int unused; };
 struct firmware { const u8 *data; size_t size; };
 static struct firmware fixture_firmware;
