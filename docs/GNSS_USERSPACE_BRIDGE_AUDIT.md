@@ -351,3 +351,39 @@ Native CI `37894001985` passed this gate at `a5d72a1`, including all three
 negative mutants. These helpers do not supply the Bionic runtime,
 complete startup configuration, firmware download or a position provider;
 they are not installed on the phone and do not establish a GNSS fix.
+
+## Isolated Bionic Load Gate
+
+The complete six-ELF B4.1 closure already exists in the local runtime audit:
+linker64, Bionic libc/libm/libdl, system libc++ and libmnl. Their bytes match
+the recorded hashes. No further OTA acquisition is needed for a load-only test.
+These hashes identify the local inputs; OTA/APEX signature authentication and
+redistribution permission are not established by this gate. None of these
+vendor/runtime binaries is committed or packaged in a pmOS image.
+
+The manual `gnss-runtime-probe.yml` workflow builds a static Linux isolation
+launcher and a Bionic helper with official
+[NDK r27d](https://developer.android.com/ndk/downloads). The download's published
+size and SHA1 are checked before use. The helper has no libmnl DT_NEEDED and
+only calls `dlopen(RTLD_NOW|RTLD_LOCAL)`, reports the result and uses `_exit`;
+it never calls a vendor API or destructor. The pinned Android linker supports
+`PROGRAM [ARGS]`, not glibc's `--library-path`; its explicit LD_LIBRARY_PATH
+is supplied inside the private root, matching
+[Bionic's loader](https://android.googlesource.com/platform/bionic/+/HEAD/linker/linker_main.cpp).
+
+`scripts/stage-gnss-load-probe.sh` checks every pinned input and CI helper
+checksum before creating a fresh root. On the phone, the trusted launcher
+requires root-owned non-writable staging, creates private mount/network/PID
+namespaces, binds the root read-only/nodev/nosuid, mounts a private read-only
+proc, drops all capabilities and runs as uid/gid 65534. No device nodes or host
+directories are supplied. Descriptors above stderr are closed. Seccomp is
+installed before exec and denies sockets, ioctl, namespace/mount operations,
+ptrace, process control, io_uring and privilege changes; clone/fork are also
+denied for this load-only gate. CPU/address-space limits and an external
+20-second kill/reap watchdog bound the attempt. Native CI exercises eight
+denial checks; the same control must pass in the phone's full sandbox before
+any Android/vendor code runs. A failed control stops the experiment, never
+justifies relaxing the policy automatically.
+
+Build and phone load results remain pending. LOAD_OK will establish library
+loadability only, not solver startup, transport ownership, firmware download,+satellite acquisition, gpsd/GeoClue or a fix.

@@ -1,0 +1,45 @@
+name: GNSS isolated runtime probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install cross compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross unzip
+      - name: Build and test isolation control
+        run: |
+          mkdir -p out
+          cc -O2 -Wall -Wextra -Werror patches/gnss-navigation-audit/mnl-isolate.c -o /tmp/isolate-host
+          /tmp/isolate-host --self-test-filter
+          aarch64-linux-gnu-gcc -static -O2 -Wall -Wextra -Werror \
+            patches/gnss-navigation-audit/mnl-isolate.c -o out/mnl-isolate
+      - name: Obtain pinned official Android NDK
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip
+          test "$(stat -c %s /tmp/ndk.zip)" = 663956036
+          printf '%s  %s\n' 22105e410cf29afcf163760cc95522b9fb981121 /tmp/ndk.zip | sha1sum --check
+          unzip -q /tmp/ndk.zip -d /tmp
+      - name: Compile Bionic load-only helper
+        run: |
+          /tmp/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang \
+            -O2 -Wall -Wextra -Werror patches/gnss-navigation-audit/mnl-load-probe.c -ldl -o out/mnl-load-probe
+          aarch64-linux-gnu-readelf -h out/mnl-load-probe | grep 'Machine:.*AArch64'
+          if aarch64-linux-gnu-readelf -d out/mnl-load-probe | grep -q 'NEEDED.*libmnl'; then
+            echo 'Vendor library must only be loaded after external isolation'
+            exit 1
+          fi
+          aarch64-linux-gnu-readelf -d out/mnl-isolate > /tmp/static-readelf
+          if grep -q NEEDED /tmp/static-readelf; then exit 1; fi
+          printf 'commit=%s\nndk=r27d\nmode=load-only-no-device-network\n' "$GITHUB_SHA" > out/BUILD-MANIFEST
+          cd out
+          sha256sum mnl-isolate mnl-load-probe > SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gnss-load-only-probe
+          path: out/
+          if-no-files-found: error
