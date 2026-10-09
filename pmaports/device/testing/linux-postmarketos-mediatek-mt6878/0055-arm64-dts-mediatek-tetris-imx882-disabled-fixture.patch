@@ -112,8 +112,8 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
 +		};
 +	};
 +
- 	key_gpio_default: key-default {
- 		pins-cmd1-dat {
- 			pinmux = <PINMUX_GPIO54__FUNC_GPIO54>;
+ 	aud_clk_mosi_off: aud-clk-mosi-off {
+ 		pins {
+ 			pinmux = <PINMUX_GPIO164__FUNC_GPIO164>;
 -- 
 2.51.0

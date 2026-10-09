@@ -16,7 +16,7 @@ BASE = PACKAGE / "0049-media-i2c-imx882-identity.patch"
 FIXTURE = PACKAGE / "0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch"
 DRIVER = "drivers/media/i2c/imx882-identity.c"
 BASE_SHA256 = "855de12c6af5dd5f9abd8c4489ff15a91f98a7033b88a8cf90ecdb7979d45db1"
-FIXTURE_SHA256 = "3495500adc10f1018ea000faecbfbabb7e558b2bae0435914026aa135b61d2fb"
+FIXTURE_SHA256 = "9662da5d38ba3d60fff991f4749f6e719c45e7177ad0de4422ddbb87cf08e0ea"
 
 
 def run(*args, **kwargs):

@@ -84,6 +84,10 @@ jobs:
           git -C upstream/linux checkout --detach FETCH_HEAD
           test "$(git -C upstream/linux rev-parse HEAD)" = \
             d84b264a54a37611f2f46bc19363cb9b41606205
+          python3 ci/check-kernel-patch-stack.py --list-paths > /tmp/kernel-stack-paths
+          git -C upstream/linux sparse-checkout add --no-cone --stdin < /tmp/kernel-stack-paths
+      - name: Check complete packaged kernel patch stack
+        run: python3 ci/check-kernel-patch-stack.py upstream/linux
       - name: Validate native display prereq gates
         run: |
           sh patches/native-display/check-postmask.sh upstream/linux

@@ -26,6 +26,9 @@ patches use package-default application rules; the new backends require zero
 fuzz. Patch diagnostics remain in the CI log. It retains the
 isolated config and manifest, never links/install modules or changes shipping DT.
 Its independent concurrency group does not cancel a full image build.
+The cheap validation job now applies all 104 packaged kernel patches to
+disposable pinned source files before compilation. This catches cross-subsystem
+context conflicts, including the camera fixture after GNSS pin removal.
 
 The GNSS DT no longer supplies unproven GPIO143/144 LNA states. Pinned B4.1
 sources and the cached stock base DT plus each of three stock DTBO choices
