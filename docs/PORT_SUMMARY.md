@@ -35,6 +35,17 @@ passed the actual XML decoder/native fault tests, matching libccd instruction
 checks/native CQ encoder, and matching Panthor-source CSF checks. These are
 host/source tests only; no GPS engine, camera DMA or GPU firmware ran on hardware.
 
+The runtime-constructor/frame-worker, CAMSV recipe/native CCD caller and scoped
+modem startup candidates are retained in `main` at `0b904d6`, with fixture fixes
+at `ba21070`. Combined stock-contract CI
+[37950390753](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37950390753)
+passed all native ASan/UBSan fixtures and pinned instruction/source checks.
+The GPS worker proves bounded host quiescence, not native engine shutdown.
+Camera WRITE acceptance is not ACK delivery or capture; FLUSH is not DMA stop.
+Modem scope requires a genuine authenticated handoff provider and supplies none.
+These candidates remain outside shipping activation; the next ownership layer
+must retain SRAM/DMA/ROM resources across callbacks and partial-start failures.
+
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
 at `063734b` passed, including source checks and ASan/UBSan fault fixtures:
@@ -127,7 +138,10 @@ the staging buffer without uploading or starting GPUEB. Cold boot
 `9cb0bd00-c093-496d-a4cc-66d3a05c3fa5` reports `verified-erased`, error 0,
 156064 bytes and plaintext SHA256
 `9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7`.
-USB/SSH recovered and SensorProxy is active. The decoded format is unknown;
+USB/SSH recovered and SensorProxy is active. The user also confirmed normal
+display/touch, rotation and automatic brightness on this cold boot. No critical
+panic/Oops/SError/external-abort signature was found in the kernel log.
+The decoded format is unknown;
 the stock 258744-byte copy is not covered by these verified bytes. No GPU boot
 or acceleration is claimed. The preceding warm reboot stopped at inherited
 SCP preflight `-EBUSY` before the GPUEB test, leaving sensors inactive; warm

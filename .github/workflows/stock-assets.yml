@@ -24,6 +24,12 @@ jobs:
             python3 python3-pyelftools python3-unicorn build-essential pkg-config libxml2-dev libssl-dev git
       - name: Extract pinned generic B4.1 vendor assets
         run: python3 ci/extract-stock-port-assets.py
+      - name: Verify owned GPUEB SRAM and quarantined partial startup
+        if: ${{ !cancelled() }}
+        run: sh patches/gpu/run_gpueb_sram_owner_ci.sh
+      - name: Verify immutable modem reservation owner
+        if: ${{ !cancelled() }}
+        run: python3 patches/modem/check_handoff_reservation.py --native-ci
       - uses: actions/upload-artifact@v7
         with:
           name: tetris-b41-selected-stock-port-assets

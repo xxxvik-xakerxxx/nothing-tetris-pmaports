@@ -1,0 +1,8 @@
+# Candidate only: not sourced by the packaged kernel Kconfig.
+config MT6878_GPUEB_SRAM_OWNER
+	bool "MT6878 GPUEB unified SRAM resource owner (candidate)"
+	depends on ARM64 && ARCH_MEDIATEK
+	default n
+	help
+	  Exclusive SRAM mapping and typed client lifetime only. No firmware load,
+	  register access, reset, BOOT or physical OFF implementation. Leave off.
