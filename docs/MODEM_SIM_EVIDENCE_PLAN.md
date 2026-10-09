@@ -1082,8 +1082,15 @@ are preserved. The new CI test extracts and executes the actual patched
 functions, checking the real cache gap, boundaries and failure paths.
 
 Local patch application, overlay validation, Python syntax and private LK
-checks passed. U-Boot native/ARM64 and pmOS C/kernel/image builds are pending;
-all compilation remains in CI. The installed phone is still r172.
+checks passed. U-Boot
+[CI 37797407178](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37797407178)
+passed native tests, ARM64 build and packaging for
+`e05970e905c08b54be88d281854d56f70f1b88bc`.
+pmOS [CI 37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235)
+passed the actual patched-function C tests, kernel/module build and r173 image
+packaging for `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
+All compilation remained in CI. The installed phone is still r172 pending
+download/integrity checks and clean installation.
 
 Next integration gate: establish the span-mapping consumer contract (the old
 U-Boot observation validator still rejects this large gap), reserve and
