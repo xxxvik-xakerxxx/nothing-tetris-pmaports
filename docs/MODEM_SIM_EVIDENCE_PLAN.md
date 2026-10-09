@@ -1118,7 +1118,7 @@ and the cache suffix, and synchronizes both written ranges. The CONSYS prefix
 and its last cache line are preserved. This is not Linux's modem-reset clear
 policy and must not erase inherited DRDI/USIP data. Native and ARM64 CI
 [37895114890](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37895114890)
-is running at `a92dff3a69`, including invalid-input no-write, cache failure,
+passed at `a92dff3a69`, including invalid-input no-write, cache failure,
 firmware/prefix preservation and guard-byte tests. No automatic caller,
 reservation or reset release is added; installed U-Boot is unchanged.
 
