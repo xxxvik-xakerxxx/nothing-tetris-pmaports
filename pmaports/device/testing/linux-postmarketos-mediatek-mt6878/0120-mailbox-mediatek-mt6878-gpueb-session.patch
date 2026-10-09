@@ -479,7 +479,8 @@ new file mode 100644
 diff --git a/drivers/mailbox/mtk-gpueb-mailbox.c b/drivers/mailbox/mtk-gpueb-mailbox.c
 --- a/drivers/mailbox/mtk-gpueb-mailbox.c
 +++ b/drivers/mailbox/mtk-gpueb-mailbox.c
-@@ -300,4 +300,23 @@
+@@ -299,7 +299,26 @@
+ 	},
  };
  
 +/* Exact MT6878 send/recv tables, cumulative 4-byte slots; ee2be53 source. */
@@ -503,6 +504,8 @@ diff --git a/drivers/mailbox/mtk-gpueb-mailbox.c b/drivers/mailbox/mtk-gpueb-mai
  static const struct of_device_id mtk_gpueb_mbox_of_ids[] = {
 +	{ .compatible = "mediatek,mt6878-gpueb-mbox", .data = &mtk_gpueb_mbox_mt6878 },
  	{ .compatible = "mediatek,mt8196-gpueb-mbox", .data = &mtk_gpueb_mbox_mt8196 },
+ 	{ /* Sentinel */ }
+ };
 diff --git a/drivers/pmdomain/mediatek/Makefile b/drivers/pmdomain/mediatek/Makefile
 --- a/drivers/pmdomain/mediatek/Makefile
 +++ b/drivers/pmdomain/mediatek/Makefile
