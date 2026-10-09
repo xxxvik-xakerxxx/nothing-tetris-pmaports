@@ -46,10 +46,13 @@ RESEARCH_SOURCES = {
     "patches/modem/mt6878_md_startup_scope.h": "include/linux/soc/mediatek/mt6878_md_startup_scope.h",
     "patches/modem/mt6878_md_handoff_reservation.c": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.c",
     "patches/modem/mt6878_md_handoff_reservation.h": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.h",
+    "patches/modem/mt6878_md_pss32.c": f"{RESEARCH_DIR}/mt6878_md_pss32.c",
+    "patches/modem/mt6878_md_pss32.h": f"{RESEARCH_DIR}/mt6878_md_pss32.h",
 }
 RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
+    "mt6878_md_pss32",
 ))
 
 

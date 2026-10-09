@@ -82,7 +82,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 4)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 5)
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
 
     def test_research_collision_fails_before_copying_other_sources(self):
