@@ -1111,9 +1111,20 @@ aliases are covered. Native tests, ARM64 build and packaging passed in
 This entry point has no boot caller or activation side effects. The new loader
 artifact was not installed; the sensor-validated loader remains in use.
 
+U-Boot `e707baf55d` adds `tetris_modem_initialize_smem_b41()` for newly
+allocated service banks after authenticated loading. It recomputes the signed
+metadata's plan, validates spans/aliases before writing, clears owned NC RAM
+and the cache suffix, and synchronizes both written ranges. The CONSYS prefix
+and its last cache line are preserved. This is not Linux's modem-reset clear
+policy and must not erase inherited DRDI/USIP data. Native and ARM64 CI
+[37895114890](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37895114890)
+is running at `a92dff3a69`, including invalid-input no-write, cache failure,
+firmware/prefix preservation and guard-byte tests. No automatic caller,
+reservation or reset release is added; installed U-Boot is unchanged.
+
 Next integration gate: establish the span-mapping consumer contract (the old
 U-Boot observation validator still rejects this large gap), reserve and
-initialize the planned RAM, apply/read back protection and remapping, and own
+map the planned RAM, connect its initialization, apply/read back protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
 detection and network registration still need live evidence. GPU/GNSS/camera
 hardware status is unchanged.
