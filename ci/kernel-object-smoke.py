@@ -92,7 +92,7 @@ def camera_staging(root):
 CAMERA_SOURCES, CAMERA_OBJECTS, CAMERA_ENABLE = camera_staging(Path(__file__).resolve().parents[1])
 # Hidden vb2 helpers need an upstream selector in the isolated config. The
 # virtual driver is neither compiled nor installed by this object-only harness.
-CAMERA_SELECTORS = ("MEDIA_TEST_SUPPORT", "VIDEO_VIVID")
+CAMERA_SELECTORS = ("MEDIA_TEST_SUPPORT", "V4L_TEST_DRIVERS", "VIDEO_VIVID")
 RESEARCH_SOURCES.update(CAMERA_SOURCES)
 RESEARCH_OBJECTS += CAMERA_OBJECTS
 

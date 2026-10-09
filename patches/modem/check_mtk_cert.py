@@ -100,7 +100,9 @@ def native_ci(kernel):
         for name in ("asn1.h", "asn1_ber_bytecode.h"):
             (includes / name).write_bytes((kernel / "include/linux" / name).read_bytes())
         cc = os.environ.get("CC", "cc")
-        subprocess.run([cc, "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+        # Match the pinned kernel's host-tool warning policy. Our production
+        # decoder and fixture below still compile with -Wextra/-Werror.
+        subprocess.run([cc, "-std=gnu11", "-O2", "-Wall", "-Wmissing-prototypes", "-Wstrict-prototypes",
                         f"-I{path / 'include'}", str(kernel / "scripts/asn1_compiler.c"),
                         "-o", str(path / "asn1_compiler")], check=True)
         generated_c, generated_h = path / f"{PREFIX}.asn1.c", path / f"{PREFIX}.asn1.h"
@@ -108,6 +110,7 @@ def native_ci(kernel):
                         str(generated_c), str(generated_h)], check=True)
         text = (HERE / "test_pss32_native.c").read_text().split("/* PRODUCTION_INSERT */")[0]
         text += ('\n#include <stdbool.h>\n#define unlikely(x) (x)\n'
+                 '#define fallthrough __attribute__((fallthrough))\n'
                  '#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))\n'
                  '#define pr_debug(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)\n'
                  '#define pr_err(...) do { if (0) fprintf(stderr, __VA_ARGS__); } while (0)\n'
