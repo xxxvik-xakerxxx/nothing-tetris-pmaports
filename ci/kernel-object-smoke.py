@@ -54,6 +54,44 @@ RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
     "mt6878_md_pss32",
 ))
+CAMERA_MANIFEST = "patches/camera-pipeline-owner/STAGING.json"
+
+
+def camera_staging(root):
+    data = json.loads((root / CAMERA_MANIFEST).read_text())
+    destination = data["destination"]
+    if destination != "drivers/media/platform/mediatek/tetris-camera-owner-smoke":
+        raise ValueError("unexpected camera staging destination")
+    sources = data["sources"]
+    if not isinstance(sources, list) or not sources or len(set(sources)) != len(sources):
+        raise ValueError("invalid camera source list")
+    mapping = {}
+    for source in sources:
+        path = Path(source)
+        if (not source.startswith("patches/camera-") or ".." in path.parts
+                or path.suffix not in (".c", ".h")):
+            raise ValueError("unsafe camera source path")
+        target = f"{destination}/{path.name}"
+        if target in mapping.values():
+            raise ValueError("camera basename collision")
+        mapping[source] = target
+    names = [*data["objects"], data["fault_object"]]
+    if len(set(names)) != len(names):
+        raise ValueError("duplicate camera object")
+    for name in names:
+        if Path(name).name != name or not name.endswith(".o"):
+            raise ValueError("unsafe camera object path")
+        if f"{destination}/{Path(name).with_suffix('.c')}" not in mapping.values():
+            raise ValueError("camera object lacks production source")
+    symbols = [*data["required_enabled"], *data["fault_required_enabled"]]
+    if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*", name) for name in symbols):
+        raise ValueError("invalid camera config symbol")
+    return mapping, tuple(f"{destination}/{name}" for name in names), tuple(symbols)
+
+
+CAMERA_SOURCES, CAMERA_OBJECTS, CAMERA_ENABLE = camera_staging(Path(__file__).resolve().parents[1])
+RESEARCH_SOURCES.update(CAMERA_SOURCES)
+RESEARCH_OBJECTS += CAMERA_OBJECTS
 
 
 def block(source, key):
@@ -102,15 +140,21 @@ def run(command):
 
 
 def stage_research_sources(kernel, root=Path(".")):
-    for destination in RESEARCH_SOURCES.values():
+    directories = {str(Path(name).parent) for name in RESEARCH_OBJECTS}
+    destinations = [*RESEARCH_SOURCES.values(), *(f"{name}/Makefile" for name in directories)]
+    for destination in destinations:
         if (kernel / destination).exists():
             raise ValueError(f"research destination already exists: {destination}")
+    for source in RESEARCH_SOURCES:
+        if not (root / source).is_file():
+            raise ValueError(f"research source is missing: {source}")
     for source, destination in RESEARCH_SOURCES.items():
         target = kernel / destination
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / source, target)
-    (kernel / RESEARCH_DIR / "Makefile").write_text(
-        "obj-y += " + " ".join(Path(name).name for name in RESEARCH_OBJECTS) + "\n")
+    for directory in sorted(directories):
+        names = [Path(name).name for name in RESEARCH_OBJECTS if str(Path(name).parent) == directory]
+        (kernel / directory / "Makefile").write_text("obj-y += " + " ".join(names) + "\n")
 
 
 def object_identity(target):
@@ -146,6 +190,8 @@ def main():
             name: hashlib.sha256(Path(name).read_bytes()).hexdigest()
             for name in RESEARCH_SOURCES
         }
+        manifest["research_source_sha256"][CAMERA_MANIFEST] = hashlib.sha256(
+            Path(CAMERA_MANIFEST).read_bytes()).hexdigest()
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -180,7 +226,8 @@ def main():
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
     options = [kernel / "scripts/config", "--file", output / ".config"]
-    for symbol in ENABLE:
+    enabled = ENABLE + (CAMERA_ENABLE if args.research_owners else ())
+    for symbol in enabled:
         options.extend(["-e", symbol])
     for symbol in MODULES:
         options.extend(["-m", symbol])
@@ -192,6 +239,10 @@ def main():
     for symbol in MODULES:
         if f"CONFIG_{symbol}=m" not in config:
             raise ValueError(f"isolated dependency missing: {symbol}")
+    if args.research_owners:
+        for symbol in CAMERA_ENABLE:
+            if f"CONFIG_{symbol}=y" not in config:
+                raise ValueError(f"isolated camera dependency missing: {symbol}")
     run([*make, "-k", *objects])
     identities = {}
     for name in objects:

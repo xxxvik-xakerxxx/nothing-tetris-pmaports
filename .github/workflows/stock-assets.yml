@@ -116,6 +116,13 @@ jobs:
           python3 patches/camera-ccd-cq/check-recipe.py out/stock-port-assets \
             --modules-repo upstream/connectivity-modules
           sh patches/camera-ccd-cq/run-recipe-tests.sh
+      - name: Verify concrete camera DMA and CCD ownership sources
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/camera-pipeline-owner/check.py \
+            --modules-repo upstream/connectivity-modules \
+            --device-repo upstream/device-modules \
+            --kernel-tree upstream/linux --assets out/stock-port-assets
       - name: Verify matching GPU CSF format
         if: ${{ !cancelled() }}
         run: |

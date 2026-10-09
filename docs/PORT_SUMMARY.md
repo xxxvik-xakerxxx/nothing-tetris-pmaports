@@ -133,7 +133,8 @@ AArch64 object check for IMX882, SENINF graph/PHY, CCCI start and GPUEB power.
 The full image stage was cancelled by a subsequent source-only push sharing
 its concurrency group. Replacement r179 run
 [37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510)
-is building at `0b904d6`; image runs now queue instead of cancelling an active
+passed all four jobs at `0b904d6`; its images are being downloaded and verified,
+not yet installed. Image runs now queue instead of cancelling an active
 image build. Cheap validation/smoke runs retain cancellation in their own groups.
 This does not compile or activate every
 research transport candidate, link candidate modules, or prove hardware function.
@@ -144,6 +145,20 @@ build stays on Alpine. The install manifest records the actually tested
 U-Boot `dcb20ce71f`, not the older loader pin. Local checks do not replace
 hardware qualification: SIM/calls, GPS fixes, accelerated rendering and
 camera capture are still not available.
+
+Follow-on source-only work adds a strict software RSA-PSS32 modem backend and
+explicit GPUEB parent/window adoption at `d9e90a5`. Independent stock-contract
+[CI 37965622503](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37965622503)
+passed the new native sanitizer/fault fixtures and all existing GPS/camera/CSF
+checks. PSS verifies signatures under an immutable caller key, not a trust
+chain or secure-world attestation; modem reservation AUTH remains closed.
+GPUEB adoption migrates real session/mailbox callers without overlapping SRAM
+claims, but its hardware gate remains closed until MMIO/IRQ ownership and
+firmware upload/start are proven. New camera pipeline sources bind real
+DMA-buf imports/exports, consumer task identity and bounded CCD callback
+lifetimes. Isolated ARM64 CI stages exact production bytes plus a KUnit fault
+object; compiling that object does not execute KUnit or prove camera capture.
+No shipping config, DT activation or end-user status is changed by this work.
 
 ## Latest installed checkpoint: r175
 

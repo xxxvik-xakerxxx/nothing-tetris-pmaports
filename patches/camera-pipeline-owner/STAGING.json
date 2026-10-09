@@ -1,0 +1,46 @@
+{
+  "scope": "isolated explicit kernel objects only; no parent Kbuild or shipped linkage",
+  "destination": "drivers/media/platform/mediatek/tetris-camera-owner-smoke",
+  "sources": [
+    "patches/camera-pipeline-owner/mt6878-camera-pipeline-owner.c",
+    "patches/camera-pipeline-owner/mt6878-camera-pipeline-owner.h",
+    "patches/camera-pipeline-owner/owner-smoke.c",
+    "patches/camera-pipeline-owner/owner-kunit.c",
+    "patches/camera-composer/mt6878-camera-ccd-owner.c",
+    "patches/camera-composer/mt6878-camera-ccd-owner.h",
+    "patches/camera-composer/mt6878-camera-ccd-session.h",
+    "patches/camera-composer/mt6878-camera-ccd-uapi.h",
+    "patches/camera-composer/mt6878-camera-capture-owner.c",
+    "patches/camera-composer/mt6878-camera-capture-owner.h",
+    "patches/camera-composer/mt6878-camera-irq-registers.h",
+    "patches/camera-composer/mt6878-camera-composer.h",
+    "patches/camera-composer/mt6878-camera-ipi-abi.h",
+    "patches/camera-camsv/mt6878-camsv-vb2.c",
+    "patches/camera-camsv/mt6878-camsv-vb2.h",
+    "patches/camera-camsv/mt6878-camsv-capture.h",
+    "patches/camera-camsv/mt6878-camsv-registers.h",
+    "patches/camera-ccd-cq/mt6878-camera-camsv-recipe.h",
+    "patches/camera-ccd-cq/mt6878-camera-ccd-cq.h",
+    "patches/camera-seninf/mt6878-seninf-contract.h"
+  ],
+  "objects": [
+    "mt6878-camera-pipeline-owner.o",
+    "mt6878-camera-ccd-owner.o",
+    "mt6878-camera-capture-owner.o",
+    "mt6878-camsv-vb2.o",
+    "owner-smoke.o"
+  ],
+  "fault_object": "owner-kunit.o",
+  "required_enabled": [
+    "DMA_SHARED_BUFFER", "RPMSG", "IOMMU_API", "MEDIA_SUPPORT",
+    "MEDIA_CONTROLLER", "VIDEO_DEV", "VIDEO_V4L2_SUBDEV_API",
+    "VIDEOBUF2_DMA_CONTIG", "VIDEOBUF2_V4L2"
+  ],
+  "fault_required_enabled": ["KUNIT"],
+  "unfrozen_prerequisites": [
+    "patches/camera-composer/mt6878-camera-ccd-owner.c",
+    "patches/camera-composer/mt6878-camera-ccd-owner.h",
+    "patches/camera-composer/mt6878-camera-ccd-session.h"
+  ],
+  "kunit_runtime": "CI test kernel only; requires all owner objects and actual dma-buf, rpmsg, vb2, media and iommu core linkage; no phone. Object compilation alone does not execute fixtures."
+}

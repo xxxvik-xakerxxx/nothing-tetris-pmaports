@@ -82,8 +82,12 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 5)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 11)
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
+        for name in smoke.CAMERA_OBJECTS:
+            makefile = self.package / Path(name).parent / "Makefile"
+            self.assertIn(Path(name).name, makefile.read_text())
+        self.assertNotIn("owner-kunit.o", (self.package / smoke.RESEARCH_DIR / "Makefile").read_text())
 
     def test_research_collision_fails_before_copying_other_sources(self):
         root = Path(__file__).resolve().parents[1]
@@ -95,6 +99,16 @@ class SmokeInputs(unittest.TestCase):
             smoke.stage_research_sources(self.package, root)
         self.assertFalse((self.package / destinations[0]).exists())
         self.assertEqual(existing.read_text(), "original\n")
+
+    def test_research_makefile_collision_is_not_overwritten(self):
+        root = Path(__file__).resolve().parents[1]
+        existing = self.package / smoke.RESEARCH_DIR / "Makefile"
+        existing.parent.mkdir(parents=True)
+        existing.write_text("# preserve\n")
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            smoke.stage_research_sources(self.package, root)
+        self.assertEqual(existing.read_text(), "# preserve\n")
+        self.assertFalse((self.package / next(iter(smoke.RESEARCH_SOURCES.values()))).exists())
 
     def test_thin_lto_object_identity(self):
         target = self.package / "unit.o"
