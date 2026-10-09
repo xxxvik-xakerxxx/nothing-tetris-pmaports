@@ -1,0 +1,29 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: preserve mode read failures before writes
+
+The MT6319-compatible provider supplies both camera VMM and GPU VGPU.
+Do not change either rail's mode after a failed current-mode read. A request
+for the already selected normal mode is a successful no-op, not EINVAL.
+No provider, consumer or power-producing DT node is enabled here.
+
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -123,6 +123,8 @@ static int mt6315_regulator_set_mode(struct regulator_dev *rdev,
+ 	info = container_of(rdev->desc, struct mt6315_regulator_info, desc);
+ 	modeset_mask = init->modeset_mask[rdev_get_id(rdev)];
+ 	curr_mode = mt6315_regulator_get_mode(rdev);
++	if (curr_mode < 0)
++		return curr_mode;
+ 	switch (mode) {
+ 	case REGULATOR_MODE_FAST:
+ 		ret = regmap_update_bits(rdev->regmap,
+@@ -147,6 +149,8 @@ static int mt6315_regulator_set_mode(struct regulator_dev *rdev,
+ 						 info->lp_mode_mask,
+ 						 0);
+ 			usleep_range(100, 110);
++		} else if (curr_mode == REGULATOR_MODE_NORMAL) {
++			ret = 0;
+ 		} else {
+ 			ret = -EINVAL;
+ 		}

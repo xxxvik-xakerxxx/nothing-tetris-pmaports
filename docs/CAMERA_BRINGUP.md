@@ -4,6 +4,14 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
+2026-10-09, installed r173: a new read-only check finds no video/media device
+or camera sensor I2C client. I2C adapters remain present; no bus scan, sensor
+transaction or camera GPIO/rail change was performed. The shared r174 PMIC
+candidate `0109` prevents GPU/camera mode writes after failed mode reads and
+accepts already-normal requests without writes. Actual-function native fault
+tests are wired into the existing GPU/camera CI gate; runtime power ownership
+and the missing receiver/capture pipeline remain open.
+
 Do not use global clock debugfs reads for the camera baseline: the current
 r168 image rebooted with an external abort while reading `clk_summary`.
 See the [captured clock-gate trace](GPU_BRINGUP.md#2026-10-08-clock-observation-failure).

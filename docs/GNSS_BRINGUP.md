@@ -19,6 +19,19 @@ does not prove all secure operations exist on a different firmware profile.
 
 ## Strongest hardware evidence
 
+2026-10-09, clean-installed r173, retained SCP-enabled loader `fef0154b`:
+boot `a507d5d4-c1d4-4acf-9bba-c4724a6e1064` started the packaged transport
+once, then ran the packaged eight-second read-only link0 probe once.
+It returned status 0, code size 42505 and fragment count 106; the cipher key
+was redacted. The actual journal shows OFF -> ON -> RST -> OFF and
+CLOSED -> OPENING -> OPENED -> CLOSING -> CLOSED, with GPS off and BT/Wi-Fi
+still on. A root-authorized descriptor walk found no gpsdl owners. A fresh
+32 MiB USB transfer matched its expected hash and no systemd units failed.
+No firmware fragments, navigation commands, NMEA or position fix were tested.
+Private journal: `local/ci-run-37797116235/validation/r173-gnss-readonly-post.txt`
+in the parent workspace. This updates the installed transport checkpoint,
+not the satellite-navigation status.
+
 Clean r155, CI 34589225716, passed supervised BINFO/download/stop on three
 separate boots: DOWNLOAD_COMPLETE, STOP_WRITTEN, CLOSED and
 OFF -> ON -> RST -> WORK -> RST -> OFF. No gpsdl owner remained; exact

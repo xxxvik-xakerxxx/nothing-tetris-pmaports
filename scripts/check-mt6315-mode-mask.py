@@ -28,7 +28,8 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(readback.file_text(args.kernel, readback.KERNEL_COMMIT, name))
         for name in ("0105-regulator-mt6315-read-active-voltage-selector.patch",
-                     "0108-regulator-mt6315-board-mode-mask.patch"):
+                     "0108-regulator-mt6315-board-mode-mask.patch",
+                     "0109-regulator-mt6315-stop-mode-change-on-read-error.patch"):
             subprocess.run(["git", "apply", "--check", str(package / name)],
                            cwd=root, check=True)
             subprocess.run(["git", "apply", str(package / name)], cwd=root, check=True)
@@ -36,8 +37,10 @@ def main():
         readback.require("ret = mt6315_init_mode_masks(dev, pdev->usid, init_data);" in source,
                          "probe does not select mode masks")
         helper = readback.function(source, "static int mt6315_init_mode_masks(")
+        mode = readback.function(source, "static unsigned int mt6315_regulator_get_mode(")
+        mode += "\n" + readback.function(source, "static int mt6315_regulator_set_mode(")
         if args.apply_only:
-            print("PASS: GPU/camera PMIC patch applies after active-selector patch; no build")
+            print("PASS: GPU/camera PMIC patches apply after active-selector patch; no build")
             return
         generated = root / "mode-mask-source.h"
         generated.write_text(helper)
@@ -55,6 +58,19 @@ def main():
             result = subprocess.run([str(binary)], cwd=root, capture_output=True)
             readback.require(result.returncode != 0, "accepted broken phase-mask implementation")
         print("PASS: wrong phase mask, swallowed error and invalid high-bit mutants rejected")
+        generated = root / "mode-transition-source.h"
+        generated.write_text(mode)
+        command = ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(root),
+                   str(HERE / "tests/mt6315-mode-transition.c"), "-o", str(binary)]
+        subprocess.run(command, check=True)
+        subprocess.run([str(binary)], check=True)
+        old = "if (curr_mode < 0)\n\t\treturn curr_mode;"
+        readback.require(old in mode, "missing read-error guard")
+        generated.write_text(mode.replace(old, "if (curr_mode < 0)\n\t\tcurr_mode = 0;"))
+        subprocess.run(command, check=True)
+        result = subprocess.run([str(binary)], cwd=root, capture_output=True)
+        readback.require(result.returncode != 0, "accepted PMIC write after mode read failure")
+        print("PASS: mode read-error swallowing mutant rejected")
 
 
 if __name__ == "__main__":

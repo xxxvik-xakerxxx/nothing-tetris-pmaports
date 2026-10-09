@@ -2,6 +2,20 @@
 
 ## Current status
 
+2026-10-09, installed r173: fresh read-only inspection still finds display
+`card0` only, no render node, no Mali platform device and no VGPU/VSRAM_CPUM
+provider. SPMI currently instantiates USIDs 4, 5 and 9, not 6. No GPU MMIO,
+clock-debugfs read or PMIC mode/voltage write was attempted.
+
+r174 candidate adds `0109`: stop MT6315/MT6319 mode changes after either
+current-mode read fails; requesting an already-normal mode is a successful
+no-op. This protects the shared camera VMM/GPU VGPU provider before runtime
+enablement. The CI harness executes the actual getter/setter over all four
+rails, phase/LP bit patterns, requested modes and read/write faults, asserting
+that errors cannot produce PMIC writes or disturb other rails. Patch application
+and overlay checks pass; native tests and kernel/image CI are pending.
+No supply or GPU consumer is enabled by this correction.
+
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
 files on the current image.** The 2026-10-08 observation below caused an
 external abort and reboot. Clock enumeration is not a passive hardware read.
