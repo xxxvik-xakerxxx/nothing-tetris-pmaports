@@ -118,9 +118,11 @@ ownership; its ARM64 integration and hardware startup remain pending.
 The direct camera candidate builds coherent CQ memory in the kernel and uses
 native vb2 RAW/meta buffers. Its restricted single-frame path needs no CCD
 daemon, new userspace ioctl or RPMSG transport. DONE observation is separate
-from controller-side IRQ drain/stop and buffer completion. Direct ARM64 API
-compilation and a real power/route/IRQ consumer remain pending; this is not
-camera capture support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
+from controller-side IRQ drain/stop and buffer completion.
+[CI 37989392644](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37989392644)
+passed all 18 ARM64 objects including the direct path. A real power/route/IRQ
+consumer and hardware capture remain pending; compilation is not camera
+support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
 
 ## Project rules
 

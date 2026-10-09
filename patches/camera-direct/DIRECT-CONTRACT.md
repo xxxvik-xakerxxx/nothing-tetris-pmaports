@@ -103,7 +103,11 @@ still must own and implement:
   guaranteed safe DMA stop can allow core queue destruction or deadlock. This
   draft therefore does not register a node or pretend that boundary is solved.
 
-Next gates: isolated ARM64 objects, then provider-backed test-kernel lifetime
+Isolated ARM64 CI [37989392644](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37989392644)
+passed at `b01de60`, including both direct objects and the existing vb2/resource
+implementation. This does not run camera MMIO or establish capture.
+
+Next gates: provider-backed test-kernel lifetime
 checks (unsupported owner before MMIO; failed stop keeps CQ/buffers; complete
 tags alone cannot return buffers). Only after power/route/IRQ/reset owners are
 validated may main activate DT and attempt one frame while preserving USB.
