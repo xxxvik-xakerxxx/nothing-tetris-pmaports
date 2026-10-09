@@ -20,6 +20,16 @@ read-error-swallowing mutant. Kernel/image CI and live PMIC behavior remain
 pending; this run produced no install image.
 No supply or GPU consumer is enabled by this correction.
 
+r175 candidate adds `0110` to select only available BUCK children from an
+explicit `regulators` container before regmap setup. Missing/disabled rail
+children are not registered without constraints; an empty/disabled container
+fails with `-ENODEV`. The historical all-rail fallback is retained only when
+the container is absent. No new DT node or PMIC transaction is introduced.
+The actual helper has 512 presence/availability tests, reference-balance
+checks and negative mutants; native CI is pending. Registering the actual
+USID-6 provider still requires proving probe/shutdown and inherited rail
+ownership, including regulator-core cleanup behavior.
+
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
 files on the current image.** The 2026-10-08 observation below caused an
 external abort and reboot. Clock enumeration is not a passive hardware read.

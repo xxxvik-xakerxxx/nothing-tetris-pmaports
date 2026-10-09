@@ -29,7 +29,8 @@ def main():
             path.write_text(readback.file_text(args.kernel, readback.KERNEL_COMMIT, name))
         for name in ("0105-regulator-mt6315-read-active-voltage-selector.patch",
                      "0108-regulator-mt6315-board-mode-mask.patch",
-                     "0109-regulator-mt6315-stop-mode-change-on-read-error.patch"):
+                     "0109-regulator-mt6315-stop-mode-change-on-read-error.patch",
+                     "0110-regulator-mt6315-register-described-rails.patch"):
             subprocess.run(["git", "apply", "--check", str(package / name)],
                            cwd=root, check=True)
             subprocess.run(["git", "apply", str(package / name)], cwd=root, check=True)
@@ -39,6 +40,13 @@ def main():
         helper = readback.function(source, "static int mt6315_init_mode_masks(")
         mode = readback.function(source, "static unsigned int mt6315_regulator_get_mode(")
         mode += "\n" + readback.function(source, "static int mt6315_regulator_set_mode(")
+        rails = readback.function(source, "static int mt6315_described_rails(")
+        probe = readback.function(source, "static int mt6315_regulator_probe(")
+        readback.require(probe.index("mask = mt6315_described_rails(dev);") <
+                         probe.index("devm_regmap_init_spmi_ext"),
+                         "rail selection must precede PMIC setup")
+        readback.require("if (!(mask & BIT(i)))\n\t\t\tcontinue;" in probe,
+                         "probe must skip undescribed rails")
         if args.apply_only:
             print("PASS: GPU/camera PMIC patches apply after active-selector patch; no build")
             return
@@ -71,6 +79,20 @@ def main():
         result = subprocess.run([str(binary)], cwd=root, capture_output=True)
         readback.require(result.returncode != 0, "accepted PMIC write after mode read failure")
         print("PASS: mode read-error swallowing mutant rejected")
+        generated = root / "described-rails-source.h"
+        generated.write_text(rails)
+        command = ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(root),
+                   str(HERE / "tests/mt6315-described-rails.c"), "-o", str(binary)]
+        subprocess.run(command, check=True)
+        subprocess.run([str(binary)], check=True)
+        for old, new in (("of_device_is_available(child)", "child != NULL"),
+                         ("of_node_put(child);", "(void)child;")):
+            readback.require(old in rails, "missing rail mutation anchor")
+            generated.write_text(rails.replace(old, new))
+            subprocess.run(command, check=True)
+            result = subprocess.run([str(binary)], cwd=root, capture_output=True)
+            readback.require(result.returncode != 0, "accepted unsafe rail selection")
+        print("PASS: disabled-rail and leaked-DT-reference mutants rejected")
 
 
 if __name__ == "__main__":

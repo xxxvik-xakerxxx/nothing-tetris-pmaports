@@ -13,6 +13,13 @@ tests passed 16,384 cases in CI `37885933479`, including a negative mutant.
 The full kernel/image build is pending; runtime power ownership
 and the missing receiver/capture pipeline remain open.
 
+The subsequent shared r175 candidate `0110` prevents registration of
+undescribed or disabled BUCK outputs when DT supplies an explicit regulator
+list. This is needed before selectively binding camera VMM without exposing
+unowned GPU/VCORE outputs. It does not turn on a camera supply or sensor.
+The 512-case actual-helper/DT-reference gate is pending native CI; runtime
+probe-off/shutdown and regulator-core cleanup still need evidence.
+
 Do not use global clock debugfs reads for the camera baseline: the current
 r168 image rebooted with an external abort while reading `clk_summary`.
 See the [captured clock-gate trace](GPU_BRINGUP.md#2026-10-08-clock-observation-failure).

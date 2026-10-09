@@ -1,0 +1,64 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: register only available described rails
+
+Do not expose unowned BUCK outputs when a board describes only part of an
+MT6315/MT6319 PMIC. A disabled or missing child must not become a regulator
+without its constraints. Preserve the historical all-rail fallback when no
+regulators container exists, and reject an explicitly empty/disabled list
+before creating a regmap. This adds no DT node or PMIC access.
+
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -214,6 +214,29 @@ static const struct of_device_id mt6315_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, mt6315_of_match);
+ 
++static int mt6315_described_rails(struct device *dev)
++{
++	struct device_node *regulators, *child;
++	int mask = 0;
++	int i;
++
++	regulators = of_get_child_by_name(dev->of_node, "regulators");
++	if (!regulators)
++		return GENMASK(MT6315_VBUCK_MAX - 1, 0);
++	if (of_device_is_available(regulators)) {
++		for (i = MT6315_VBUCK1; i < MT6315_VBUCK_MAX; i++) {
++			child = of_get_child_by_name(regulators,
++						   mt6315_regulators[i].desc.of_match);
++			if (of_device_is_available(child))
++				mask |= BIT(i);
++			of_node_put(child);
++		}
++	}
++	of_node_put(regulators);
++
++	return mask ? mask : -ENODEV;
++}
++
+ static int mt6315_init_mode_masks(struct device *dev, unsigned int usid,
+ 				  struct mt_regulator_init_data *init_data)
+ {
+@@ -261,7 +284,11 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	struct mt_regulator_init_data *init_data;
+ 	struct regulator_config config = {};
+ 	struct regulator_dev *rdev;
+-	int i, ret;
++	int i, ret, mask;
++
++	mask = mt6315_described_rails(dev);
++	if (mask < 0)
++		return dev_err_probe(dev, mask, "No available BUCK rails\n");
+ 
+ 	regmap = devm_regmap_init_spmi_ext(pdev, &mt6315_regmap_config);
+ 	if (IS_ERR(regmap))
+@@ -288,6 +315,8 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	config.dev = dev;
+ 	config.regmap = regmap;
+ 	for (i = MT6315_VBUCK1; i < MT6315_VBUCK_MAX; i++) {
++		if (!(mask & BIT(i)))
++			continue;
+ 		config.driver_data = init_data;
+ 		rdev = devm_regulator_register(dev, &mt6315_regulators[i].desc, &config);
+ 		if (IS_ERR(rdev)) {
