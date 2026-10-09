@@ -23,7 +23,16 @@ Retained U-Boot code `56de656803` from CI `37902382709` again reports
 authenticated modem RAM preparation, not modem execution or SIM/calls.
 Sensor startup was disabled on the fresh image; previous opt-in was restored
 for the next cold boot without starting/reloading modules on this warm boot.
-Cold-start and lifecycle checks remain pending. GPU render nodes and camera
+User-confirmed cold power-on produced boot
+`436b22a7-5886-4e19-b692-8ccd6e92b81d`: sensor firmware ready, 24 inventory
+entries and physical mask 31 at 17.114 seconds, SensorProxy started at
+17.488 seconds. All three D-Bus classes are present; a bounded 30-second
+capture received real 134-135 lux light updates. No orientation/proximity
+transition or brightness change was captured; desktop confirmation is pending.
+USB/SSH, installed FIT hash and another 32 MiB transfer passed, with no
+failed units or critical kernel crash signature. Modem RAM preparation again
+reports zero error, not execution. This is one cold-start pass after opt-in;
+repeat, lifecycle and portability checks remain open. GPU render nodes and camera
 video/media nodes remain absent; GNSS navigation is not established.
 
 Image SHA256:

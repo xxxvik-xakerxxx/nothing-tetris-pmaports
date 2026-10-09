@@ -1142,7 +1142,13 @@ pass, not modem execution; protection/remap and the CCCI handoff remain open.
 See the current
 [installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r175).
 
-Next integration gate: repeat preparation on cold boot, establish the
+On clean r175, warm boot `aa136f81-1539-4455-a2f9-7eed5ffacc91` and
+user-confirmed cold power-on `436b22a7-5886-4e19-b692-8ccd6e92b81d` both
+report `service-initialization`, zero error, `ram-loaded-not-started` with
+separate reservations. Cold automatic sensor startup and a hash-verified
+32 MiB USB transfer also passed; no modem execution was attempted.
+
+Next integration gate: repeat cold preparation, establish the
 span-mapping consumer contract (the old U-Boot observation validator still
 rejects this large gap), apply/read back protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
