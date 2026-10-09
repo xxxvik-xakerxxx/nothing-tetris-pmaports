@@ -1,0 +1,47 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: validate explicitly owned mode phases
+
+Registering a subset of BUCK rails is not enough to establish mode ownership:
+VBUCK1 FAST or FAST-to-NORMAL requests can alter several phase bits.
+For boards that explicitly describe buck1-mode-mask, reject a mask reaching
+outside the described available rails before registering any regulator.
+Never silently truncate a coupled mask.
+
+Preserve historical default coupled-phase behavior when the property is
+absent: existing MT8192/MT8195 boards describe only selected outputs of
+physically coupled bucks. Described-output presence does not prove their
+historical physical phase topology incorrect. Tetris's USID-6 inventory
+explicitly supplies mask 1, matching Nothing B4.1 commit
+ee2be53cb75670b548948636a0db1d1ff112bf12, and remains disabled.
+
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -280,6 +280,15 @@ static int mt6315_init_mode_masks(struct device *dev, unsigned int usid,
+ 	return 0;
+ }
+ 
++static bool mt6315_mode_mask_owned(struct device *dev, u32 rails, u32 phases)
++{
++	/* Preserve legacy coupled outputs unless the board declares its phases. */
++	if (!of_find_property(dev->of_node, "mediatek,buck1-mode-mask", NULL))
++		return true;
++
++	return !(rails & BIT(MT6315_VBUCK1)) || !(phases & ~rails);
++}
++
+ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -303,6 +312,11 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Invalid BUCK mode mask\n");
+ 
++	/* Explicit mode changes must not write phases outside this provider. */
++	if (!mt6315_mode_mask_owned(dev, mask,
++				    init_data->modeset_mask[MT6315_VBUCK1]))
++		return dev_err_probe(dev, -EINVAL, "BUCK mode mask includes unowned rails\n");
++
+ 	chip->dev = dev;
+ 	chip->regmap = regmap;
+ 	dev_set_drvdata(dev, chip);

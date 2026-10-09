@@ -1,0 +1,68 @@
+From: Tetris port maintainers
+Subject: [PATCH] arm64: dts: tetris: describe disabled GPU supply providers
+
+Describe the MT6319 USID-6 VBUCK2 and MT6363 VSRAM_CPUM wiring from
+Nothing B4.1 device modules ee2be53cb75670b548948636a0db1d1ff112bf12.
+Use the upstream direct SPMI regulator binding rather than vendor MFD
+nesting. Keep the provider and both children disabled; no consumer or OPP
+is added, no voltage/enable/mode/always-on request is made at runtime.
+
+Do not describe VBUCK1 camera VMM or shared VBUCK4 VCORE as Linux-owned.
+The board's VBUCK1 phase mask is 1, not the historical USID-6 mask 11.
+Enabling these nodes requires a separate GPUEB/power ownership experiment,
+including regulator-core registration writes, and is not a GPU enable.
+Depends on 0030 available-child filtering and 0108/0110 mode/rail filtering.
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dts
+@@ -7,6 +7,7 @@
+ #include "mt6878-nothing-tetris.dts"
+ #include <dt-bindings/power/mediatek,mt6878-power.h>
+ #include "mt6878-native-display-power.dtsi"
++#include "mt6878-tetris-gpu-supplies.dtsi"
+ 
+ / {
+ 	model = "Nothing CMF Phone 1 (native display)";
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi
+@@ -0,0 +1,37 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++#include <dt-bindings/spmi/spmi.h>
++
++/* Inventory only: GPUEB/secure-world rail ownership is not established. */
++&spmi {
++	mt6319_gpu: pmic@6 {
++		compatible = "mediatek,mt6319-regulator",
++			     "mediatek,mt6315-regulator";
++		reg = <0x6 SPMI_USID>;
++		mediatek,buck1-mode-mask = <0x1>;
++		status = "disabled";
++
++		regulators {
++			mt6319_vgpu: vbuck2 {
++				regulator-name = "mt6319-vgpu";
++				regulator-min-microvolt = <300000>;
++				regulator-max-microvolt = <1193750>;
++				regulator-enable-ramp-delay = <256>;
++				status = "disabled";
++			};
++		};
++	};
++};
++
++&main_pmic {
++	regulators {
++		mt6363_vsram_cpum: vsram-cpum {
++			regulator-name = "mt6363-vsram-cpum";
++			regulator-min-microvolt = <400000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <180>;
++			status = "disabled";
++		};
++	};
++};
++
++/* No supply phandle is attached until both providers have a live contract. */

@@ -319,6 +319,134 @@ def config_producer(mnld, lib):
     print("PASS: actual libmnl entry copies distinct 0x70/0x444 inputs without crossing guards; stops before init")
 
 
+def build_policy(mnld):
+    m = Machine(mnld, MNLD_SHA, [(0x628e0, 0x62a10)])
+    properties = {}
+    reads = []
+    def property_get(a):
+        name = bytes(m.u.mem_read(a[0], 32)).split(b"\0", 1)[0].decode()
+        assert name in ("ro.build.type", "ro.debuggable") and a[2] == 0
+        reads.append(name)
+        value = properties[name].encode()
+        m.u.mem_write(a[1], value + b"\0")
+        return len(value)
+    m.mock(0x85530, property_get)
+    m.mock(0x84f30, lambda a: 0)  # Diagnostic formatting, not policy.
+    for kind, debug, expected in (("user", "0", 0), ("user", "1", 0),
+                                  ("eng", "1", 1), ("userdebug", "1", 2),
+                                  ("eng", "0", -1), ("userdebug", "0", -1),
+                                  ("eng", "10", -1), ("unknown", "1", -1),
+                                  ("", "", -1)):
+        reads.clear()
+        properties.update({"ro.build.type": kind, "ro.debuggable": debug})
+        m.run(0x628e0)
+        assert m.args()[0] == expected & 0xffffffff
+        assert reads == ["ro.build.type", "ro.debuggable"]
+    print("PASS: full628e0 build policy producer; nine property vectors; offsetc8 is not GNSS mode")
+
+
+def mandatory_callbacks(mnld, lib):
+    with mnld.open("rb") as stream:
+        elf = ELFFile(stream)
+        relocations = {r["r_offset"]: r["r_addend"]
+                       for r in elf.get_section_by_name(".rela.dyn").iter_relocations()}
+    expected = (0x5de00, 0x7b240, 0x7b3f0, 0x7ba50, 0x7bbc0,
+                0x7b850, 0x5fa80, 0x5d910, 0x5d920, 0x5d930)
+    assert tuple(relocations[0x88cb8 + i * 8] for i in range(10)) == expected
+    print("PASS: pinned mnld registration table RELATIVE producers0..9")
+
+    m = Machine(mnld, MNLD_SHA, [(0x5d910, 0x5d934), (0x84c6c, 0x84e8c)])
+    for count in (0, 1, 7, 8, 15, 16, 31, 32, 33, 63, 256):
+        for operation in (0, 1):
+            for overlap in (False, True):
+                src, dst = DATA, DATA + (1 if overlap else 0x1000)
+                initial = bytes(range(256)) * 32
+                m.u.mem_write(DATA, initial)
+                result = bytearray(initial)
+                for i in range(count):
+                    value = result[i]
+                    result[dst - DATA + i] = (((value ^ 0x63) << 2) |
+                                              ((value ^ 0x63) >> 6)) & 255 if operation else \
+                                             (((value >> 2) | (value << 6)) ^ 0x63) & 255
+                # Producer wrappers8/9 tail-call helpers with asymmetric operands.
+                m.run(0x5d930 if operation else 0x5d920,
+                      args=(dst, src, count) if operation else (src, dst, count))
+                assert m.args()[0] == count
+                assert bytes(m.u.mem_read(DATA, len(initial))) == bytes(result)
+    print("PASS: slots8/9 full scalar/SIMD bodies;44 length/direction/overlap vectors")
+    for value in (0, 1, 0x80000000, 0xffffffff):
+        m.run(0x5d910, args=(value,))
+        assert m.args()[0] == value
+    l = Machine(lib, LIB_SHA, [(0x509064, 0x509074)])
+    l.q(l.global_at(0x6e6d38), STOP + 4)
+    l.mock(STOP + 4, lambda a: a[0])
+    l.run(0x509064, args=(0x80000000,))
+    assert l.args()[0] == 0x80000000
+    print("PASS: slot7 RET preserves input; libmnl veneer preserves w0; consumer542008 passes fcvtzs w0")
+
+    m = Machine(mnld, MNLD_SHA, [(0x7b850, 0x7b990)])
+    def string(p, bound=64):
+        raw = bytes(m.u.mem_read(p, bound))
+        assert b"\0" in raw
+        return raw.split(b"\0", 1)[0]
+    def formatter(a):
+        fmt = string(a[2])
+        value = m.u.reg_read(UC_ARM64_REG_X4) & 0xffffffff
+        if fmt == b"PMTK%d,1,%d":
+            assert a[3] == 736
+            out = fmt % (a[3], value if value < 0x80000000 else value - 0x100000000)
+        else:
+            assert fmt == b"$%s*%02X\r\n"
+            out = fmt % (string(a[3]), value)
+        assert len(out) < 64
+        m.u.mem_write(a[0], out + b"\0")
+        return len(out)
+    m.mock(0x7b9a0, formatter)
+    def copy(a):
+        raw = string(a[1])[:a[2]].ljust(a[2], b"\0")
+        assert a[2] < a[3] == 64
+        m.u.mem_write(a[0], raw)
+        return a[0]
+    m.mock(0x85000, copy)
+    m.mock(0x853c0, lambda a: len(string(a[0], a[1])))
+    sent = []
+    m.mock(0x5fa80, lambda a: sent.append((a[0], bytes(m.u.mem_read(a[2], a[1])))) or 0xffffffff)
+    for value in (0, 1, 255, 256, 0x7fffffff, 0x80000000, 0xffffffff):
+        sent.clear()
+        m.run(0x7b850, args=(value,))
+        body = f"PMTK736,1,{value if value < 0x80000000 else value - 0x100000000}".encode()
+        checksum = 0
+        for byte in body:
+            checksum ^= byte
+        assert sent == [(0, b"$" + body + f"*{checksum:02X}\r\n".encode())]
+        assert m.args()[0] == 0
+    print("PASS: slot5 full callback; seven signed32 vectors; CRLF retained; vendor masks dispatch failure")
+
+    m = Machine(mnld, MNLD_SHA, [(0x5de00, 0x5de60), (0x5f9e8, 0x5fa24)])
+    m.map(STACK - 0x50000, 0x60000)
+    for event in (1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 14, 0xffffffff):
+        m.run(0x5de00, args=(event,))
+        assert m.args()[0] == 0
+    for event, target in ((0, 0x5de60), (3, 0x5dfd8), (7, 0x5df28), (13, 0x5e0c0)):
+        m.run(0x5de00, target, args=(event,))
+    print("PASS: slot0 twelve genuine no-action selectors; four active targets identified, NOT executed")
+
+    m = Machine(mnld, MNLD_SHA, [(0x7b240, 0x7b3c4)])
+    m.map(0x89000, 4096)
+    m.u.mem_write(0x89264, bytes(4))  # Explicit diagnostic-disabled state.
+    m.run(0x7b240, args=(DATA, 5))
+    assert m.args()[0] == 0
+    print("PASS: slot1 diagnostic-disabled producer returns0; pointer/length consumer already tested")
+
+    m = Machine(mnld, MNLD_SHA, [(0x5fa80, 0x5feb0)])
+    m.u.mem_write(0x88bf4, bytes(4))  # Explicit receiver-off state, not ELF default.
+    m.mock(0x84f30, lambda a: 0)
+    for selector in (0, 1, 7):
+        m.run(0x5fa80, args=(selector, 5, DATA))
+        assert m.args()[0] == 0xffffffff
+    print("PASS: slot6 mandatory receiver-off gate returns-1; no fabricated AGPS delivery")
+
+
 if __name__ == "__main__":
     lib, mnld = map(Path, sys.argv[1:])
     registration(lib)
@@ -327,4 +455,6 @@ if __name__ == "__main__":
     nmea(lib)
     frame_callbacks(lib, mnld)
     config_producer(mnld, lib)
+    build_policy(mnld)
+    mandatory_callbacks(mnld, lib)
     print("OFFLINE ONLY: mocked globals/endpoints, no complete init, firmware, receiver or solver")

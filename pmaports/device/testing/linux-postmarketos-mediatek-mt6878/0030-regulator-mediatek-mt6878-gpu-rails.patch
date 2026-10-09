@@ -11,16 +11,16 @@ connectivity rails needed by the current port.
 Add the VSRAM_CPUM register and voltage description from Nothing OS 4.1
 Tetris device modules revision
 ee2be53cb75670b548948636a0db1d1ff112bf12. Only register regulators
-which have a matching child in DT. There is deliberately no VSRAM_CPUM
+which have an available matching child in DT. There is no VSRAM_CPUM
 DT child in this patch, so this is compile-only inventory and causes no
 new PMIC access, enable, voltage change or autoload at runtime.
 
 Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
 ---
  .../regulator/mediatek,mt6363-regulator.yaml  | 52 +++++++++++++++++++
- drivers/regulator/mt6363-regulator.c          | 42 +++++++++++++++
+ drivers/regulator/mt6363-regulator.c          | 43 +++++++++++++++
  include/linux/mfd/mt6363/registers.h          |  2 ++
- 3 files changed, 96 insertions(+)
+ 3 files changed, 97 insertions(+)
  create mode 100644 Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml
 
 diff --git a/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml b/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml
@@ -111,7 +111,7 @@ diff --git a/drivers/regulator/mt6363-regulator.c b/drivers/regulator/mt6363-reg
  static const struct regulator_desc mt6363_regulators[] = {
  	{
  		.name = "vcn13",
-@@ -72,6 +85,20 @@ static const struct regulator_desc mt6363_regulators[] = {
+@@ -72,6 +85,21 @@ static const struct regulator_desc mt6363_regulators[] = {
  		.vsel_reg = MT6363_VRFIO18_VSEL,
  		.vsel_mask = GENMASK(3, 0),
  	},
@@ -126,17 +126,19 @@ diff --git a/drivers/regulator/mt6363-regulator.c b/drivers/regulator/mt6363-reg
 +		.n_voltages = 0x80,
 +		.enable_reg = MT6363_VSRAM_CPUM_ENABLE,
 +		.enable_mask = BIT(0),
++		.enable_time = 180,
 +		.vsel_reg = MT6363_VSRAM_CPUM_VSEL,
 +		.vsel_mask = GENMASK(6, 0),
 +	},
  };
  
  static int mt6363_regulator_probe(struct platform_device *pdev)
-@@ -91,6 +118,18 @@ static int mt6363_regulator_probe(struct platform_device *pdev)
+@@ -91,6 +119,20 @@ static int mt6363_regulator_probe(struct platform_device *pdev)
  
  	for (i = 0; i < ARRAY_SIZE(mt6363_regulators); i++) {
  		struct regulator_dev *rdev;
 +		struct device_node *np;
++		bool available;
 +
 +		/*
 +		 * Do not register unmodelled rails. Besides keeping this provider
@@ -145,9 +147,10 @@ diff --git a/drivers/regulator/mt6363-regulator.c b/drivers/regulator/mt6363-reg
 +		 */
 +		np = of_get_child_by_name(pdev->dev.of_node,
 +					  mt6363_regulators[i].of_match);
-+		if (!np)
-+			continue;
++		available = of_device_is_available(np);
 +		of_node_put(np);
++		if (!available)
++			continue;
  
  		rdev = devm_regulator_register(&pdev->dev,
  					      &mt6363_regulators[i], &config);

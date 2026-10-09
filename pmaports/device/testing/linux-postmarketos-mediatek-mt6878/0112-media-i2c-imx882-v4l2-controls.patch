@@ -1,0 +1,2058 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: add bounded Tetris IMX882 V4L2 streaming candidate
+
+No board DT activation. Keep identity-only probing as a separate driver.
+Tables are mechanically copied from the pinned Nothing 4.1 driver.
+Controls use short exposure only; calibration and receiver ownership
+remain separate runtime gates. Build native tests and module in CI only.
+
+diff --git a/drivers/media/i2c/imx882-tetris-stream.c b/drivers/media/i2c/imx882-tetris-stream.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/i2c/imx882-tetris-stream.c
+@@ -0,0 +1,665 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Unenabled candidate: requires owned power and a C-PHY receiver. */
++#include <linux/kernel.h>
++#include <linux/mutex.h>
++#include <linux/pm.h>
++#include <media/v4l2-async.h>
++#include <media/v4l2-ctrls.h>
++#include <media/v4l2-device.h>
++#include <media/v4l2-fwnode.h>
++#include "imx882-tetris-tables.h"
++#include <linux/clk.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/regulator/consumer.h>
++
++#define IMX882_REG_CHIP_ID_HIGH		0x0016
++#define IMX882_REG_CHIP_ID_LOW		0x0017
++#define IMX882_CHIP_ID			0x8202
++#define IMX882_XCLK_RATE		24000000
++
++enum imx882_supply_id {
++	IMX882_SUPPLY_AFVDD,
++	IMX882_SUPPLY_AVDD,
++	IMX882_SUPPLY_DVDD,
++	IMX882_SUPPLY_DOVDD,
++	IMX882_NUM_SUPPLIES,
++};
++
++static const char * const imx882_supply_names[IMX882_NUM_SUPPLIES] = {
++	[IMX882_SUPPLY_AFVDD] = "afvdd",
++	[IMX882_SUPPLY_AVDD] = "avdd",
++	[IMX882_SUPPLY_DVDD] = "dvdd",
++	[IMX882_SUPPLY_DOVDD] = "dovdd",
++};
++
++static const int imx882_supply_uv[IMX882_NUM_SUPPLIES] = {
++	[IMX882_SUPPLY_AFVDD] = 2800000,
++	[IMX882_SUPPLY_AVDD] = 2800000,
++	[IMX882_SUPPLY_DVDD] = 1200000,
++	[IMX882_SUPPLY_DOVDD] = 1800000,
++};
++
++struct imx882_identity {
++	struct clk *xclk;
++	struct gpio_desc *reset;
++	struct pinctrl *pinctrl;
++	struct pinctrl_state *mclk_4ma;
++	struct pinctrl_state *mclk_off;
++	struct regulator_bulk_data supplies[IMX882_NUM_SUPPLIES];
++	bool rate_exclusive;
++};
++
++static int imx882_read_reg(struct i2c_client *client, u16 reg, u8 *value)
++{
++	u8 address[] = { reg >> 8, reg & 0xff };
++	struct i2c_msg messages[] = {
++		{
++			.addr = client->addr,
++			.flags = 0,
++			.len = sizeof(address),
++			.buf = address,
++		},
++		{
++			.addr = client->addr,
++			.flags = I2C_M_RD,
++			.len = sizeof(*value),
++			.buf = value,
++		},
++	};
++	int ret;
++
++	ret = i2c_transfer(client->adapter, messages, ARRAY_SIZE(messages));
++	if (ret < 0)
++		return ret;
++	if (ret != ARRAY_SIZE(messages))
++		return -EIO;
++
++	return 0;
++}
++
++static int imx882_enable_supply(struct imx882_identity *imx882,
++				int supply)
++{
++	int ret;
++
++	ret = regulator_set_voltage(imx882->supplies[supply].consumer,
++				    imx882_supply_uv[supply],
++				    imx882_supply_uv[supply]);
++	if (ret)
++		return ret;
++
++	return regulator_enable(imx882->supplies[supply].consumer);
++}
++
++static int imx882_disable_supply(struct imx882_identity *imx882,
++				  int supply)
++{
++	return regulator_disable(imx882->supplies[supply].consumer);
++}
++
++static int imx882_power_off(struct imx882_identity *imx882,
++			     unsigned long enabled_supplies, bool clock_enabled)
++{
++	int ret, err, supply;
++
++	/* Descriptor values are logical; assert reset before removing power. */
++	gpiod_set_value_cansleep(imx882->reset, 1);
++
++	if (clock_enabled)
++		clk_disable_unprepare(imx882->xclk);
++	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_off);
++
++	for (supply = IMX882_NUM_SUPPLIES - 1; supply >= 0; supply--) {
++		if (!(enabled_supplies & BIT(supply)))
++			continue;
++		err = imx882_disable_supply(imx882, supply);
++		if (!ret)
++			ret = err;
++	}
++	if (imx882->rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk);
++		imx882->rate_exclusive = false;
++	}
++	return ret;
++}
++
++static int imx882_power_on(struct imx882_identity *imx882,
++			   unsigned long *enabled_supplies,
++			   bool *clock_enabled)
++{
++	int ret;
++
++	ret = clk_set_rate_exclusive(imx882->xclk, IMX882_XCLK_RATE);
++	if (ret)
++		return ret;
++	imx882->rate_exclusive = true;
++	if (clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE)
++		return -EINVAL;
++
++	gpiod_set_value_cansleep(imx882->reset, 1);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AFVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_AFVDD);
++	usleep_range(1000, 1100);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_AVDD);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_DVDD);
++	usleep_range(1000, 1100);
++
++	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DOVDD);
++	if (ret)
++		return ret;
++	*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);
++	usleep_range(1000, 1100);
++
++	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_4ma);
++	if (ret)
++		return ret;
++
++	ret = clk_prepare_enable(imx882->xclk);
++	if (ret)
++		return ret;
++	*clock_enabled = true;
++	usleep_range(5000, 5100);
++
++	gpiod_set_value_cansleep(imx882->reset, 0);
++	usleep_range(1000, 1100);
++
++	return 0;
++}
++
++/* Appended to the existing, checked IMX882 board power helpers by generate.py. */
++
++struct imx882_camera {
++	struct imx882_identity power;
++	struct v4l2_subdev sd;
++	struct media_pad pad;
++	struct v4l2_ctrl_handler controls;
++	struct v4l2_ctrl *vblank;
++	struct v4l2_ctrl *exposure;
++	struct v4l2_ctrl *gain;
++	struct v4l2_ctrl *hblank;
++	struct v4l2_mbus_config_mipi_csi2 cphy;
++	/* Shared with active-state and control locks; serializes power and I2C. */
++	struct mutex lock;
++	struct i2c_client *client;
++	const struct imx882_mode *mode;
++	unsigned long enabled_supplies;
++	bool clock_enabled;
++	bool streaming;
++	bool faulted;
++};
++
++static struct imx882_camera *to_imx882(struct v4l2_subdev *sd)
++{
++	return container_of(sd, struct imx882_camera, sd);
++}
++
++static int imx882_write(void *context, unsigned short address,
++			unsigned char value)
++{
++	struct imx882_camera *camera = context;
++	u8 data[] = { address >> 8, address & 0xff, value };
++	int ret = i2c_master_send(camera->client, data, sizeof(data));
++
++	return ret < 0 ? ret : ret == sizeof(data) ? 0 : -EIO;
++}
++
++static struct imx882_bus imx882_bus(struct imx882_camera *camera)
++{
++	return (struct imx882_bus) { .write = imx882_write, .context = camera };
++}
++
++static int imx882_apply_controls(struct imx882_camera *camera)
++{
++	struct imx882_bus bus = imx882_bus(camera);
++
++	return imx882_write_controls(&bus,
++		camera->mode->height + camera->vblank->val,
++		camera->exposure->val, camera->gain->val);
++}
++
++static int imx882_set_control(struct v4l2_ctrl *ctrl)
++{
++	struct imx882_camera *camera = container_of(ctrl->handler,
++		struct imx882_camera, controls);
++	int ret = 0;
++
++	if (ctrl->id == V4L2_CID_VBLANK) {
++		int maximum = camera->mode->height + ctrl->val - 64;
++
++		__v4l2_ctrl_modify_range(camera->exposure, 6, maximum, 1,
++					min(1000, maximum));
++	}
++	if (camera->faulted)
++		return -EIO;
++	if (camera->streaming)
++		ret = imx882_apply_controls(camera);
++	if (ret)
++		camera->faulted = true;
++	return ret;
++}
++
++static const struct v4l2_ctrl_ops imx882_control_ops = {
++	.s_ctrl = imx882_set_control,
++};
++
++static void imx882_fill_format(const struct imx882_mode *mode,
++			       struct v4l2_mbus_framefmt *format)
++{
++	*format = (struct v4l2_mbus_framefmt) {
++		.width = mode->width, .height = mode->height,
++		.code = MEDIA_BUS_FMT_SRGGB10_1X10,
++		.field = V4L2_FIELD_NONE, .colorspace = V4L2_COLORSPACE_RAW,
++	};
++}
++
++static int imx882_init_state(struct v4l2_subdev *sd,
++			     struct v4l2_subdev_state *state)
++{
++	imx882_fill_format(&imx882_modes[0],
++			   v4l2_subdev_state_get_format(state, 0));
++	return 0;
++}
++
++static int imx882_enum_code(struct v4l2_subdev *sd,
++	struct v4l2_subdev_state *state, struct v4l2_subdev_mbus_code_enum *code)
++{
++	if (code->pad || code->index || code->stream)
++		return -EINVAL;
++	code->code = MEDIA_BUS_FMT_SRGGB10_1X10;
++	return 0;
++}
++
++static int imx882_enum_size(struct v4l2_subdev *sd,
++	struct v4l2_subdev_state *state, struct v4l2_subdev_frame_size_enum *size)
++{
++	if (size->pad || size->stream || size->index >= ARRAY_SIZE(imx882_modes) ||
++	    size->code != MEDIA_BUS_FMT_SRGGB10_1X10)
++		return -EINVAL;
++	size->min_width = size->max_width = imx882_modes[size->index].width;
++	size->min_height = size->max_height = imx882_modes[size->index].height;
++	return 0;
++}
++
++static int imx882_set_format(struct v4l2_subdev *sd,
++	struct v4l2_subdev_state *state, struct v4l2_subdev_format *format)
++{
++	struct imx882_camera *camera = to_imx882(sd);
++	const struct imx882_mode *mode;
++
++	if (format->pad || format->stream)
++		return -EINVAL;
++	mode = v4l2_find_nearest_size(imx882_modes, ARRAY_SIZE(imx882_modes),
++				    width, height, format->format.width,
++				    format->format.height);
++	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE && camera->streaming)
++		return -EBUSY;
++	imx882_fill_format(mode, &format->format);
++	*v4l2_subdev_state_get_format(state, 0) = format->format;
++	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
++		camera->mode = mode;
++		__v4l2_ctrl_modify_range(camera->hblank, 7500 - mode->width,
++					7500 - mode->width, 1, 7500 - mode->width);
++		__v4l2_ctrl_modify_range(camera->vblank, 3900 - mode->height,
++			65535 - mode->height, 1, 3900 - mode->height);
++		__v4l2_ctrl_s_ctrl(camera->vblank, 3900 - mode->height);
++	}
++	return 0;
++}
++
++static int imx882_get_interval(struct v4l2_subdev *sd,
++	struct v4l2_subdev_state *state, struct v4l2_subdev_frame_interval *interval)
++{
++	struct imx882_camera *camera = to_imx882(sd);
++	unsigned int frame_length = 3900;
++
++	if (interval->pad || interval->stream)
++		return -EINVAL;
++	if (interval->which == V4L2_SUBDEV_FORMAT_ACTIVE)
++		frame_length = camera->mode->height + camera->vblank->val;
++	interval->interval.numerator = frame_length * 7500;
++	interval->interval.denominator = 878400000;
++	return 0;
++}
++
++static int imx882_mbus_config(struct v4l2_subdev *sd, unsigned int pad,
++			      struct v4l2_mbus_config *config)
++{
++	struct imx882_camera *camera = to_imx882(sd);
++
++	if (pad)
++		return -EINVAL;
++	memset(config, 0, sizeof(*config));
++	config->type = V4L2_MBUS_CSI2_CPHY;
++	config->bus.mipi_csi2 = camera->cphy;
++	/* No invented link frequency: this requires the receiver clock contract. */
++	return 0;
++}
++
++static int imx882_frame_desc(struct v4l2_subdev *sd, unsigned int pad,
++			     struct v4l2_mbus_frame_desc *desc)
++{
++	struct imx882_camera *camera = to_imx882(sd);
++
++	if (pad)
++		return -EINVAL;
++	mutex_lock(&camera->lock);
++	memset(desc, 0, sizeof(*desc));
++	desc->type = V4L2_MBUS_FRAME_DESC_TYPE_CSI2;
++	/* The unchanged vendor modes also emit PDAF on VC0, DT0x30. */
++	desc->num_entries = 2;
++	desc->entry[0].pixelcode = MEDIA_BUS_FMT_SRGGB10_1X10;
++	desc->entry[0].flags = V4L2_MBUS_FRAME_DESC_FL_LEN_MAX;
++	desc->entry[0].length = camera->mode->width * camera->mode->height * 10 / 8;
++	desc->entry[0].bus.csi2.vc = 0;
++	desc->entry[0].bus.csi2.dt = 0x2b;
++	desc->entry[1].bus.csi2.vc = 0;
++	desc->entry[1].bus.csi2.dt = 0x30;
++	/* Vendor frame_desc: width x (height / 4), remapped to RAW10. */
++	desc->entry[1].flags = V4L2_MBUS_FRAME_DESC_FL_BLOB |
++			       V4L2_MBUS_FRAME_DESC_FL_LEN_MAX;
++	desc->entry[1].length = camera->mode->width * (camera->mode->height / 4) * 10 / 8;
++	mutex_unlock(&camera->lock);
++	return 0;
++}
++
++static int imx882_stop(struct imx882_camera *camera)
++{
++	int ret = 0, cleanup;
++
++	if (camera->streaming)
++		ret = imx882_write(camera, 0x0100, 0);
++	cleanup = imx882_power_off(&camera->power, camera->enabled_supplies,
++				 camera->clock_enabled);
++	if (!ret)
++		ret = cleanup;
++	camera->streaming = false;
++	if (cleanup) {
++		/* An uncertain supply reference must not be enabled a second time. */
++		camera->faulted = true;
++		return ret;
++	}
++	camera->enabled_supplies = 0;
++	camera->clock_enabled = false;
++	camera->faulted = false;
++	return ret;
++}
++
++static int imx882_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct imx882_camera *camera = to_imx882(sd);
++	struct imx882_bus bus = imx882_bus(camera);
++	u8 high, low;
++	int ret, cleanup;
++
++	mutex_lock(&camera->lock);
++	if (!enable) {
++		ret = camera->streaming ? imx882_stop(camera) : 0;
++		goto unlock;
++	}
++	if (camera->faulted) {
++		ret = -EIO;
++		goto unlock;
++	}
++	if (camera->streaming) {
++		ret = 0;
++		goto unlock;
++	}
++	ret = imx882_power_on(&camera->power, &camera->enabled_supplies,
++			      &camera->clock_enabled);
++	if (ret)
++		goto failed;
++	ret = imx882_read_reg(camera->client, IMX882_REG_CHIP_ID_HIGH, &high);
++	if (ret)
++		goto failed;
++	ret = imx882_read_reg(camera->client, IMX882_REG_CHIP_ID_LOW, &low);
++	if (ret)
++		goto failed;
++	if (((high << 8) | low) != IMX882_CHIP_ID) {
++		ret = -ENODEV;
++		goto failed;
++	}
++	ret = imx882_write_table(&bus, imx882_init_regs,
++				 ARRAY_SIZE(imx882_init_regs));
++	if (ret)
++		goto failed;
++	ret = imx882_write(camera, 0x0101, 0); /* vendor IMAGE_NORMAL */
++	if (ret)
++		goto failed;
++	/* Vendor's documented no-QSC branch; never write another unit's EEPROM. */
++	ret = imx882_write(camera, 0x3206, 0);
++	if (ret)
++		goto failed;
++	ret = imx882_write_table(&bus, camera->mode->regs, camera->mode->count);
++	if (ret)
++		goto failed;
++	ret = imx882_apply_controls(camera);
++	if (ret)
++		goto failed;
++	ret = imx882_write(camera, 0x0100, 1);
++	if (ret)
++		goto failed;
++	camera->streaming = true;
++	goto unlock;
++failed:
++	/* Reset/power-down contains even an ambiguous final stream-on write. */
++	cleanup = imx882_stop(camera);
++	if (cleanup)
++		dev_err(&camera->client->dev, "camera cleanup failed: %d\n", cleanup);
++	dev_err(&camera->client->dev, "camera start failed: %d\n", ret);
++unlock:
++	mutex_unlock(&camera->lock);
++	return ret;
++}
++
++static const struct v4l2_subdev_video_ops imx882_video_ops = {
++	.s_stream = imx882_stream,
++};
++
++static const struct v4l2_subdev_pad_ops imx882_pad_ops = {
++	.enum_mbus_code = imx882_enum_code,
++	.enum_frame_size = imx882_enum_size,
++	.get_fmt = v4l2_subdev_get_fmt,
++	.set_fmt = imx882_set_format,
++	.get_frame_desc = imx882_frame_desc,
++	.get_frame_interval = imx882_get_interval,
++	.get_mbus_config = imx882_mbus_config,
++};
++
++static const struct v4l2_subdev_ops imx882_subdev_ops = {
++	.video = &imx882_video_ops,
++	.pad = &imx882_pad_ops,
++};
++
++static const struct v4l2_subdev_internal_ops imx882_internal_ops = {
++	.init_state = imx882_init_state,
++};
++
++static int imx882_camera_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct v4l2_fwnode_endpoint endpoint = {
++		.bus_type = V4L2_MBUS_CSI2_CPHY,
++	};
++	struct fwnode_handle *ep;
++	struct imx882_camera *camera;
++	struct imx882_identity *power;
++	struct v4l2_ctrl *pixel_rate;
++	u32 lanes[3], xclk_rate;
++	int ret, i;
++
++	ep = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
++	if (!ep)
++		return dev_err_probe(dev, -EINVAL, "missing C-PHY endpoint\n");
++	/* Parser otherwise silently replaces duplicate mappings with defaults. */
++	ret = fwnode_property_count_u32(ep, "data-lanes");
++	if (ret != ARRAY_SIZE(lanes)) {
++		fwnode_handle_put(ep);
++		return dev_err_probe(dev, -EINVAL, "requires explicit three-trio mapping\n");
++	}
++	ret = fwnode_property_read_u32_array(ep, "data-lanes", lanes,
++					   ARRAY_SIZE(lanes));
++	if (!ret && (lanes[0] != 0 || lanes[1] != 1 || lanes[2] != 2))
++		ret = -EINVAL;
++	if (ret) {
++		fwnode_handle_put(ep);
++		return dev_err_probe(dev, ret, "unsupported sensor C-PHY trio mapping\n");
++	}
++	ret = v4l2_fwnode_endpoint_parse(ep, &endpoint);
++	fwnode_handle_put(ep);
++	if (ret)
++		return ret;
++	if (endpoint.bus_type != V4L2_MBUS_CSI2_CPHY ||
++	    endpoint.bus.mipi_csi2.num_data_lanes != 3)
++		return dev_err_probe(dev, -EINVAL, "requires three C-PHY trios\n");
++	ret = device_property_read_u32(dev, "clock-frequency", &xclk_rate);
++	if (ret || xclk_rate != IMX882_XCLK_RATE)
++		return dev_err_probe(dev, -EINVAL, "requires explicit 24 MHz xclk claim\n");
++	camera = devm_kzalloc(dev, sizeof(*camera), GFP_KERNEL);
++	if (!camera)
++		return -ENOMEM;
++	power = &camera->power;
++	camera->client = client;
++	camera->mode = &imx882_modes[0];
++	camera->cphy = endpoint.bus.mipi_csi2;
++	for (i = 0; i < IMX882_NUM_SUPPLIES; i++)
++		power->supplies[i].supply = imx882_supply_names[i];
++	ret = devm_regulator_bulk_get(dev, IMX882_NUM_SUPPLIES, power->supplies);
++	if (ret)
++		return dev_err_probe(dev, ret, "camera supplies unavailable\n");
++	power->xclk = devm_clk_get(dev, "xclk");
++	if (IS_ERR(power->xclk))
++		return PTR_ERR(power->xclk);
++	power->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
++	if (IS_ERR(power->reset))
++		return PTR_ERR(power->reset);
++	if (!gpiod_is_active_low(power->reset))
++		return dev_err_probe(dev, -EINVAL, "reset must be active-low\n");
++	ret = gpiod_direction_output(power->reset, 1);
++	if (ret)
++		return ret;
++	power->pinctrl = devm_pinctrl_get(dev);
++	if (IS_ERR(power->pinctrl))
++		return PTR_ERR(power->pinctrl);
++	power->mclk_off = pinctrl_lookup_state(power->pinctrl, "mclk-off");
++	if (IS_ERR(power->mclk_off))
++		return PTR_ERR(power->mclk_off);
++	power->mclk_4ma = pinctrl_lookup_state(power->pinctrl, "mclk-4ma");
++	if (IS_ERR(power->mclk_4ma))
++		return PTR_ERR(power->mclk_4ma);
++	mutex_init(&camera->lock);
++	v4l2_i2c_subdev_init(&camera->sd, client, &imx882_subdev_ops);
++	camera->sd.internal_ops = &imx882_internal_ops;
++	camera->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
++	camera->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
++	camera->sd.state_lock = &camera->lock;
++	v4l2_ctrl_handler_init(&camera->controls, 5);
++	camera->controls.lock = &camera->lock;
++	camera->vblank = v4l2_ctrl_new_std(&camera->controls, &imx882_control_ops,
++		V4L2_CID_VBLANK, 900, 62535, 1, 900);
++	camera->exposure = v4l2_ctrl_new_std(&camera->controls, &imx882_control_ops,
++		V4L2_CID_EXPOSURE, 6, 3836, 1, 1000);
++	camera->gain = v4l2_ctrl_new_std(&camera->controls, &imx882_control_ops,
++		V4L2_CID_ANALOGUE_GAIN, 1463, 65536, 1, 4096);
++	camera->hblank = v4l2_ctrl_new_std(&camera->controls, NULL,
++		V4L2_CID_HBLANK, 3500, 3500, 1, 3500);
++	if (camera->hblank)
++		camera->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++	/* Upstream PIXEL_RATE describes the pixel-array sampling clock, not
++	 * the vendor MIPI transport rate. This preserves frame timing with
++	 * the source-grounded 7500-pixel line length and VBLANK contract.
++	 */
++	pixel_rate = v4l2_ctrl_new_std(&camera->controls, NULL,
++		V4L2_CID_PIXEL_RATE, 878400000, 878400000, 1, 878400000);
++	if (pixel_rate)
++		pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++	ret = camera->controls.error;
++	if (ret)
++		goto free_controls;
++	camera->sd.ctrl_handler = &camera->controls;
++	camera->pad.flags = MEDIA_PAD_FL_SOURCE;
++	ret = media_entity_pads_init(&camera->sd.entity, 1, &camera->pad);
++	if (ret)
++		goto free_controls;
++	ret = v4l2_subdev_init_finalize(&camera->sd);
++	if (ret)
++		goto clean_entity;
++	ret = v4l2_async_register_subdev_sensor(&camera->sd);
++	if (!ret)
++		return 0;
++	v4l2_subdev_cleanup(&camera->sd);
++clean_entity:
++	media_entity_cleanup(&camera->sd.entity);
++free_controls:
++	v4l2_ctrl_handler_free(&camera->controls);
++	mutex_destroy(&camera->lock);
++	return ret;
++}
++
++static void imx882_camera_remove(struct i2c_client *client)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct imx882_camera *camera = to_imx882(sd);
++	int ret;
++
++	v4l2_async_unregister_subdev(sd);
++	mutex_lock(&camera->lock);
++	ret = camera->streaming ? imx882_stop(camera) : 0;
++	mutex_unlock(&camera->lock);
++	if (ret)
++		dev_err(&client->dev, "camera removal shutdown failed: %d\n", ret);
++	v4l2_subdev_cleanup(sd);
++	media_entity_cleanup(&sd->entity);
++	v4l2_ctrl_handler_free(&camera->controls);
++	mutex_destroy(&camera->lock);
++}
++
++static int imx882_camera_suspend(struct device *dev)
++{
++	struct v4l2_subdev *sd = dev_get_drvdata(dev);
++	struct imx882_camera *camera = to_imx882(sd);
++	int ret;
++
++	mutex_lock(&camera->lock);
++	/* The receiver must stop the stream first; do not silently lose frames. */
++	ret = camera->streaming || camera->faulted ? -EBUSY : 0;
++	mutex_unlock(&camera->lock);
++	return ret;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(imx882_camera_pm, imx882_camera_suspend, NULL);
++
++static const struct of_device_id imx882_camera_of_match[] = {
++	{ .compatible = "nothing,tetris-imx882-stream" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, imx882_camera_of_match);
++
++static struct i2c_driver imx882_camera_driver = {
++	.probe = imx882_camera_probe,
++	.remove = imx882_camera_remove,
++	.driver = {
++		.name = "tetris-imx882-stream",
++		.of_match_table = imx882_camera_of_match,
++		.pm = pm_sleep_ptr(&imx882_camera_pm),
++	},
++};
++module_i2c_driver(imx882_camera_driver);
++
++MODULE_DESCRIPTION("Nothing Tetris IMX882 C-PHY sensor");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/imx882-tetris-tables.h b/drivers/media/i2c/imx882-tetris-tables.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/i2c/imx882-tetris-tables.h
+@@ -0,0 +1,1180 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Exact register order from Nothing 4.1 modules e96f60dc081ae3525ef43d4bcf0ee5ee97e53835. */
++#include "imx882-stream-core.h"
++
++static const struct imx882_reg imx882_init_regs[] = {
++	{ 0x0136, 0x18 },
++	{ 0x0137, 0x00 },
++	{ 0x961c, 0x04 },
++	{ 0xf800, 0x18 },
++	{ 0xf801, 0x18 },
++	{ 0xf802, 0xc5 },
++	{ 0xf803, 0x26 },
++	{ 0xf804, 0x55 },
++	{ 0xf805, 0xc4 },
++	{ 0xf806, 0x3f },
++	{ 0xf807, 0x00 },
++	{ 0xf808, 0x17 },
++	{ 0xf809, 0xfa },
++	{ 0xf80a, 0x84 },
++	{ 0xf80b, 0xbe },
++	{ 0xf80c, 0x55 },
++	{ 0xf80d, 0xc8 },
++	{ 0xf80e, 0x3f },
++	{ 0xf80f, 0x00 },
++	{ 0xf810, 0x40 },
++	{ 0xf811, 0x80 },
++	{ 0xf812, 0x3a },
++	{ 0xf813, 0xc4 },
++	{ 0xfa00, 0x23 },
++	{ 0xfa01, 0x23 },
++	{ 0xfa02, 0xc5 },
++	{ 0xfa03, 0x2b },
++	{ 0xfa04, 0x55 },
++	{ 0xfa05, 0xc4 },
++	{ 0xfa06, 0x3f },
++	{ 0xfa07, 0x00 },
++	{ 0xfa08, 0x17 },
++	{ 0xfa09, 0xfa },
++	{ 0xfa0a, 0x84 },
++	{ 0xfa0b, 0xbe },
++	{ 0xfa0c, 0x55 },
++	{ 0xfa0d, 0xc8 },
++	{ 0xfa0e, 0x3f },
++	{ 0xfa0f, 0x00 },
++	{ 0xfa10, 0x40 },
++	{ 0xfa11, 0x80 },
++	{ 0xfa12, 0x3a },
++	{ 0xfa13, 0xc4 },
++	{ 0xfc00, 0x4f },
++	{ 0xfc01, 0x06 },
++	{ 0xfc02, 0xac },
++	{ 0xfc03, 0x27 },
++	{ 0xfc04, 0xac },
++	{ 0xfc05, 0x1d },
++	{ 0xfc06, 0xac },
++	{ 0xfc07, 0x14 },
++	{ 0xfc08, 0xfa },
++	{ 0xfc09, 0xe8 },
++	{ 0xfc0a, 0xeb },
++	{ 0xfc0b, 0x2e },
++	{ 0xfc0c, 0xd0 },
++	{ 0xfc0d, 0x20 },
++	{ 0xfc0e, 0x40 },
++	{ 0xfc0f, 0x4f },
++	{ 0xfc10, 0x1e },
++	{ 0xfc11, 0x05 },
++	{ 0xfc12, 0xd4 },
++	{ 0xfc13, 0x18 },
++	{ 0xfc14, 0x08 },
++	{ 0xfc15, 0x00 },
++	{ 0xfc16, 0xf6 },
++	{ 0xfc17, 0x40 },
++	{ 0xfc18, 0x06 },
++	{ 0xfc19, 0xb7 },
++	{ 0xfc1a, 0xbe },
++	{ 0xfc1b, 0x06 },
++	{ 0xfc1c, 0xf0 },
++	{ 0xfc1d, 0x40 },
++	{ 0xfc1e, 0x06 },
++	{ 0xfc1f, 0xb8 },
++	{ 0xfc20, 0x29 },
++	{ 0xfc21, 0x25 },
++	{ 0xfc22, 0x90 },
++	{ 0xfc23, 0x2c },
++	{ 0xfc24, 0x80 },
++	{ 0xfc25, 0x22 },
++	{ 0xfc26, 0xf6 },
++	{ 0xfc27, 0x41 },
++	{ 0xfc28, 0x05 },
++	{ 0xfc29, 0x1c },
++	{ 0xfc2a, 0xb8 },
++	{ 0xfc2b, 0x8b },
++	{ 0xfc2c, 0xd0 },
++	{ 0xfc2d, 0x18 },
++	{ 0xfc2e, 0x27 },
++	{ 0xfc2f, 0x6c },
++	{ 0xfc30, 0xf0 },
++	{ 0xfc31, 0x02 },
++	{ 0xfc32, 0x02 },
++	{ 0xfc33, 0x74 },
++	{ 0xfc34, 0xf6 },
++	{ 0xfc35, 0x40 },
++	{ 0xfc36, 0x07 },
++	{ 0xfc37, 0x10 },
++	{ 0xfc38, 0x0f },
++	{ 0xfc39, 0x20 },
++	{ 0xfc3a, 0xfa },
++	{ 0xfc3b, 0xe8 },
++	{ 0xfc3c, 0x03 },
++	{ 0xfc3d, 0x8a },
++	{ 0xfc3e, 0x80 },
++	{ 0xfc3f, 0x04 },
++	{ 0xfc40, 0x5f },
++	{ 0xfc41, 0xf0 },
++	{ 0xfc42, 0x29 },
++	{ 0xfc43, 0x25 },
++	{ 0xfc44, 0x90 },
++	{ 0xfc45, 0x0a },
++	{ 0xfc46, 0x50 },
++	{ 0xfc47, 0x31 },
++	{ 0xfc48, 0xfa },
++	{ 0xfc49, 0xe8 },
++	{ 0xfc4a, 0x03 },
++	{ 0xfc4b, 0x7c },
++	{ 0xfc4c, 0x80 },
++	{ 0xfc4d, 0x04 },
++	{ 0xfc4e, 0x09 },
++	{ 0xfc4f, 0x50 },
++	{ 0xfc50, 0xf4 },
++	{ 0xfc51, 0x40 },
++	{ 0xfc52, 0x06 },
++	{ 0xfc53, 0xbc },
++	{ 0xfc54, 0x50 },
++	{ 0xfc55, 0xa1 },
++	{ 0xfc56, 0xfa },
++	{ 0xfc57, 0xe8 },
++	{ 0xfc58, 0x03 },
++	{ 0xfc59, 0x6e },
++	{ 0xfc5a, 0xfa },
++	{ 0xfc5b, 0xe8 },
++	{ 0xfc5c, 0x02 },
++	{ 0xfc5d, 0x9e },
++	{ 0xfc5e, 0xa8 },
++	{ 0xfc5f, 0x14 },
++	{ 0xfc60, 0xa8 },
++	{ 0xfc61, 0x1d },
++	{ 0xfc62, 0xa8 },
++	{ 0xfc63, 0x27 },
++	{ 0xfc64, 0xa0 },
++	{ 0xfc65, 0x09 },
++	{ 0xfc66, 0x00 },
++	{ 0xfc67, 0x00 },
++	{ 0x4331, 0x01 },
++	{ 0x3304, 0x00 },
++	{ 0x33f0, 0x04 },
++	{ 0x33f1, 0x06 },
++	{ 0x0111, 0x03 },
++	{ 0x3855, 0x01 },
++	{ 0x0d06, 0x82 },
++	{ 0x0d07, 0x02 },
++	{ 0x0d12, 0x78 },
++	{ 0x0d13, 0x01 },
++	{ 0x0d0d, 0x00 },
++	{ 0x0d08, 0x01 },
++	{ 0x1012, 0x00 },
++	{ 0x2edf, 0x07 },
++	{ 0x3953, 0x01 },
++	{ 0x3954, 0x01 },
++	{ 0x3955, 0x01 },
++	{ 0x3b30, 0x01 },
++	{ 0x3b32, 0x12 },
++	{ 0x3b33, 0x04 },
++	{ 0x3b34, 0x0a },
++	{ 0x3b36, 0xb2 },
++	{ 0x3b40, 0x00 },
++	{ 0x3b42, 0x0a },
++	{ 0x3b43, 0x04 },
++	{ 0x3b45, 0x0d },
++	{ 0x3b46, 0x40 },
++	{ 0x5a1d, 0x52 },
++	{ 0x5a27, 0x19 },
++	{ 0x5a37, 0xc8 },
++	{ 0x5a39, 0x25 },
++	{ 0x5a3d, 0x0e },
++	{ 0x5a41, 0x19 },
++	{ 0x5a47, 0x62 },
++	{ 0x5a51, 0x52 },
++	{ 0x5a5b, 0x19 },
++	{ 0x5a69, 0xc8 },
++	{ 0x5a6b, 0x25 },
++	{ 0x5a6f, 0x11 },
++	{ 0x5a73, 0x19 },
++	{ 0x5a79, 0x8a },
++	{ 0x5a83, 0x52 },
++	{ 0x5a8d, 0x19 },
++	{ 0x5a9b, 0xc8 },
++	{ 0x5a9d, 0x25 },
++	{ 0x5aa1, 0x52 },
++	{ 0x5aa5, 0x19 },
++	{ 0x5aab, 0x93 },
++	{ 0x5ab5, 0x52 },
++	{ 0x5abf, 0x19 },
++	{ 0x5acd, 0xc8 },
++	{ 0x5acf, 0x25 },
++	{ 0x5ad3, 0x11 },
++	{ 0x5ad7, 0x19 },
++	{ 0x5add, 0x4b },
++	{ 0x5ae7, 0x52 },
++	{ 0x5af1, 0x19 },
++	{ 0x5af5, 0x2d },
++	{ 0x5aff, 0xc8 },
++	{ 0x5b01, 0x25 },
++	{ 0x5b05, 0x0e },
++	{ 0x5b09, 0x19 },
++	{ 0x5b0d, 0x9e },
++	{ 0x5b0f, 0x34 },
++	{ 0x5b21, 0x19 },
++	{ 0x5b27, 0x2d },
++	{ 0x5b33, 0x19 },
++	{ 0x5b39, 0x9e },
++	{ 0x5b3f, 0x52 },
++	{ 0x5b49, 0x19 },
++	{ 0x5b4d, 0x87 },
++	{ 0x5b57, 0xc8 },
++	{ 0x5b59, 0x25 },
++	{ 0x5b5d, 0x0e },
++	{ 0x5b61, 0x19 },
++	{ 0x5b65, 0xda },
++	{ 0x5b6d, 0x52 },
++	{ 0x5b79, 0x19 },
++	{ 0x5b7f, 0x2d },
++	{ 0x5b8b, 0x19 },
++	{ 0x5b91, 0x9e },
++	{ 0x5b97, 0x52 },
++	{ 0x5ba1, 0x19 },
++	{ 0x5ba5, 0x2d },
++	{ 0x5baf, 0xc8 },
++	{ 0x5bb1, 0x25 },
++	{ 0x5bb5, 0x11 },
++	{ 0x5bb9, 0x19 },
++	{ 0x5bbd, 0x9e },
++	{ 0x5bbf, 0x5c },
++	{ 0x5bd1, 0x19 },
++	{ 0x5bd7, 0x2d },
++	{ 0x5be3, 0x19 },
++	{ 0x5be9, 0x9e },
++	{ 0x5bef, 0x52 },
++	{ 0x5bf9, 0x19 },
++	{ 0x5bfd, 0x87 },
++	{ 0x5c07, 0xc8 },
++	{ 0x5c09, 0x25 },
++	{ 0x5c0d, 0x11 },
++	{ 0x5c11, 0x19 },
++	{ 0x5c15, 0xda },
++	{ 0x5c29, 0x19 },
++	{ 0x5c2f, 0x2d },
++	{ 0x5c3b, 0x19 },
++	{ 0x5c41, 0x9e },
++	{ 0x5c47, 0x52 },
++	{ 0x5c51, 0x19 },
++	{ 0x5c57, 0x41 },
++	{ 0x5c5f, 0xc8 },
++	{ 0x5c61, 0x25 },
++	{ 0x5c65, 0x11 },
++	{ 0x5c69, 0x19 },
++	{ 0x5c6e, 0x01 },
++	{ 0x5c6f, 0x13 },
++	{ 0x5c85, 0xc8 },
++	{ 0x5c87, 0x25 },
++	{ 0x5c8b, 0x1b },
++	{ 0x5c8f, 0x19 },
++	{ 0x5c95, 0x41 },
++	{ 0x5c9b, 0x52 },
++	{ 0x5ca5, 0x19 },
++	{ 0x5caa, 0x03 },
++	{ 0x5cab, 0xde },
++	{ 0x5cb3, 0xc8 },
++	{ 0x5cb5, 0x25 },
++	{ 0x5cb9, 0x11 },
++	{ 0x5cbd, 0x19 },
++	{ 0x5cc3, 0xb8 },
++	{ 0x5cd9, 0xc8 },
++	{ 0x5cdb, 0x25 },
++	{ 0x5cdf, 0x1b },
++	{ 0x5ce3, 0x19 },
++	{ 0x5ce8, 0x03 },
++	{ 0x5ce9, 0xde },
++	{ 0x5cef, 0x52 },
++	{ 0x5cf9, 0x19 },
++	{ 0x5cff, 0x79 },
++	{ 0x5d07, 0xc8 },
++	{ 0x5d09, 0x25 },
++	{ 0x5d0c, 0x00 },
++	{ 0x5d0d, 0x52 },
++	{ 0x5d11, 0x19 },
++	{ 0x5d16, 0x01 },
++	{ 0x5d17, 0x28 },
++	{ 0x5d2d, 0xc8 },
++	{ 0x5d2f, 0x25 },
++	{ 0x5d33, 0x53 },
++	{ 0x5d37, 0x19 },
++	{ 0x5d3d, 0x79 },
++	{ 0x5d43, 0x52 },
++	{ 0x5d4d, 0x19 },
++	{ 0x5d51, 0x2d },
++	{ 0x5d53, 0x41 },
++	{ 0x5d55, 0x6b },
++	{ 0x5d5b, 0xc8 },
++	{ 0x5d5d, 0x25 },
++	{ 0x5d61, 0x11 },
++	{ 0x5d65, 0x19 },
++	{ 0x5d69, 0x9e },
++	{ 0x5d6b, 0xd0 },
++	{ 0x5d7d, 0x19 },
++	{ 0x5d83, 0x2d },
++	{ 0x5d95, 0xc8 },
++	{ 0x5d97, 0x25 },
++	{ 0x5d9b, 0x1b },
++	{ 0x5d9f, 0x19 },
++	{ 0x5da5, 0x41 },
++	{ 0x5db1, 0x19 },
++	{ 0x5db7, 0x6b },
++	{ 0x5dc3, 0x19 },
++	{ 0x5dc9, 0x9e },
++	{ 0x5dcf, 0x52 },
++	{ 0x5dd9, 0x19 },
++	{ 0x5ddd, 0x87 },
++	{ 0x5ddf, 0x41 },
++	{ 0x5de1, 0x41 },
++	{ 0x5de7, 0xc8 },
++	{ 0x5de9, 0x25 },
++	{ 0x5ded, 0x11 },
++	{ 0x5df1, 0x19 },
++	{ 0x5df5, 0xda },
++	{ 0x5df7, 0x4a },
++	{ 0x5e09, 0x19 },
++	{ 0x5e0f, 0x2d },
++	{ 0x5e21, 0xc8 },
++	{ 0x5e23, 0x25 },
++	{ 0x5e27, 0x1b },
++	{ 0x5e2b, 0x19 },
++	{ 0x5e31, 0x41 },
++	{ 0x5e3d, 0x19 },
++	{ 0x5e43, 0x6b },
++	{ 0x5e4f, 0x19 },
++	{ 0x5e55, 0x9e },
++	{ 0x5e5b, 0x52 },
++	{ 0x5e65, 0x19 },
++	{ 0x5e69, 0x2d },
++	{ 0x5e6b, 0x41 },
++	{ 0x5e73, 0xc8 },
++	{ 0x5e75, 0x25 },
++	{ 0x5e79, 0x11 },
++	{ 0x5e7d, 0x19 },
++	{ 0x5e81, 0x9e },
++	{ 0x5e83, 0xfb },
++	{ 0x5e95, 0x19 },
++	{ 0x5e9b, 0x2d },
++	{ 0x5ead, 0xc8 },
++	{ 0x5eaf, 0x25 },
++	{ 0x5eb3, 0x1b },
++	{ 0x5eb7, 0x19 },
++	{ 0x5ebd, 0x41 },
++	{ 0x5ec9, 0x19 },
++	{ 0x5ecf, 0x9e },
++	{ 0x5ed5, 0x52 },
++	{ 0x5edf, 0x19 },
++	{ 0x5ee3, 0x2d },
++	{ 0x5ee5, 0x5a },
++	{ 0x5ee7, 0x41 },
++	{ 0x5eef, 0xc8 },
++	{ 0x5ef1, 0x25 },
++	{ 0x5ef5, 0x11 },
++	{ 0x5ef9, 0x19 },
++	{ 0x5efd, 0xda },
++	{ 0x5eff, 0xcb },
++	{ 0x5f11, 0x19 },
++	{ 0x5f17, 0x2d },
++	{ 0x5f23, 0x19 },
++	{ 0x5f29, 0x2d },
++	{ 0x5f3b, 0xc8 },
++	{ 0x5f3d, 0x25 },
++	{ 0x5f41, 0x1b },
++	{ 0x5f45, 0x19 },
++	{ 0x5f4b, 0x41 },
++	{ 0x5f57, 0x19 },
++	{ 0x5f5d, 0x9e },
++	{ 0x5f63, 0x52 },
++	{ 0x5f6d, 0x19 },
++	{ 0x5f7f, 0x55 },
++	{ 0x5f83, 0x0e },
++	{ 0x5f87, 0x19 },
++	{ 0x5f93, 0x12 },
++	{ 0x6c06, 0xff },
++	{ 0x6c07, 0xff },
++	{ 0x6c0e, 0x00 },
++	{ 0x6c0f, 0x02 },
++	{ 0x6c11, 0xd9 },
++	{ 0x6c12, 0xff },
++	{ 0x6c13, 0xff },
++	{ 0x6c1a, 0x00 },
++	{ 0x6c1b, 0x02 },
++	{ 0x6c1d, 0xd9 },
++	{ 0x6c1e, 0xff },
++	{ 0x6c1f, 0xff },
++	{ 0x6c26, 0x00 },
++	{ 0x6c27, 0x02 },
++	{ 0x6c29, 0xd9 },
++	{ 0x6c2a, 0xff },
++	{ 0x6c2b, 0xff },
++	{ 0x6c32, 0x00 },
++	{ 0x6c33, 0x02 },
++	{ 0x6c35, 0xd9 },
++	{ 0x6c36, 0xff },
++	{ 0x6c37, 0xff },
++	{ 0x6c3e, 0x00 },
++	{ 0x6c3f, 0x02 },
++	{ 0x6c41, 0xd9 },
++	{ 0x6c42, 0xff },
++	{ 0x6c43, 0xff },
++	{ 0x6c4a, 0x00 },
++	{ 0x6c4b, 0x02 },
++	{ 0x6c4d, 0xd9 },
++	{ 0x6c4e, 0xff },
++	{ 0x6c4f, 0xff },
++	{ 0x6c5a, 0xff },
++	{ 0x6c5b, 0xff },
++	{ 0x6c66, 0xff },
++	{ 0x6c67, 0xff },
++	{ 0x6c72, 0xff },
++	{ 0x6c73, 0xff },
++	{ 0x6c7e, 0xff },
++	{ 0x6c7f, 0xff },
++	{ 0x6caa, 0x00 },
++	{ 0x6cab, 0x02 },
++	{ 0x6cad, 0xd9 },
++	{ 0x6cae, 0x00 },
++	{ 0x6caf, 0x02 },
++	{ 0x6cb1, 0xd9 },
++	{ 0x6cb2, 0x00 },
++	{ 0x6cb3, 0x02 },
++	{ 0x6cb5, 0xd9 },
++	{ 0x6cb6, 0x00 },
++	{ 0x6cb7, 0x02 },
++	{ 0x6cb9, 0xd9 },
++	{ 0x6cba, 0x00 },
++	{ 0x6cbb, 0x02 },
++	{ 0x6cbd, 0xd9 },
++	{ 0x6e3f, 0xde },
++	{ 0x6e47, 0xde },
++	{ 0x6e4f, 0xde },
++	{ 0x6e57, 0xde },
++	{ 0x6e5f, 0xde },
++	{ 0x6e67, 0xde },
++	{ 0x6eb3, 0xde },
++	{ 0x6eb7, 0xde },
++	{ 0x6ebb, 0xde },
++	{ 0x6ebf, 0xde },
++	{ 0x6ec3, 0xde },
++	{ 0x7476, 0x00 },
++	{ 0x7477, 0x00 },
++	{ 0x7478, 0x00 },
++	{ 0x7509, 0x00 },
++	{ 0x750b, 0x00 },
++	{ 0x7516, 0x01 },
++	{ 0x7524, 0x0c },
++	{ 0x7528, 0x02 },
++	{ 0x7530, 0x03 },
++	{ 0x7616, 0x0c },
++	{ 0x7619, 0x0c },
++	{ 0x761c, 0x0c },
++	{ 0x761d, 0x0c },
++	{ 0x761e, 0x0c },
++	{ 0x761f, 0x0c },
++	{ 0x7620, 0x00 },
++	{ 0x7623, 0x00 },
++	{ 0x7624, 0x00 },
++	{ 0x7625, 0x00 },
++	{ 0x7626, 0x00 },
++	{ 0x7627, 0x00 },
++	{ 0x7628, 0x00 },
++	{ 0x7629, 0x00 },
++	{ 0x762a, 0x00 },
++	{ 0x762b, 0x00 },
++	{ 0x762c, 0x00 },
++	{ 0x762d, 0x00 },
++	{ 0x762e, 0x00 },
++	{ 0x762f, 0x00 },
++	{ 0x7631, 0x07 },
++	{ 0x7632, 0x07 },
++	{ 0x7634, 0x07 },
++	{ 0x7635, 0x07 },
++	{ 0x76fc, 0x44 },
++	{ 0x76fd, 0x2a },
++	{ 0x76fe, 0x2c },
++	{ 0x76ff, 0x26 },
++	{ 0x7700, 0x43 },
++	{ 0x7701, 0x2a },
++	{ 0x7702, 0x2a },
++	{ 0x7703, 0x26 },
++	{ 0x7704, 0x2c },
++	{ 0x7705, 0x2a },
++	{ 0x7706, 0x2a },
++	{ 0x7707, 0x65 },
++	{ 0x7708, 0x44 },
++	{ 0x7709, 0x48 },
++	{ 0x770a, 0x40 },
++	{ 0x770b, 0x64 },
++	{ 0x770c, 0x44 },
++	{ 0x770d, 0x44 },
++	{ 0x770e, 0x40 },
++	{ 0x770f, 0x48 },
++	{ 0x7710, 0x44 },
++	{ 0x7711, 0x44 },
++	{ 0x7712, 0x45 },
++	{ 0x7713, 0x43 },
++	{ 0x7714, 0x47 },
++	{ 0x7715, 0x40 },
++	{ 0x7716, 0x42 },
++	{ 0x7717, 0x43 },
++	{ 0x7718, 0x43 },
++	{ 0x7719, 0x40 },
++	{ 0x771a, 0x47 },
++	{ 0x771b, 0x43 },
++	{ 0x771c, 0x43 },
++	{ 0x771d, 0x5d },
++	{ 0x771e, 0x43 },
++	{ 0x771f, 0x46 },
++	{ 0x7720, 0x40 },
++	{ 0x7721, 0x62 },
++	{ 0x7722, 0x43 },
++	{ 0x7723, 0x43 },
++	{ 0x7724, 0x40 },
++	{ 0x7725, 0x46 },
++	{ 0x7726, 0x43 },
++	{ 0x7727, 0x43 },
++	{ 0x7728, 0x41 },
++	{ 0x7729, 0x43 },
++	{ 0x772a, 0x3f },
++	{ 0x772b, 0x41 },
++	{ 0x772c, 0x41 },
++	{ 0x772d, 0x3f },
++	{ 0x772e, 0x43 },
++	{ 0x772f, 0x41 },
++	{ 0x7730, 0x41 },
++	{ 0x7731, 0x40 },
++	{ 0x7732, 0x42 },
++	{ 0x7733, 0x3f },
++	{ 0x7734, 0x40 },
++	{ 0x7735, 0x40 },
++	{ 0x7736, 0x3f },
++	{ 0x7737, 0x42 },
++	{ 0x7738, 0x40 },
++	{ 0x7739, 0x40 },
++	{ 0x773a, 0x40 },
++	{ 0x773b, 0x15 },
++	{ 0x773c, 0x16 },
++	{ 0x773d, 0x09 },
++	{ 0x773e, 0x3b },
++	{ 0x773f, 0x15 },
++	{ 0x7740, 0x15 },
++	{ 0x7741, 0x09 },
++	{ 0x7742, 0x16 },
++	{ 0x7743, 0x15 },
++	{ 0x7744, 0x15 },
++	{ 0x7745, 0x63 },
++	{ 0x7746, 0x2f },
++	{ 0x7747, 0x2f },
++	{ 0x7748, 0x19 },
++	{ 0x7749, 0x5d },
++	{ 0x774a, 0x2f },
++	{ 0x774b, 0x2f },
++	{ 0x774c, 0x19 },
++	{ 0x774d, 0x2f },
++	{ 0x774e, 0x2f },
++	{ 0x774f, 0x2f },
++	{ 0x7750, 0x45 },
++	{ 0x7751, 0x2f },
++	{ 0x7752, 0x2f },
++	{ 0x7753, 0x24 },
++	{ 0x7754, 0x43 },
++	{ 0x7755, 0x2f },
++	{ 0x7756, 0x2f },
++	{ 0x7757, 0x24 },
++	{ 0x7758, 0x2f },
++	{ 0x7759, 0x2f },
++	{ 0x775a, 0x2f },
++	{ 0x775b, 0x57 },
++	{ 0x775c, 0x39 },
++	{ 0x775d, 0x36 },
++	{ 0x775e, 0x32 },
++	{ 0x775f, 0x64 },
++	{ 0x7760, 0x39 },
++	{ 0x7761, 0x39 },
++	{ 0x7762, 0x32 },
++	{ 0x7763, 0x36 },
++	{ 0x7764, 0x39 },
++	{ 0x7765, 0x39 },
++	{ 0x7766, 0x3b },
++	{ 0x7767, 0x3b },
++	{ 0x7768, 0x3b },
++	{ 0x7769, 0x3b },
++	{ 0x776a, 0x3b },
++	{ 0x776b, 0x3b },
++	{ 0x776c, 0x3b },
++	{ 0x776d, 0x3b },
++	{ 0x776e, 0x3b },
++	{ 0x776f, 0x41 },
++	{ 0x7770, 0x40 },
++	{ 0x7771, 0x3f },
++	{ 0x7772, 0x41 },
++	{ 0x7773, 0x41 },
++	{ 0x7774, 0x3f },
++	{ 0x7775, 0x40 },
++	{ 0x7776, 0x41 },
++	{ 0x7777, 0x41 },
++	{ 0x7778, 0x0f },
++	{ 0x7779, 0x0a },
++	{ 0x777a, 0x0a },
++	{ 0x777b, 0x0a },
++	{ 0x777c, 0x0f },
++	{ 0x777d, 0x0a },
++	{ 0x777e, 0x0a },
++	{ 0x777f, 0x0a },
++	{ 0x7780, 0x0a },
++	{ 0x7781, 0x0a },
++	{ 0x7782, 0x0a },
++	{ 0x7783, 0x0f },
++	{ 0x7784, 0x0a },
++	{ 0x7785, 0x0a },
++	{ 0x7786, 0x0a },
++	{ 0x7787, 0x0f },
++	{ 0x7788, 0x0a },
++	{ 0x7789, 0x0a },
++	{ 0x778a, 0x0a },
++	{ 0x778b, 0x0a },
++	{ 0x778c, 0x0a },
++	{ 0x778d, 0x0a },
++	{ 0x778e, 0x14 },
++	{ 0x778f, 0x0a },
++	{ 0x7790, 0x0a },
++	{ 0x7791, 0x0a },
++	{ 0x7792, 0x0f },
++	{ 0x7793, 0x0a },
++	{ 0x7794, 0x0a },
++	{ 0x7795, 0x0a },
++	{ 0x7796, 0x0a },
++	{ 0x7797, 0x0a },
++	{ 0x7798, 0x0a },
++	{ 0x7799, 0x14 },
++	{ 0x779a, 0x0a },
++	{ 0x779b, 0x0a },
++	{ 0x779c, 0x0a },
++	{ 0x779d, 0x0f },
++	{ 0x779e, 0x0a },
++	{ 0x779f, 0x0a },
++	{ 0x77a0, 0x0a },
++	{ 0x77a1, 0x0a },
++	{ 0x77a2, 0x0a },
++	{ 0x77a3, 0x0a },
++	{ 0x77a4, 0x0a },
++	{ 0x77a5, 0x0a },
++	{ 0x77a6, 0x0a },
++	{ 0x77a7, 0x0a },
++	{ 0x77a8, 0x0a },
++	{ 0x77a9, 0x0a },
++	{ 0x77aa, 0x0a },
++	{ 0x77ab, 0x0a },
++	{ 0x77ac, 0x0a },
++	{ 0x77ad, 0x0b },
++	{ 0x77ae, 0x0a },
++	{ 0x77af, 0x0a },
++	{ 0x77b0, 0x0b },
++	{ 0x77b1, 0x0b },
++	{ 0x77b2, 0x0a },
++	{ 0x77b3, 0x0a },
++	{ 0x77b4, 0x0b },
++	{ 0x77b5, 0x0b },
++	{ 0x77f4, 0x01 },
++	{ 0x77f5, 0x01 },
++	{ 0x77f6, 0x01 },
++	{ 0x77f8, 0x01 },
++	{ 0x77f9, 0x01 },
++	{ 0x77fb, 0x01 },
++	{ 0x77fc, 0x01 },
++	{ 0x7814, 0x2a },
++	{ 0x7815, 0x01 },
++	{ 0x7816, 0x01 },
++	{ 0x7818, 0x2a },
++	{ 0x7819, 0x01 },
++	{ 0x781a, 0x01 },
++	{ 0x781c, 0x01 },
++	{ 0x781d, 0x01 },
++	{ 0x781e, 0x01 },
++	{ 0x781f, 0x2a },
++	{ 0x7820, 0x01 },
++	{ 0x7821, 0x01 },
++	{ 0x7823, 0x2a },
++	{ 0x7824, 0x01 },
++	{ 0x7825, 0x01 },
++	{ 0x7827, 0x01 },
++	{ 0x7828, 0x01 },
++	{ 0x7829, 0x01 },
++	{ 0x782a, 0x2a },
++	{ 0x782b, 0x0a },
++	{ 0x782c, 0x0a },
++	{ 0x782e, 0x2a },
++	{ 0x782f, 0x0a },
++	{ 0x7830, 0x0a },
++	{ 0x7832, 0x0a },
++	{ 0x7833, 0x0a },
++	{ 0x7834, 0x0a },
++	{ 0x7835, 0x2a },
++	{ 0x7836, 0x19 },
++	{ 0x7837, 0x19 },
++	{ 0x7838, 0x2a },
++	{ 0x7839, 0x2a },
++	{ 0x783a, 0x19 },
++	{ 0x783b, 0x19 },
++	{ 0x783c, 0x2a },
++	{ 0x783d, 0x19 },
++	{ 0x783e, 0x19 },
++	{ 0x783f, 0x19 },
++	{ 0x7840, 0x1d },
++	{ 0x7841, 0x1d },
++	{ 0x7842, 0x2a },
++	{ 0x7843, 0x1d },
++	{ 0x7844, 0x1d },
++	{ 0x7845, 0x2a },
++	{ 0x7846, 0x1d },
++	{ 0x7847, 0x1d },
++	{ 0x7848, 0x1d },
++	{ 0x7849, 0x2a },
++	{ 0x784a, 0x2a },
++	{ 0x784b, 0x2a },
++	{ 0x784c, 0x2a },
++	{ 0x784d, 0x2a },
++	{ 0x784e, 0x2a },
++	{ 0x784f, 0x2a },
++	{ 0x7850, 0x2a },
++	{ 0x7851, 0x2a },
++	{ 0x7853, 0x50 },
++	{ 0x7856, 0x50 },
++	{ 0x7857, 0x50 },
++	{ 0x785a, 0x50 },
++	{ 0x785b, 0x50 },
++	{ 0x785d, 0x50 },
++	{ 0x7860, 0x50 },
++	{ 0x7861, 0x50 },
++	{ 0x7864, 0x50 },
++	{ 0x7865, 0x50 },
++	{ 0x7867, 0x50 },
++	{ 0x786a, 0x50 },
++	{ 0x786b, 0x50 },
++	{ 0x7902, 0x15 },
++	{ 0x7904, 0x13 },
++	{ 0x7905, 0x15 },
++	{ 0x7908, 0x13 },
++	{ 0x7909, 0x08 },
++	{ 0x790b, 0x11 },
++	{ 0x790d, 0x0c },
++	{ 0x790e, 0x08 },
++	{ 0x790f, 0x08 },
++	{ 0x7912, 0x0b },
++	{ 0x7919, 0x06 },
++	{ 0x791e, 0x06 },
++	{ 0x791f, 0x06 },
++	{ 0x7929, 0x00 },
++	{ 0x792e, 0x00 },
++	{ 0x792f, 0x00 },
++	{ 0x7a2a, 0x19 },
++	{ 0x7a2b, 0xf1 },
++	{ 0x7a2c, 0x0f },
++	{ 0x7a48, 0x0f },
++	{ 0x7a49, 0x01 },
++	{ 0x7a4a, 0x03 },
++	{ 0x7a51, 0x09 },
++	{ 0x7a58, 0x0f },
++	{ 0x7a5d, 0x32 },
++	{ 0x7a63, 0x32 },
++	{ 0x7a6b, 0x3e },
++	{ 0x7a71, 0x3e },
++	{ 0x7aad, 0x99 },
++	{ 0x7ab3, 0x99 },
++	{ 0x7abb, 0xa5 },
++	{ 0x7ac1, 0xa5 },
++	{ 0x7afd, 0x66 },
++	{ 0x7b05, 0x72 },
++	{ 0x7b26, 0x12 },
++	{ 0x7b27, 0x12 },
++	{ 0x7b28, 0x12 },
++	{ 0x7b29, 0x12 },
++	{ 0x7b2a, 0x12 },
++	{ 0x7b2b, 0x12 },
++	{ 0x7b2c, 0x12 },
++	{ 0x7b2d, 0x12 },
++	{ 0x7b2e, 0x12 },
++	{ 0x7b2f, 0x12 },
++	{ 0x7b30, 0x12 },
++	{ 0x7b31, 0x12 },
++	{ 0x7b32, 0x12 },
++	{ 0x7b33, 0x12 },
++	{ 0x7b34, 0x12 },
++	{ 0x7b35, 0x12 },
++	{ 0x7b36, 0x12 },
++	{ 0x7b37, 0x12 },
++	{ 0x7b38, 0x12 },
++	{ 0x7b39, 0x12 },
++	{ 0x7b3a, 0x12 },
++	{ 0x7b3b, 0x12 },
++	{ 0x7b3c, 0x12 },
++	{ 0x7b3d, 0x12 },
++	{ 0x7b3e, 0x12 },
++	{ 0x7b3f, 0x12 },
++	{ 0x7b40, 0x12 },
++	{ 0x7b41, 0x12 },
++	{ 0x7b42, 0x12 },
++	{ 0x7b43, 0x12 },
++	{ 0x7b44, 0x12 },
++	{ 0x7b45, 0x12 },
++	{ 0x7b46, 0x12 },
++	{ 0x7b47, 0x12 },
++	{ 0x7b48, 0x12 },
++	{ 0x7b49, 0x12 },
++	{ 0x7b4a, 0x12 },
++	{ 0x7b4b, 0x12 },
++	{ 0x7b4c, 0x12 },
++	{ 0x7b4d, 0x12 },
++	{ 0x7c73, 0x0b },
++	{ 0x7c74, 0x0b },
++	{ 0x7c75, 0x0b },
++	{ 0x7c76, 0x0b },
++	{ 0x7c77, 0x0b },
++	{ 0x7c78, 0x0b },
++	{ 0x7c79, 0x0b },
++	{ 0x7c7c, 0x0b },
++	{ 0x7c7d, 0x0b },
++	{ 0x7c7e, 0x0b },
++	{ 0x7c7f, 0x0b },
++	{ 0x7c80, 0x0b },
++	{ 0x7c81, 0x0b },
++	{ 0x7c83, 0x0b },
++	{ 0x7c84, 0x0b },
++	{ 0x7c85, 0x0b },
++	{ 0x7c86, 0x0b },
++	{ 0x7c87, 0x0b },
++	{ 0x7c88, 0x0b },
++	{ 0x7ca5, 0x01 },
++	{ 0x7caa, 0x01 },
++	{ 0x7cb0, 0x01 },
++	{ 0x7cb5, 0x01 },
++	{ 0x7cbb, 0x01 },
++	{ 0x7cc0, 0x01 },
++	{ 0x7cd1, 0x01 },
++	{ 0x7cd6, 0x01 },
++	{ 0x7cdc, 0x01 },
++	{ 0x7ce1, 0x01 },
++	{ 0x7ce7, 0x01 },
++	{ 0x7cec, 0x01 },
++	{ 0x90b3, 0x80 },
++	{ 0x974a, 0x09 },
++	{ 0x974b, 0x08 },
++	{ 0x9752, 0x0e },
++	{ 0x9753, 0xb4 },
++	{ 0x975b, 0x0c },
++	{ 0x9762, 0x09 },
++	{ 0x9763, 0x08 },
++	{ 0x976a, 0x09 },
++	{ 0x976b, 0x08 },
++	{ 0x9772, 0x0f },
++	{ 0x9773, 0x7c },
++	{ 0x978a, 0x09 },
++	{ 0x978b, 0xe8 },
++	{ 0xdda9, 0x4e },
++	{ 0xde8d, 0x01 },
++	{ 0xe24e, 0x00 },
++	{ 0x7854, 0x50 },
++	{ 0x7859, 0x50 },
++	{ 0x785e, 0x50 },
++	{ 0x7863, 0x50 },
++	{ 0x7869, 0x50 },
++	{ 0x7a5e, 0x00 },
++	{ 0x7a5f, 0x32 },
++	{ 0x7a66, 0x00 },
++	{ 0x7a67, 0x32 },
++	{ 0x7a6c, 0x00 },
++	{ 0x7a6d, 0x3e },
++	{ 0x7a74, 0x00 },
++	{ 0x7a75, 0x3e },
++	{ 0x7aae, 0x00 },
++	{ 0x7aaf, 0x99 },
++	{ 0x7ab6, 0x00 },
++	{ 0x7ab7, 0x99 },
++	{ 0x7abc, 0x00 },
++	{ 0x7abd, 0xa5 },
++	{ 0x7ac4, 0x00 },
++	{ 0x7ac5, 0xa5 },
++	{ 0x7b00, 0x00 },
++	{ 0x7b01, 0x66 },
++	{ 0x7b08, 0x00 },
++	{ 0x7b09, 0x72 },
++	{ 0x7ca6, 0x01 },
++	{ 0x7ca9, 0x01 },
++	{ 0x7cac, 0x01 },
++	{ 0x7cad, 0x01 },
++	{ 0x7cae, 0x01 },
++	{ 0x7cb1, 0x01 },
++	{ 0x7cb4, 0x01 },
++	{ 0x7cb7, 0x01 },
++	{ 0x7cb8, 0x01 },
++	{ 0x7cb9, 0x01 },
++	{ 0x7cbc, 0x01 },
++	{ 0x7cbf, 0x01 },
++	{ 0x7cc2, 0x01 },
++	{ 0x7cc3, 0x01 },
++	{ 0x7cc4, 0x01 },
++	{ 0x7cd2, 0x01 },
++	{ 0x7cd5, 0x01 },
++	{ 0x7cd8, 0x01 },
++	{ 0x7cd9, 0x01 },
++	{ 0x7cda, 0x01 },
++	{ 0x7cdd, 0x01 },
++	{ 0x7ce0, 0x01 },
++	{ 0x7ce3, 0x01 },
++	{ 0x7ce4, 0x01 },
++	{ 0x7ce5, 0x01 },
++	{ 0x7ce8, 0x01 },
++	{ 0x7ceb, 0x01 },
++	{ 0x7cee, 0x01 },
++	{ 0x7cef, 0x01 },
++	{ 0x7cf0, 0x01 },
++	{ 0xab30, 0x00 },
++	{ 0xab31, 0x3c },
++	{ 0xab32, 0x00 },
++	{ 0xab33, 0x3c },
++	{ 0xab34, 0x00 },
++	{ 0xab35, 0x3c },
++	{ 0xae24, 0x01 },
++	{ 0xae25, 0x61 },
++	{ 0xae26, 0x01 },
++	{ 0xae27, 0xdf },
++	{ 0xae28, 0x02 },
++	{ 0xae29, 0xd0 },
++	{ 0xab55, 0x23 },
++	{ 0xab57, 0x23 },
++	{ 0xab59, 0x23 },
++	{ 0xab5b, 0x0a },
++	{ 0xab5d, 0x0a },
++	{ 0xab5f, 0x0a },
++	{ 0xab73, 0x23 },
++	{ 0xab75, 0x23 },
++	{ 0xab77, 0x23 },
++	{ 0xab79, 0x0a },
++	{ 0xab7b, 0x0a },
++	{ 0xab7d, 0x0a },
++	{ 0x0d08, 0x00 },
++};
++
++static const struct imx882_reg imx882_preview_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x02 },
++	{ 0x0342, 0x1d },
++	{ 0x0343, 0x4c },
++	{ 0x3850, 0x00 },
++	{ 0x3851, 0xcd },
++	{ 0x0340, 0x0f },
++	{ 0x0341, 0x3c },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x00 },
++	{ 0x0347, 0x40 },
++	{ 0x0348, 0x1f },
++	{ 0x0349, 0xff },
++	{ 0x034a, 0x17 },
++	{ 0x034b, 0xbf },
++	{ 0x0900, 0x01 },
++	{ 0x0901, 0x22 },
++	{ 0x0902, 0x00 },
++	{ 0x3005, 0x02 },
++	{ 0x3006, 0x02 },
++	{ 0x3140, 0x0a },
++	{ 0x3144, 0x00 },
++	{ 0x3148, 0x04 },
++	{ 0x31c0, 0x41 },
++	{ 0x31c1, 0x41 },
++	{ 0x3205, 0x00 },
++	{ 0x323c, 0x01 },
++	{ 0x39ac, 0x01 },
++	{ 0x0408, 0x00 },
++	{ 0x0409, 0x30 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x04 },
++	{ 0x040c, 0x0f },
++	{ 0x040d, 0xa0 },
++	{ 0x040e, 0x0b },
++	{ 0x040f, 0xb8 },
++	{ 0x034c, 0x0f },
++	{ 0x034d, 0xa0 },
++	{ 0x034e, 0x0b },
++	{ 0x034f, 0xb8 },
++	{ 0x0301, 0x05 },
++	{ 0x0303, 0x02 },
++	{ 0x0305, 0x04 },
++	{ 0x0306, 0x01 },
++	{ 0x0307, 0x6e },
++	{ 0x030b, 0x02 },
++	{ 0x030d, 0x06 },
++	{ 0x030e, 0x01 },
++	{ 0x030f, 0xff },
++	{ 0x3104, 0x01 },
++	{ 0x38b0, 0x03 },
++	{ 0x38b1, 0xff },
++	{ 0x38b4, 0x03 },
++	{ 0x38b5, 0xff },
++	{ 0x38b8, 0x03 },
++	{ 0x38b9, 0xff },
++	{ 0x38bc, 0x03 },
++	{ 0x38bd, 0xff },
++	{ 0x38d8, 0x14 },
++	{ 0x38e2, 0x00 },
++	{ 0x38e3, 0x00 },
++	{ 0x38e4, 0x00 },
++	{ 0x38e5, 0x00 },
++	{ 0x38e6, 0x00 },
++	{ 0x38e7, 0x00 },
++	{ 0x0202, 0x03 },
++	{ 0x0203, 0xe8 },
++	{ 0x0204, 0x13 },
++	{ 0x0205, 0x34 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++	{ 0x3103, 0x00 },
++	{ 0x3422, 0x01 },
++	{ 0x3423, 0xfc },
++	{ 0x30a4, 0x00 },
++	{ 0x30a6, 0x00 },
++	{ 0x30f2, 0x01 },
++	{ 0x30f3, 0x01 },
++	{ 0x30a5, 0x30 },
++	{ 0x30a7, 0x30 },
++	{ 0x30a2, 0x00 },
++	{ 0x30f1, 0x01 },
++	{ 0x30a3, 0x30 },
++	{ 0x38a0, 0x00 },
++	{ 0x38a1, 0x0a },
++	{ 0x38a2, 0x00 },
++	{ 0x38a3, 0x76 },
++	{ 0x38a8, 0x00 },
++	{ 0x38a9, 0x0a },
++	{ 0x38aa, 0x00 },
++	{ 0x38ab, 0x76 },
++	{ 0x38d0, 0x01 },
++	{ 0x38d1, 0x1a },
++	{ 0x38d2, 0x01 },
++	{ 0x38d3, 0x4a },
++	{ 0x3b00, 0x07 },
++	{ 0x3b01, 0x34 },
++	{ 0x3b04, 0x07 },
++	{ 0x3b05, 0xd4 },
++	{ 0x38e0, 0x02 },
++	{ 0x38e1, 0x42 },
++};
++
++static const struct imx882_reg imx882_video_regs[] = {
++	{ 0x0112, 0x0a },
++	{ 0x0113, 0x0a },
++	{ 0x0114, 0x02 },
++	{ 0x0342, 0x1d },
++	{ 0x0343, 0x4c },
++	{ 0x3850, 0x00 },
++	{ 0x3851, 0xcd },
++	{ 0x0340, 0x0f },
++	{ 0x0341, 0x3c },
++	{ 0x0344, 0x00 },
++	{ 0x0345, 0x00 },
++	{ 0x0346, 0x03 },
++	{ 0x0347, 0x00 },
++	{ 0x0348, 0x1f },
++	{ 0x0349, 0xff },
++	{ 0x034a, 0x14 },
++	{ 0x034b, 0xff },
++	{ 0x0900, 0x01 },
++	{ 0x0901, 0x22 },
++	{ 0x0902, 0x00 },
++	{ 0x3005, 0x02 },
++	{ 0x3006, 0x02 },
++	{ 0x3140, 0x0a },
++	{ 0x3144, 0x00 },
++	{ 0x3148, 0x04 },
++	{ 0x31c0, 0x41 },
++	{ 0x31c1, 0x41 },
++	{ 0x3205, 0x00 },
++	{ 0x323c, 0x01 },
++	{ 0x39ac, 0x01 },
++	{ 0x0408, 0x00 },
++	{ 0x0409, 0x00 },
++	{ 0x040a, 0x00 },
++	{ 0x040b, 0x00 },
++	{ 0x040c, 0x10 },
++	{ 0x040d, 0x00 },
++	{ 0x040e, 0x09 },
++	{ 0x040f, 0x00 },
++	{ 0x034c, 0x10 },
++	{ 0x034d, 0x00 },
++	{ 0x034e, 0x09 },
++	{ 0x034f, 0x00 },
++	{ 0x0301, 0x05 },
++	{ 0x0303, 0x02 },
++	{ 0x0305, 0x04 },
++	{ 0x0306, 0x01 },
++	{ 0x0307, 0x6e },
++	{ 0x030b, 0x02 },
++	{ 0x030d, 0x06 },
++	{ 0x030e, 0x01 },
++	{ 0x030f, 0xff },
++	{ 0x3104, 0x01 },
++	{ 0x38b0, 0x03 },
++	{ 0x38b1, 0xff },
++	{ 0x38b4, 0x03 },
++	{ 0x38b5, 0xff },
++	{ 0x38b8, 0x03 },
++	{ 0x38b9, 0xff },
++	{ 0x38bc, 0x03 },
++	{ 0x38bd, 0xff },
++	{ 0x38d8, 0x14 },
++	{ 0x38e2, 0x00 },
++	{ 0x38e3, 0x00 },
++	{ 0x38e4, 0x00 },
++	{ 0x38e5, 0x00 },
++	{ 0x38e6, 0x00 },
++	{ 0x38e7, 0x00 },
++	{ 0x0202, 0x03 },
++	{ 0x0203, 0xe8 },
++	{ 0x0204, 0x13 },
++	{ 0x0205, 0x34 },
++	{ 0x020e, 0x01 },
++	{ 0x020f, 0x00 },
++	{ 0x3103, 0x00 },
++	{ 0x3422, 0x01 },
++	{ 0x3423, 0xfc },
++	{ 0x30a4, 0x00 },
++	{ 0x30a6, 0x00 },
++	{ 0x30f2, 0x01 },
++	{ 0x30f3, 0x01 },
++	{ 0x30a5, 0x30 },
++	{ 0x30a7, 0x30 },
++	{ 0x30a2, 0x00 },
++	{ 0x30f1, 0x01 },
++	{ 0x30a3, 0x30 },
++	{ 0x38a0, 0x00 },
++	{ 0x38a1, 0x0a },
++	{ 0x38a2, 0x00 },
++	{ 0x38a3, 0x76 },
++	{ 0x38a8, 0x00 },
++	{ 0x38a9, 0x0a },
++	{ 0x38aa, 0x00 },
++	{ 0x38ab, 0x76 },
++	{ 0x38d0, 0x01 },
++	{ 0x38d1, 0x1a },
++	{ 0x38d2, 0x01 },
++	{ 0x38d3, 0x4a },
++	{ 0x3b00, 0x07 },
++	{ 0x3b01, 0x34 },
++	{ 0x3b04, 0x07 },
++	{ 0x3b05, 0xd4 },
++	{ 0x38e0, 0x02 },
++	{ 0x38e1, 0x42 },
++};
++
++struct imx882_mode {
++	unsigned int width, height;
++	const struct imx882_reg *regs;
++	unsigned int count;
++};
++
++static const struct imx882_mode imx882_modes[] = {
++	{ 4000, 3000, imx882_preview_regs, ARRAY_SIZE(imx882_preview_regs) },
++	{ 4096, 2304, imx882_video_regs, ARRAY_SIZE(imx882_video_regs) },
++};
+diff --git a/drivers/media/i2c/imx882-stream-core.h b/drivers/media/i2c/imx882-stream-core.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/i2c/imx882-stream-core.h
+@@ -0,0 +1,80 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef IMX882_STREAM_CORE_H
++#define IMX882_STREAM_CORE_H
++
++#ifdef __KERNEL__
++#include <linux/errno.h>
++#else
++#include <errno.h>
++#endif
++
++/* Matching Nothing 4.1: e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.
++ * The caller owns power, bus serialization and stream lifecycle.
++ */
++struct imx882_reg {
++	unsigned short address;
++	unsigned char value;
++};
++
++struct imx882_bus {
++	int (*write)(void *context, unsigned short address, unsigned char value);
++	void *context;
++};
++
++static inline int imx882_write_table(const struct imx882_bus *bus,
++				   const struct imx882_reg *table,
++				   unsigned int count)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < count; i++) {
++		ret = bus->write(bus->context, table[i].address, table[i].value);
++		if (ret)
++			return ret;
++	}
++	return 0;
++}
++
++static inline int imx882_write_word(const struct imx882_bus *bus,
++				  unsigned short address, unsigned short value)
++{
++	int ret = bus->write(bus->context, address, value >> 8);
++
++	if (ret)
++		return ret;
++	return bus->write(bus->context, address + 1, value & 0xff);
++}
++
++/* Short exposure only: no undocumented long-exposure state transitions.
++ * Always attempt to release group hold, including an ambiguous hold write.
++ */
++static inline int imx882_write_controls(const struct imx882_bus *bus,
++				       unsigned int frame_length,
++				       unsigned int exposure,
++				       unsigned int gain)
++{
++	unsigned int reg_gain;
++	int ret, release;
++
++	if (frame_length < 3900 || frame_length > 65535 ||
++	    exposure < 6 || exposure > frame_length - 64 ||
++	    gain < 1463 || gain > 65536)
++		return -EINVAL;
++
++	reg_gain = 16384 - (16384 * 1024) / gain;
++	ret = bus->write(bus->context, 0x0104, 1);
++	if (!ret)
++		ret = imx882_write_word(bus, 0x0340, frame_length);
++	/* Do not let auto-extension violate the exposed VBLANK contract. */
++	if (!ret)
++		ret = bus->write(bus->context, 0x0350, 0);
++	if (!ret)
++		ret = imx882_write_word(bus, 0x0202, exposure);
++	if (!ret)
++		ret = imx882_write_word(bus, 0x0204, reg_gain);
++	release = bus->write(bus->context, 0x0104, 0);
++	return ret ? ret : release;
++}
++
++#endif
+diff --git a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml
+new file mode 100644
+--- /dev/null
++++ b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml
+@@ -0,0 +1,79 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/media/i2c/nothing,tetris-imx882-stream.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Nothing Tetris IMX882 C-PHY streaming candidate
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description: |
++  Explicit main-module streaming candidate, not an identity probe or an
++  automatic board activation. Board integration must establish module
++  supplier, reset polarity, owned power and an MT6878 capture receiver.
++  Normal binned modes emit RAW10 and PDAF on virtual channel zero.
++
++properties:
++  compatible:
++    const: nothing,tetris-imx882-stream
++  reg:
++    maxItems: 1
++  clocks:
++    maxItems: 1
++  clock-names:
++    const: xclk
++  clock-frequency:
++    const: 24000000
++  afvdd-supply:
++    description: Autofocus supply, 2.8 V
++  avdd-supply:
++    description: Analog supply, 2.8 V
++  dvdd-supply:
++    description: Digital core supply, 1.2 V
++  dovdd-supply:
++    description: Digital I/O supply, 1.8 V
++  reset-gpios:
++    description: Active-low reset, logical assertion holds the sensor in reset
++    maxItems: 1
++  pinctrl-names:
++    items:
++      - const: mclk-off
++      - const: mclk-4ma
++  port:
++    $ref: /schemas/graph.yaml#/$defs/port-base
++    unevaluatedProperties: false
++    properties:
++      endpoint:
++        $ref: /schemas/media/video-interfaces.yaml#
++        unevaluatedProperties: false
++        properties:
++          bus-type:
++            const: 1
++          data-lanes:
++            items:
++              - const: 0
++              - const: 1
++              - const: 2
++        required:
++          - bus-type
++          - data-lanes
++          - remote-endpoint
++
++required:
++  - compatible
++  - reg
++  - clocks
++  - clock-names
++  - clock-frequency
++  - afvdd-supply
++  - avdd-supply
++  - dvdd-supply
++  - dovdd-supply
++  - reset-gpios
++  - pinctrl-names
++  - port
++
++additionalProperties: false
++...
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -786,3 +786,14 @@
+ 	  explicitly selected bring-up device trees only.
+ 
++config VIDEO_IMX882_TETRIS
++	tristate "Nothing Tetris IMX882 V4L2 streaming candidate"
++	depends on I2C && OF && GPIOLIB && COMMON_CLK && REGULATOR && PINCTRL
++	depends on VIDEO_DEV && MEDIA_CONTROLLER
++	select V4L2_FWNODE
++	help
++	  Unenabled C-PHY sensor candidate. Requires explicit board power
++	  ownership and a compatible receiver. Does not enable any DT nodes.
++	  Supports binned 30 fps modes and standard exposure/gain controls.
++	  Per-unit calibration and receiver DMA bring-up are separate tasks.
++
+ source "drivers/media/i2c/ccs/Kconfig"
+diff --git a/drivers/media/i2c/Makefile b/drivers/media/i2c/Makefile
+--- a/drivers/media/i2c/Makefile
++++ b/drivers/media/i2c/Makefile
+@@ -126,3 +126,4 @@
+ obj-$(CONFIG_VIDEO_RJ54N1) += rj54n1cb0c.o
+ obj-$(CONFIG_VIDEO_IMX882_IDENTITY) += imx882-identity.o
++obj-$(CONFIG_VIDEO_IMX882_TETRIS) += imx882-tetris-stream.o
+ obj-$(CONFIG_VIDEO_PD9302A) += pd9302a.o

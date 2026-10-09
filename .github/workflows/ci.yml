@@ -19,8 +19,8 @@ permissions:
 env:
   PMBOOTSTRAP_COMMIT: ea17c1499b7f82d5829849314e89b23684919141
   PMAPORTS_COMMIT: 7ea600ada6d4716b500bda0d6a17ba396be05b5c
-  TETRIS_UBOOT_COMMIT: 60bcf22fdc0a94526424db59fc7640298ea8f0dd
-  TETRIS_UBOOT_SHA256: 2c5d1d868dac176044d1d7ffc69760e0f2b576553bd892e5e2ace245c65e6760
+  TETRIS_UBOOT_COMMIT: dcb20ce71f5361a4492649d46650d59e9b2cbbc4
+  TETRIS_UBOOT_SHA256: 71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967
   NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
@@ -59,7 +59,13 @@ jobs:
           git -C upstream/linux checkout FETCH_HEAD -- \
             arch/arm64/boot/dts/mediatek \
             Documentation/devicetree/bindings/display/mediatek \
+            Documentation/devicetree/bindings/power \
+            Documentation/devicetree/bindings/regulator \
+            MAINTAINERS \
             drivers/gpu/drm/mediatek \
+            drivers/media/i2c \
+            drivers/pmdomain/mediatek \
+            drivers/regulator \
             drivers/soc/mediatek
       - name: Validate native display prereq gates
         run: |
@@ -82,6 +88,8 @@ jobs:
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
+      - name: Validate isolated modem power sequencing
+        run: python3 scripts/check-mt6878-modem-power.py upstream/linux --native-ci
       - name: Validate Panthor VGPU readback gate
         run: |
           python3 scripts/check-panthor-vgpu-readback.py \
@@ -91,6 +99,12 @@ jobs:
         run: python3 scripts/check-sensor-list-reply.py upstream/device-modules
       - name: Validate GPU and camera PMIC phase ownership
         run: python3 scripts/check-mt6315-mode-mask.py upstream/linux
+      - name: Validate disabled GPU supply ownership
+        run: |
+          export TETRIS_KERNEL_TREE=upstream/linux
+          python3 patches/gpu/test_supply_inventory.py
+          python3 patches/gpu/test_readonly_vgpu.py
+          TETRIS_GPU_OBSERVER_TESTS=1 sh patches/gpu/run_native.sh
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py
@@ -109,10 +123,17 @@ jobs:
           git -C upstream/connectivity-modules fetch --filter=blob:none --depth=1 origin \
             e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
           python3 scripts/check-gnss-clock-readback.py upstream/connectivity-modules
+      - name: Validate IMX882 streaming modes and controls
+        run: |
+          python3 patches/camera-imx882/check.py \
+            --vendor-repo upstream/connectivity-modules --kernel-tree upstream/linux
+          sh patches/camera-imx882/run-core-tests.sh
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
       - name: Validate GNSS host callback and borrowed-output contracts
         run: python3 scripts/check-gnss-host-boundary.py
+      - name: Validate typed GNSS startup adapter
+        run: sh patches/gnss-navigation-audit/run_startup_adapter_ci.sh
       - name: Validate kernel package layout
         run: |
           kernel_apkbuild=pmaports/device/testing/linux-postmarketos-mediatek-mt6878/APKBUILD
@@ -131,6 +152,41 @@ jobs:
             echo "package output must not be restored from the Actions cache"
             exit 1
           fi
+
+  build-gnss-bionic-adapter:
+    needs: validate-overlay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Obtain matching pinned Android NDK
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip
+          test "$(stat -c %s /tmp/ndk.zip)" = 663956036
+          printf '%s  %s\n' 22105e410cf29afcf163760cc95522b9fb981121 /tmp/ndk.zip | sha1sum --check
+          unzip -q /tmp/ndk.zip -d /tmp
+      - name: Build AArch64 Bionic callback tests without vendor engine
+        run: |
+          mkdir -p out
+          ndk=/tmp/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin
+          "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
+            patches/gnss-navigation-audit/b41_startup_adapter.c \
+            patches/gnss-navigation-audit/test_b41_startup_adapter.c \
+            -o out/b41-startup-adapter-test
+          "$ndk/llvm-readelf" -h out/b41-startup-adapter-test | grep 'Machine:.*AArch64'
+          "$ndk/llvm-readelf" -d out/b41-startup-adapter-test > out/DYNAMIC
+          if grep -q 'NEEDED.*libmnl' out/DYNAMIC; then
+            echo 'Callback tests must not start the vendor navigation engine'
+            exit 1
+          fi
+          printf 'commit=%s\nndk=r27d\nmode=callback-tests-no-vendor-engine\n' \
+            "$GITHUB_SHA" > out/BUILD-MANIFEST
+          (cd out && sha256sum b41-startup-adapter-test > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gnss-bionic-adapter-tests
+          path: out/
+          if-no-files-found: error
 
   build-pmaports:
     needs: validate-overlay

@@ -1,5 +1,26 @@
 # Port summary, 2026-10-09
 
+## Combined candidate: r176
+
+Prepared together, not yet installed or advertised as working:
+
+- Modem: dedicated power-domain sequencing with checked bus protection,
+  isolation after shutdown acknowledgement, inherited-state rejection and
+  first-error latching. No reset release or ready CCCI handoff is enabled.
+- Camera: native IMX882 V4L2 stream candidate with exact B4.1 init/mode tables,
+  exposure/gain/frame timing controls and checked start/stop. Runtime DT stays
+  disabled; SENINF receiver and capture DMA remain missing.
+- GPU: disabled VGPU/VSRAM inventory, disabled-child filtering and rejection
+  of phase masks that reach unowned rails. Panthor remains inactive.
+- GNSS: typed host configuration and callbacks with bounded copied-output
+  queues. Missing engine/transport contracts still prevent navigation startup.
+
+CI validates native fault tests and compiles the camera candidate with an
+isolated Media config. The install manifest now records the actually tested
+U-Boot `dcb20ce71f`, not the older loader pin. Local checks do not replace
+hardware qualification: SIM/calls, GPS fixes, accelerated rendering and
+camera capture are still not available.
+
 ## Latest installed checkpoint: r175
 
 Latest loader experiment: U-Boot `dcb20ce71f`, successful

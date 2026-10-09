@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=175
+pkgrel=176
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -148,8 +148,13 @@ source="
 	0109-regulator-mt6315-stop-mode-change-on-read-error.patch
 	0110-regulator-mt6315-register-described-rails.patch
 	0111-regulator-mt6315-fail-closed-shutdown.patch
+	0113-regulator-mt6315-reject-unowned-phase-mask.patch
+	0112-arm64-dts-tetris-disabled-gpu-supplies.patch
+	0114-regulator-mt6315-read-only-vgpu-observer.patch
+	0113-pmdomain-mediatek-mt6878-modem-power.patch
 	0106-media-i2c-imx882-check-shutdown.patch
 	0107-media-i2c-imx882-hold-clock-rate.patch
+	0112-media-i2c-imx882-v4l2-controls.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -193,10 +198,32 @@ _build_camera_clk_compile_only() (
 		die "MT6878 camera clock gate must not produce a module"
 )
 
+_build_imx882_stream_compile_only() (
+	_out=$(mktemp -d "$srcdir/imx882-stream.XXXXXX")
+	trap 'rm -rf "$_out"' EXIT
+	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
+	cp "$srcdir/config-$_flavor.$arch" "$_out/.config"
+	"$builddir/scripts/config" --file "$_out/.config" \
+		-e MEDIA_SUPPORT -e MEDIA_CAMERA_SUPPORT -e VIDEO_DEV \
+		-e MEDIA_CONTROLLER -e VIDEO_V4L2_SUBDEV_API -e V4L2_FWNODE \
+		-m VIDEO_IMX882_TETRIS
+	make -j"$_jobs" -C "$builddir" O="$_out" \
+		ARCH="$_carch" LLVM=1 olddefconfig
+	grep -Fxq 'CONFIG_VIDEO_IMX882_TETRIS=m' "$_out/.config" || \
+		die "IMX882 stream dependencies were not enabled in isolated CI config"
+	make -j"$_jobs" -C "$builddir" O="$_out" \
+		ARCH="$_carch" LLVM=1 drivers/media/i2c/imx882-tetris-stream.o
+	test -s "$_out/drivers/media/i2c/imx882-tetris-stream.o" || \
+		die "IMX882 stream compile-only object is missing"
+	test ! -e "$_out/drivers/media/i2c/imx882-tetris-stream.ko" || \
+		die "IMX882 stream gate must not produce a runtime module"
+)
+
 prepare() {
 	default_prepare
 	export PATH="/usr/lib/llvm21/bin:$PATH"
 	_build_camera_clk_compile_only
+	_build_imx882_stream_compile_only
 	cp "$srcdir/config-$_flavor.$arch" .config
 	make ARCH="$_carch" LLVM=1 olddefconfig
 
@@ -981,6 +1008,11 @@ package() {
 }
 
 sha512sums="
+5a9621efc110bcc1dbea670573ebaddf764599d167b2836786bd34d2bc31a365556f15f6502ad558a1ac24f5b2c16ad6e12e8cf7df59a125828786cce0a4a139  0114-regulator-mt6315-read-only-vgpu-observer.patch
+3740247157560615aa7ea93231d5a653cee2fc834c23db3121be16a8d50824e74e4b6718d5b15a7c1d12872c7ba77b5e2ed8379de6f5edb5b9bbfa4ff52000ac  0112-arm64-dts-tetris-disabled-gpu-supplies.patch
+277b4c46fb3dcfee3be4e33a10e43ba2d19458f71920d89904a089961c14d10e0f94d6c2d8aaa0bbb669c0aad0ced76135d90a8c43afcd36311e90973d86148a  0113-regulator-mt6315-reject-unowned-phase-mask.patch
+5e276b98717cfc2d938d6e8b25a0d3266397d0fabb83a4d60b7e26f205a30129550762b597e98fa6edc07c221b1a21b59a3ccb470c02470fcd06efe8157ff21c  0113-pmdomain-mediatek-mt6878-modem-power.patch
+0eb90a16f88a9d3d85233ddb7a0eac758c4db021a27be1ed44acb8990a7930720be2ab5d6dfeb7874fef27f025646e1f41e4d457e34b2f0e2cc059ba7f898c67  0112-media-i2c-imx882-v4l2-controls.patch
 6bc374697a03337674951fc8a007f2b0fa692bb88a5e32035f6e21bc1a86f7f120a201ac8553a928ca79c5c7895b12b7a58a8407a05685fb115f561ea1d89452  0173-vendor-ccci-smem-map-span.patch.vendor
 4fe03ca717a5d781350d17a5aaa5dd0f4f6815a635b9d46791a9a7bed6e2b7c2a42f3f80d9dbde43958df52a657683779ee98fdcd5b10e94dd28e0956c70453a  0109-vendor-eccci-cldma-timer-api.patch.vendor
 05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch
@@ -1010,7 +1042,7 @@ e589d0aed09a2d0cd9705f16eaec49c97f45e161429e244fe857b382503aafb8522fb8d4a6972820
 261778b15f8d1fbc5730a46eccb93d4fe8982e82ba9b70ae9dca8d94b3cd3cd15070aa181bc21479e468ff4c9b7f24695e111d24f8b11da5c6edf14b8d37728e  0006-pinctrl-mediatek-mt6878-eint.patch
 2d00776c2f409dbc76dc412e41f343279e0f7c8e16340071fd71771b9fb5b883cb65262be64d923fc8600d55db5ad45220f8b12870a0c377c9f2236ec9d2f575  0007-power-supply-mt6375-monitor.patch
 1f34c790726bd24e0385e4c10541e61391b9232e0b4d3d873098e2df0e2c26fce8a8fa8233cb260b3c1d6605db9ddd24810ba353efb5b2d3391a985704278be8  0008-connectivity-mt6878-mt6631-connsys.patch
-283e32699cace2446f37c09750c076ca2211f30dfcd6aa0f935578cb3d7e07ce9dc16e2d2af338188bb5ffdcb0ac27fc9aa194258fc2333211fac83c9f167bb8  0030-regulator-mediatek-mt6878-gpu-rails.patch
+b3c1820524e030c566bd642862082819cac7da0a55d793841bf31f2e127585e168562ed6632d64c9c1da7747759a6d7e0c98f5e9d8100976c801f6c6680e2a68  0030-regulator-mediatek-mt6878-gpu-rails.patch
 4748a738d123ed7c1bca58c8bb65835af3fb07b0bfd0aba0c341ed8decdfa9d3ef4a7cfea73adfd1b31dd76eb68c20245dd9d28c0f6ede63746f413da23b3f37  0009-clk-mediatek-mt6878-mfg.patch
 d02e464bc6e8e28f24dff334703d357ab3a7db2188bc617a274f5b7e95bd4b07f0eb5a72f0b5e7df2d9b2f16e3d6367f8723d4c0e902eadf8bde94ce5a3e93d7  0010-audio-mt6878-aw88261.patch
 4318fcdde22711fe4e016dfc5642bb3b9e6c89a3880539ad9a341635c0b53588b88190a4c6a14e3f2dcd4f6bb80e5df79c9c290282b85627720bdf676ab81324  0011-input-rt6010-haptics-tetris.patch

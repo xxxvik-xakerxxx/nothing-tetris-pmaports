@@ -1,0 +1,153 @@
+From: Tetris port maintainers
+Subject: [PATCH] regulator: mt6315: add opt-in read-only VGPU observation
+
+Normal regulator registration can apply voltage/mode/enable constraints and
+late cleanup can disable unused rails. Provide an explicit read-only path
+for the Tetris MT6319 USID-6 VBUCK2 supply, bypassing registration entirely.
+No regulator device or consumer is created, and shutdown does not program
+the PMIC in this mode. The normal provider path is unchanged.
+
+Use the B4.1 active-selector contract already implemented by patch 0105:
+DBG4 bit 0 selects DBG0 when on, otherwise the programmed ELR2 selector.
+Repeat only the status read once to reject an enable transition; no retry
+loop, voltage/mode write, debug-selector write or guessed chip-ID register.
+Return the first error and publish only a complete snapshot. This proves
+SPMI readability and electrical state, not PMIC identity or GPUEB ownership.
+
+diff --git a/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml b/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
+--- a/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
++++ b/Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml
+@@ -25,6 +25,14 @@ properties:
+   reg:
+     maxItems: 1
+ 
++  mediatek,observe-vgpu-only:
++    type: boolean
++    description:
++      Read-only VBUCK2 state snapshot for MT6319 at SPMI USID 6. Skip all
++      regulator registration, constraint application and shutdown writes.
++      No supply is provided to consumers. This is not a hardware identity
++      or firmware ownership assertion. Remove only after ownership validation.
++
+   mediatek,buck1-mode-mask:
+     $ref: /schemas/types.yaml#/definitions/uint32
+     enum: [1, 3, 5, 7, 9, 11, 13, 15]
+diff --git a/drivers/regulator/mt6315-regulator.c b/drivers/regulator/mt6315-regulator.c
+--- a/drivers/regulator/mt6315-regulator.c
++++ b/drivers/regulator/mt6315-regulator.c
+@@ -292,6 +292,84 @@ static bool mt6315_mode_mask_owned(struct device *dev, u32 rails, u32 phases)
+ 	return !(rails & BIT(MT6315_VBUCK1)) || !(phases & ~rails);
+ }
+ 
++struct mt6315_vgpu_snapshot {
++	u32 status;
++	u32 selector;
++	u32 selector_reg;
++};
++
++static bool mt6315_vgpu_readable_reg(struct device *dev, unsigned int reg)
++{
++	(void)dev;
++	return reg == MT6315_VBUCK2_DBG4 || reg == MT6315_VBUCK2_DBG0 ||
++	       reg == MT6315_BUCK_TOP_ELR2;
++}
++
++static bool mt6315_vgpu_writeable_reg(struct device *dev, unsigned int reg)
++{
++	(void)dev;
++	(void)reg;
++	return false;
++}
++
++static const struct regmap_config mt6315_vgpu_observer_config = {
++	.reg_bits = 16,
++	.val_bits = 8,
++	.max_register = 0x16d0,
++	.cache_type = REGCACHE_NONE,
++	.readable_reg = mt6315_vgpu_readable_reg,
++	.writeable_reg = mt6315_vgpu_writeable_reg,
++};
++
++static int mt6315_read_vgpu(struct regmap *regmap,
++			    struct mt6315_vgpu_snapshot *snapshot)
++{
++	unsigned int status, selector, reg, after;
++	int ret;
++
++	ret = regmap_read(regmap, MT6315_VBUCK2_DBG4, &status);
++	if (ret)
++		return ret;
++	reg = status & BIT(0) ? MT6315_VBUCK2_DBG0 : MT6315_BUCK_TOP_ELR2;
++	ret = regmap_read(regmap, reg, &selector);
++	if (ret)
++		return ret;
++	ret = regmap_read(regmap, MT6315_VBUCK2_DBG4, &after);
++	if (ret)
++		return ret;
++	if ((status ^ after) & BIT(0))
++		return -EAGAIN;
++	selector &= 0xff;
++	if (selector >= 0xc0)
++		return -ERANGE;
++	snapshot->status = status;
++	snapshot->selector = selector;
++	snapshot->selector_reg = reg;
++	return 0;
++}
++
++static int mt6315_observe_vgpu(struct spmi_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct mt6315_vgpu_snapshot snapshot;
++	struct regmap *regmap;
++	int ret;
++
++	if (pdev->usid != 6 ||
++	    !of_device_is_compatible(dev->of_node, "mediatek,mt6319-regulator"))
++		return dev_err_probe(dev, -EINVAL, "VGPU observer requires MT6319 USID 6\n");
++	regmap = devm_regmap_init_spmi_ext(pdev, &mt6315_vgpu_observer_config);
++	if (IS_ERR(regmap))
++		return PTR_ERR(regmap);
++	ret = mt6315_read_vgpu(regmap, &snapshot);
++	if (ret)
++		return dev_err_probe(dev, ret, "VGPU snapshot failed\n");
++	dev_info(dev, "VGPU read-only: status=%#x selector=%#x source=%#x uV=%u; ownership unproven\n",
++		 snapshot.status, snapshot.selector, snapshot.selector_reg,
++		 snapshot.selector * 6250);
++	return 0;
++}
++
+ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -302,6 +380,9 @@ static int mt6315_regulator_probe(struct spmi_device *pdev)
+ 	struct regulator_dev *rdev;
+ 	int i, ret, mask;
+ 
++	if (of_property_read_bool(dev->of_node, "mediatek,observe-vgpu-only"))
++		return mt6315_observe_vgpu(pdev);
++
+ 	mask = mt6315_described_rails(dev);
+ 	if (mask < 0)
+ 		return dev_err_probe(dev, mask, "No available BUCK rails\n");
+@@ -366,6 +447,9 @@ static void mt6315_regulator_shutdown(struct spmi_device *pdev)
+ 	struct mt6315_chip *chip = dev_get_drvdata(&pdev->dev);
+ 	int ret;
+ 
++	if (of_property_read_bool(pdev->dev.of_node, "mediatek,observe-vgpu-only"))
++		return;
++
+ 	ret = mt6315_prepare_poweroff(chip->regmap);
+ 	if (ret < 0)
+ 		dev_err(&pdev->dev, "[%#x] Failed to enable power off sequence. %d\n",
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi
+--- a/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi
++++ b/arch/arm64/boot/dts/mediatek/mt6878-tetris-gpu-supplies.dtsi
+@@ -8,6 +8,7 @@
+ 			     "mediatek,mt6315-regulator";
+ 		reg = <0x6 SPMI_USID>;
+ 		mediatek,buck1-mode-mask = <0x1>;
++		mediatek,observe-vgpu-only;
+ 		status = "disabled";
+ 
+ 		regulators {

@@ -1,0 +1,275 @@
+From: Tetris port maintainers
+Subject: [PATCH] pmdomain: mediatek: isolate MT6878 modem sequencing
+
+Source: Nothing OS 4.1 device modules
+ee2be53cb75670b548948636a0db1d1ff112bf12, mtk-scpsys-mt6878.c
+and scpsys_md_power_on/off in mtk-scpsys.c.
+
+Use a separate controller compatible with two access-controller phandles
+(IFR, NEMICFG), leaving the existing display controller unchanged. Register
+only a fully protected, isolated, powered-off modem; reject inherited ON or
+mixed acknowledgements without touching hardware. Do not operate reset_b,
+PWR_ON_2ND, SRAM or the generic isolation/clock-disable bits. Any transition
+failure latches its first error until reboot, without speculative rollback.
+
+No DT nodes or consumers are enabled. Modem reset, EMI ownership and firmware
+handoff remain separate prerequisites; this provider does not start firmware.
+
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.h b/drivers/pmdomain/mediatek/mtk-pm-domains.h
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.h
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.h
+@@ -21,2 +21,3 @@
+ #define MTK_SCPD_INFRA_REQ_OPT		BIT(14)
++#define MTK_SCPD_MT6878_MD		BIT(15)
+ #define MTK_SCPD_CAPS(_scpd, _x)	((_scpd)->data->caps & (_x))
+@@ -64,2 +65,3 @@
+ 	BUS_PROT_BLOCK_SMI,
++	BUS_PROT_BLOCK_NEMICFG,
+ 	BUS_PROT_BLOCK_COUNT,
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -63,2 +63,4 @@
+ 	struct regmap *hwv;
++	int md_error;
++	bool md_owned;
+ };
+@@ -706,3 +708,5 @@
++#include "mt6878-modem-pm.h"
++
+ static struct
+ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_node *node)
+ {
+@@ -814,2 +818,11 @@
+-	if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF)) {
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
++		if (pd->num_clks || pd->num_subsys_clks ||
++		    of_property_present(node, "domain-supply")) {
++			ret = -EINVAL;
++			goto err_put_subsys_clocks;
++		}
++		ret = mt6878_md_check_off(pd);
++		if (ret)
++			goto err_put_subsys_clocks;
++	} else if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF)) {
+ 		if (scpsys_domain_is_on(pd))
+@@ -844,2 +857,5 @@
+-	if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
++		pd->genpd.power_off = mt6878_md_power_off;
++		pd->genpd.power_on = mt6878_md_power_on;
++	} else if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
+ 		pd->genpd.power_off = scpsys_hwv_power_off;
+@@ -937,3 +953,7 @@
+-	if (scpsys_domain_is_on(pd))
++	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
++		if (!ret)
++			mt6878_md_cleanup(pd);
++	} else if (scpsys_domain_is_on(pd)) {
+ 		pd->genpd.power_off(&pd->genpd);
++	}
+ 
+@@ -1102,2 +1123,6 @@
+ static const struct of_device_id scpsys_of_match[] = {
++	{
++		.compatible = "mediatek,mt6878-modem-power-controller",
++		.data = &mt6878_md_scpsys_data,
++	},
+ 	{
+diff --git a/drivers/pmdomain/mediatek/mt6878-modem-pm.h b/drivers/pmdomain/mediatek/mt6878-modem-pm.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-modem-pm.h
+@@ -0,0 +1,162 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included after scpsys types/helpers: deliberately modem-only. */
++#define MT6878_MD_CTL 0x0e00
++#define MT6878_MD_ISO 0x0f24
++#define MT6878_MD_ISO_MASK GENMASK(1, 0)
++#define MT6878_MD_ACK GENMASK(31, 30)
++
++static enum scpsys_bus_prot_block mt6878_md_blocks[] = {
++	BUS_PROT_BLOCK_INFRA, BUS_PROT_BLOCK_NEMICFG,
++};
++
++static const struct scpsys_domain_data mt6878_md_domains[] = {
++	[0] = {
++		.name = "md",
++		.sta_mask = MT6878_MD_ACK,
++		.ctl_offs = MT6878_MD_CTL,
++		.pwr_sta_offs = MT6878_MD_CTL,
++		.pwr_sta2nd_offs = MT6878_MD_CTL,
++		.caps = MTK_SCPD_MT6878_MD | MTK_SCPD_KEEP_DEFAULT_OFF |
++			MTK_SCPD_STATUS_IN_CTL | MTK_SCPD_SKIP_RESET_B,
++		.bp_cfg = {
++			BUS_PROT_WR(INFRA, BIT(9), 0x0c54, 0x0c58, 0x0c5c),
++			BUS_PROT_WR(INFRA, BIT(11), 0x0c44, 0x0c48, 0x0c4c),
++			BUS_PROT_WR(NEMICFG, BIT(6) | BIT(7), 0x84, 0x88, 0x8c),
++		},
++	},
++};
++
++static const struct scpsys_soc_data mt6878_md_scpsys_data = {
++	.domains_data = mt6878_md_domains,
++	.num_domains = ARRAY_SIZE(mt6878_md_domains),
++	.bus_prot_blocks = mt6878_md_blocks,
++	.num_bus_prot_blocks = ARRAY_SIZE(mt6878_md_blocks),
++};
++
++static int mt6878_md_check_off(struct scpsys_domain *pd)
++{
++	u32 value;
++	int i, ret;
++
++	ret = regmap_read(pd->scpsys->base, MT6878_MD_CTL, &value);
++	if (ret)
++		return ret;
++	if (value & (MT6878_MD_ACK | PWR_ON_BIT))
++		return -EBUSY;
++	ret = regmap_read(pd->scpsys->base, MT6878_MD_ISO, &value);
++	if (ret)
++		return ret;
++	if ((value & MT6878_MD_ISO_MASK) != MT6878_MD_ISO_MASK)
++		return -EBUSY;
++	for (i = 0; i < 3; i++) {
++		const struct scpsys_bus_prot_data *bp = &pd->data->bp_cfg[i];
++		struct regmap *map = scpsys_bus_protect_get_regmap(pd, bp);
++
++		ret = regmap_read(map, bp->bus_prot_sta, &value);
++		if (ret)
++			return ret;
++		if ((value & bp->bus_prot_sta_mask) != bp->bus_prot_sta_mask)
++			return -EBUSY;
++	}
++	return 0;
++}
++
++static int mt6878_md_bus(struct scpsys_domain *pd, bool protect)
++{
++	int step, ret;
++	u32 value;
++
++	for (step = 0; step < 3; step++) {
++		int index = protect ? step : 2 - step;
++		const struct scpsys_bus_prot_data *bp = &pd->data->bp_cfg[index];
++		struct regmap *map = scpsys_bus_protect_get_regmap(pd, bp);
++		u32 expected = protect ? bp->bus_prot_sta_mask : 0;
++
++		ret = regmap_write(map, protect ? bp->bus_prot_set : bp->bus_prot_clr,
++				   bp->bus_prot_set_clr_mask);
++		if (ret)
++			return ret;
++		ret = regmap_read_poll_timeout(map, bp->bus_prot_sta, value,
++				(value & bp->bus_prot_sta_mask) == expected,
++				MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
++		if (ret)
++			return ret;
++	}
++	return 0;
++}
++
++static int mt6878_md_power_on(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	struct regmap *base = pd->scpsys->base;
++	u32 value;
++	int ret;
++
++	if (pd->md_error)
++		return pd->md_error;
++	if (pd->md_owned)
++		return -EBUSY;
++	ret = mt6878_md_check_off(pd);
++	if (ret)
++		goto fault;
++	ret = regmap_clear_bits(base, MT6878_MD_ISO, MT6878_MD_ISO_MASK);
++	if (ret)
++		goto fault;
++	ret = regmap_set_bits(base, MT6878_MD_CTL, PWR_ON_BIT);
++	if (ret)
++		goto fault;
++	ret = regmap_read_poll_timeout(base, MT6878_MD_CTL, value,
++			(value & MT6878_MD_ACK) == MT6878_MD_ACK,
++			MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
++	if (ret)
++		goto fault;
++	ret = mt6878_md_bus(pd, false);
++	if (ret)
++		goto fault;
++	pd->md_owned = true;
++	return 0;
++fault:
++	pd->md_error = ret;
++	dev_err(pd->scpsys->dev, "modem power-on failed: %d; reboot required\n", ret);
++	return ret;
++}
++
++static int mt6878_md_power_off(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	struct regmap *base = pd->scpsys->base;
++	u32 value;
++	int ret;
++
++	if (pd->md_error)
++		return pd->md_error;
++	if (!pd->md_owned)
++		return -EBUSY;
++	ret = mt6878_md_bus(pd, true);
++	if (ret)
++		goto fault;
++	ret = regmap_clear_bits(base, MT6878_MD_CTL, PWR_ON_BIT);
++	if (ret)
++		goto fault;
++	ret = regmap_read_poll_timeout(base, MT6878_MD_CTL, value,
++			!(value & MT6878_MD_ACK),
++			MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
++	if (ret)
++		goto fault;
++	ret = regmap_set_bits(base, MT6878_MD_ISO, MT6878_MD_ISO_MASK);
++	if (ret)
++		goto fault;
++	pd->md_owned = false;
++	return 0;
++fault:
++	pd->md_error = ret;
++	dev_err(pd->scpsys->dev, "modem power-off failed: %d; reboot required\n", ret);
++	return ret;
++}
++
++static void mt6878_md_cleanup(struct scpsys_domain *pd)
++{
++	/* No status reads or fallback sequence on unowned/faulted state. */
++	if (pd->md_owned && !pd->md_error)
++		mt6878_md_power_off(&pd->genpd);
++}
+diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
++++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+@@ -28,2 +28,3 @@
+       - mediatek,mt6878-power-controller
++      - mediatek,mt6878-modem-power-controller
+       - mediatek,mt6878-mfg-power-controller
+@@ -161,2 +162,22 @@
+ allOf:
++  - if:
++      properties:
++        compatible:
++          const: mediatek,mt6878-modem-power-controller
++    then:
++      required:
++        - access-controllers
++      properties:
++        access-controllers:
++          minItems: 2
++          maxItems: 2
++          items:
++            - description: INFRACFG bus protection
++            - description: NEMICFG AO memory bus protection
++      patternProperties:
++        "^power-domain@[0-9a-f]+$":
++          properties:
++            reg:
++              items:
++                - const: 0
+   - if:
