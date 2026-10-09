@@ -12,6 +12,10 @@ on:
         description: Run validation and candidate tests without building install images
         type: boolean
         default: false
+      kernel_smoke_only:
+        description: Compile packaged candidate AArch64 objects without install images
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,7 +28,7 @@ env:
   NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.validation_only && 'validation' || 'images' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
   cancel-in-progress: true
 
 jobs:
@@ -41,6 +45,10 @@ jobs:
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
         run: ./scripts/validate-pmaports-overlay.sh
+      - name: Validate isolated kernel object inputs
+        run: |
+          python3 ci/test-kernel-object-smoke.py
+          python3 ci/kernel-object-smoke.py --plan-only
       - name: Validate MT6878 display route
         run: sh ./scripts/check-mt6878-display-route.sh
       - name: Validate DRM sequence measurement
@@ -241,9 +249,32 @@ jobs:
           path: out/
           if-no-files-found: error
 
+  kernel-object-smoke:
+    needs: validate-overlay
+    if: ${{ inputs.kernel_smoke_only }}
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.23.3
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install package-matching kernel compiler
+        run: |
+          apk add --no-cache build-base bc bison flex clang21 llvm21 lld21 \
+            openssl-dev perl python3 patch linux-headers
+      - name: Compile isolated AArch64 candidate objects
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 ci/kernel-object-smoke.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kernel-object-smoke-evidence
+          path: out/kernel-object-smoke/
+          if-no-files-found: warn
+
   build-pmaports:
     needs: validate-overlay
-    if: ${{ github.event_name != 'pull_request' && !inputs.validation_only }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.validation_only && !inputs.kernel_smoke_only }}
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23.3

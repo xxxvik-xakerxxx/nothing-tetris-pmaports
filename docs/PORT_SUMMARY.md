@@ -2,13 +2,21 @@
 
 ## Combined candidate: r177
 
-Follow-on r178 is prepared locally for one combined CI qualification:
+Follow-on r178 is on `main`; combined native validation
+[37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
+at `063734b` passed, including source checks and ASan/UBSan fault fixtures:
 dedicated CCCI first-start/runtime-PM and typed secure-call adapter, GPUEB-owned
 whole-GPU power transaction, calibrated SENINF PHY/MAC register program,
 and read-only GNSS LNA metadata. Hardware ownership/session validators and
 transport/DMA integration remain incomplete; none is automatic hardware support.
 All three new kernel backends are compiled in an isolated output tree only;
 shipping config and module packaging explicitly reject their activation.
+Native fixture success does not establish kernel API compatibility or hardware
+operation. The separate `kernel_smoke_only` workflow compiles the packaged
+candidate AArch64 translation units using the image's Alpine/LLVM 21 toolchain,
+after checksum verification and the ordered kernel patch stack. It retains the
+isolated config and manifest, never links/install modules or changes shipping DT.
+Its independent concurrency group does not cancel a full image build.
 
 The GNSS DT no longer supplies unproven GPIO143/144 LNA states. Pinned B4.1
 sources and the cached stock base DT plus each of three stock DTBO choices
@@ -26,7 +34,8 @@ Prepared together, not yet installed or advertised as working:
 - Camera: native IMX882 V4L2 stream candidate with exact B4.1 init/mode tables,
   exposure/gain/frame timing controls and checked start/stop. Runtime DT stays
   disabled. SENINF resource/media graph and partial analog/mux transactions
-  are now prepared; calibrated receiver setup and capture DMA remain missing.
+  are prepared; calibrated receiver register programming passes native fault
+  fixtures, but capture DMA/composer ownership and runtime validation are missing.
 - GPU: disabled VGPU/VSRAM inventory, disabled-child filtering and rejection
   of phase masks that reach unowned rails. A separately selected read-only
   diagnostic DT enables only the VGPU observer. Panthor remains inactive.
