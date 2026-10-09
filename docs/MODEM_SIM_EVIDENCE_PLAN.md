@@ -1095,7 +1095,7 @@ packaging for `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
 All compilation remained in CI. r173 was subsequently clean-installed after
 archive/image/sparse verification. Its first boot and subsequent automatic
 sensor cold start passed; display, touch, desktop rotation and auto-brightness
-were user-confirmed. See [the installed checkpoint](PORT_SUMMARY.md#previous-installed-checkpoint-r173).
+were user-confirmed. See [the historical r173 checkpoint](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/blob/3912734/docs/PORT_SUMMARY.md#previous-installed-checkpoint-r173).
 
 U-Boot `30e73368db6477708cad54148c70ce33ab621bd7` now connects the explicit
 partition reader to signed B4.1 metadata planning and ROM/DSP placement.
@@ -1140,7 +1140,7 @@ reserves 512 MiB for firmware and `0x2690000` bytes separately for services;
 USB/SSH and a 32 MiB hash-verified transfer passed. This is a RAM-preparation
 pass, not modem execution; protection/remap and the CCCI handoff remain open.
 See the current
-[installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r175).
+[historical r175 checkpoint](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/blob/3912734/docs/PORT_SUMMARY.md#previous-r175-loader-experiments).
 
 On clean r175, warm boot `aa136f81-1539-4455-a2f9-7eed5ffacc91` and
 user-confirmed cold power-on `436b22a7-5886-4e19-b692-8ccd6e92b81d` both
