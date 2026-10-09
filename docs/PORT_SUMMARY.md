@@ -50,11 +50,19 @@ owner are retained at `cf22166`. Combined stock-contract CI
 [37951174452](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37951174452)
 at `8eed059` passed their production-body native fault/concurrency fixtures,
 pinned vendor resource checks and all existing GPS/camera/CSF tests. These are
-host checks, not the new owners' AArch64 kernel compilation or live activation.
+host checks, not live activation.
 The SRAM API retains claims on quarantined partial start and has no firmware
 upload/start operation. The modem reservation owner rejects unchanged state
 with `ENOKEY` until genuine authentication evidence exists; its copied digest
 claim never becomes an attestation. Shipping hardware status is unchanged.
+Subsequent isolated AArch64 CI
+[37951855806](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37951855806)
+at `79b9b11` passed all nine translation units: the five packaged candidates
+plus SRAM core/controller, scoped modem startup and ROM/SMEM reservation owner.
+Research production bytes are copied into an isolated built-in object directory;
+their hashes and object architectures are recorded. No parent Kbuild linkage,
+shipping config change, module/kernel link, installation or hardware activation
+occurs. The separate owner-smoke group does not cancel install-image builds.
 
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
