@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("smoke", Path(__file__).with_name("kernel-object-smoke.py"))
 smoke = importlib.util.module_from_spec(spec)
@@ -69,6 +70,37 @@ class SmokeInputs(unittest.TestCase):
         plan = smoke.plan(Path(__file__).resolve().parents[1] / smoke.PACKAGE)
         self.assertGreater(len(plan["patches"]), 100)
         self.assertEqual(len(plan["objects"]), 5)
+
+    def test_thin_lto_object_identity(self):
+        target = self.package / "unit.o"
+        for magic in (b"BC\xc0\xde", b"\xde\xc0\x17\x0b"):
+            target.write_bytes(magic)
+            with patch.object(smoke.subprocess, "check_output", return_value=
+                              'target triple = "aarch64-unknown-linux-gnu"\n') as check:
+                self.assertEqual(smoke.object_identity(target)["format"], "LLVM bitcode")
+                self.assertEqual(check.call_args.args[0][0], "llvm-dis")
+            for ir in ('target triple = "x86_64-unknown-linux-gnu"\n', "",
+                       'target triple = "aarch64-linux"\ntarget triple = "aarch64-linux"\n'):
+                with patch.object(smoke.subprocess, "check_output", return_value=ir):
+                    with self.assertRaisesRegex(ValueError, "bitcode architecture"):
+                        smoke.object_identity(target)
+
+    def test_elf_object_identity(self):
+        target = self.package / "unit.o"
+        target.write_bytes(b"\x7fELF")
+        with patch.object(smoke.subprocess, "check_output", return_value="Machine: AArch64\n"):
+            self.assertEqual(smoke.object_identity(target)["machine"], "AArch64")
+        for header in ("Machine: X86-64\n", ""):
+            with patch.object(smoke.subprocess, "check_output", return_value=header):
+                with self.assertRaisesRegex(ValueError, "object architecture"):
+                    smoke.object_identity(target)
+
+    def test_unknown_magic_cannot_be_blessed_by_header(self):
+        target = self.package / "unit.o"
+        target.write_bytes(b"nope")
+        with patch.object(smoke.subprocess, "check_output", return_value="Machine: AArch64\n"):
+            with self.assertRaisesRegex(ValueError, "object architecture"):
+                smoke.object_identity(target)
 
 
 if __name__ == "__main__":

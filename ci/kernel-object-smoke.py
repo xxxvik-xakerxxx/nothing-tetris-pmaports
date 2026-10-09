@@ -83,6 +83,22 @@ def run(command):
     subprocess.run(list(map(str, command)), check=True)
 
 
+def object_identity(target):
+    with target.open("rb") as stream:
+        magic = stream.read(4)
+    if magic in (b"BC\xc0\xde", b"\xde\xc0\x17\x0b"):
+        # Shipping ThinLTO emits LLVM IR for built-in translation units.
+        ir = subprocess.check_output(["llvm-dis", "-o", "-", target], text=True)
+        triples = re.findall(r'^target triple = "([^"]+)"$', ir, re.M)
+        if len(triples) != 1 or not triples[0].startswith("aarch64-"):
+            raise ValueError(f"wrong bitcode architecture: {target.name}")
+        return {"format": "LLVM bitcode", "target_triple": triples[0]}
+    header = subprocess.check_output(["llvm-readelf", "-h", target], text=True)
+    if magic != b"\x7fELF" or not re.search(r"Machine:\s+AArch64", header):
+        raise ValueError(f"wrong object architecture: {target.name}")
+    return {"format": "ELF", "machine": "AArch64"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan-only", action="store_true")
@@ -133,17 +149,18 @@ def main():
         if f"CONFIG_{symbol}=m" not in config:
             raise ValueError(f"isolated dependency missing: {symbol}")
     run([*make, "-k", *OBJECTS])
+    identities = {}
     for name in OBJECTS:
         target = output / name
         if not target.is_file() or not target.stat().st_size:
             raise ValueError(f"missing object: {name}")
-        run(["llvm-readelf", "-h", target])
-        header = subprocess.check_output(["llvm-readelf", "-h", target], text=True)
-        if not re.search(r"Machine:\s+AArch64", header):
-            raise ValueError(f"wrong object architecture: {name}")
+        identities[name] = object_identity(target)
+        identities[name]["sha256"] = hashlib.sha256(target.read_bytes()).hexdigest()
+        print(name + ": " + json.dumps(identities[name]), flush=True)
     if list(output.rglob("*.ko")) or (output / "vmlinux").exists():
         raise ValueError("object-only CI must not produce runtime modules or kernel")
     manifest["status"] = "passed"
+    manifest["object_identities"] = identities
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
