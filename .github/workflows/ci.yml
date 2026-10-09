@@ -117,7 +117,11 @@ jobs:
       - name: Validate CCCI first-start backend
         run: python3 patches/modem/check_first_start.py upstream/linux --vendor upstream/device-modules --native-ci
       - name: Validate concrete CCCI transport owner
-        run: python3 patches/modem/check_transport_owner.py upstream/device-modules --native-ci upstream/linux
+        id: modem_transport_candidate
+        continue-on-error: true
+        run: |
+          python3 patches/modem/test_transport_owner_fixture.py
+          python3 patches/modem/check_transport_owner.py upstream/device-modules --native-ci upstream/linux
       - name: Validate read-only modem preflight
         run: |
           python3 scripts/check-mt6878-modem-preflight.py upstream/linux --native-ci
@@ -145,6 +149,8 @@ jobs:
           export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
           sh patches/gpu/run_gpueb_power_ci.sh
       - name: Validate GPUEB session and firmware ingress
+        id: gpueb_transport_candidate
+        continue-on-error: true
         run: |
           export TETRIS_KERNEL_TREE="$PWD/upstream/linux"
           export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
@@ -190,6 +196,8 @@ jobs:
             --modules-repo upstream/connectivity-modules
           sh patches/camera-seninf/run-phy-tests.sh
       - name: Validate CAMSV DMA and composer handoff
+        id: camera_transport_candidate
+        continue-on-error: true
         run: |
           python3 patches/camera-camsv/check.py \
             --modules-repo upstream/connectivity-modules --device-repo upstream/device-modules
@@ -229,6 +237,15 @@ jobs:
             echo "package output must not be restored from the Actions cache"
             exit 1
           fi
+
+      - name: Require all transport candidates to pass
+        if: ${{ always() && (steps.modem_transport_candidate.outcome == 'failure' || steps.gpueb_transport_candidate.outcome == 'failure' || steps.camera_transport_candidate.outcome == 'failure') }}
+        run: |
+          printf 'CCCI=%s GPUEB=%s camera=%s\n' \
+            '${{ steps.modem_transport_candidate.outcome }}' \
+            '${{ steps.gpueb_transport_candidate.outcome }}' \
+            '${{ steps.camera_transport_candidate.outcome }}'
+          exit 1
 
   build-gnss-bionic-adapter:
     runs-on: ubuntu-latest

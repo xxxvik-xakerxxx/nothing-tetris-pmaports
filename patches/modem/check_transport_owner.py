@@ -106,6 +106,9 @@ def check_delimiters(text):
 
 
 EXTRA = r'''
+static void atomic_set(atomic_t *value,int next){
+    value->counter=next;
+}
 #define DEFINE_MUTEX(n) struct mutex n={0}
 struct module {int refs;};
 static struct module self_module,proof_module,ccif_module,dpmaif_module;
@@ -248,6 +251,12 @@ static void real_hifs(void){
     real_transport_context=true;
 }
 int main(void){
+    owner_setup();
+    mt6878_md_cleanup(&pd);assert(!calls && !pd.md_owned && !pd.md_error);
+    /* Unowned inherited ON must not be read or shut down by cleanup. */
+    maps[0].words[0xe00/4]|=BIT(2)|GENMASK(31,30);
+    u32 inherited=maps[0].words[0xe00/4];
+    mt6878_md_cleanup(&pd);assert(!calls && maps[0].words[0xe00/4]==inherited);
     owner_setup();allocate(); /* Retain use of the shared backend allocation fixture. */
     assert(ccci_tetris_owner_entry()==-ENOKEY && !calls);
     assert(!owner_bind());calls=0;assert(!ccci_tetris_owner_start(&modem));int total=calls;
@@ -262,6 +271,11 @@ int main(void){
         assert(modem.per_md_data.config.setting&MD_SETTING_FIRST_BOOT);
         assert(ccci_tetris_owner_start(&modem)==e && calls==fault);
         assert(ccci_tetris_owner_latch(-ETIMEDOUT)==e && calls==fault);invariant();
+        if(pd.md_error){
+            int first_fault=pd.md_error;
+            mt6878_md_cleanup(&pd);
+            assert(calls==fault && pd.md_error==first_fault);
+        }
     }
     owner_setup();assert(ccci_tetris_owner_start(&modem)==-ENOKEY && !calls);
     assert(owner_bind()==-EBUSY && !calls);

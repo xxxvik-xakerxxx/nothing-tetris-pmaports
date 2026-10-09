@@ -15,6 +15,12 @@ DMA/CQ/composer completion. These source candidates are not in the kernel
 package source list or shipping linkage. Native fixtures are not AArch64 kernel
 compilation or end-user operation. Secure modem exclusivity, GPUEB transform/boot,
 matching camera composer and DONE acknowledgment remain runtime blockers.
+The manually dispatched stock-asset workflow extracts only named generic vendor
+files from the [pinned B4.1 mirror](https://github.com/spike0en/nothing_archive/releases/tag/Tetris_B4.1-260415-1709).
+It verifies both archive hashes and an independently pinned libMNL hash; this is
+not OEM signature verification. No Android service or firmware is executed and
+no handset NV/calibration is uploaded. The goal is the missing GPS XML, GPU CSF
+image and matching camera composer inputs, not reinstalling Android.
 
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
