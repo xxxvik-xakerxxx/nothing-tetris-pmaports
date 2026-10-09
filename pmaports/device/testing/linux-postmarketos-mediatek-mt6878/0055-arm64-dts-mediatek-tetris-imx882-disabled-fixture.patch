@@ -112,8 +112,8 @@ Signed-off-by: xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.co
 +		};
 +	};
 +
- 	gps_pins_default: gps-default {
- 	};
- 
+ 	key_gpio_default: key-default {
+ 		pins-cmd1-dat {
+ 			pinmux = <PINMUX_GPIO54__FUNC_GPIO54>;
 -- 
 2.51.0
