@@ -306,7 +306,7 @@ jobs:
 
   kernel-object-smoke:
     needs: validate-overlay
-    if: ${{ inputs.kernel_smoke_only }}
+    if: ${{ inputs.kernel_smoke_only || (github.event_name != 'pull_request' && !inputs.validation_only) }}
     runs-on: ubuntu-latest
     container:
       image: alpine:3.23.3
@@ -328,7 +328,7 @@ jobs:
           if-no-files-found: warn
 
   build-pmaports:
-    needs: validate-overlay
+    needs: [validate-overlay, kernel-object-smoke]
     if: ${{ github.event_name != 'pull_request' && !inputs.validation_only && !inputs.kernel_smoke_only }}
     runs-on: ubuntu-latest
     container:

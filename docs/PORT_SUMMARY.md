@@ -29,6 +29,11 @@ Matching libccd instructions now anchor a native bounded CQ encoder and its eigh
 frame-cookie commands; the full CAMSV frame recipe and hardware completion remain
 incomplete. CSF format checks accept the actual B4.1 image, but GPU_ID, power,
 clock/voltage ownership and runtime firmware startup remain unverified.
+Stock-contract CI
+[37944928218](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37944928218)
+passed the actual XML decoder/native fault tests, matching libccd instruction
+checks/native CQ encoder, and matching Panthor-source CSF checks. These are
+host/source tests only; no GPS engine, camera DMA or GPU firmware ran on hardware.
 
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
@@ -47,6 +52,8 @@ patches use package-default application rules; the new backends require zero
 fuzz. Patch diagnostics remain in the CI log. It retains the
 isolated config and manifest, never links/install modules or changes shipping DT.
 Its independent concurrency group does not cancel a full image build.
+Full image builds also depend on the isolated object check, so candidate API or
+build-tool failures are caught before the long kernel/package build.
 The cheap validation job now applies all 104 packaged kernel patches to
 disposable pinned source files before compilation. This catches cross-subsystem
 context conflicts, including the camera fixture after GNSS pin removal.
