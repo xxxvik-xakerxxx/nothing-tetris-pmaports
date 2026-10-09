@@ -950,6 +950,9 @@ validate_compile_only_boundaries() {
 		return 1
 	fi
 	grep -Fq '_build_camera_clk_compile_only' "$kernel_apkbuild"
+	_stream_config=$(sed -n '/^_build_imx882_stream_compile_only()/,/^)/p' "$kernel_apkbuild")
+	printf '%s\n' "$_stream_config" | grep -Fq -- '-e MEDIA_PLATFORM_SUPPORT -e MEDIA_PLATFORM_DRIVERS'
+	printf '%s\n' "$_stream_config" | grep -Fq -- '-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH'
 	grep -Fq 'O="$_out"' "$kernel_apkbuild"
 	grep -Fq 'drivers/clk/mediatek/clk-mt6878-cam.o' "$kernel_apkbuild"
 	grep -Fq 'compile-only MT6878 camera clock module must not be packaged' \

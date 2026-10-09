@@ -210,6 +210,7 @@ _build_imx882_stream_compile_only() (
 	cp "$srcdir/config-$_flavor.$arch" "$_out/.config"
 	"$builddir/scripts/config" --file "$_out/.config" \
 		-e MEDIA_SUPPORT -e MEDIA_CAMERA_SUPPORT -e VIDEO_DEV \
+		-e MEDIA_PLATFORM_SUPPORT -e MEDIA_PLATFORM_DRIVERS \
 		-e MEDIA_CONTROLLER -e VIDEO_V4L2_SUBDEV_API -e V4L2_FWNODE \
 		-m VIDEO_IMX882_TETRIS -m VIDEO_MT6878_SENINF_GRAPH
 	make -j"$_jobs" -C "$builddir" O="$_out" \
