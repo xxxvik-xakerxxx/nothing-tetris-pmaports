@@ -45,6 +45,16 @@ Camera WRITE acceptance is not ACK delivery or capture; FLUSH is not DMA stop.
 Modem scope requires a genuine authenticated handoff provider and supplies none.
 These candidates remain outside shipping activation; the next ownership layer
 must retain SRAM/DMA/ROM resources across callbacks and partial-start failures.
+The exclusive GPUEB SRAM controller and immutable modem ROM/SMEM reservation
+owner are retained at `cf22166`. Combined stock-contract CI
+[37951174452](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37951174452)
+at `8eed059` passed their production-body native fault/concurrency fixtures,
+pinned vendor resource checks and all existing GPS/camera/CSF tests. These are
+host checks, not the new owners' AArch64 kernel compilation or live activation.
+The SRAM API retains claims on quarantined partial start and has no firmware
+upload/start operation. The modem reservation owner rejects unchanged state
+with `ENOKEY` until genuine authentication evidence exists; its copied digest
+claim never becomes an attestation. Shipping hardware status is unchanged.
 
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
