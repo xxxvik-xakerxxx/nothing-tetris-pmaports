@@ -549,6 +549,7 @@ jobs:
           check_exec /usr/libexec/nothing-tetris-sensor-proxy
           check_exec /usr/libexec/nothing-tetris-sensors
           check_file /usr/lib/systemd/system/iio-sensor-proxy.service.d/90-tetris-hf.conf
+          check_file /usr/share/dbus-1/system-services/net.hadess.SensorProxy.service
           check_file /usr/lib/udev/rules.d/80-tetris-hf.rules
           check_file /usr/lib/firmware/wifi.cfg
           check_file /etc/pulse/default.pa.d/90-nothing-tetris-audio.pa

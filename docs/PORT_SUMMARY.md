@@ -133,8 +133,8 @@ AArch64 object check for IMX882, SENINF graph/PHY, CCCI start and GPUEB power.
 The full image stage was cancelled by a subsequent source-only push sharing
 its concurrency group. Replacement r179 run
 [37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510)
-passed all four jobs at `0b904d6`; its images are being downloaded and verified,
-not yet installed. Image runs now queue instead of cancelling an active
+passed all four jobs at `0b904d6`; its verified images were clean-installed
+on 2026-10-09. Image runs now queue instead of cancelling an active
 image build. Cheap validation/smoke runs retain cancellation in their own groups.
 This does not compile or activate every
 research transport candidate, link candidate modules, or prove hardware function.
@@ -160,7 +160,41 @@ lifetimes. Isolated ARM64 CI stages exact production bytes plus a KUnit fault
 object; compiling that object does not execute KUnit or prove camera capture.
 No shipping config, DT activation or end-user status is changed by this work.
 
-## Latest installed checkpoint: r175
+## Latest installed checkpoint: r179
+
+Clean installation used CI `37949322510`, source
+`0b904d61731624418b70201e4d615c945eacbb4d`. Archive SHA256:
+`de5dd350fe8519ebcf986757446ea3dae69b809ff19e8c10b69e02ae44cd9c2c`.
+All three image hashes and 7,665 sparse chunks were checked before flashing
+`super` and `userdata`. Required U-Boot `dcb20ce71f` was restored to `lk_a`;
+its readback matches the manifest. Stock `lk_b` and factory/NV/calibration
+partitions were preserved. Kernel is `7.2.1-r179`, Linux `6.18.0 #180`;
+device package is `8-r17`, root filesystem 104.5 GiB.
+
+The user confirmed normal display/touch after installation. USB/SSH and a
+hash-verified userspace binary transfer passed. The first warm boot reported
+SCP preflight `-EBUSY`; warm sensor recovery is still unresolved. After full
+poweroff/on, boot `8fa11d20-8b2e-4b16-a326-097b73728dc2` reports SCP
+`secure-handoff-prepared`, error zero. Sensors did not start automatically:
+the installed packages lack the D-Bus activation descriptor. One standard
+`systemctl start iio-sensor-proxy.service` successfully started both services,
+with firmware ready, 24 inventory entries, physical mask 31 and standard
+accelerometer/light properties true; USB remained up. This is a packaging
+defect, not clean-install automatic sensor support. Package `3.9-r2` adds
+standard D-Bus activation. Live descriptor installation and userspace proxy
+reactivation preserved the inventory and USB; clean package installation and
+lifecycle remain to be verified.
+
+Source-only native CI
+[37968660008](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37968660008)
+passed actual kernel ASN.1/modem certificate and PSS32 fixtures, GPUEB bounded
+MMIO logic and GNSS argument checks. These do not establish SIM/calls, a GPS
+fix, GPU acceleration or camera capture. Isolated camera kernel compilation
+is pending after correcting its generated patch to match the macro-safe
+barrier calls. No render node, GNSS transport or camera video/media node was
+present on the installed image.
+
+### Previous r175 loader experiments
 
 Latest loader experiment: U-Boot `a329b44232`,
 [CI 37946708562](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37946708562),

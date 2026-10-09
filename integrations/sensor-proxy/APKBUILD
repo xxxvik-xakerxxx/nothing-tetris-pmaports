@@ -1,7 +1,7 @@
 # Experimental opt-in transport adapter; not a replacement for calibration.
 pkgname=iio-sensor-proxy-tetris
 pkgver=3.9
-pkgrel=1
+pkgrel=2
 pkgdesc="MediaTek HF backend for standard sensor-proxy on Nothing Tetris"
 url="https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports"
 arch="aarch64"
@@ -16,6 +16,7 @@ source="https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/$pkgver
 	80-tetris-hf.rules
 	90-tetris-hf.conf
 	90-sensor-proxy.conf
+	net.hadess.SensorProxy.service
 	"
 builddir="$srcdir/iio-sensor-proxy-$pkgver"
 
@@ -44,6 +45,8 @@ package() {
 	install -Dm644 "$srcdir/90-sensor-proxy.conf" \
 		"$pkgdir/usr/lib/systemd/system/nothing-tetris-sensors.service.d/90-sensor-proxy.conf"
 	install -Dm644 "$srcdir/80-tetris-hf.rules" "$pkgdir/usr/lib/udev/rules.d/80-tetris-hf.rules"
+	install -Dm644 "$srcdir/net.hadess.SensorProxy.service" \
+		"$pkgdir/usr/share/dbus-1/system-services/net.hadess.SensorProxy.service"
 }
 
 sha512sums="
@@ -55,4 +58,5 @@ a2eb397b3bd5165f5668a1b393ea781c914e32ba2fc14aa1fcc6ad69a4aca1c902cd822701c5eb89
 e2a48daf27a523ffc6f247a5403bacaa35e9b1189b5ffb3c2cef08ddf3a2b1bf0e5f305c89fda7adc9ec7787be011091b83156ea3489e2e04dcd3560c06cac4e  80-tetris-hf.rules
 e5b6d268da1095050c709223068b746684ec816f60ddf22947b10a9d6a79b22e27e3da94051e688e3da150e76b28973d05907a357cc0df06308b23e56de197a9  90-tetris-hf.conf
 a38b992b8562ecfd41de87a4eb8c48d8b762caefd0390959e3ce5b3d0f16f9e94e92ee760798517e4f18ac3dcfa788520332d74b1fb5eb6d0de8354888ce669f  90-sensor-proxy.conf
+95ac08bbbcb04a9b4fe64c694df455f1d200aeaa291561a8d3e44601b47f63403ff255760e1ea5426f6b4e306a22ddcaeb0e4df96bf254afda39a3112e517ae4  net.hadess.SensorProxy.service
 "

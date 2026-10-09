@@ -31,6 +31,22 @@ remains disabled by default pending lifecycle validation.
 
 ## Live evidence
 
+### Standard activation packaging fix
+
+The r179 clean install contains the service/drop-in but lacks a system-bus
+activation descriptor. A standard D-Bus request reports "not activatable";
+after a verified cold handoff, one systemd start brings up the real HF
+inventory (24 entries, physical mask 31) and accelerometer/light properties.
+Package `3.9-r2` installs `net.hadess.SensorProxy.service` with the existing
+`iio-sensor-proxy.service` as its systemd owner. This retains upstream D-Bus
+and subscriber behavior, without a boot polling script or duplicate service.
+It does not solve inherited warm SCP state or establish calibration.
+The descriptor was installed live on r179 and the bus configuration reloaded.
+The proxy deactivated cleanly and was immediately reactivated while a client
+was present; accelerometer/light properties remained true, the HF inventory
+was unchanged and USB stayed up. Only the userspace proxy was restarted.
+Clean package activation and lifecycle validation remain pending.
+
 ### Scalar callback optimization candidate
 
 Package `3.9-r1` suppresses repeated equal light values and repeated equal

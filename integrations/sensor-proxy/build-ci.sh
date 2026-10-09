@@ -23,6 +23,7 @@ cp output/src/iio-sensor-proxy output/src/monitor-sensor "$dest/artifact/"
 cp "$src/90-tetris-hf.conf" "$dest/artifact/"
 cp "$src/80-tetris-hf.rules" "$dest/artifact/"
 cp "$src/90-sensor-proxy.conf" "$dest/artifact/"
+cp "$src/net.hadess.SensorProxy.service" "$dest/artifact/"
 # Package the same reviewed sources; -d skips the phone-only runtime dependency.
 mkdir -p "$dest/testing/iio-sensor-proxy-tetris"
 cp "$src"/* "$dest/testing/iio-sensor-proxy-tetris/"
@@ -30,7 +31,7 @@ cd "$dest/testing/iio-sensor-proxy-tetris"
 abuild-keygen -a -n
 cp /root/.config/abuild/*.pub /etc/apk/keys/
 REPODEST="$dest/packages" abuild -F -d
-cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r1.apk" "$dest/artifact/"
+cp "$dest/packages/testing/aarch64/iio-sensor-proxy-tetris-3.9-r2.apk" "$dest/artifact/"
 cd "$dest/artifact"
-sha256sum iio-sensor-proxy monitor-sensor ./*.apk ./*.conf ./*.rules > SHA256SUMS
+sha256sum iio-sensor-proxy monitor-sensor ./*.apk ./*.conf ./*.rules ./*.service > SHA256SUMS
 printf '%s\n' "${GITHUB_SHA:?CI source commit required}" > source-commit
