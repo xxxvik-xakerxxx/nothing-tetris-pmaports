@@ -221,6 +221,7 @@ jobs:
           sh patches/gnss-navigation-audit/run_agps_host_ci.sh
           sh patches/gnss-navigation-audit/run_control_notify_ci.sh
           sh patches/gnss-navigation-audit/run_second_config_ci.sh
+          sh patches/gnss-navigation-audit/run_navigation_output_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -293,6 +294,17 @@ jobs:
             patches/gnss-navigation-audit/b41_first_queries.c \
             patches/gnss-navigation-audit/test_b41_first_queries.c \
             -o out/b41-first-queries-test
+          "$ndk/aarch64-linux-android28-clang" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra -Werror -pthread \
+            patches/gnss-navigation-audit/b41_startup_adapter.c \
+            patches/gnss-navigation-audit/b41_agps_host.c \
+            patches/gnss-navigation-audit/b41_frame_worker.c \
+            patches/gnss-navigation-audit/b41_navigation_output.c \
+            patches/gnss-navigation-audit/test_b41_navigation_output.c \
+            -Wl,--wrap=write -o out/b41-navigation-output-test
+          "$ndk/aarch64-linux-android28-clang" -std=c11 -O2 -Wall -Wextra -Werror \
+            patches/gnss-navigation-audit/b41_gpsdl_identity.c \
+            patches/gnss-navigation-audit/test_b41_gpsdl_identity.c \
+            -o out/b41-gpsdl-identity-test
           for binary in out/b41-*-test; do
             "$ndk/llvm-readelf" -h "$binary" | grep 'Machine:.*AArch64'
             "$ndk/llvm-readelf" -d "$binary" > "$binary.DYNAMIC"

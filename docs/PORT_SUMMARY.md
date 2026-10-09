@@ -124,6 +124,13 @@ passed all 18 ARM64 objects including the direct path. A real power/route/IRQ
 consumer and hardware capture remain pending; compilation is not camera
 support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
 
+GNSS output now uses the existing callback worker, with separate application
+and raw/NMEA sinks for standard consumers. Frame requests keep the same AGPS
+path; no second receiver reader or navigation parser was added. Native stream
+fault tests and AArch64 Bionic builds are wired into CI, pending their first
+result. Engine initialization, firmware readiness and a position fix remain
+unverified. See [integration](../patches/gnss-navigation-audit/NAVIGATION_HOST_INTEGRATION.md).
+
 ## Project rules
 
 Use Linux media/vb2, remoteproc, DRM/Panthor and the standard desktop sensor

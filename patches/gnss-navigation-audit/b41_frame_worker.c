@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "b41_frame_worker.h"
+#include "b41_navigation_output.h"
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>
@@ -23,10 +24,8 @@ static void *run(void *context)
         if (status) { fail(w, status); break; }
         status = b41_host_adapter_take(w->adapter, &event);
         if (!status) {
-            /* Only proven frame-request events; other output has a different
-             * owner and is rejected, never silently consumed as a successful TX.
-             */
-            status = b41_agps_owner_send_event(w->ipc, &event);
+            /* Keep navigation output and AGPS frame work on one queue consumer. */
+            status = b41_navigation_dispatch_event(w->ipc, &event);
             if (status) { fail(w, status); break; }
             continue;
         }

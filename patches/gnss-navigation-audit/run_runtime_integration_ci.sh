@@ -19,6 +19,7 @@ libs=$(pkg-config --libs libxml-2.0 libcrypto)
 "$out/test_startup_bundle" "$asset"
 "${CC:-cc}" -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -pthread \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
-    "$here/b41_startup_adapter.c" "$here/b41_agps_host.c" "$here/b41_frame_worker.c" \
+    "$here/b41_startup_adapter.c" "$here/b41_agps_host.c" \
+    "$here/b41_navigation_output.c" "$here/b41_frame_worker.c" \
     "$here/test_b41_frame_worker.c" -Wl,--wrap=send -o "$out/test_frame_worker"
 "$out/test_frame_worker"
