@@ -26,7 +26,22 @@ jobs:
         run: python3 ci/extract-stock-port-assets.py
       - name: Verify owned GPUEB SRAM and quarantined partial startup
         if: ${{ !cancelled() }}
-        run: sh patches/gpu/run_gpueb_sram_owner_ci.sh
+        env:
+          TETRIS_DEVICE_MODULES_TREE: ${{ github.workspace }}/upstream/device-modules
+        run: |
+          mkdir -p upstream/device-modules
+          git -C upstream/device-modules init
+          git -C upstream/device-modules remote add origin \
+            https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git
+          git -C upstream/device-modules sparse-checkout init --no-cone
+          git -C upstream/device-modules sparse-checkout set \
+            /arch/arm64/boot/dts/mediatek/mt6878.dts \
+            /drivers/soc/mediatek/mtk-dvfsrc.c \
+            /drivers/misc/mediatek/eccci/Kconfig
+          git -C upstream/device-modules fetch --filter=blob:none --depth=1 origin \
+            ee2be53cb75670b548948636a0db1d1ff112bf12
+          git -C upstream/device-modules checkout --detach FETCH_HEAD
+          sh patches/gpu/run_gpueb_sram_owner_ci.sh
       - name: Verify immutable modem reservation owner
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_handoff_reservation.py --native-ci
@@ -58,7 +73,7 @@ jobs:
             out/stock-port-assets/vendor/etc/MNL_Config.xml
       - name: Verify scoped modem startup and immutable handoff boundaries
         if: ${{ !cancelled() }}
-        run: python3 patches/modem/check_startup_scope.py --native-ci
+        run: python3 patches/modem/check_startup_scope.py --native-ci --vendor upstream/device-modules
       - name: Verify matching camera command encoding
         if: ${{ !cancelled() }}
         run: |
