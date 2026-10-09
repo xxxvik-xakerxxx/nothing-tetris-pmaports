@@ -327,7 +327,8 @@ jobs:
     if: ${{ inputs.research_owner_smoke || inputs.kernel_smoke_only || (github.event_name != 'pull_request' && !inputs.validation_only) }}
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.23.3
+      # Official Alpine 3.23.3 linux/amd64; avoid shared Docker Hub pull limits.
+      image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
     steps:
       - uses: actions/checkout@v6
       - name: Install package-matching kernel compiler
@@ -354,7 +355,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' && !inputs.validation_only && !inputs.kernel_smoke_only && !inputs.research_owner_smoke }}
     runs-on: ubuntu-latest
     container:
-      image: alpine:3.23.3
+      image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
       options: --privileged --ulimit nofile=1048576:1048576
     steps:
       - uses: actions/checkout@v6
