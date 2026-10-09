@@ -1,0 +1,36 @@
+From: Tetris Linux bring-up
+Subject: [PATCH] mailbox: mediatek: retain GPUEB claims after failed boot attempt
+
+remoteproc start/attach can fail after hardware has begun accessing memory.
+An absent successful boot reference is not evidence of physical shutdown.
+Keep all claims and references after an attempted boot that returned an error,
+even if the remoteproc core restored its logical OFFLINE state. This deliberately
+does not invent an OFF acknowledgement or call shutdown without a reference.
+Activation still requires an audited physical stop contract in the real owner.
+
+--- a/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
++++ b/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
+@@ -40,5 +40,5 @@
+ 	phys_addr_t shared_pa;
+ 	u32 magic, reply[GPUEB_WORDS];
+-	bool waiting, initialized, boot_ref;
++	bool waiting, initialized, boot_ref, boot_attempted;
+ 	int error;
+ };
+@@ -225,4 +225,10 @@
+ static bool gpueb_release(struct mt6878_gpueb_session *s)
+ {
++	/*
++	 * rproc_boot() errors can follow a partial hardware start. Core state
++	 * alone cannot authorize freeing memory in that case.
++	 */
++	if (s->boot_attempted && !s->boot_ref)
++		return false;
+ 	if (s->boot_ref) {
+ 		if (rproc_shutdown(s->rproc) ||
+@@ -361,4 +367,5 @@
+ 		goto fail;
+ 	}
++	s->boot_attempted = true;
+ 	ret = rproc_boot(s->rproc);
+ 	if (ret)

@@ -1,0 +1,461 @@
+From: Tetris port maintainers
+Subject: [PATCH] eccci: wire opt-in first-start owner without legacy early HIF start
+
+Compile-only candidate against B4.1 ee2be53cb75670b548948636a0db1d1ff112bf12.
+Canonical new sources are bundled by check_transport_owner.py --emit-bundle.
+No shipping activation, DT enable, proof flags, reset guessing or APKBUILD edit.
+
+diff --git a/drivers/misc/mediatek/eccci/Kconfig b/drivers/misc/mediatek/eccci/Kconfig
+--- a/drivers/misc/mediatek/eccci/Kconfig
++++ b/drivers/misc/mediatek/eccci/Kconfig
+@@ -8,6 +8,15 @@
+ 	  then modem1 is using eccci driver, if no,
+ 	  eccci driver is disabled.
+ 	  The option default disabled.
++
++
++config MTK_ECCCI_TETRIS_OWNER
++	bool "Tetris authenticated first-start owner (compile-only candidate)"
++	depends on MTK_ECCCI_DRIVER = m
++	depends on MTK_MT6878_CCCI_FIRST_START = m
++	help
++	  Default off. Requires a real evidence owner and an OFF-attached virtual
++	  domain consumer. Never enable merely because this object compiles.
+ 
+ config MTK_ECCCI_CLDMA
+ 	tristate "ECCCI driver using CLDMA HW to communicate with LTE modem"
+diff --git a/drivers/misc/mediatek/eccci/Makefile b/drivers/misc/mediatek/eccci/Makefile
+--- a/drivers/misc/mediatek/eccci/Makefile
++++ b/drivers/misc/mediatek/eccci/Makefile
+@@ -87,6 +87,9 @@
+ 			fsm/ap_md_mem.o
+ 
+ # fsm end
++ifeq ($(CONFIG_MTK_ECCCI_TETRIS_OWNER), y)
++ccci_md_all-$(CCCI_OBJ) += fsm/ccci_tetris_owner.o hif/ccci_tetris_hif_owned.o
++endif
+ 
+ # plat start
+ ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/pmic/
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_internal.h b/drivers/misc/mediatek/eccci/hif/ccci_hif_internal.h
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_internal.h
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_internal.h
+@@ -51,6 +51,9 @@
+ 
+ 
+ struct ccci_hif_ops {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	struct module *owner;
++#endif
+ 	/* must-have */
+ 	int (*send_skb)(unsigned char hif_id, int qno, struct sk_buff *skb,
+ 		int skb_from_pool, int blocking);
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+@@ -448,6 +448,10 @@
+ 
+ 	switch (state) {
+ 	case BOOT_WAITING_FOR_HS1:
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		/* Only the powered owner callback may start transport. */
++		break;
++#endif
+ 		ccci_hif_start(CCIF_HIF_ID);
+ 		ccci_hif_start(DPMAIF_HIF_ID);
+ 
+diff --git a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+--- a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
++++ b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+@@ -46,6 +46,9 @@
+ //#include "hif/ccci_hif_ccif.h"
+ #include "modem_sys.h"
+ #include "ccci_fsm_sys.h"
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include "ccci_tetris_owner.h"
++#endif
+ 
+ #define TAG "mcd"
+ 
+@@ -142,8 +145,26 @@
+ 	return 0;
+ }
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++int ccci_tetris_wdt_init_owned(struct ccci_modem *md)
++{
++	int ret;
++
++	atomic_set(&md->wdt_enabled, 0);
++	ret = request_irq(md->md_wdt_irq_id, md_cd_wdt_isr,
++			  md->md_wdt_irq_flags | IRQF_NO_AUTOEN, "MD_WDT", md);
++	if (ret)
++		return ret;
++	/* Keep the IRQ disabled on wake failure; controlled cold recovery owns it. */
++	return irq_set_irq_wake(md->md_wdt_irq_id, 1);
++}
++#endif
++
+ static int md_cd_start(struct ccci_modem *md)
+ {
++	int ret = 0;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	return ccci_tetris_owner_start(md);
++#endif
+-	int ret = 0;
+ 
+ 	if (md->per_md_data.config.setting & MD_SETTING_FIRST_BOOT) {
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c b/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
+@@ -1387,6 +1387,19 @@
+ 	return ret;
+ }
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include "ccci_tetris_owner.h"
++int ccci_tetris_publish_hs1(void)
++{
++	struct ccci_fsm_ctl *ctl = ccci_fsm_entries;
++
++	if (!ctl || ctl->curr_state != CCCI_FSM_STARTING)
++		return -EBUSY;
++	/* BOOT_WAITING is not HS1 completion; READY still requires real events. */
++	return fsm_broadcast_state(ctl, BOOT_WAITING_FOR_HS1);
++}
++#endif
++
+ static void fsm_routine_start(struct ccci_fsm_ctl *ctl,
+ 	struct ccci_fsm_command *cmd)
+ {
+@@ -1397,6 +1410,14 @@
+ 	unsigned long flags;
+ 	struct arm_smccc_res res;
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = ccci_tetris_owner_entry();
++	if (ret) {
++		ccci_tetris_owner_latch(ret);
++		fsm_finish_command(ctl, cmd, -1);
++		return;
++	}
++#endif
+ 	/* 1. state sanity check */
+ 	if (ctl->curr_state == CCCI_FSM_READY)
+ 		goto success;
+@@ -1409,11 +1430,13 @@
+ 	ctl->curr_state = CCCI_FSM_STARTING;
+ 	atomic_set(&md_ee_occurred, 0);
+ 	__pm_stay_awake(ctl->wakelock);
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 	arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, CCIF_CLK_REQUEST,
+ 		0, 0, 0, 0, 0, 0, &res);
+ 	CCCI_NORMAL_LOG(MD_SYS1, FSM, "%s [CCIF_CLK_REQUEST] res = 0x%lX\n",
+ 		__func__, res.a0);
+ 
++#endif
+ 
+ 	/* 2. poll for critical users exit */
+ 	while (count < BOOT_TIMEOUT/EVENT_POLL_INTEVAL && !needforcestop) {
+@@ -1444,13 +1467,17 @@
+ 	}
+ 	spin_unlock_irqrestore(&ctl->event_lock, flags);
+ 	/* 3. action and poll event queue */
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 	ccci_md_pre_start();
+ 	fsm_broadcast_state(ctl, BOOT_WAITING_FOR_HS1);
++#endif
+ 	/* clear md emi mpu violation */
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ #if IS_ENABLED(CONFIG_MTK_EMI)
+ 	CCCI_NORMAL_LOG(0, FSM, "mtk_clear_md_violation\n");
+ 	mtk_clear_md_violation();
+ 	smpu_clear_md_violation();
++#endif
+ #endif
+ 	ret = ccci_md_start();
+ 	if (ret)
+@@ -1516,14 +1543,25 @@
+ 	}
+ 	if (needforcestop) {
+ 		fsm_finish_command(ctl, cmd, -1);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		ccci_tetris_owner_latch(-ECANCELED);
++#else
+ 		arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, CCIF_CLK_RELEASE,
+ 			0, 0, 0, 0, 0, 0, &res);
+ 		CCCI_NORMAL_LOG(MD_SYS1, FSM, "%s [CCIF_CLK_RELEASE] res = 0x%lX\n",
+ 			__func__, res.a0);
++#endif
+ 		return;
+ 	}
+ 	/* 4. check result, finish command */
+ fail:
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Preserve the first fault; no speculative dumps, resets or power cleanup. */
++	ccci_tetris_owner_latch(ret ? ret : -ETIMEDOUT);
++	fsm_finish_command(ctl, cmd, -1);
++	__pm_relax(ctl->wakelock);
++	return;
++#endif
+ 	if (hs1_got)
+ 		fsm_routine_exception(ctl, NULL, EXCEPTION_HS2_TIMEOUT);
+ 	else
+@@ -1542,10 +1580,14 @@
+ 	 */
+ 	fsm_finish_command(ctl, cmd, -1);
+ 	__pm_relax(ctl->wakelock);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ccci_tetris_owner_latch(-EIO);
++#else
+ 	arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, CCIF_CLK_RELEASE,
+ 		0, 0, 0, 0, 0, 0, &res);
+ 	CCCI_NORMAL_LOG(MD_SYS1, FSM, "%s [CCIF_CLK_RELEASE] res = 0x%lX\n",
+ 		__func__, res.a0);
++#endif
+ 	return;
+ 
+ success:
+@@ -1554,10 +1596,12 @@
+ 	ccci_md_post_start();
+ 	fsm_finish_command(ctl, cmd, 1);
+ 	__pm_relax(ctl->wakelock);
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 	arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, CCIF_CLK_RELEASE,
+ 		0, 0, 0, 0, 0, 0, &res);
+ 	CCCI_NORMAL_LOG(MD_SYS1, FSM, "%s [CCIF_CLK_RELEASE] res = 0x%lX\n",
+ 		__func__, res.a0);
++#endif
+ 	__pm_wakeup_event(ctl->wakelock, jiffies_to_msecs(10 * HZ));
+ }
+ 
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+@@ -1329,6 +1329,10 @@
+ 		ccif_ctrl->rxq[i].ccif_ch = D2H_RINGQ0 + i;
+ 		ccif_ctrl->rxq[i].worker = alloc_workqueue("rx%d_worker",
+ 				WQ_UNBOUND | WQ_MEM_RECLAIM | WQ_HIGHPRI, 1, i);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		if (!ccif_ctrl->rxq[i].worker)
++			return -ENOMEM;
++#endif
+ 		INIT_WORK(&ccif_ctrl->rxq[i].qwork, ccif_rx_work);
+ 		/*tx */
+ 		ccif_ctrl->txq[i].ringbuf_bak[RB_NORMAL] = ringbuf;
+@@ -1371,20 +1375,37 @@
+ 	 * request_irq will get a unbalance warning
+ 	 */
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Probe assumed auto-enable; match the NO_AUTOEN request below instead. */
++	atomic_set(&ccif_ctrl->ccif_irq1_enabled, 0);
++#endif
+ 	ret = request_irq(ccif_ctrl->ap_ccif_irq1_id, md_ccif_isr1,
+-			IRQF_TRIGGER_NONE, "CCIF_AP_DATA1", ccif_ctrl);
++			IRQF_TRIGGER_NONE | (IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER) ?
++			IRQF_NO_AUTOEN : 0), "CCIF_AP_DATA1", ccif_ctrl);
+ 	if (ret) {
+ 		CCCI_ERROR_LOG(0, TAG,
+ 			"request CCIF_AP_DATA IRQ1(%d) error %d\n",
+ 			ccif_ctrl->ap_ccif_irq1_id, ret);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		return ret;
++#else
+ 		return -1;
++#endif
+ 	}
+ 	ret = irq_set_irq_wake(ccif_ctrl->ap_ccif_irq1_id, 1);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	if (ret)
++		return ret;
++#endif
+ 	if (ret)
+ 		CCCI_ERROR_LOG(0, TAG,
+ 			"irq_set_irq_wake ccif ap_ccif_irq1_id(%d) error %d\n",
+ 			ccif_ctrl->ap_ccif_irq1_id, ret);
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	return md_ccif_ring_buf_init(CCIF_HIF_ID);
++#else
+ 	md_ccif_ring_buf_init(CCIF_HIF_ID);
++#endif
+ 
+ 	return 0;
+ }
+@@ -1469,6 +1503,10 @@
+ static void ccif_enable_irq1(unsigned char hif_id)
+ {
+ 	struct md_ccif_ctrl *ccif_ctrl = ccci_ccif_ctrl;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	if (!ccif_ctrl || hif_id != CCIF_HIF_ID)
++		return;
++#endif
+ 
+ 	if (atomic_cmpxchg(&ccif_ctrl->ccif_irq1_enabled, 0, 1) == 0) {
+ 		enable_irq(ccif_ctrl->ap_ccif_irq1_id);
+@@ -1510,10 +1527,47 @@
+ 	ccci_reset_seq_num(&ccif_ctrl->traffic_info);
+ }
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++static int ccif_owner_clocks(void)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(ccif_clk_table); i++)
++		if (IS_ERR_OR_NULL(ccif_clk_table[i].clk_ref))
++			return -ENODEV;
++	for (i = 0; i < ARRAY_SIZE(ccif_clk_table); i++) {
++		ret = clk_prepare_enable(ccif_clk_table[i].clk_ref);
++		if (ret)
++			return ret < 0 ? ret : -EPROTO;
++	}
++	return 0;
++}
++#endif
++
+ static int ccif_start(unsigned char hif_id)
+ {
+ 	unsigned long flags;
+ 	struct md_ccif_ctrl *ccif_ctrl = ccci_ccif_ctrl;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	int ret;
++
++	if (!ccif_ctrl || hif_id != CCIF_HIF_ID)
++		return -ENODEV;
++	if (ccif_ctrl->ccif_state != HIFCCIF_STATE_MIN)
++		return -EBUSY;
++	ret = ccif_late_init(hif_id);
++	if (ret)
++		return ret < 0 ? ret : -EPROTO;
++	if (!ccif_ctrl->ccif_clk_free_run) {
++		ret = ccif_owner_clocks();
++		if (ret)
++			return ret;
++	}
++	spin_lock_irqsave(&devapc_flag_lock, flags);
++	devapc_check_flag = 1;
++	spin_unlock_irqrestore(&devapc_flag_lock, flags);
++#else
+ 
+ 	if (ccif_ctrl->ccif_state == HIFCCIF_STATE_PWRON)
+ 		return 0;
+@@ -1530,6 +1584,7 @@
+ 		devapc_check_flag = 1;
+ 		spin_unlock_irqrestore(&devapc_flag_lock, flags);
+ 	}
++#endif
+ 
+ 	md_ccif_sram_reset(CCIF_HIF_ID);
+ 	md_ccif_switch_ringbuf(CCIF_HIF_ID, RB_EXP);
+@@ -1569,6 +1624,9 @@
+ }
+ 
+ static struct ccci_hif_ops ccci_hif_ccif_ops = {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	.owner = THIS_MODULE,
++#endif
+ 	.send_skb = &md_ccif_op_send_skb,
+ 	.give_more = &md_ccif_op_give_more,
+ 	.write_room = &md_ccif_op_write_room,
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+@@ -2340,9 +2340,35 @@
+ }
+ #endif
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++static int dpmaif_owner_clocks(struct dpmaif_clk_node *clocks)
++{
++	struct dpmaif_clk_node *clock;
++	int ret;
++
++	if (!clocks || !clocks->clk_name)
++		return -ENODEV;
++	for (clock = clocks; clock->clk_name; clock++)
++		if (IS_ERR_OR_NULL(clock->clk_ref))
++			return -ENODEV;
++	for (clock = clocks; clock->clk_name; clock++) {
++		ret = clk_prepare_enable(clock->clk_ref);
++		if (ret)
++			return ret < 0 ? ret : -EPROTO;
++	}
++	return 0;
++}
++#endif
++
+ static int dpmaif_start(unsigned char hif_id)
+ {
+ 	int ret = 0;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	if (!dpmaif_ctl || hif_id != DPMAIF_HIF_ID)
++		return -ENODEV;
++	if (dpmaif_ctl->dpmaif_state != DPMAIF_STATE_MIN)
++		return -EBUSY;
++#endif
+ 
+ 	if (dpmaif_ctl->dpmaif_state == DPMAIF_STATE_PWRON)
+ 		return 0;
+@@ -2349,17 +2375,42 @@
+ 		ret = dpmaif_late_init();
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		if (ret)
++			return ret < 0 ? ret : -EPROTO;
++#endif
+ 		if (ret < 0)
+ 			return ret;
+ 	}
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = dpmaif_owner_clocks(dpmaif_ctl->clk_tbs);
++	if (ret)
++		return ret;
++#else
+ 	dpmaif_set_clk(1, dpmaif_ctl->clk_tbs);
++#endif
+ 
+ 	ret = ops.drv_start();
+ 	if (ret)
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		return ret < 0 ? ret : -EPROTO;
++#else
+ 		return -1;
++#endif
+ 
+ 	if (dpmaif_ctl->support_2rxq)
+ 		ccci_drv3_dl_lro_hpc_hw_init();
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = dpmaif_rxqs_start();
++	if (ret)
++		return ret < 0 ? ret : -EPROTO;
++	ret = ccci_dpmaif_bat_start();
++	if (ret)
++		return ret < 0 ? ret : -EPROTO;
++	ret = dpmaif_txqs_start();
++	if (ret)
++		return ret < 0 ? ret : -EPROTO;
++#else
+ 	if (dpmaif_rxqs_start())
+ 		return -1;
+ 
+@@ -2369,6 +2416,7 @@
+ 
+ 	if (dpmaif_txqs_start())
+ 		return -1;
++#endif
+ 
+ 	if (g_dpmf_ver >= 3) {
+ 		ccci_drv3_hw_init_done();
+@@ -2937,6 +2985,9 @@
+ }
+ 
+ static struct ccci_hif_ops g_dpmaif_ops = {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	.owner = THIS_MODULE,
++#endif
+ 	.send_skb =    &dpmaif_tx_send_skb_to_md,
+ 	.give_more =   &dpmaif_give_more,
+ 	.write_room =  &dpmaif_write_room,

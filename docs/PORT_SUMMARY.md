@@ -9,6 +9,13 @@ OEM untouched-zero error branch; the latter never becomes a successful ioctl or
 physical wiring proof. Navigation startup remains blocked by missing config,
 host-service and stop contracts. Native control/query fixtures are CI-only.
 
+The follow-on transport suite validates actual CCIF/DPMAIF start functions,
+GPUEB mailbox request/response ownership and firmware ingress, and CAMSV paired
+DMA/CQ/composer completion. These source candidates are not in the kernel
+package source list or shipping linkage. Native fixtures are not AArch64 kernel
+compilation or end-user operation. Secure modem exclusivity, GPUEB transform/boot,
+matching camera composer and DONE acknowledgment remain runtime blockers.
+
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
 at `063734b` passed, including source checks and ASan/UBSan fault fixtures:

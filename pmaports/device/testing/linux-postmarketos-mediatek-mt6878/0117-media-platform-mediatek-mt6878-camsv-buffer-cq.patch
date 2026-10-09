@@ -1,0 +1,661 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: mediatek: prepare checked CAMSV buffer/CQ ownership
+
+Source-grounded CQ submission/reset, VC filters and paired vb2 completion.
+Composer/IRQ/resource owners must be supplied; no runtime activation.
+
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camsv-capture.h b/drivers/media/platform/mediatek/seninf/mt6878-camsv-capture.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camsv-capture.h
+@@ -0,0 +1,365 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_CAMSV_CAPTURE_H
++#define MT6878_CAMSV_CAPTURE_H
++
++#ifdef __KERNEL__
++#include <linux/errno.h>
++#else
++#include <errno.h>
++#endif
++
++/* isp7sp mtk_cam-sv.c/apply_camsv_cq, sv_reset and IRQ done groups;
++ * Nothing modules e96f60dc081ae3525ef43d4bcf0ee5ee97e53835.
++ * Resource/DMA aperture: device ee2be53cb75670b548948636a0db1d1ff112bf12.
++ * The firmware CQ composer is NOT implemented here. Never construct a CQ
++ * by guessing WDMA stride/format registers from debug-only definitions.
++ */
++enum mt6878_camsv_region { MT6878_SV_CENTRAL, MT6878_SV_DMA, MT6878_SV_CQ, MT6878_SV_SENINF };
++enum mt6878_camsv_owner {
++	MT6878_SV_RESOURCES, MT6878_SV_IOMMU, MT6878_SV_ROUTE,
++	MT6878_SV_IRQ, MT6878_SV_COMPOSER, MT6878_SV_STOPPED
++};
++
++struct mt6878_camsv_buffer {
++	unsigned long long dma;
++	unsigned int size, mapped;
++};
++
++struct mt6878_camsv_dma_layout {
++	unsigned int format, width, height, bytesperline, sizeimage, pixel_mode_shift;
++};
++
++#include "mt6878-camsv-registers.h"
++
++/* Output DMA layout, NOT CSI packet layout. Exact restricted vendor
++ * mtk_cam_dmao_xsize / mtk_cam_dma_bus_size formula. The composer owner
++ * must prove the selected format/geometry/stride against its emitted CQ.
++ */
++static inline int mt6878_camsv_layout_validate(const struct mt6878_camsv_dma_layout *l,
++	unsigned int capacity)
++{
++	unsigned int bits, bus, row;
++
++	if (!l || !l->width || !l->height || l->width > 65535 || l->height > 65535 ||
++	    l->pixel_mode_shift > 4)
++		return -EINVAL;
++	if (l->format == SV_DMA_FMT_BAYER8)
++		bits = 8;
++	else if (l->format == SV_DMA_FMT_BAYER10 || l->format == SV_DMA_FMT_BAYER10_MIPI)
++		bits = 10;
++	else
++		return -EOPNOTSUPP;
++	bus = (16U << l->pixel_mode_shift) / 8;
++	row = (l->width * bits + 7) / 8;
++	row = (row + bus - 1) / bus * bus;
++	if (l->bytesperline < row || l->bytesperline > 65535 ||
++	    l->bytesperline % bus || l->sizeimage != l->bytesperline * l->height ||
++	    l->sizeimage > capacity)
++		return -ERANGE;
++	return 0;
++}
++
++struct mt6878_camsv_job {
++	unsigned int sv_id, width, height, sequence;
++	unsigned int raw_tag, pdaf_tag;
++	unsigned int group_tags[4]; /* Composer-proven active_group_info. */
++	struct mt6878_camsv_buffer raw, pdaf, cq;
++	struct mt6878_camsv_dma_layout raw_layout, pdaf_layout;
++};
++
++struct mt6878_camsv_backend {
++	/* No receiver MMIO during verification. Prove held CAM_MAIN/clocks,
++	 * exclusive six-bank resource ownership and the exact live IOMMU domain
++	 * for all three DMA mappings. ROUTE verifies CAMMUX tags and the frozen
++	 * SENINF route; IRQ owns all four CAMSV lines and bounded acknowledgment.
++	 * COMPOSER proves exact RAW10/PDAF output addresses/strides, tag groups,
++	 * FH_SPARE sequence and CQ initialization, including DMA synchronization
++	 * and no reuse of these mappings after their group completion.
++	 * Unsupported => -EOPNOTSUPP.
++	 * STOPPED proves sensor/CAMMUX/TG/VF stopped, IRQ synchronized, clocks held.
++	 * A stub verifier is not a valid live implementation.
++	 */
++	int (*verify)(void *context, enum mt6878_camsv_owner owner,
++		const struct mt6878_camsv_job *job);
++	int (*read)(void *context, enum mt6878_camsv_region region,
++		unsigned int offset, unsigned int *value);
++	int (*write)(void *context, enum mt6878_camsv_region region,
++		unsigned int offset, unsigned int value);
++	int (*barrier)(void *context);
++	int (*delay_us)(void *context, unsigned int us);
++	/* MT6878 get_sv_smi_reset_setting requires common 31 clamp+lock.
++	 * Callback must own that shared SMI interface, not reinterpret it as
++	 * permission to touch unrelated larbs. Failure keeps all buffers pinned.
++	 */
++	int (*smi_clamp)(void *context, unsigned int common, unsigned int enable);
++	void *context;
++	unsigned long sizes[4];
++};
++
++struct mt6878_camsv_transaction {
++	struct mt6878_camsv_job job;
++	unsigned int attempted, submitted, complete_tags, off_attempted, quiesced;
++	unsigned int hw_attempted;
++	int first_error;
++};
++
++static inline int mt6878_camsv_error(struct mt6878_camsv_transaction *tx, int ret)
++{
++	if (ret && !tx->first_error)
++		tx->first_error = ret;
++	return tx->first_error;
++}
++
++static inline int mt6878_camsv_range(const struct mt6878_camsv_buffer *buffer,
++	unsigned int required)
++{
++	/* Exact MT6878 DT dma-ranges / vendor DMA_BIT_MASK(34). Zero DMA is legal. */
++	if (buffer->mapped != 1 || buffer->size < required || !required ||
++	    buffer->dma >= (1ULL << 34) || buffer->size > (1ULL << 34) - buffer->dma)
++		return -EINVAL;
++	return 0;
++}
++
++static inline int mt6878_camsv_overlap(const struct mt6878_camsv_buffer *a,
++	const struct mt6878_camsv_buffer *b)
++{
++	return a->dma < b->dma + b->size && b->dma < a->dma + a->size;
++}
++
++static inline int mt6878_camsv_validate(const struct mt6878_camsv_backend *io,
++	const struct mt6878_camsv_job *job)
++{
++	unsigned int tags, seen = 0, i;
++
++	if (!io || !job || !io->verify || !io->read || !io->write ||
++	    !io->barrier || !io->delay_us || !io->smi_clamp ||
++	    io->sizes[0] != 0x1000 || io->sizes[1] != 0x1000 ||
++	    io->sizes[2] != 0x1000 || io->sizes[3] != 0x18000 ||
++	    job->sv_id > 1 || job->raw_tag > 7 || job->pdaf_tag > 7 ||
++	    job->raw_tag == job->pdaf_tag ||
++	    !((job->width == 4000 && job->height == 3000) ||
++	      (job->width == 4096 && job->height == 2304)))
++		return -EINVAL;
++	if (job->raw_layout.width != job->width || job->raw_layout.height != job->height ||
++	    (job->raw_layout.format != SV_DMA_FMT_BAYER10 &&
++	     job->raw_layout.format != SV_DMA_FMT_BAYER10_MIPI) ||
++	    mt6878_camsv_layout_validate(&job->raw_layout, job->raw.size) ||
++	    mt6878_camsv_layout_validate(&job->pdaf_layout, job->pdaf.size) ||
++	    mt6878_camsv_range(&job->raw, job->raw_layout.sizeimage) ||
++	    mt6878_camsv_range(&job->pdaf, job->pdaf_layout.sizeimage) ||
++	    mt6878_camsv_range(&job->cq, job->cq.size) || job->cq.size > 0xffff ||
++	    mt6878_camsv_overlap(&job->raw, &job->pdaf) ||
++	    mt6878_camsv_overlap(&job->raw, &job->cq) ||
++	    mt6878_camsv_overlap(&job->pdaf, &job->cq))
++		return -EINVAL;
++	tags = (1U << job->raw_tag) | (1U << job->pdaf_tag);
++	for (i = 0; i < 4; i++) {
++		if ((job->group_tags[i] & ~tags) || (job->group_tags[i] & seen))
++			return -EINVAL;
++		seen |= job->group_tags[i];
++	}
++	return seen == tags ? 0 : -EINVAL;
++}
++
++static inline int mt6878_camsv_write(const struct mt6878_camsv_backend *io,
++	struct mt6878_camsv_transaction *tx, enum mt6878_camsv_region region,
++	unsigned int offset, unsigned int value)
++{
++	int ret;
++
++	if ((unsigned int)region > MT6878_SV_SENINF || io->sizes[region] < 4 ||
++	    (offset & 3) || offset > io->sizes[region] - 4)
++		return mt6878_camsv_error(tx, -EINVAL);
++	ret = io->write(io->context, region, offset, value);
++	return ret ? mt6878_camsv_error(tx, ret) : 0;
++}
++
++static inline int mt6878_camsv_update(const struct mt6878_camsv_backend *io,
++	struct mt6878_camsv_transaction *tx, enum mt6878_camsv_region region,
++	unsigned int offset, unsigned int mask, unsigned int value)
++{
++	unsigned int old;
++	int ret;
++
++	if ((unsigned int)region > MT6878_SV_SENINF || io->sizes[region] < 4 ||
++	    (offset & 3) || offset > io->sizes[region] - 4 || (value & ~mask))
++		return mt6878_camsv_error(tx, -EINVAL);
++	ret = io->read(io->context, region, offset, &old);
++
++	if (ret)
++		return mt6878_camsv_error(tx, ret);
++	return mt6878_camsv_write(io, tx, region, offset, (old & ~mask) | value);
++}
++
++static inline int mt6878_camsv_submit(const struct mt6878_camsv_backend *io,
++	struct mt6878_camsv_transaction *tx, const struct mt6878_camsv_job *job)
++{
++	unsigned int owner, output, offset, dt;
++	int ret;
++
++	if (!tx)
++		return -EINVAL;
++	if (tx->first_error)
++		return tx->first_error;
++	if (tx->attempted || tx->off_attempted)
++		return -EALREADY;
++	ret = mt6878_camsv_validate(io, job);
++	if (ret)
++		return mt6878_camsv_error(tx, ret);
++	tx->attempted = 1;
++	tx->job = *job;
++	job = &tx->job;
++	for (owner = MT6878_SV_RESOURCES; owner <= MT6878_SV_COMPOSER; owner++) {
++		ret = io->verify(io->context, owner, &tx->job);
++		if (ret)
++			return mt6878_camsv_error(tx, ret);
++	}
++	tx->hw_attempted = 1;
++	/* Exact set_cammux_vc field order. Does NOT enable CAMMUX or its tag page. */
++	for (output = 0; output < 2; output++) {
++		unsigned int tag = output ? job->pdaf_tag : job->raw_tag;
++
++		offset = 0x17000 + 0x40 * (job->sv_id * 8 + tag) + SV_CAMMUX_OPT;
++		dt = output ? 0x30 : 0x2b;
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_SENINF, offset, SV_VC_MASK, 0);
++		if (!ret)
++			ret = mt6878_camsv_update(io, tx, MT6878_SV_SENINF, offset,
++				SV_DT_MASK, dt << SV_DT_SHIFT);
++		if (!ret)
++			ret = mt6878_camsv_update(io, tx, MT6878_SV_SENINF, offset,
++				SV_VC_EN_MASK, SV_VC_EN_MASK);
++		if (!ret)
++			ret = mt6878_camsv_update(io, tx, MT6878_SV_SENINF, offset,
++				SV_DT_EN_MASK, SV_DT_EN_MASK);
++		if (ret)
++			return ret;
++	}
++	/* apply_camsv_cq descriptor size -> MSB -> LSB -> start -> barrier. */
++	ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_SIZE, job->cq.size);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_MSB, job->cq.dma >> 32);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_LSB, job->cq.dma);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_START, 1);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 12, 1U << 12);
++	if (ret)
++		return mt6878_camsv_error(tx, ret);
++	tx->submitted = 1;
++	return 0;
++}
++
++/* Threaded IRQ owner passes the vendor DONE_STATUS plus inner FH_SPARE
++ * sequence after its bounded read/ack. No guessed W1C write here. A group
++ * completion completes its mapped tags, NOT every tag on any interrupt.
++ */
++static inline int mt6878_camsv_done(struct mt6878_camsv_transaction *tx,
++	unsigned int done_status, unsigned int inner_sequence)
++{
++	unsigned int group, tags = 0;
++
++	if (!tx || !tx->submitted || tx->off_attempted || tx->first_error)
++		return -EINVAL;
++	if (inner_sequence != tx->job.sequence)
++		return -ESTALE;
++	for (group = 0; group < 4; group++)
++		if (done_status & (1U << (16 + group)))
++			tags |= tx->job.group_tags[group];
++	if (!tags)
++		return 0;
++	if ((tx->complete_tags & tags) == tags)
++		return -EALREADY;
++	tx->complete_tags |= tags;
++	return tx->complete_tags == ((1U << tx->job.raw_tag) | (1U << tx->job.pdaf_tag));
++}
++
++static inline int mt6878_camsv_poll_idle(const struct mt6878_camsv_backend *io,
++	struct mt6878_camsv_transaction *tx, enum mt6878_camsv_region region,
++	unsigned int offset)
++{
++	unsigned int value, count;
++	int ret;
++
++	/* Exact vendor SW_RST_CTL idle bit=2, delay=1us, timeout=100000us. */
++	for (count = 0; count < 100000; count++) {
++		ret = io->read(io->context, region, offset, &value);
++		if (ret)
++			return mt6878_camsv_error(tx, ret);
++		if (value & 2)
++			return 0;
++		ret = io->delay_us(io->context, 1);
++		if (ret)
++			return mt6878_camsv_error(tx, ret);
++	}
++	return mt6878_camsv_error(tx, -ETIMEDOUT);
++}
++
++static inline int mt6878_camsv_stop(const struct mt6878_camsv_backend *io,
++	struct mt6878_camsv_transaction *tx)
++{
++	int ret;
++
++	if (!tx || !tx->attempted || mt6878_camsv_validate(io, &tx->job))
++		return -EINVAL;
++	if (tx->off_attempted)
++		return tx->first_error ? tx->first_error : -EALREADY;
++	tx->off_attempted = 1;
++	ret = io->verify(io->context, MT6878_SV_STOPPED, &tx->job);
++	if (!ret)
++		ret = io->smi_clamp(io->context, 31, 1);
++	if (ret)
++		return mt6878_camsv_error(tx, ret);
++	ret = mt6878_camsv_write(io, tx, MT6878_SV_DMA, SV_DMA_RESET, 0);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_DMA, SV_DMA_RESET, 1);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = mt6878_camsv_poll_idle(io, tx, MT6878_SV_DMA, SV_DMA_RESET);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CENTRAL, SV_DCM_DIS, 0);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CENTRAL, SV_SW_CTL, 0);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CENTRAL, SV_SW_CTL, 1);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_DMA, SV_DMA_RESET, 0);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CENTRAL, SV_SW_CTL, 0);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 0);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 1);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = mt6878_camsv_poll_idle(io, tx, MT6878_SV_CQ, SV_CQ_RESET);
++	if (!ret)
++		ret = mt6878_camsv_write(io, tx, MT6878_SV_CQ, SV_CQ_RESET, 0);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 16, 1U << 16);
++	if (!ret)
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_SUB_EN, 1U << 16, 1U << 16);
++	if (!ret)
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_SUB_EN, 1U << 16, 0);
++	if (!ret)
++		ret = mt6878_camsv_update(io, tx, MT6878_SV_CQ, SV_CQ_EN, 1U << 16, 0);
++	if (!ret)
++		ret = io->barrier(io->context);
++	if (!ret)
++		ret = io->smi_clamp(io->context, 31, 0);
++	if (ret)
++		return mt6878_camsv_error(tx, ret);
++	tx->quiesced = 1;
++	tx->submitted = 0;
++	return tx->first_error;
++}
++
++#endif
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camsv-registers.h b/drivers/media/platform/mediatek/seninf/mt6878-camsv-registers.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camsv-registers.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Generated vendor register definitions, Copyright (c) 2020 MediaTek Inc. */
++#define SV_DMA_FMT_BAYER8 0
++#define SV_DMA_FMT_BAYER10 1
++#define SV_DMA_FMT_BAYER10_MIPI 80
++#define SV_CQ_SIZE 0x0158
++#define SV_CQ_MSB 0x0150
++#define SV_CQ_LSB 0x014c
++#define SV_CQ_START 0x0014
++#define SV_CQ_EN 0x0100
++#define SV_CQ_SUB_EN 0x0130
++#define SV_DMA_RESET 0x0020
++#define SV_CQ_RESET 0x0010
++#define SV_DCM_DIS 0x007C
++#define SV_SW_CTL 0x01D0
++#define SV_CAMMUX_OPT 0x0004
++#define SV_VC_MASK 0x1f
++#define SV_DT_MASK 0x3f00
++#define SV_DT_SHIFT 8
++#define SV_VC_EN_MASK 0x80
++#define SV_DT_EN_MASK 0x8000
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.h b/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.h
+@@ -0,0 +1,45 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_CAMSV_VB2_H
++#define MT6878_CAMSV_VB2_H
++
++#include <linux/iommu.h>
++#include <linux/clk.h>
++#include <linux/platform_device.h>
++#include <media/videobuf2-dma-contig.h>
++#include <media/videobuf2-v4l2.h>
++#include "mt6878-camsv-capture.h"
++
++/* Owned by a future capture/video-device driver, not registered here.
++ * RAW10 video and PDAF metadata use separate queues, never a fabricated
++ * two-plane Bayer format. Call under the capture owner's queue mutex;
++ * IRQ completion/stop must be serialized with buffer removal.
++ */
++struct mt6878_camsv_vb2_pair {
++	struct vb2_v4l2_buffer *raw, *pdaf;
++	struct mt6878_camsv_transaction tx;
++	unsigned int completed;
++};
++
++struct mt6878_camsv_resources {
++	void __iomem *banks[6];
++	int irqs[4];
++	struct clk_bulk_data clocks[8];
++	struct device *port_owner; /* Port supplier, not necessarily the allocator. */
++	struct iommu_domain *domain;
++	unsigned int sv_id;
++};
++
++/* Resource-only acquisition; no clock/power enable or IRQ registration. */
++int mt6878_camsv_get_resources(struct platform_device *pdev,
++	struct device *port_owner, struct mt6878_camsv_resources *resources);
++
++int mt6878_camsv_vb2_submit(struct mt6878_camsv_vb2_pair *pair,
++	struct vb2_v4l2_buffer *raw, struct vb2_v4l2_buffer *pdaf,
++	struct device *dma_owner, struct iommu_domain *verified_domain,
++	const struct mt6878_camsv_backend *io, const struct mt6878_camsv_job *job);
++int mt6878_camsv_vb2_done(struct mt6878_camsv_vb2_pair *pair,
++	unsigned int status, unsigned int inner_sequence, u64 timestamp_ns);
++int mt6878_camsv_vb2_stop(struct mt6878_camsv_vb2_pair *pair,
++	const struct mt6878_camsv_backend *io);
++
++#endif
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.c b/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camsv-vb2.c
+@@ -0,0 +1,204 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Buffer bridge only: no platform/video registration, DT or live MMIO adapter. */
++#include "mt6878-camsv-vb2.h"
++#include <linux/io.h>
++#include <linux/of.h>
++
++int mt6878_camsv_get_resources(struct platform_device *pdev,
++	struct device *port_owner, struct mt6878_camsv_resources *resources)
++{
++	static const char * const banks[] = {
++		"base", "base_DMA", "base_SCQ", "inner_base", "inner_base_DMA", "inner_base_SCQ"
++	};
++	static const char * const clocks[] = {
++		"cam_main_cam_cgpdn", NULL, "cam_main_camsv_top_con",
++		"cam_main_cam2mm0_gals_con", "cam_main_cam2mm1_gals_con", NULL,
++		"topckgen_top_cam_sel", "topckgen_top_camtm_sel"
++	};
++	struct of_phandle_args args[2] = { 0 };
++	struct device *dev;
++	struct resource *resource;
++	u32 sv_id, cammux, larb;
++	unsigned int i, j;
++	int ret;
++
++	if (!pdev || !port_owner || !resources || !port_owner->of_node)
++		return -EINVAL;
++	dev = &pdev->dev;
++	ret = device_property_read_u32(dev, "mediatek,camsv-id", &sv_id);
++	if (!ret)
++		ret = device_property_read_u32(dev, "mediatek,cammux-id", &cammux);
++	if (ret || sv_id > 1 || cammux != sv_id * 8)
++		return -EINVAL;
++	if (!of_device_is_compatible(port_owner->of_node, "mediatek,camisp-larb") ||
++	    device_property_read_u32(port_owner, "mediatek,larb-id", &larb) ||
++	    larb != (sv_id ? 13 : 14) ||
++	    of_count_phandle_with_args(port_owner->of_node, "iommus", "#iommu-cells") != 2)
++		return -EINVAL;
++	for (i = 0; i < 2; i++) {
++		ret = of_parse_phandle_with_args(port_owner->of_node, "iommus",
++			"#iommu-cells", i, &args[i]);
++		if (ret)
++			goto put_iommus;
++		/* Exact NORMAL_DOM/MM_TAB CQI port0 + WDMA port1 encoding. */
++		if (args[i].args_count != 1 || args[i].args[0] != ((larb << 5) | i)) {
++			ret = -EINVAL;
++			goto put_iommus;
++		}
++	}
++	ret = args[0].np == args[1].np ? 0 : -EINVAL;
++put_iommus:
++	for (i = 0; i < 2; i++)
++		of_node_put(args[i].np);
++	if (ret)
++		return ret;
++	if (!device_is_bound(port_owner))
++		return -EPROBE_DEFER;
++	resources->domain = iommu_get_domain_for_dev(port_owner);
++	if (!resources->domain)
++		return -EPROBE_DEFER;
++	/* Managed supplier lifetime only; deliberately no runtime-PM link flag. */
++	if (!device_link_add(dev, port_owner, DL_FLAG_AUTOREMOVE_CONSUMER))
++		return -ENOMEM;
++	if (of_count_phandle_with_args(dev->of_node, "clocks", "#clock-cells") != 8 ||
++	    device_property_string_array_count(dev, "clock-names") != 8 ||
++	    of_count_phandle_with_args(dev->of_node, "power-domains", "#power-domain-cells") != 1)
++		return -EINVAL;
++	for (i = 0; i < 6; i++) {
++		resource = platform_get_resource_byname(pdev, IORESOURCE_MEM, banks[i]);
++		if (!resource || resource_size(resource) != 0x1000)
++			return -EINVAL;
++		resources->banks[i] = devm_ioremap_resource(dev, resource);
++		if (IS_ERR(resources->banks[i]))
++			return PTR_ERR(resources->banks[i]);
++	}
++	for (i = 0; i < 4; i++) {
++		resources->irqs[i] = platform_get_irq(pdev, i);
++		if (resources->irqs[i] < 0)
++			return resources->irqs[i];
++		for (j = 0; j < i; j++)
++			if (resources->irqs[i] == resources->irqs[j])
++				return -EINVAL;
++	}
++	for (i = 0; i < 8; i++)
++		resources->clocks[i].id = clocks[i];
++	resources->clocks[1].id = sv_id ? "cam_main_larb13_con" : "cam_main_larb14_con";
++	resources->clocks[5].id = sv_id ? "cam_main_camsv_b_con" : "cam_main_camsv_a_con";
++	ret = devm_clk_bulk_get(dev, 8, resources->clocks);
++	if (ret)
++		return ret;
++	resources->port_owner = port_owner;
++	resources->sv_id = sv_id;
++	return 0;
++}
++
++static int mt6878_camsv_vb2_map(struct vb2_v4l2_buffer *buffer,
++	struct device *owner, struct mt6878_camsv_buffer *mapped)
++{
++	struct vb2_buffer *vb;
++	unsigned long size;
++
++	if (!buffer || !owner)
++		return -EINVAL;
++	vb = &buffer->vb2_buf;
++	if (!vb->vb2_queue || vb->vb2_queue->dev != owner || vb->num_planes != 1 ||
++	    vb->vb2_queue->mem_ops != &vb2_dma_contig_memops ||
++	    vb->state != VB2_BUF_STATE_ACTIVE || vb->planes[0].data_offset)
++		return -EINVAL;
++	size = vb2_plane_size(vb, 0);
++	if (!size || size > 0xffffffffUL || !vb2_plane_cookie(vb, 0))
++		return -EINVAL;
++	mapped->dma = vb2_dma_contig_plane_dma_addr(vb, 0);
++	mapped->size = size;
++	mapped->mapped = 1;
++	return 0;
++}
++
++int mt6878_camsv_vb2_submit(struct mt6878_camsv_vb2_pair *pair,
++	struct vb2_v4l2_buffer *raw, struct vb2_v4l2_buffer *pdaf,
++	struct device *dma_owner, struct iommu_domain *verified_domain,
++	const struct mt6878_camsv_backend *io, const struct mt6878_camsv_job *job)
++{
++	struct mt6878_camsv_job mapped;
++	int ret;
++
++	if (!pair || !job || !raw || !pdaf || raw == pdaf ||
++	    pair->raw || pair->pdaf || pair->tx.attempted || pair->completed ||
++	    !dma_owner || !verified_domain ||
++	    iommu_get_domain_for_dev(dma_owner) != verified_domain)
++		return -EINVAL;
++	if (raw->vb2_buf.vb2_queue == pdaf->vb2_buf.vb2_queue ||
++	    !raw->vb2_buf.vb2_queue || !pdaf->vb2_buf.vb2_queue ||
++	    raw->vb2_buf.vb2_queue->type != V4L2_BUF_TYPE_VIDEO_CAPTURE ||
++	    pdaf->vb2_buf.vb2_queue->type != V4L2_BUF_TYPE_META_CAPTURE)
++		return -EINVAL;
++	mapped = *job;
++	ret = mt6878_camsv_vb2_map(raw, dma_owner, &mapped.raw);
++	if (!ret)
++		ret = mt6878_camsv_vb2_map(pdaf, dma_owner, &mapped.pdaf);
++	if (!ret)
++		ret = mt6878_camsv_validate(io, &mapped);
++	if (ret)
++		return ret;
++	/* Retain both buffers even if CQ submission fails after the START write.
++	 * Never return DMA-owned memory before verified stop/reset completion.
++	 */
++	pair->raw = raw;
++	pair->pdaf = pdaf;
++	ret = mt6878_camsv_submit(io, &pair->tx, &mapped);
++	if (ret && !pair->tx.hw_attempted) {
++		/* No MMIO occurred: start_streaming may return these as QUEUED.
++		 * Do not force a hardware reset for a rejected unsupported path.
++		 */
++		pair->raw = NULL;
++		pair->pdaf = NULL;
++	}
++	return ret;
++}
++
++int mt6878_camsv_vb2_done(struct mt6878_camsv_vb2_pair *pair,
++	unsigned int status, unsigned int inner_sequence, u64 timestamp_ns)
++{
++	int ret;
++
++	if (!pair || !pair->raw || !pair->pdaf || pair->completed)
++		return -EINVAL;
++	if (mt6878_camsv_layout_validate(&pair->tx.job.raw_layout,
++		vb2_plane_size(&pair->raw->vb2_buf, 0)) ||
++	    mt6878_camsv_layout_validate(&pair->tx.job.pdaf_layout,
++		vb2_plane_size(&pair->pdaf->vb2_buf, 0)))
++		return -ERANGE;
++	ret = mt6878_camsv_done(&pair->tx, status, inner_sequence);
++	if (ret != 1)
++		return ret;
++	pair->completed = 1;
++	pair->raw->sequence = inner_sequence;
++	pair->pdaf->sequence = inner_sequence;
++	pair->raw->vb2_buf.timestamp = timestamp_ns;
++	pair->pdaf->vb2_buf.timestamp = timestamp_ns;
++	vb2_set_plane_payload(&pair->raw->vb2_buf, 0, pair->tx.job.raw_layout.sizeimage);
++	vb2_set_plane_payload(&pair->pdaf->vb2_buf, 0, pair->tx.job.pdaf_layout.sizeimage);
++	vb2_buffer_done(&pair->raw->vb2_buf, VB2_BUF_STATE_DONE);
++	vb2_buffer_done(&pair->pdaf->vb2_buf, VB2_BUF_STATE_DONE);
++	return 1;
++}
++
++int mt6878_camsv_vb2_stop(struct mt6878_camsv_vb2_pair *pair,
++	const struct mt6878_camsv_backend *io)
++{
++	int ret;
++
++	if (!pair || !pair->raw || !pair->pdaf)
++		return -EINVAL;
++	ret = mt6878_camsv_stop(io, &pair->tx);
++	if (!pair->tx.quiesced)
++		return ret; /* Caller must retain mappings/queues and recover ownership. */
++	if (!pair->completed) {
++		pair->completed = 1;
++		vb2_set_plane_payload(&pair->raw->vb2_buf, 0, 0);
++		vb2_set_plane_payload(&pair->pdaf->vb2_buf, 0, 0);
++		vb2_buffer_done(&pair->raw->vb2_buf, VB2_BUF_STATE_ERROR);
++		vb2_buffer_done(&pair->pdaf->vb2_buf, VB2_BUF_STATE_ERROR);
++	}
++	return ret;
++}

@@ -1,0 +1,905 @@
+From: Codex <codex@openai.com>
+Subject: [PATCH] media: mediatek: validate CCD CQ replies and capture completion
+
+Pinned ISP7SP ABI, explicit output layout, bounded vendor DONE snapshot.
+No production registration, firmware surrogate or DT activation.
+
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camera-ipi-abi.h b/drivers/media/platform/mediatek/seninf/mt6878-camera-ipi-abi.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camera-ipi-abi.h
+@@ -0,0 +1,530 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (c) 2019 MediaTek Inc.
++ */
++
++#ifndef __MTK_CAM_IPI_H__
++#define __MTK_CAM_IPI_H__
++
++#define MTK_CAM_IPI_VERSION_MAJOR 0
++#define MTK_CAM_IPI_VERSION_MINOR 1
++
++#include <linux/types.h>
++enum mtkcam_pipe_subdev {
++	MTKCAM_SUBDEV_RAW_START = 0,
++	MTKCAM_SUBDEV_RAW_0	= MTKCAM_SUBDEV_RAW_START,
++	MTKCAM_SUBDEV_RAW_1,
++	MTKCAM_SUBDEV_RAW_2,
++	MTKCAM_SUBDEV_RAW_END,
++	MTKCAM_SUBDEV_CAMSV_START = MTKCAM_SUBDEV_RAW_END,
++	MTKCAM_SUBDEV_CAMSV_0 = MTKCAM_SUBDEV_CAMSV_START,
++	MTKCAM_SUBDEV_CAMSV_1,
++	MTKCAM_SUBDEV_CAMSV_2,
++	MTKCAM_SUBDEV_CAMSV_3,
++	MTKCAM_SUBDEV_CAMSV_4,
++	MTKCAM_SUBDEV_CAMSV_5,
++	MTKCAM_SUBDEV_CAMSV_6,
++	MTKCAM_SUBDEV_CAMSV_7,
++	MTKCAM_SUBDEV_CAMSV_8,
++	MTKCAM_SUBDEV_CAMSV_9,
++	MTKCAM_SUBDEV_CAMSV_10,
++	MTKCAM_SUBDEV_CAMSV_11,
++	MTKCAM_SUBDEV_CAMSV_12,
++	MTKCAM_SUBDEV_CAMSV_13,
++	MTKCAM_SUBDEV_CAMSV_14,
++	MTKCAM_SUBDEV_CAMSV_15,
++	MTKCAM_SUBDEV_CAMSV_END,
++	MTKCAM_SUBDEV_MRAW_START = MTKCAM_SUBDEV_CAMSV_END,
++	MTKCAM_SUBDEV_MRAW_0 = MTKCAM_SUBDEV_MRAW_START,
++	MTKCAM_SUBDEV_MRAW_1,
++	MTKCAM_SUBDEV_MRAW_2,
++	MTKCAM_SUBDEV_MRAW_3,
++	MTKCAM_SUBDEV_MRAW_END,
++	MTKCAM_SUBDEV_MAX = MTKCAM_SUBDEV_MRAW_END,
++};
++enum mtkcam_ipi_video_id {
++	MTKCAM_IPI_RAW_ID_UNKNOWN	= 0,
++	MTKCAM_IPI_RAW_RAWI_2,		/* RAWI_R2 */
++	MTKCAM_IPI_RAW_RAWI_3,		/* RAWI_R3 */
++	MTKCAM_IPI_RAW_RAWI_5,		/* RAWI_R5 */
++	MTKCAM_IPI_RAW_IPUI,		/* ADLRD */
++	MTKCAM_IPI_RAW_IMGO,		/* IMGO_R1 */
++	/* no need pure raw */
++	MTKCAM_IPI_RAW_YUVO_1,		/* YUVO_R1 */
++	MTKCAM_IPI_RAW_YUVO_2,		/* YUVO_R2 */
++	MTKCAM_IPI_RAW_YUVO_3,		/* YUVO_R3 */
++	MTKCAM_IPI_RAW_YUVO_4,		/* YUVO_R4 */
++	MTKCAM_IPI_RAW_YUVO_5,		/* YUVO_R5 */
++	MTKCAM_IPI_RAW_RZH1N2TO_2,	/* RZH1N2TO_R2 */
++	MTKCAM_IPI_RAW_DRZS4NO_1,	/* DRZS4NO_R1 */
++	MTKCAM_IPI_RAW_DRZS4NO_3,	/* DRZS4NO_R3 */
++	MTKCAM_IPI_RAW_RZH1N2TO_3,	/* RZH1N2TO_R3 */
++	MTKCAM_IPI_RAW_RZH1N2TO_1,	/* RZH1N2TO_R1 */
++	MTKCAM_IPI_RAW_DRZB2NO_1,	/* DRZB2NO_R1 */
++	MTKCAM_IPI_RAW_IPUO,		/* IPUO_R1 */
++	MTKCAM_IPI_RAW_META_STATS_CFG,	/* All settings */
++	MTKCAM_IPI_RAW_META_STATS_0,	/* statistics */
++
++	/*
++	 * MTKCAM_IPI_RAW_META_STATS_1 is for AFO only, the buffer can be
++	 * dequeued once we got the  dma done.
++	 */
++	MTKCAM_IPI_RAW_META_STATS_1,
++
++	/* following is for RGBW's w path */
++	MTKCAM_IPI_RAW_IMGO_W,		/* IMGO_R1 */
++	MTKCAM_IPI_RAW_RAWI_2_W,	/* RAWI_R2 */
++	MTKCAM_IPI_RAW_RAWI_3_W,	/* RAWI_R3 */
++	MTKCAM_IPI_RAW_RAWI_5_W,	/* RAWI_R5 */
++
++	MTKCAM_IPI_RAW_ID_MAX,
++
++	MTKCAM_IPI_CAMSV_MAIN_OUT = MTKCAM_IPI_RAW_ID_MAX,	/* imgo */
++
++	MTKCAM_IPI_CAMSV_ID_MAX,
++
++	MTKCAM_IPI_MRAW_ID_START = MTKCAM_IPI_CAMSV_ID_MAX,
++	MTKCAM_IPI_MRAW_META_STATS_CFG = MTKCAM_IPI_MRAW_ID_START,
++	MTKCAM_IPI_MRAW_META_STATS_0,
++	MTKCAM_IPI_MRAW_ID_MAX,
++};
++enum mtkcam_ipi_fmt {
++	MTKCAM_IPI_IMG_FMT_UNKNOWN		= -1,
++	MTKCAM_IPI_IMG_FMT_BAYER8		= 0,
++	MTKCAM_IPI_IMG_FMT_BAYER10		= 1,
++	MTKCAM_IPI_IMG_FMT_BAYER12		= 2,
++	MTKCAM_IPI_IMG_FMT_BAYER14		= 3,
++	MTKCAM_IPI_IMG_FMT_BAYER16		= 4,
++	MTKCAM_IPI_IMG_FMT_BAYER10_UNPACKED	= 5,
++	MTKCAM_IPI_IMG_FMT_BAYER12_UNPACKED	= 6,
++	MTKCAM_IPI_IMG_FMT_BAYER14_UNPACKED	= 7,
++	MTKCAM_IPI_IMG_FMT_RGB565		= 8,
++	MTKCAM_IPI_IMG_FMT_RGB888		= 9,
++	MTKCAM_IPI_IMG_FMT_JPEG			= 10,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER8		= 11,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER10		= 12,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER12		= 13,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER14		= 14,
++	MTKCAM_IPI_IMG_FMT_YUYV			= 15,
++	MTKCAM_IPI_IMG_FMT_YVYU			= 16,
++	MTKCAM_IPI_IMG_FMT_UYVY			= 17,
++	MTKCAM_IPI_IMG_FMT_VYUY			= 18,
++	MTKCAM_IPI_IMG_FMT_YUV_422_2P		= 19,
++	MTKCAM_IPI_IMG_FMT_YVU_422_2P		= 20,
++	MTKCAM_IPI_IMG_FMT_YUV_422_3P		= 21,
++	MTKCAM_IPI_IMG_FMT_YVU_422_3P		= 22,
++	MTKCAM_IPI_IMG_FMT_YUV_420_2P		= 23,
++	MTKCAM_IPI_IMG_FMT_YVU_420_2P		= 24,
++	MTKCAM_IPI_IMG_FMT_YUV_420_3P		= 25,
++	MTKCAM_IPI_IMG_FMT_YVU_420_3P		= 26,
++	MTKCAM_IPI_IMG_FMT_Y8			= 27,
++	MTKCAM_IPI_IMG_FMT_YUYV_Y210		= 28,
++	MTKCAM_IPI_IMG_FMT_YVYU_Y210		= 29,
++	MTKCAM_IPI_IMG_FMT_UYVY_Y210		= 30,
++	MTKCAM_IPI_IMG_FMT_VYUY_Y210		= 31,
++	MTKCAM_IPI_IMG_FMT_YUYV_Y210_PACKED	= 32,
++	MTKCAM_IPI_IMG_FMT_YVYU_Y210_PACKED	= 33,
++	MTKCAM_IPI_IMG_FMT_UYVY_Y210_PACKED	= 34,
++	MTKCAM_IPI_IMG_FMT_VYUY_Y210_PACKED	= 35,
++	MTKCAM_IPI_IMG_FMT_YUV_P210		= 36,
++	MTKCAM_IPI_IMG_FMT_YVU_P210		= 37,
++	MTKCAM_IPI_IMG_FMT_YUV_P010		= 38,
++	MTKCAM_IPI_IMG_FMT_YVU_P010		= 39,
++	MTKCAM_IPI_IMG_FMT_YUV_P210_PACKED	= 40,
++	MTKCAM_IPI_IMG_FMT_YVU_P210_PACKED	= 41,
++	MTKCAM_IPI_IMG_FMT_YUV_P010_PACKED	= 42,
++	MTKCAM_IPI_IMG_FMT_YVU_P010_PACKED	= 43,
++	MTKCAM_IPI_IMG_FMT_YUV_P212		= 44,
++	MTKCAM_IPI_IMG_FMT_YVU_P212		= 45,
++	MTKCAM_IPI_IMG_FMT_YUV_P012		= 46,
++	MTKCAM_IPI_IMG_FMT_YVU_P012		= 47,
++	MTKCAM_IPI_IMG_FMT_YUV_P212_PACKED	= 48,
++	MTKCAM_IPI_IMG_FMT_YVU_P212_PACKED	= 49,
++	MTKCAM_IPI_IMG_FMT_YUV_P012_PACKED	= 50,
++	MTKCAM_IPI_IMG_FMT_YVU_P012_PACKED	= 51,
++	MTKCAM_IPI_IMG_FMT_RGB_8B_3P		= 52,
++	MTKCAM_IPI_IMG_FMT_RGB_10B_3P		= 53,
++	MTKCAM_IPI_IMG_FMT_RGB_12B_3P		= 54,
++	MTKCAM_IPI_IMG_FMT_RGB_14B_3P		= 55,
++	MTKCAM_IPI_IMG_FMT_RGB_16B_3P		= 56,
++	MTKCAM_IPI_IMG_FMT_RGB_10B_3P_PACKED	= 57,
++	MTKCAM_IPI_IMG_FMT_RGB_12B_3P_PACKED	= 58,
++	MTKCAM_IPI_IMG_FMT_RGB_14B_3P_PACKED	= 59,
++	MTKCAM_IPI_IMG_FMT_RGB_16B_3P_PACKED	= 60,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER8_3P		= 61,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER10_3P	= 62,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER12_3P	= 63,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER14_3P	= 64,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER16_3P	= 65,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER10_3P_PACKED	= 66,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER12_3P_PACKED	= 67,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER14_3P_PACKED = 68,
++	MTKCAM_IPI_IMG_FMT_FG_BAYER16_3P_PACKED = 69,
++	MTKCAM_IPI_IMG_FMT_UFBC_NV12		= 70,
++	MTKCAM_IPI_IMG_FMT_UFBC_NV21		= 71,
++	MTKCAM_IPI_IMG_FMT_UFBC_YUV_P010	= 72,
++	MTKCAM_IPI_IMG_FMT_UFBC_YVU_P010	= 73,
++	MTKCAM_IPI_IMG_FMT_UFBC_YUV_P012	= 74,
++	MTKCAM_IPI_IMG_FMT_UFBC_YVU_P012	= 75,
++	MTKCAM_IPI_IMG_FMT_UFBC_BAYER8		= 76,
++	MTKCAM_IPI_IMG_FMT_UFBC_BAYER10		= 77,
++	MTKCAM_IPI_IMG_FMT_UFBC_BAYER12		= 78,
++	MTKCAM_IPI_IMG_FMT_UFBC_BAYER14		= 79,
++	MTKCAM_IPI_IMG_FMT_BAYER10_MIPI		= 80,
++	MTKCAM_IPI_IMG_FMT_BAYER_8B_4P_BGGR	= 81,
++	MTKCAM_IPI_IMG_FMT_BAYER_8B_4P_GBRG	= 82,
++	MTKCAM_IPI_IMG_FMT_BAYER_8B_4P_GRBG	= 83,
++	MTKCAM_IPI_IMG_FMT_BAYER_8B_4P_RGGB	= 84,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_BGGR	= 85,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_GBRG	= 86,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_GRBG	= 87,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_RGGB	= 88,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_BGGR	= 89,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_GBRG	= 90,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_GRBG	= 91,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_RGGB	= 92,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_BGGR_PACKED	= 93,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_GBRG_PACKED	= 94,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_GRBG_PACKED	= 95,
++	MTKCAM_IPI_IMG_FMT_BAYER_10B_4P_RGGB_PACKED	= 96,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_BGGR_PACKED	= 97,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_GBRG_PACKED	= 98,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_GRBG_PACKED	= 99,
++	MTKCAM_IPI_IMG_FMT_BAYER_12B_4P_RGGB_PACKED	= 100,
++	MTKCAM_IPI_IMG_FMT_BAYER22		= 101,  // re-order?
++};
++
++#define MTK_CAM_MAX_RUNNING_JOBS (3)
++#define CAM_MAX_PLANENUM (4)
++#define CAM_MAX_SUBSAMPLE (32)
++
++/*
++ * struct mtkcam_ipi_point - Point
++ *
++ * @x: x-coordinate of the point (zero-based).
++ * @y: y-coordinate of the point (zero-based).
++ */
++struct mtkcam_ipi_point {
++	__u16 x;
++	__u16 y;
++} __packed;
++
++/*
++ * struct mtkcam_ipi_size - Size
++ *
++ * @w: width (in pixels).
++ * @h: height (in pixels).
++ */
++struct mtkcam_ipi_size {
++	__u16 w;
++	__u16 h;
++} __packed;
++
++/*
++ * struct mtkcam_ipi_buffer
++ *	- Shared buffer between cam-device and co-processor.
++ *
++ * @iova: DMA address for CAM DMA device.
++ * @ccd_fd: fd to ccd
++ * @scp_addr: SCP  address for external co-processor unit.
++ * @size: buffer size.
++ */
++struct mtkcam_ipi_buffer {
++	__u64 iova;
++	union {
++		__u32 ccd_fd;
++		__u32 scp_addr;
++	};
++	__u32 size;
++} __packed;
++
++struct mtkcam_ipi_pix_fmt {
++	__u32			format;
++	struct mtkcam_ipi_size	s;
++	__u16			stride[CAM_MAX_PLANENUM];
++} __packed;
++
++struct mtkcam_ipi_crop {
++	struct mtkcam_ipi_point p;
++	struct mtkcam_ipi_size s;
++} __packed;
++
++struct mtkcam_ipi_uid {
++	__u8 pipe_id;
++	__u8 id;
++} __packed;
++
++struct mtkcam_ipi_img_input {
++	struct mtkcam_ipi_uid		uid;
++	struct mtkcam_ipi_pix_fmt	fmt;
++	struct mtkcam_ipi_buffer	buf[CAM_MAX_PLANENUM];
++} __packed;
++
++struct mtkcam_ipi_img_output {
++	struct mtkcam_ipi_uid		uid;
++	struct mtkcam_ipi_pix_fmt	fmt;
++	struct mtkcam_ipi_buffer	buf[CAM_MAX_SUBSAMPLE][CAM_MAX_PLANENUM];
++	struct mtkcam_ipi_crop		crop;
++} __packed;
++
++struct mtkcam_ipi_meta_input {
++	struct mtkcam_ipi_uid		uid;
++	struct mtkcam_ipi_buffer	buf;
++} __packed;
++
++struct mtkcam_ipi_meta_output {
++	struct mtkcam_ipi_uid		uid;
++	struct mtkcam_ipi_buffer	buf;
++} __packed;
++
++struct mtkcam_ipi_input_param {
++	__u32	fmt;
++	__u8	raw_pixel_id;
++	__u8	data_pattern;
++	__u8	pixel_mode;
++	__u8	pixel_mode_before_raw;
++	__u8	subsample;
++	/* u8 continuous; */ /* always 1 */
++	/* u16 tg_fps; */ /* not used yet */
++	struct mtkcam_ipi_crop in_crop;
++} __packed;
++
++struct mtkcam_ipi_sv_input_param {
++	__u32	pipe_id;
++	__u8	tag_id;
++	__u8	tag_order;
++	__u8	is_first_frame;
++	__u8	is_two_smi_out;
++	__u8	is_last_order_meta_off;
++	struct mtkcam_ipi_input_param input;
++} __packed;
++
++struct mtkcam_ipi_mraw_input_param {
++	__u32	pipe_id;
++	struct mtkcam_ipi_input_param input;
++} __packed;
++
++struct mtkcam_ipi_img_ufo_param {
++	__u32 ufd_bitstream_ofst_addr[2]; /* 2 for max 3-raw of twin driver */
++	__u32 ufd_bs_au_start[2];
++	__u32 ufd_au2_size[2];
++	__u32 ufd_bond_mode[2]; /* bond means boundary, 2 for max 3-raw of twin driver */
++} __packed;
++
++struct mtkcam_ipi_img_ufdo_params {
++	/* NOTE: "imgo_w" param is not required
++	   until supporting twin mode in RGBW */
++	struct mtkcam_ipi_img_ufo_param imgo;
++	/* struct mtkcam_ipi_img_ufo_param imgo2; */
++	struct mtkcam_ipi_img_ufo_param yuvo1;
++	struct mtkcam_ipi_img_ufo_param yuvo3;
++} __packed;
++
++struct mtkcam_ipi_img_ufdi_params {
++	struct mtkcam_ipi_img_ufo_param rawi2;
++	struct mtkcam_ipi_img_ufo_param rawi3;
++	/* struct mtkcam_ipi_img_ufo_param rawi4; */
++	struct mtkcam_ipi_img_ufo_param rawi5;
++} __packed;
++
++enum dc_path_type {
++	DC_DRAM,
++	DC_SLB_EMI,
++	DC_SLB_DEDICATED_PORT,
++};
++
++struct mtkcam_ipi_dcif_ring_param {
++	__u8	ring_mode_en;
++	__u64	ring_start_offset;
++	__u8	dc_path_type;
++} __packed;
++
++struct mtkcam_ipi_raw_frame_param {
++	__u8	imgo_path_sel; /* mtkcam_ipi_raw_path_control */
++	__u32	hardware_scenario;
++	__u32	bin_flag;
++	__u8    exposure_num;
++	__u8    previous_exposure_num;
++
++	/* blahblah */
++} __packed;
++
++struct mtkcam_ipi_adl_frame_param {
++	__u8 vpu_i_point;
++	__u8 vpu_o_point;
++	__u8 sysram_en;
++	__u32 block_y_size;
++	__u64 slb_addr;
++	__u32 slb_size;
++} __packed;
++
++/* TODO: support CAMSV */
++struct cam_camsv_params {
++	/* sth here */
++} __packed;
++
++#define MRAW_MAX_IMAGE_OUTPUT (3)
++#define CAMSV_MAX_IMAGE_OUTPUT (1)
++
++struct mtkcam_ipi_camsv_frame_param {
++	__u32	pipe_id;
++	__u8	tag_id;
++	__u32	hardware_scenario; /* TODO: remove it */
++
++	struct mtkcam_ipi_img_output camsv_img_outputs[CAMSV_MAX_IMAGE_OUTPUT];
++} __packed;
++
++struct mtkcam_ipi_mraw_frame_param {
++	__u32 pipe_id;
++
++	struct mtkcam_ipi_meta_input mraw_meta_inputs;
++	struct mtkcam_ipi_img_output mraw_img_outputs[MRAW_MAX_IMAGE_OUTPUT];
++} __packed;
++
++struct mtkcam_ipi_session_cookie {
++	__u8 session_id;
++	__u32 frame_no;
++} __packed;
++
++struct mtkcam_ipi_session_param {
++	struct mtkcam_ipi_buffer workbuf; /* TODO: rename cqbuf? */
++	struct mtkcam_ipi_buffer msg_buf;
++} __packed;
++
++struct mtkcam_ipi_hw_mapping {
++	__u8 pipe_id; /* ref. to mtkcam_pipe_subdev */
++	__u16 dev_mask; /* ref. to mtkcam_pipe_dev */
++} __packed;
++
++struct mtkcam_ipi_bw_info {
++	/* TBD */
++	/* TODO: define ports in defs.h */
++	__u32 xsize;
++	__u32 ysize;
++} __packed;
++
++struct mtkcam_ipi_timeshared_msg {
++	__u8	session_id;
++	__u32	cur_msgbuf_offset;
++	__u32	cur_msgbuf_size;
++} __packed;
++
++/*  Control flags of CAM_CMD_CONFIG */
++#define MTK_CAM_IPI_CONFIG_TYPE_INIT			0x0001
++#define MTK_CAM_IPI_CONFIG_TYPE_INPUT_CHANGE		0x0002
++#define MTK_CAM_IPI_CONFIG_TYPE_EXEC_TWICE		0x0004
++#define MTK_CAM_IPI_CONFIG_TYPE_SMVR_PREVIEW		0x0008
++#define MTK_CAM_IPI_CONFIG_TYPE_REINIT		0x00010
++
++
++/* TODO: update number */
++#define CAM_MAX_INPUT_PAD           (3)
++#define CAM_MAX_W_PATH_INPUT_SIZE   (2)
++#define CAM_MAX_IMAGE_INPUT  (CAM_MAX_INPUT_PAD + CAM_MAX_W_PATH_INPUT_SIZE)
++#define CAM_MAX_OUTPUT_PAD          (15)
++#define CAM_MAX_W_PATH_OUT_SIZE     (1)
++#define CAM_MAX_IMAGE_OUTPUT (CAM_MAX_OUTPUT_PAD + CAM_MAX_W_PATH_OUT_SIZE)
++#define CAM_MAX_META_OUTPUT	 (4)
++#define CAM_MAX_PIPE_USED	 (4)
++#define MRAW_MAX_PIPE_USED   (4)
++#define CAMSV_MAX_PIPE_USED  (2)
++#define CAMSV_MAX_TAGS       (8)
++
++struct mtkcam_ipi_config_param {
++	__u8 flags;
++	struct mtkcam_ipi_input_param	input;
++	struct mtkcam_ipi_sv_input_param sv_input[CAMSV_MAX_PIPE_USED][CAMSV_MAX_TAGS];
++	struct mtkcam_ipi_mraw_input_param mraw_input[MRAW_MAX_PIPE_USED];
++	__u8 n_maps; /* maximum # of subdevs per stream */
++	struct mtkcam_ipi_hw_mapping maps[6];
++	__u8	sw_feature;
++	__u32	exp_order : 4;
++	__u32	frame_order : 4;
++	__u32	vsync_order : 4;
++	struct mtkcam_ipi_buffer w_cac_table; /* for rgbw's empty cac table */
++} __packed;
++
++struct mtkcam_ipi_frame_param {
++	__u32 cur_workbuf_offset;
++	__u32 cur_workbuf_size;
++
++	struct mtkcam_ipi_dcif_ring_param dcif_param;
++	struct mtkcam_ipi_raw_frame_param raw_param;
++	struct mtkcam_ipi_mraw_frame_param mraw_param[MRAW_MAX_PIPE_USED];
++	struct mtkcam_ipi_camsv_frame_param camsv_param[CAMSV_MAX_PIPE_USED][CAMSV_MAX_TAGS];
++	struct mtkcam_ipi_adl_frame_param adl_param;
++
++	struct mtkcam_ipi_timeshared_msg	timeshared_param;
++
++	struct mtkcam_ipi_img_input img_ins[CAM_MAX_IMAGE_INPUT];
++	struct mtkcam_ipi_img_output img_outs[CAM_MAX_IMAGE_OUTPUT];
++	struct mtkcam_ipi_meta_output meta_outputs[CAM_MAX_META_OUTPUT];
++	struct mtkcam_ipi_meta_input meta_inputs[CAM_MAX_PIPE_USED];
++	/* for UFD meta info transfer from buffer header to parameters */
++	struct mtkcam_ipi_img_ufdo_params img_ufdo_params;
++	struct mtkcam_ipi_img_ufdi_params img_ufdi_params;
++
++	/* following will be modified */
++	//struct mtkcam_ipi_bw_info	bw_infos[10*3]; //ports * num_raw
++} __packed;
++
++struct mtkcam_ipi_frame_info {
++	__u32	cur_msgbuf_offset;
++	__u32	cur_msgbuf_size;
++} __packed;
++
++struct mtkcam_ipi_cq_desc_entry {
++	__u32 offset;
++	__u32 size;
++} __packed;
++
++struct mtkcam_ipi_frame_ack_result {
++	struct mtkcam_ipi_cq_desc_entry		main;
++	struct mtkcam_ipi_cq_desc_entry		sub;
++	struct mtkcam_ipi_cq_desc_entry		mraw[MRAW_MAX_PIPE_USED];
++	struct mtkcam_ipi_cq_desc_entry		camsv[CAMSV_MAX_PIPE_USED];
++} __packed;
++
++struct mtkcam_ipi_ack_info {
++	__u8 ack_cmd_id;
++	__s32 ret;
++	struct mtkcam_ipi_frame_ack_result frame_result;
++} __packed;
++
++/*
++ * The IPI command enumeration.
++ */
++enum mtkcam_ipi_cmds {
++	/* request for a new streaming: mtkcam_ipi_session_param */
++	CAM_CMD_CREATE_SESSION,
++
++	/* config the stream: mtkcam_ipi_config_param */
++	CAM_CMD_CONFIG,
++
++	/* per-frame: mtkcam_ipi_frame_param */
++	CAM_CMD_FRAME,
++
++	/* release certain streaming: mtkcam_ipi_session_param */
++	CAM_CMD_DESTROY_SESSION,
++
++	/* ack: mtkcam_ipi_ack_info */
++	CAM_CMD_ACK,
++
++	/* flush: to ensure previous cmds are done */
++	CAM_CMD_FLUSH,
++
++	CAM_CMD_RESERVED,
++};
++
++struct mtkcam_ipi_event  {
++	struct mtkcam_ipi_session_cookie cookie;
++	__u8 cmd_id;
++	union {
++		struct mtkcam_ipi_session_param	session_data;
++		struct mtkcam_ipi_config_param	config_data;
++		struct mtkcam_ipi_frame_info	frame_data;
++		struct mtkcam_ipi_ack_info	ack_data;
++	};
++} __packed;
++
++#endif /* __MTK_CAM_IPI_H__ */
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camera-irq-registers.h b/drivers/media/platform/mediatek/seninf/mt6878-camera-irq-registers.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camera-irq-registers.h
+@@ -0,0 +1,6 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Generated pinned vendor DONE-handler offsets. */
++#define CAMERA_FIRST_TAG 0x01CC
++#define CAMERA_FH_SPARE_TAG1 0x057C
++#define CAMERA_FH_SPARE_SHIFT 0x40
++#define CAMERA_DONE_STATUS 0x0348
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camera-composer.h b/drivers/media/platform/mediatek/seninf/mt6878-camera-composer.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camera-composer.h
+@@ -0,0 +1,200 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_CAMERA_COMPOSER_H
++#define MT6878_CAMERA_COMPOSER_H
++
++#ifdef __KERNEL__
++#include <linux/string.h>
++#else
++#include <string.h>
++#endif
++#include "mt6878-camera-ipi-abi.h"
++#include "mt6878-camsv-capture.h"
++
++/* The camera CCD composer, not sensor SCP, must own this workbuf mapping.
++ * One outstanding frame per state; reset only after transport drain and DMA
++ * quiescence. Serialized by the capture owner. No firmware-ready surrogate.
++ */
++struct mt6878_camera_reply {
++	unsigned int session, cookie, accepted;
++	int first_error;
++};
++
++/* Pinned mtk_cam-job.h: [31:24] context, [23:0] frame sequence. */
++static inline int mt6878_camera_cookie_valid(unsigned int session, unsigned int cookie)
++{
++	return session <= 3 && (cookie >> 24) == session;
++}
++
++static inline unsigned int mt6878_camera_le32(const unsigned char *p)
++{
++	return p[0] | ((unsigned int)p[1] << 8) |
++		((unsigned int)p[2] << 16) | ((unsigned int)p[3] << 24);
++}
++
++static inline int mt6878_camera_reply_header(const void *message, unsigned int length,
++	unsigned int session, unsigned int cookie, unsigned int command)
++{
++	const unsigned char *p = message;
++	int ret;
++
++	if (!message)
++		return -ENOTCONN;
++	if (length < 75)
++		return -EMSGSIZE;
++	if (p[0] != session || mt6878_camera_le32(p + 1) != cookie)
++		return -ESTALE;
++	if (p[5] != CAM_CMD_ACK)
++		return -EPROTO;
++	/* CREATE/CONFIG ACKs may be delayed: never poison a later FRAME. */
++	if (p[6] != command)
++		return -ESTALE;
++	ret = (int)mt6878_camera_le32(p + 7);
++	return ret > 0 ? -EPROTO : ret;
++}
++
++/* Exact packed ACK prefix: cookie(5), command(1), ACK(69). No unaligned
++ * struct dereferences, and no interpretation of the larger union tail.
++ * camsv[0] is the logical composer slot even when physical CAMSV is SV1.
++ */
++static inline int mt6878_camera_ack(struct mt6878_camera_reply *state,
++	const void *message, unsigned int length,
++	const struct mt6878_camsv_buffer *workbuf,
++	struct mt6878_camsv_buffer *cq)
++{
++	const unsigned char *p = message;
++	unsigned int offset, size, i;
++	int ret;
++
++	if (!state || !message || !workbuf || !cq)
++		return -EINVAL;
++	if (state->first_error)
++		return state->first_error;
++	if (state->accepted)
++		return -EALREADY;
++	if (length < 75 || state->session > 255) {
++		ret = -EMSGSIZE;
++		goto fail;
++	}
++	if (p[0] != state->session || mt6878_camera_le32(p + 1) != state->cookie) {
++		/* A foreign/stale reply must not poison the current frame. */
++		return -ESTALE;
++	}
++	if (p[5] != CAM_CMD_ACK || p[6] != CAM_CMD_FRAME) {
++		ret = -EPROTO;
++		goto fail;
++	}
++	ret = (int)mt6878_camera_le32(p + 7);
++	if (ret) {
++		if (ret > 0)
++			ret = -EPROTO;
++		goto fail;
++	}
++	/* Reject RAW, MRAW and a second CAMSV result: this owner has one engine. */
++	for (i = 0; i < 8; i++) {
++		if (i == 6)
++			continue;
++		if (mt6878_camera_le32(p + 11 + i * 8) ||
++		    mt6878_camera_le32(p + 15 + i * 8)) {
++			ret = -EOPNOTSUPP;
++			goto fail;
++		}
++	}
++	offset = mt6878_camera_le32(p + 59);
++	size = mt6878_camera_le32(p + 63);
++	if (mt6878_camsv_range(workbuf, workbuf->size) || !size ||
++	    size > 0xffff || offset > workbuf->size ||
++	    size > workbuf->size - offset) {
++		ret = -ERANGE;
++		goto fail;
++	}
++	cq->dma = workbuf->dma + offset;
++	cq->size = size;
++	cq->mapped = 1;
++	state->accepted = 1;
++	return 0;
++fail:
++	state->first_error = ret;
++	return ret;
++}
++
++/* Copy an already source-validated pair of output descriptions into the
++ * actual full frame ABI. Format/stride/PDAF packing are the composer's
++ * validated contract, not guessed here. fd fields remain the caller's CCD
++ * handles; those handles require a real exporter/CCD transport owner.
++ * Caller allocates the large frame outside the kernel stack.
++ */
++static inline int mt6878_camera_frame(struct mtkcam_ipi_frame_param *frame,
++	const struct mt6878_camsv_job *job, unsigned int work_offset,
++	unsigned int work_size, unsigned int shared_size,
++	const struct mtkcam_ipi_img_output *raw,
++	const struct mtkcam_ipi_img_output *pdaf)
++{
++	const struct mtkcam_ipi_img_output *outputs[2] = { raw, pdaf };
++	const struct mt6878_camsv_dma_layout *layouts[2];
++	const struct mt6878_camsv_buffer *buffers[2];
++	unsigned int tags[2], i, s, plane, pipe;
++
++	if (!frame || !job || !raw || !pdaf || job->sv_id > 1 ||
++	    job->raw_tag > 7 || job->pdaf_tag > 7 || job->raw_tag == job->pdaf_tag ||
++	    !work_size || work_offset > shared_size || work_size > shared_size - work_offset)
++		return -EINVAL;
++	layouts[0] = &job->raw_layout;
++	layouts[1] = &job->pdaf_layout;
++	if (!((job->width == 4000 && job->height == 3000) ||
++	      (job->width == 4096 && job->height == 2304)) ||
++	    layouts[0]->width != job->width || layouts[0]->height != job->height ||
++	    (layouts[0]->format != MTKCAM_IPI_IMG_FMT_BAYER10 &&
++	     layouts[0]->format != MTKCAM_IPI_IMG_FMT_BAYER10_MIPI))
++		return -EOPNOTSUPP;
++	buffers[0] = &job->raw;
++	buffers[1] = &job->pdaf;
++	tags[0] = job->raw_tag;
++	tags[1] = job->pdaf_tag;
++	pipe = job->sv_id + MTKCAM_SUBDEV_CAMSV_START;
++	for (i = 0; i < 2; i++) {
++		const struct mtkcam_ipi_img_output *out = outputs[i];
++
++		if (mt6878_camsv_layout_validate(layouts[i], buffers[i]->size) ||
++		    out->fmt.format != layouts[i]->format ||
++		    out->fmt.s.w != layouts[i]->width || out->fmt.s.h != layouts[i]->height ||
++		    out->fmt.stride[0] != layouts[i]->bytesperline ||
++		    out->uid.pipe_id != pipe || out->uid.id != MTKCAM_IPI_CAMSV_MAIN_OUT ||
++		    out->buf[0][0].iova != buffers[i]->dma ||
++		    out->buf[0][0].size != buffers[i]->size ||
++		    mt6878_camsv_range(buffers[i], buffers[i]->size) ||
++		    !out->fmt.s.w || !out->fmt.s.h || !out->fmt.stride[0])
++			return -EINVAL;
++		for (plane = 1; plane < CAM_MAX_PLANENUM; plane++)
++			if (out->fmt.stride[plane])
++				return -EOPNOTSUPP;
++		for (s = 0; s < CAM_MAX_SUBSAMPLE; s++)
++			for (plane = 0; plane < CAM_MAX_PLANENUM; plane++) {
++				struct mtkcam_ipi_buffer zero = { 0 };
++
++				if ((s || plane) &&
++				    memcmp(&out->buf[s][plane], &zero, sizeof(zero)))
++					return -EOPNOTSUPP;
++			}
++	}
++	/* Inputs must not alias frame: memset would destroy them. */
++	if ((unsigned long)raw < (unsigned long)frame + sizeof(*frame) &&
++	    (unsigned long)frame < (unsigned long)raw + sizeof(*raw))
++		return -EINVAL;
++	if ((unsigned long)pdaf < (unsigned long)frame + sizeof(*frame) &&
++	    (unsigned long)frame < (unsigned long)pdaf + sizeof(*pdaf))
++		return -EINVAL;
++	memset(frame, 0, sizeof(*frame));
++	frame->cur_workbuf_offset = work_offset;
++	frame->cur_workbuf_size = work_size;
++	for (i = 0; i < 2; i++) {
++		struct mtkcam_ipi_camsv_frame_param *sv = &frame->camsv_param[0][tags[i]];
++
++		sv->pipe_id = pipe;
++		sv->tag_id = tags[i];
++		sv->hardware_scenario = 0;
++		memcpy(&sv->camsv_img_outputs[0], outputs[i], sizeof(*raw));
++	}
++	return 0;
++}
++
++#endif
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.h b/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_CAMERA_CAPTURE_OWNER_H
++#define MT6878_CAMERA_CAPTURE_OWNER_H
++
++#include "mt6878-camera-composer.h"
++#include "mt6878-camsv-vb2.h"
++
++struct mt6878_camera_done_snapshot {
++	u32 outer_sequence, inner_sequence, status;
++	u64 timestamp_ns;
++};
++
++struct mt6878_camera_capture_owner {
++	struct mt6878_camera_reply reply;
++	struct mt6878_camsv_job job;
++	struct mt6878_camsv_buffer workbuf;
++	struct mt6878_camsv_vb2_pair *pair;
++	const struct mt6878_camsv_backend *backend;
++	struct mt6878_camsv_resources *resources;
++	struct device *allocator;
++	/* Prove powered exclusive banks, live registered IRQ ownership and
++	 * the vendor status-read acknowledgment protocol before any read.
++	 * Must be atomic in hard IRQ; no placeholder success implementation.
++	 */
++	int (*verify_irq_read)(struct mt6878_camera_capture_owner *owner);
++};
++
++/* Queue mutex / threaded IRQ serialization is supplied by the capture owner.
++ * No probe, request_irq, clocks, firmware loading or production registration.
++ */
++int mt6878_camera_capture_ack(struct mt6878_camera_capture_owner *owner,
++	const void *message, unsigned int length,
++	struct vb2_v4l2_buffer *raw, struct vb2_v4l2_buffer *pdaf);
++int mt6878_camera_done_snapshot(struct mt6878_camera_capture_owner *owner,
++	struct mt6878_camera_done_snapshot *snapshot);
++int mt6878_camera_done_dispatch(struct mt6878_camera_capture_owner *owner,
++	const struct mt6878_camera_done_snapshot *snapshot);
++
++#endif
+diff --git a/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.c b/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/media/platform/mediatek/seninf/mt6878-camera-capture-owner.c
+@@ -0,0 +1,99 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/build_bug.h>
++#include <linux/io.h>
++#include <linux/ktime.h>
++#include <linux/stddef.h>
++#include "mt6878-camera-capture-owner.h"
++#include "mt6878-camera-irq-registers.h"
++
++static_assert(sizeof(struct mtkcam_ipi_session_cookie) == 5);
++static_assert(sizeof(struct mtkcam_ipi_ack_info) == 69);
++static_assert(offsetof(struct mtkcam_ipi_event, ack_data) == 6);
++static_assert(offsetof(struct mtkcam_ipi_frame_ack_result, camsv) == 48);
++static_assert(sizeof(struct mtkcam_ipi_camsv_frame_param) == 2083);
++static_assert(sizeof(struct mtkcam_ipi_frame_param) == 92291);
++static_assert(offsetof(struct mtkcam_ipi_frame_param, camsv_param) == 25005);
++
++int mt6878_camera_capture_ack(struct mt6878_camera_capture_owner *owner,
++	const void *message, unsigned int length,
++	struct vb2_v4l2_buffer *raw, struct vb2_v4l2_buffer *pdaf)
++{
++	struct mt6878_camsv_job job;
++	int ret;
++
++	if (!owner || !owner->pair || !owner->backend || !owner->resources ||
++	    !owner->allocator || !raw || !pdaf ||
++	    owner->job.sv_id != owner->resources->sv_id)
++		return -EINVAL;
++	job = owner->job;
++	if (!raw->vb2_buf.vb2_queue || !pdaf->vb2_buf.vb2_queue ||
++	    raw->vb2_buf.vb2_queue->mem_ops != &vb2_dma_contig_memops ||
++	    pdaf->vb2_buf.vb2_queue->mem_ops != &vb2_dma_contig_memops ||
++	    raw->vb2_buf.num_planes != 1 || pdaf->vb2_buf.num_planes != 1 ||
++	    !vb2_plane_cookie(&raw->vb2_buf, 0) || !vb2_plane_cookie(&pdaf->vb2_buf, 0) ||
++	    vb2_dma_contig_plane_dma_addr(&raw->vb2_buf, 0) != job.raw.dma ||
++	    vb2_dma_contig_plane_dma_addr(&pdaf->vb2_buf, 0) != job.pdaf.dma)
++		return -EINVAL;
++	if (mt6878_camsv_layout_validate(&job.raw_layout, job.raw.size) ||
++	    mt6878_camsv_layout_validate(&job.pdaf_layout, job.pdaf.size) ||
++	    vb2_plane_size(&raw->vb2_buf, 0) < job.raw_layout.sizeimage ||
++	    vb2_plane_size(&pdaf->vb2_buf, 0) < job.pdaf_layout.sizeimage)
++		return -ERANGE;
++	ret = mt6878_camera_ack(&owner->reply, message, length, &owner->workbuf, &job.cq);
++	if (ret)
++		return ret;
++	/* ACK is not proof of CQ contents or cache synchronization. Frozen 0117
++	 * still verifies COMPOSER/ROUTE/IRQ/IOMMU before the first write.
++	 */
++	ret = mt6878_camsv_vb2_submit(owner->pair, raw, pdaf, owner->allocator,
++		owner->resources->domain, owner->backend, &job);
++	if (ret)
++		owner->reply.first_error = ret;
++	return ret;
++}
++
++int mt6878_camera_done_snapshot(struct mt6878_camera_capture_owner *owner,
++	struct mt6878_camera_done_snapshot *snapshot)
++{
++	struct mt6878_camsv_resources *res;
++	struct mt6878_camera_done_snapshot value;
++	u32 tags, offset = CAMERA_FH_SPARE_TAG1;
++	unsigned int i;
++	int ret;
++
++	if (!owner || !snapshot || !owner->resources || !owner->verify_irq_read)
++		return -EINVAL;
++	res = owner->resources;
++	if (!res->banks[0] || !res->banks[3])
++		return -EINVAL;
++	ret = owner->verify_irq_read(owner);
++	if (ret)
++		return ret;
++	/* Exact vendor DONE-handler read order. No write-clear is evidenced.
++	 * Four reads, at most eight tag checks, no polls or waits in IRQ context.
++	 */
++	tags = readl_relaxed(res->banks[3] + CAMERA_FIRST_TAG);
++	for (i = 0; i < 8; i++)
++		if (tags & BIT(i)) {
++			offset += CAMERA_FH_SPARE_SHIFT * i;
++			break;
++		}
++	value.outer_sequence = readl_relaxed(res->banks[0] + offset);
++	value.inner_sequence = readl_relaxed(res->banks[3] + offset);
++	value.status = readl_relaxed(res->banks[0] + CAMERA_DONE_STATUS);
++	value.timestamp_ns = ktime_get_boottime_ns();
++	*snapshot = value;
++	return 0;
++}
++
++int mt6878_camera_done_dispatch(struct mt6878_camera_capture_owner *owner,
++	const struct mt6878_camera_done_snapshot *snapshot)
++{
++	if (!owner || !owner->pair || !snapshot)
++		return -EINVAL;
++	/* Only inner frame identity can release buffers. Outer may already refer
++	 * to the next queued CQ. Partial groups are accumulated by 0117.
++	 */
++	return mt6878_camsv_vb2_done(owner->pair, snapshot->status,
++		snapshot->inner_sequence, snapshot->timestamp_ns);
++}

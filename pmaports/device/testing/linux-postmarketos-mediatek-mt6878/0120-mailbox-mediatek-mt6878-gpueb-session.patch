@@ -1,0 +1,542 @@
+From: Tetris port maintainers
+Subject: [PATCH] mailbox: mediatek: add MT6878 layout and GPUEB session client
+
+Pinned Nothing 4.1 device-modules ee2be53cb75670b548948636a0db1d1ff112bf12.
+Use the upstream GPUEB mailbox for source-derived MT6878 offsets and IRQ bits.
+Add actual GPR13 / INIT_SHARED_MEM ownership using reserved no-map physical
+RAM and the mailbox completion API. Never interpret TX completion as response.
+
+No DT nodes, MFG/supply activation, genpd publication or guessed firmware.
+The GPUEB remoteproc owner/boot image handoff is still missing: probe explicitly
+requires that genuine owner and refuses SCP/other remoteproc substitution.
+Readiness facts never manufacture the dependency flags required by 0118.
+Failed shutdown retains claims/owner references rather than exposing live RAM.
+
+diff --git a/include/linux/soc/mediatek/mt6878-gpueb-session.h b/include/linux/soc/mediatek/mt6878-gpueb-session.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878-gpueb-session.h
+@@ -0,0 +1,21 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_GPUEB_SESSION_H
++#define _MT6878_GPUEB_SESSION_H
++#include <linux/types.h>
++struct mt6878_gpueb_session;
++struct mt6878_gpueb_session_status {
++	u32 magic;
++	int power_count;
++	u32 power_control;
++};
++/*
++ * Both functions require the owner's session lock. Facts only, not 0118
++ * ready flags. Supply/MFG0/clock ownership must be established separately.
++ * No POWER_CONTROL is sent by probe. Not a CSF firmware interface.
++ */
++int mt6878_gpueb_session_status(struct mt6878_gpueb_session *session,
++			       struct mt6878_gpueb_session_status *status);
++int mt6878_gpueb_session_transfer(void *session, const u32 *words,
++				 unsigned int count, unsigned int timeout_ms,
++				 int *power_count);
++#endif
+diff --git a/drivers/pmdomain/mediatek/mt6878-gpueb-session.c b/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-gpueb-session.c
+@@ -0,0 +1,433 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Source: Nothing 4.1 ee2be53cb75670b548948636a0db1d1ff112bf12,
++ * gpufreq_v2.c / gpueb_init.c / mt6878.dts. No AP boot/reset sequence inferred.
++ * Requires a genuine GPUEB remoteproc owner; no SCP/ELF/partition substitute.
++ * Reserved no-map physical RAM is the firmware ABI, not an IOMMU DMA buffer.
++ */
++#include <linux/completion.h>
++#include <linux/io.h>
++#include <linux/ioport.h>
++#include <linux/jiffies.h>
++#include <linux/mailbox_client.h>
++#include <linux/mm.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/platform_device.h>
++#include <linux/remoteproc.h>
++#include <linux/spinlock.h>
++#include <linux/soc/mediatek/mt6878-gpueb-session.h>
++
++#define GPUEB_GPR13 0x34
++#define GPUEB_SHARED_SIZE 0x4000
++#define GPUEB_STATUS_POWER_COUNT 0x1c
++#define GPUEB_STATUS_POWER_CONTROL 0xc4
++#define GPUEB_TIMEOUT_MS 10000
++#define GPUEB_WORDS 8
++
++struct mt6878_gpueb_session {
++	struct device *dev;
++	struct rproc *rproc;
++	struct mbox_client client;
++	struct mbox_chan *chan;
++	struct completion response;
++	spinlock_t rx_lock;
++	struct mutex request_lock;
++	struct resource *gpr_claim, *shared_claim;
++	void __iomem *gpr, *shared;
++	phys_addr_t shared_pa;
++	u32 magic, reply[GPUEB_WORDS];
++	bool waiting, initialized, boot_ref;
++	int error;
++};
++
++static int gpueb_fail(struct mt6878_gpueb_session *s, int error)
++{
++	unsigned long flags;
++	int first;
++
++	spin_lock_irqsave(&s->rx_lock, flags);
++	if (!s->error)
++		s->error = error < 0 ? error : -EPROTO;
++	first = s->error;
++	spin_unlock_irqrestore(&s->rx_lock, flags);
++	return first;
++}
++
++static void gpueb_rx(struct mbox_client *client, void *message)
++{
++	struct mt6878_gpueb_session *s =
++		container_of(client, struct mt6878_gpueb_session, client);
++	unsigned long flags;
++
++	spin_lock_irqsave(&s->rx_lock, flags);
++	if (!message) {
++		if (!s->error)
++			s->error = -EPROTO;
++		spin_unlock_irqrestore(&s->rx_lock, flags);
++		return;
++	}
++	if (!s->waiting) {
++		/* No request IDs in this ABI: an unsolicited response loses correlation. */
++		if (!s->error)
++			s->error = -EPROTO;
++	} else {
++		memcpy(s->reply, message, sizeof(s->reply));
++		s->waiting = false;
++		complete(&s->response);
++	}
++	spin_unlock_irqrestore(&s->rx_lock, flags);
++}
++
++/*
++ * The caller serializes commands; this ABI has no request IDs/echo guarantee.
++ * A duplicate observed outside a window poisons the session, but a stale
++ * response first observed inside a new window cannot be distinguished.
++ * Do not claim full correlation or clear an observed fault to send again.
++ */
++static int gpueb_exchange(struct mt6878_gpueb_session *s, const u32 *words,
++			  u32 *reply)
++{
++	unsigned long flags, deadline = jiffies + msecs_to_jiffies(GPUEB_TIMEOUT_MS);
++	long remaining;
++	int ret;
++
++	if (READ_ONCE(s->error))
++		return READ_ONCE(s->error);
++	if (atomic_read(&s->rproc->power) != 1)
++		return gpueb_fail(s, -EBUSY);
++	if (READ_ONCE(s->rproc->state) != RPROC_RUNNING &&
++	    READ_ONCE(s->rproc->state) != RPROC_ATTACHED)
++		return gpueb_fail(s, -ENOTCONN);
++	spin_lock_irqsave(&s->rx_lock, flags);
++	if (s->error) {
++		ret = s->error;
++		spin_unlock_irqrestore(&s->rx_lock, flags);
++		return ret;
++	}
++	reinit_completion(&s->response);
++	s->waiting = true;
++	spin_unlock_irqrestore(&s->rx_lock, flags);
++	ret = mbox_send_message(s->chan, (void *)words);
++	if (ret >= 0) {
++		remaining = deadline - jiffies;
++		if (remaining <= 0 ||
++		    !wait_for_completion_timeout(&s->response, remaining))
++			ret = -ETIMEDOUT;
++		else
++			ret = READ_ONCE(s->error);
++	}
++	spin_lock_irqsave(&s->rx_lock, flags);
++	s->waiting = false;
++	if (!ret)
++		memcpy(reply, s->reply, sizeof(s->reply));
++	spin_unlock_irqrestore(&s->rx_lock, flags);
++	return ret ? gpueb_fail(s, ret) : 0;
++}
++
++static int gpueb_status_locked(struct mt6878_gpueb_session *s,
++			       struct mt6878_gpueb_session_status *status)
++{
++	u32 before, after, allowed;
++	int count;
++
++	if (!s || !status)
++		return -EINVAL;
++	if (READ_ONCE(s->error))
++		return READ_ONCE(s->error);
++	if (!s->initialized)
++		return -ENOTCONN;
++	if (!READ_ONCE(s->rproc->recovery_disabled) ||
++	    (READ_ONCE(s->rproc->state) != RPROC_RUNNING &&
++	     READ_ONCE(s->rproc->state) != RPROC_ATTACHED))
++		return gpueb_fail(s, -ESTALE);
++	/* A new nonzero handshake means the original firmware session is gone. */
++	if (readl(s->gpr + GPUEB_GPR13))
++		return gpueb_fail(s, -ESTALE);
++	before = readl(s->shared + GPUEB_STATUS_POWER_COUNT);
++	allowed = readl(s->shared + GPUEB_STATUS_POWER_CONTROL);
++	after = readl(s->shared + GPUEB_STATUS_POWER_COUNT);
++	if (before != after)
++		return -EAGAIN;
++	count = (s32)after;
++	if (count < 0 || allowed > 1)
++		return gpueb_fail(s, -EPROTO);
++	*status = (struct mt6878_gpueb_session_status) {
++		.magic = s->magic, .power_count = count, .power_control = allowed,
++	};
++	return 0;
++}
++int mt6878_gpueb_session_status(struct mt6878_gpueb_session *s,
++			       struct mt6878_gpueb_session_status *status)
++{
++	int ret;
++
++	if (!s || !status)
++		return -EINVAL;
++	mutex_lock(&s->request_lock);
++	ret = gpueb_status_locked(s, status);
++	mutex_unlock(&s->request_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_gpueb_session_status);
++
++static int gpueb_transfer_locked(void *ctx, const u32 *words,
++				 unsigned int count, unsigned int timeout_ms,
++				 int *power_count)
++{
++	struct mt6878_gpueb_session *s = ctx;
++	struct mt6878_gpueb_session_status status;
++	u32 reply[GPUEB_WORDS];
++	int ret, i;
++
++	if (!s || !words || !power_count || count != GPUEB_WORDS ||
++	    timeout_ms != GPUEB_TIMEOUT_MS)
++		return -EINVAL;
++	/* Only audited POWER_CONTROL after handshake. No DVFS/debug commands. */
++	ret = gpueb_status_locked(s, &status);
++	if (ret)
++		return ret;
++	if (!status.power_control)
++		return -EACCES;
++	if (words[0] != s->magic || words[1] != 6 || words[4] > 1)
++		return -EINVAL;
++	for (i = 2; i < GPUEB_WORDS; i++)
++		if (i != 4 && words[i])
++			return -EINVAL;
++	ret = gpueb_exchange(s, words, reply);
++	if (!ret)
++		*power_count = (s32)reply[4]; /* No assumed magic/target echo. */
++	return ret;
++}
++int mt6878_gpueb_session_transfer(void *ctx, const u32 *words,
++				 unsigned int count, unsigned int timeout_ms,
++				 int *power_count)
++{
++	struct mt6878_gpueb_session *s = ctx;
++	int ret;
++
++	if (!s)
++		return -EINVAL;
++	mutex_lock(&s->request_lock);
++	ret = gpueb_transfer_locked(s, words, count, timeout_ms, power_count);
++	mutex_unlock(&s->request_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_gpueb_session_transfer);
++
++/*
++ * No STOP command is known. Never relinquish SRAM/mailbox/shared-memory claims
++ * while firmware might still use them. Reserved RAM remains no-map regardless.
++ * A failed remoteproc shutdown quarantines the complete owner until reboot.
++ */
++static bool gpueb_release(struct mt6878_gpueb_session *s)
++{
++	if (s->boot_ref) {
++		if (rproc_shutdown(s->rproc) ||
++		    READ_ONCE(s->rproc->state) != RPROC_OFFLINE)
++			return false;
++		s->boot_ref = false;
++	}
++	if (s->chan)
++		mbox_free_channel(s->chan);
++	if (s->shared)
++		iounmap(s->shared);
++	if (s->gpr)
++		iounmap(s->gpr);
++	if (s->shared_claim)
++		release_mem_region(s->shared_pa, GPUEB_SHARED_SIZE);
++	if (s->gpr_claim)
++		release_mem_region(s->gpr_claim->start, resource_size(s->gpr_claim));
++	rproc_put(s->rproc);
++	put_device(s->dev);
++	kfree(s);
++	return true;
++}
++
++static bool gpueb_shared_range_valid(u64 base, u64 size)
++{
++	return size >= GPUEB_SHARED_SIZE &&
++		size <= 0x800000000ULL - 0x40000000ULL &&
++		IS_ALIGNED(base, PAGE_SIZE) && base >= 0x40000000ULL &&
++		base <= 0x800000000ULL - size;
++}
++
++static int gpueb_init_message(u32 *words, u32 magic, u64 base)
++{
++	if (!words || !magic || !gpueb_shared_range_valid(base, GPUEB_SHARED_SIZE))
++		return -EINVAL;
++	memset(words, 0, GPUEB_WORDS * sizeof(*words));
++	words[0] = magic;
++	/* CMD_INIT_SHARED_MEM=0, ARM64 union starts at byte 16. */
++	words[4] = lower_32_bits(base);
++	words[5] = upper_32_bits(base);
++	words[6] = GPUEB_SHARED_SIZE;
++	return 0;
++}
++
++static int gpueb_validate_channel(struct device_node *node)
++{
++	struct of_phandle_args args;
++	int index, ret;
++
++	index = of_property_match_string(node, "mbox-names", "gpufreq");
++	if (index < 0)
++		return index;
++	ret = of_parse_phandle_with_args(node, "mboxes", "#mbox-cells", index, &args);
++	if (ret)
++		return ret;
++	ret = of_device_is_compatible(args.np, "mediatek,mt6878-gpueb-mbox") &&
++		args.args_count == 1 && args.args[0] == 1 ? 0 : -EINVAL;
++	of_node_put(args.np);
++	return ret;
++}
++
++static int gpueb_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct mt6878_gpueb_session *s;
++	struct device_node *node;
++	struct reserved_mem *rmem;
++	struct resource *res;
++	u32 remote, words[GPUEB_WORDS] = {}, reply[GPUEB_WORDS];
++	int ret;
++
++	/* Do not claim/map resources before a real remoteproc owner exists. */
++	ret = gpueb_validate_channel(dev->of_node);
++	if (ret)
++		return ret;
++	if (of_property_read_u32(dev->of_node, "remoteproc", &remote))
++		return -EINVAL;
++	node = of_find_node_by_phandle(remote);
++	if (!node || !of_device_is_compatible(node, "mediatek,mt6878-gpueb-rproc")) {
++		of_node_put(node);
++		return -EINVAL;
++	}
++	of_node_put(node);
++	s = kzalloc(sizeof(*s), GFP_KERNEL);
++	if (!s)
++		return -ENOMEM;
++	s->rproc = rproc_get_by_phandle(remote);
++	if (!s->rproc) {
++		kfree(s);
++		return -EPROBE_DEFER;
++	}
++	s->dev = get_device(dev);
++	spin_lock_init(&s->rx_lock);
++	mutex_init(&s->request_lock);
++	init_completion(&s->response);
++	/* No automatic firmware recovery can silently reuse this session. */
++	if (!READ_ONCE(s->rproc->recovery_disabled) || atomic_read(&s->rproc->power)) {
++		ret = -EBUSY;
++		goto fail;
++	}
++	node = of_parse_phandle(dev->of_node, "memory-region", 0);
++	rmem = node ? of_reserved_mem_lookup(node) : NULL;
++	if (!node || !rmem || !of_property_read_bool(node, "no-map") ||
++	    !of_device_is_compatible(node, "mediatek,reserve-memory-gpueb_share") ||
++	    of_property_read_bool(node, "reusable") ||
++	    !gpueb_shared_range_valid(rmem->base, rmem->size)) {
++		of_node_put(node);
++		ret = -EINVAL;
++		goto fail;
++	}
++	s->shared_pa = rmem->base;
++	of_node_put(node);
++	s->shared_claim = request_mem_region(s->shared_pa, GPUEB_SHARED_SIZE, dev_name(dev));
++	if (!s->shared_claim) {
++		ret = -EBUSY;
++		goto fail;
++	}
++	s->shared = ioremap_wc(s->shared_pa, GPUEB_SHARED_SIZE);
++	if (!s->shared) {
++		ret = -ENOMEM;
++		goto fail;
++	}
++	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpueb_gpr_base");
++	if (!res || resource_size(res) < GPUEB_GPR13 + sizeof(u32)) {
++		ret = -EINVAL;
++		goto fail;
++	}
++	s->gpr_claim = request_mem_region(res->start, resource_size(res), dev_name(dev));
++	if (!s->gpr_claim) {
++		ret = -EBUSY;
++		goto fail;
++	}
++	s->gpr = ioremap(res->start, resource_size(res));
++	if (!s->gpr) {
++		ret = -ENOMEM;
++		goto fail;
++	}
++	ret = rproc_boot(s->rproc);
++	if (ret)
++		goto fail;
++	s->boot_ref = true;
++	s->client.dev = dev;
++	s->client.rx_callback = gpueb_rx;
++	s->client.tx_block = true;
++	s->client.tx_tout = GPUEB_TIMEOUT_MS;
++	s->chan = mbox_request_channel_byname(&s->client, "gpufreq");
++	if (IS_ERR(s->chan)) {
++		ret = PTR_ERR(s->chan);
++		s->chan = NULL;
++		goto fail;
++	}
++	s->magic = readl(s->gpr + GPUEB_GPR13);
++	if (!s->magic) {
++		ret = -ENOTCONN;
++		goto fail;
++	}
++	ret = gpueb_init_message(words, s->magic, s->shared_pa);
++	if (ret)
++		goto fail;
++	/* Exactly the first MEM_ID_GPUFREQ block; never zero firmware/logger RAM. */
++	memset_io(s->shared, 0, GPUEB_SHARED_SIZE);
++	wmb();
++	writel(0, s->gpr + GPUEB_GPR13);
++	ret = gpueb_exchange(s, words, reply);
++	if (ret)
++		goto fail;
++	s->initialized = true;
++	platform_set_drvdata(pdev, s);
++	dev_info(dev, "GPUEB shared-memory session initialized; GPU provider remains unpublished\n");
++	return 0;
++fail:
++	if (!gpueb_release(s))
++		dev_err(dev, "GPUEB owner quarantined after error %d; cold reset required\n", ret);
++	return ret;
++}
++
++static void gpueb_remove(struct platform_device *pdev)
++{
++	struct mt6878_gpueb_session *s = platform_get_drvdata(pdev);
++
++	if (!gpueb_release(s))
++		dev_err(&pdev->dev, "GPUEB owner retained: firmware not stopped; cold reset required\n");
++}
++
++static int gpueb_suspend(struct device *dev)
++{
++	/* No proven SLEEP/RESUME contract yet; never silently retain stale state. */
++	return -EBUSY;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(gpueb_pm_ops, gpueb_suspend, NULL);
++static const struct of_device_id gpueb_matches[] = {
++	{ .compatible = "mediatek,mt6878-gpueb-session" },
++	{}
++};
++MODULE_DEVICE_TABLE(of, gpueb_matches);
++static struct platform_driver gpueb_driver = {
++	.probe = gpueb_probe,
++	.remove = gpueb_remove,
++	.driver = {
++		.name = "mt6878-gpueb-session",
++		.of_match_table = gpueb_matches,
++		.pm = pm_sleep_ptr(&gpueb_pm_ops),
++		.suppress_bind_attrs = true,
++	},
++};
++builtin_platform_driver(gpueb_driver);
++MODULE_LICENSE("GPL");
+diff --git a/drivers/mailbox/mtk-gpueb-mailbox.c b/drivers/mailbox/mtk-gpueb-mailbox.c
+--- a/drivers/mailbox/mtk-gpueb-mailbox.c
++++ b/drivers/mailbox/mtk-gpueb-mailbox.c
+@@ -300,4 +300,23 @@
+ };
+ 
++/* Exact MT6878 send/recv tables, cumulative 4-byte slots; ee2be53 source. */
++static const struct mtk_gpueb_mbox_variant mtk_gpueb_mbox_mt6878 = {
++	.num_channels = 11,
++	.channels = {
++		{ "fast-dvfs-event", 0, 0x0000, 16, 0x00d8, 16 },
++		{ "gpufreq",         1, 0x0010, 32, 0x00e8, 32 },
++		{ "sleep",           2, 0x0030, 12, 0x0108,  4 },
++		{ "timer",           3, 0x003c, 24, 0x010c,  4 },
++		{ "fhctl",           4, 0x0054, 36, 0x0110,  4 },
++		{ "ccf",             5, 0x0078, 16, 0x0114, 16 },
++		{ "gpumpu",          6, 0x0088, 24, 0x0124,  4 },
++		{ "fast-dvfs",       7, 0x00a0, 24, 0x0128, 24 },
++		{ "ipir-c-met",      8, 0x00b8,  4, 0x0140, 16 },
++		{ "ipis-c-met",      9, 0x00bc, 16, 0x0150,  4 },
++		{ "brisket",        10, 0x00cc, 12, 0x0154, 12 },
++	},
++};
++
+ static const struct of_device_id mtk_gpueb_mbox_of_ids[] = {
++	{ .compatible = "mediatek,mt6878-gpueb-mbox", .data = &mtk_gpueb_mbox_mt6878 },
+ 	{ .compatible = "mediatek,mt8196-gpueb-mbox", .data = &mtk_gpueb_mbox_mt8196 },
+diff --git a/drivers/pmdomain/mediatek/Makefile b/drivers/pmdomain/mediatek/Makefile
+--- a/drivers/pmdomain/mediatek/Makefile
++++ b/drivers/pmdomain/mediatek/Makefile
+@@ -1,3 +1,4 @@
+ # SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_MTK_MT6878_GPUEB_SESSION) += mt6878-gpueb-session.o
+ obj-$(CONFIG_MTK_MT6878_GPUEB_POWER) += mt6878-gpueb-power.o
+ obj-$(CONFIG_MTK_SCPSYS)		+= mtk-scpsys.o
+diff --git a/drivers/pmdomain/mediatek/Kconfig b/drivers/pmdomain/mediatek/Kconfig
+--- a/drivers/pmdomain/mediatek/Kconfig
++++ b/drivers/pmdomain/mediatek/Kconfig
+@@ -1,4 +1,16 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ 
++config MTK_MT6878_GPUEB_SESSION
++	bool "MT6878 GPUEB shared-memory session client"
++	depends on ARM64 && !CPU_BIG_ENDIAN
++	depends on ARCH_MEDIATEK || COMPILE_TEST
++	depends on REMOTEPROC=y && MTK_GPUEB_MBOX=y
++	help
++	  Enable the audited GPUEB mailbox/session client. Requires an exclusive
++	  GPUEB remoteproc owner and reserved no-map memory; no DT activation.
++	  Does not publish a GPU power provider or load Mali CSF firmware.
++	  Firmware reboot/recovery and system suspend remain unsupported.
++	  Leave disabled until the boot/resource ownership gates are met.
++
+ menu "MediaTek PM Domains"
+ 	depends on ARCH_MEDIATEK || COMPILE_TEST
+diff --git a/Documentation/devicetree/bindings/mailbox/mediatek,mt8196-gpueb-mbox.yaml b/Documentation/devicetree/bindings/mailbox/mediatek,mt8196-gpueb-mbox.yaml
+--- a/Documentation/devicetree/bindings/mailbox/mediatek,mt8196-gpueb-mbox.yaml
++++ b/Documentation/devicetree/bindings/mailbox/mediatek,mt8196-gpueb-mbox.yaml
+@@ -13,4 +13,5 @@
+   compatible:
+     enum:
++      - mediatek,mt6878-gpueb-mbox
+       - mediatek,mt8196-gpueb-mbox
+ 
