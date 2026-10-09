@@ -1,4 +1,4 @@
-# Port summary, 2026-10-09
+# Port summary, 2026-10-10
 
 Native postmarketOS port for Nothing CMF Phone 1 (nothing-tetris, MT6878).
 This is an experimental port, not a fully functional daily-driver phone.
@@ -17,14 +17,24 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | `dcb20ce71f5361a4492649d46650d59e9b2cbbc4`, slot `lk_a` |
-| U-Boot image SHA256 | `71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967` |
+| U-Boot | Experimental `d385921124b9e48a00d5e078d11b07dcdf311270`, slot `lk_a` |
+| U-Boot image SHA256 | `ab95c709d8579daf89fe3d8eeb8b04e1782e53605a509a18f97c12bb08382365` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
 See [installation guide and disclaimer](INSTALL.md) before flashing.
+
+The clean installation originally used validated loader `dcb20ce` (image
+`71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967`),
+which remains the recovery baseline. The current experimental loader comes
+from [CI 37990994952](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37990994952);
+download hashes and installed `lk_a` readback match. Stock `lk_b` digest remains
+`812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.
+Warm boot reached r179 and restored USB/SSH, but SCP again rejected inherited
+TCM with `-EBUSY`; sensors did not start. Full poweroff was issued and the cold
+GPUEB/sensor test is awaiting physical power-on. No GPU power/start writes occur.
 
 The user confirmed normal display/touch. USB/SSH and a hash-verified userspace
 binary transfer passed. First warm boot reported SCP preflight `-EBUSY`;
@@ -40,9 +50,10 @@ boot polling script. [Package CI 37970239648](https://github.com/xxxvik-xakerxxx
 passed at `d941aa6`; APK SHA256:
 `ba8ce7185648dcc7d745c516a158fd4de9ff02a9722ace8e483c842f5b0d792c`.
 
-The verified APK is installed and owns the activation descriptor. Both services
-are active, accelerometer/light properties are true, no system units failed and
-USB remains up. Only the userspace proxy was restarted; modules were not
+The verified APK is installed and owns the activation descriptor. Before the
+latest loader test, both services were active, accelerometer/light properties
+were true, no system units failed and USB remained up. Only the userspace proxy
+was restarted; modules were not
 reloaded. APK triggers regenerated initramfs/FIT with the unchanged kernel.
 Automatic activation on a new cold boot and full lifecycle remain unverified.
 
@@ -96,9 +107,9 @@ lifecycle or SKU. Earlier subsystem evidence is identified explicitly.
 passed the actual kernel ASN.1/modem certificate and PSS32 fixtures, GPUEB
 bounded MMIO logic, GNSS argument and existing camera/CSF checks.
 
-[ARM64 CI 37970251487](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37970251487)
-passed validation, Bionic compilation and all 16 isolated kernel translation
-units, including six camera units. Production source bytes and object identities
+[ARM64 CI 37991879173](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37991879173)
+passed validation, Bionic compilation and all 20 isolated kernel translation
+units, including direct-camera and platform consumers. Production source bytes and object identities
 are recorded in the CI artifact. The generated CAMSV patch matches the
 macro-safe barrier calls. KUnit object compilation is not KUnit execution.
 
@@ -119,9 +130,8 @@ The direct camera candidate builds coherent CQ memory in the kernel and uses
 native vb2 RAW/meta buffers. Its restricted single-frame path needs no CCD
 daemon, new userspace ioctl or RPMSG transport. DONE observation is separate
 from controller-side IRQ drain/stop and buffer completion.
-[CI 37989392644](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37989392644)
-passed all 18 ARM64 objects including the direct path. A real power/route/IRQ
-consumer and hardware capture remain pending; compilation is not camera
+A platform IRQ/lifetime consumer is now present, but complete power/route/stop
+providers and hardware capture remain pending. Compilation is not camera
 support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
 
 GNSS output now uses the existing callback worker, with separate application
@@ -137,8 +147,8 @@ source-derived NS BL33 clock/isolation/power/bus ordering and four-word BROM
 completion. First-error reporting and finite stock-order failure shutdown are
 separate. [CI 37991128306](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37991128306)
 passed all 37 native sanitizer fault cases plus the actual signed stock input.
-Active EMI row production,
-ARM64 compilation and physical startup remain incomplete. It is not enabled
+Active EMI row production and physical startup remain incomplete; real U-Boot
+ARM64 compilation is queued in CI 37992519175. It is not enabled
 by a board hook and does not expose SIM/calls. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
@@ -146,7 +156,7 @@ The camera platform consumer adds four source-derived IRQ handlers, native
 media-pipeline ownership, runtime-PM/clock references and controller-context
 stop. IRQ drain occurs outside the vb2 mutex. CAM_MAIN/SMI reset, calibrated
 SENINF/CAMMUX and TG/VF shutdown providers are still required; no video node
-is activated. Its two additional ARM64 objects are queued for CI. See
+is activated. Its two additional ARM64 objects passed the combined CI above. See
 [platform contract](../patches/camera-direct-platform/SOURCE-CONTRACT.md).
 
 ## Project rules

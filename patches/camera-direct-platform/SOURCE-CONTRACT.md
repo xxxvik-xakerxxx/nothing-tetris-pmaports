@@ -1,6 +1,6 @@
 # Direct platform consumer draft
 
-No probe/DT activation, native build or phone operation. This is a concrete
+No probe/DT activation or phone operation. This is a concrete
 IRQ registration/power-reference/stop-task consumer, NOT a completed hardware
 backend. Frozen direct and shared files remain unchanged.
 
@@ -78,6 +78,7 @@ target mt6878-camsv-platform.o and platform-smoke.o in isolated CI. Needs
 MEDIA_CONTROLLER, VIDEO_V4L2_SUBDEV_API, PM, common IRQ/workqueue infrastructure
 and existing direct/vb2 dependencies. No CCD/RPMSG/daemon dependencies.
 
-Next gate: isolated ARM64 objects plus lifecycle race review, then implement
-native CAM_MAIN/SMI and SENINF/CAMMUX TG/VF owners before runtime activation.
-No captured-frame claim. No local C builds.
+Both platform ARM64 objects passed combined CI 37991879173 with the existing
+direct closure (20 total objects). Compilation does not execute the IRQ/stop
+path. Next implement native CAM_MAIN/SMI and SENINF/CAMMUX TG/VF owners before
+runtime activation. No captured-frame claim or local C builds.
