@@ -1,6 +1,6 @@
 # Port summary, 2026-10-09
 
-## Combined candidate: r177
+## Combined candidate: r179
 
 Follow-on r179 packages the external-LNA control restriction after r178 metadata
 and corrects the disabled camera fixture's context after GNSS pin removal.
@@ -96,8 +96,13 @@ the run still fails overall, and a failed diagnostic must never be flashed.
 Combined transport/native validation
 [37943848089](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37943848089)
 passed for CCCI, GPUEB and CAMSV/composer. Isolated kernel-object compilation
-stopped at a missing Bash build-tool dependency before compiling candidates;
-the dependency is now explicit. No candidate AArch64 API compatibility is claimed.
+stopped at a missing Bash build-tool dependency before compiling candidates.
+After adding that dependency and checking ThinLTO bitcode identity correctly,
+[37945710919](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37945710919)
+at `bd4df47` passed native validation, the Bionic fixtures and the isolated
+AArch64 object check for IMX882, SENINF graph/PHY, CCCI start and GPUEB power.
+The full r179 image is still building. This does not compile or activate every
+research transport candidate, link candidate modules, or prove hardware function.
 Earlier fixture path, patch hunk count and isolated Media parent-config errors
 were repaired without suppressing warnings or sanitizers. No r177 image has
 been flashed. Native fault tests use Ubuntu with ASan/UBSan; the pmOS image
@@ -108,7 +113,23 @@ camera capture are still not available.
 
 ## Latest installed checkpoint: r175
 
-Latest loader experiment: U-Boot `dcb20ce71f`, successful
+Latest loader experiment: U-Boot `a329b44232`,
+[CI 37946708562](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37946708562),
+LK SHA256 `2dd3131bdc57a0be0d16b714a0bb577d57a8719ae988bf8622cb9cd11e387238`,
+was flashed only to `lk_a`. Its opt-in GPUEB test authenticates and transforms
+the signed primary RV33 image, checks the signed plaintext digest, then erases
+the staging buffer without uploading or starting GPUEB. Cold boot
+`9cb0bd00-c093-496d-a4cc-66d3a05c3fa5` reports `verified-erased`, error 0,
+156064 bytes and plaintext SHA256
+`9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7`.
+USB/SSH recovered and SensorProxy is active. The decoded format is unknown;
+the stock 258744-byte copy is not covered by these verified bytes. No GPU boot
+or acceleration is claimed. The preceding warm reboot stopped at inherited
+SCP preflight `-EBUSY` before the GPUEB test, leaving sensors inactive; warm
+restart remains a lifecycle limitation. The r179 manifest still requires the
+previous tested loader below; restore that loader before its clean installation.
+
+Previous loader experiment: U-Boot `dcb20ce71f`, successful
 [CI 37915946655](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37915946655),
 is flashed only to `lk_a` for secure modem EMI observation. Warm and
 user-confirmed cold boot both return complete, identical successful readbacks;

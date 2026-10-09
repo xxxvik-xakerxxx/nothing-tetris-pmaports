@@ -1,2 +1,3 @@
 *.patch -whitespace
 *.patch.vendor -whitespace
+*.patch.kernel -whitespace

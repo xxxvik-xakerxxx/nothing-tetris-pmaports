@@ -1,0 +1,122 @@
+From: Tetris port maintainers
+Subject: [PATCH] eccci/dvfsrc: serialize first start with actual VCOREFS INIT
+
+Compile-only follow-up after frozen 0007. Requires separately installed default-off
+MTK_MT6878_MD_STARTUP_SCOPE component and a real authenticated handoff owner.
+This patch does not supply that owner, enable DT, or prove secure boot inhibition.
+
+diff --git a/drivers/misc/mediatek/eccci/Kconfig b/drivers/misc/mediatek/eccci/Kconfig
+--- a/drivers/misc/mediatek/eccci/Kconfig
++++ b/drivers/misc/mediatek/eccci/Kconfig
+@@ -16,6 +16,7 @@
+ 	bool "Tetris authenticated first-start owner (compile-only candidate)"
+ 	depends on MTK_ECCCI_DRIVER = m
+ 	depends on MTK_MT6878_CCCI_FIRST_START = m
++	depends on MTK_MT6878_MD_STARTUP_SCOPE
+ 	help
+ 	  Default off. Requires a real evidence owner and an OFF-attached virtual
+ 	  domain consumer. Never enable merely because this object compiles.
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.h b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.h
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.h
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.h
+@@ -1,12 +1,14 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ #ifndef CCCI_TETRIS_OWNER_H
+ #define CCCI_TETRIS_OWNER_H
+ #include <linux/soc/mediatek/mt6878_ccci_start.h>
++#include <linux/soc/mediatek/mt6878_md_startup_scope.h>
+ struct ccci_modem;
+ struct module;
+ struct ccci_tetris_proofs {
+ 	struct module *module;
++	struct mt6878_md_handoff_owner handoff;
+ 	/* Real evidence owner; missing authentication/EMI/ownership must fail. */
+ 	int (*verify)(struct device *, void *, enum mt6878_ccci_start_gate);
+ 	/* Prove CCIF/DPMAIF MMIO, IRQ, DMA, shared memory, clocks and reset profile. */
+ 	int (*transport_access)(struct device *, void *);
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.c b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.c
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.c
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_owner.c
+@@ -28,9 +28,15 @@
+ static int tetris_verify(struct device *dev, void *owner,
+ 			 enum mt6878_ccci_start_gate gate)
+ {
++	int ret;
++
+ 	if (owner != &tetris_owner || dev != tetris_owner.runtime_dev)
+ 		return -EINVAL;
+-	return tetris_owner.proofs.verify(dev, tetris_owner.proof_owner, gate);
++	ret = tetris_owner.proofs.verify(dev, tetris_owner.proof_owner, gate);
++	if (ret)
++		return ret;
++	return gate == MT6878_CCCI_BEFORE_EXECUTION ?
++		mt6878_md_scope_validate_execution() : 0;
+ }
+ 
+ static int tetris_transport(struct device *dev, void *owner)
+@@ -72,6 +78,8 @@
+ 	if (!md || !md->plat_dev || !md->hw_info || !md->hw_info->plat_val ||
+ 	    !runtime_dev || !proofs || !proofs->verify || !proofs->transport_access)
+ 		return -EINVAL;
++	if (!proofs->handoff.snapshot || !proofs->handoff.authenticate)
++		return -ENOKEY;
+ 	/* A normal platform-domain attach already powers ON before driver probe. */
+ 	if (runtime_dev == &md->plat_dev->dev || md->plat_dev->dev.pm_domain ||
+ 	    !runtime_dev->pm_domain || !runtime_dev->bus ||
+@@ -155,8 +163,12 @@
+ 		goto out;
+ 	}
+ 	tetris_owner.attempted = true;
++	ret = mt6878_md_scope_begin(&tetris_owner.proofs.handoff, tetris_owner.proof_owner);
++	if (ret)
++		goto fault;
+ 	ret = mt6878_ccci_first_start(tetris_owner.backend);
+ 	mt6878_ccci_start_result(tetris_owner.backend, &tetris_owner.result.backend);
++	ret = mt6878_md_scope_end(ret);
+ 	if (ret)
+ 		goto fault;
+ 	/* No READY/HS1/HS2 fabrication: the existing IRQ/port FSM receives them. */
+diff --git a/drivers/soc/mediatek/mtk-dvfsrc.c b/drivers/soc/mediatek/mtk-dvfsrc.c
+--- a/drivers/soc/mediatek/mtk-dvfsrc.c
++++ b/drivers/soc/mediatek/mtk-dvfsrc.c
+@@ -12,6 +12,9 @@
+ #include <linux/platform_device.h>
+ #include <linux/soc/mediatek/mtk_dvfsrc.h>
+ #include <linux/soc/mediatek/mtk_sip_svc.h>
++#if IS_ENABLED(CONFIG_MTK_MT6878_MD_STARTUP_SCOPE)
++#include <linux/soc/mediatek/mt6878_md_startup_scope.h>
++#endif
+ #include <dt-bindings/soc/mtk,dvfsrc.h>
+ #include "mtk-scpsys.h"
+ #include <linux/interrupt.h>
+@@ -1092,8 +1095,15 @@
+ 	dvfsrc->disable_wait_level = of_property_read_bool(np, "disable-wait-level");
+ 
+ 	if (!is_bringup) {
++#if IS_ENABLED(CONFIG_MTK_MT6878_MD_STARTUP_SCOPE)
++		ret = mt6878_md_scoped_dvfsrc_init(dvfsrc->dev, dvfsrc_flag,
++						 dvfsrc_vmode, &ares);
++		if (ret)
++			goto err;
++#else
+ 		arm_smccc_smc(MTK_SIP_VCOREFS_CONTROL, MTK_SIP_DVFSRC_INIT,
+ 			      dvfsrc_flag, dvfsrc_vmode, 0, 0, 0, 0, &ares);
++#endif
+ 		if (!ares.a0) {
+ 			dvfsrc->dram_type = ares.a1;
+ 			dvfsrc->dvfsrc_enable = true;
+@@ -1102,8 +1112,14 @@
+ 	} else
+ 		dev_info(dvfsrc->dev, "dvfs mode is bringup mode\n");
+ #else
++#if IS_ENABLED(CONFIG_MTK_MT6878_MD_STARTUP_SCOPE)
++	ret = mt6878_md_scoped_dvfsrc_init(dvfsrc->dev, 0, 0, &ares);
++	if (ret)
++		goto err;
++#else
+ 	arm_smccc_smc(MTK_SIP_VCOREFS_CONTROL, MTK_SIP_DVFSRC_INIT, 0, 0, 0,
+ 		0, 0, 0, &ares);
++#endif
+ 
+ 	if (!ares.a0) {
+ 		dvfsrc->dram_type = ares.a1;
