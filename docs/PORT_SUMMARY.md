@@ -109,8 +109,18 @@ actual runtime integration, not merely additional compile-only candidates.
 
 The signed modem input caller reuses the existing ROM/DSP layout and retains
 the firmware API's verified bytes without another full allocation, bundle scan
-or rehash during placement. Independent manufacturer-signed B4.1 input CI is
-pending; this caller does not establish physical EMI/power/BROM ownership.
+or rehash during placement. Independent manufacturer-signed B4.1 input
+[CI 37988706465](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37988706465)
+passed the actual public 90,214,400-byte `modem.img`, real crypto and sanitizer
+lifetime/fault fixtures. This caller does not establish physical EMI/power/BROM
+ownership; its ARM64 integration and hardware startup remain pending.
+
+The direct camera candidate builds coherent CQ memory in the kernel and uses
+native vb2 RAW/meta buffers. Its restricted single-frame path needs no CCD
+daemon, new userspace ioctl or RPMSG transport. DONE observation is separate
+from controller-side IRQ drain/stop and buffer completion. Direct ARM64 API
+compilation and a real power/route/IRQ consumer remain pending; this is not
+camera capture support. See [direct path](../patches/camera-direct/DIRECT-CONTRACT.md).
 
 ## Project rules
 

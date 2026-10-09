@@ -21,14 +21,19 @@
     "patches/camera-camsv/mt6878-camsv-registers.h",
     "patches/camera-ccd-cq/mt6878-camera-camsv-recipe.h",
     "patches/camera-ccd-cq/mt6878-camera-ccd-cq.h",
-    "patches/camera-seninf/mt6878-seninf-contract.h"
+    "patches/camera-seninf/mt6878-seninf-contract.h",
+    "patches/camera-direct/mt6878-camsv-direct.c",
+    "patches/camera-direct/mt6878-camsv-direct.h",
+    "patches/camera-direct/direct-smoke.c"
   ],
   "objects": [
     "mt6878-camera-pipeline-owner.o",
     "mt6878-camera-ccd-owner.o",
     "mt6878-camera-capture-owner.o",
     "mt6878-camsv-vb2.o",
-    "owner-smoke.o"
+    "owner-smoke.o",
+    "mt6878-camsv-direct.o",
+    "direct-smoke.o"
   ],
   "fault_object": "owner-kunit.o",
   "required_enabled": [

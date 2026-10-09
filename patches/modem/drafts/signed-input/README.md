@@ -85,8 +85,14 @@ allocation/algorithm faults and firmware release on success/failure. Placement
 tests compare layout and SMEM output to the existing ROM planner, hash the two
 actual placed spans, check gaps/tail/guard bytes and pre-write error atomicity,
 and assert no crypto calls or additional tracked allocations during placement. They do
-not claim exhaustive layout fuzzing or concurrency validation. Both CI modes
-are pending execution. Locally only static checks were run.
+not claim exhaustive layout fuzzing or concurrency validation.
+Native CI [37988706465](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37988706465)
+passed at `10a651c` using the actual public B4.1 `modem.img` (90,214,400 bytes,
+SHA256 `b15207a948125439a5957224d65774d9d44c558c6eb285372a520b27b8d7d6c5`).
+The independent manufacturer-root oracle and production C crypto/lifetime/fault
+suite passed with ASan/UBSan. The firmware API route avoids a second full
+source allocation by construction; no handset peak-memory benchmark is claimed.
+ARM64 object CI remains pending. Locally only static checks were run.
 
 The native path reuses main's `check_mtk_cert.native_ci()` unchanged, including
 its separate kernel-decoder TU and upstream warning policy; no second copy of

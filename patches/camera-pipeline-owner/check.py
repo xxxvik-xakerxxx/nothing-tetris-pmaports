@@ -79,7 +79,8 @@ def main():
     assert "file_count(buffer->file)" in tests and "mt6878_pipeline_close_callback_gate(owner), -EBUSY" in tests
     print("PASS: pinned DMA/CCD ownership and exact upstream API names (static only)")
     print("PASS: contiguous full mappings, current-task fd transfer, callback gate, fail-closed activation")
-    print("PASS: 20-file staging closure; 5 owner/API objects plus separate KUnit fault object")
+    print(f"PASS: {len(sources)}-file staging closure; "
+          f"{len(staging['objects'])} owner/API objects plus separate KUnit fault object")
     print("Native/kernel objects and KUnit execution remain CI-only and unverified")
 
 

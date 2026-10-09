@@ -1,0 +1,24 @@
+{
+  "scope": "isolated explicit kernel objects only; no parent Kbuild, module init, DT or shipped linkage",
+  "destination": "drivers/media/platform/mediatek/tetris-camera-direct-smoke",
+  "sources": [
+    "patches/camera-direct/mt6878-camsv-direct.c",
+    "patches/camera-direct/mt6878-camsv-direct.h",
+    "patches/camera-direct/direct-smoke.c",
+    "patches/camera-camsv/mt6878-camsv-vb2.c",
+    "patches/camera-camsv/mt6878-camsv-vb2.h",
+    "patches/camera-camsv/mt6878-camsv-capture.h",
+    "patches/camera-camsv/mt6878-camsv-registers.h",
+    "patches/camera-ccd-cq/mt6878-camera-camsv-recipe.h",
+    "patches/camera-ccd-cq/mt6878-camera-ccd-cq.h",
+    "patches/camera-composer/mt6878-camera-ipi-abi.h",
+    "patches/camera-composer/mt6878-camera-irq-registers.h"
+  ],
+  "objects": ["mt6878-camsv-direct.o", "mt6878-camsv-vb2.o", "direct-smoke.o"],
+  "required_enabled": [
+    "DMA_SHARED_BUFFER", "IOMMU_API", "MEDIA_SUPPORT", "VIDEO_DEV",
+    "VIDEOBUF2_DMA_CONTIG", "VIDEOBUF2_V4L2", "OF", "HAS_DMA"
+  ],
+  "transport_dependencies": [],
+  "config_note": "Hidden vb2 selections require an actual selector in isolated olddefconfig; no shipping dependency changes. No RPMSG, REMOTEPROC, CCD owner, private UAPI or userspace daemon required."
+}
