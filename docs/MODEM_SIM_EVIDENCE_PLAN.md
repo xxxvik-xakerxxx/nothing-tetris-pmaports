@@ -1154,8 +1154,8 @@ default. CI
 [37912420528](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37912420528)
 passed CCCI host tests over both OTA/installed-partition NVRAM profiles,
 malformed tables, reserved-range escape and rounding overflow, plus ARM64
-builds and LK packaging. No new tags or modem startup are enabled, and the
-handset still uses verified loader `56de656803`.
+builds and LK packaging. No new tags or modem startup are enabled; the
+verified `56de656803` runtime checkpoint precedes the experiment below.
 
 Next integration gate: repeat cold preparation, explicitly select the verified
 span-mapping consumer contract in a publishing caller, apply/read back
@@ -1163,6 +1163,30 @@ protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM
 detection and network registration still need live evidence. GPU/GNSS/camera
 hardware status is unchanged.
+
+## Secure EMI observation experiment
+
+Default-off U-Boot profile `modem_emi_observe` reads the pinned ATF's
+BL_EMIMPU operation 2 only, after slot-A modem RAM preparation and a storage
+digest recheck. Policy reads change the selector, not permissions; no modem
+reset, remap, range or ready-tag write is permitted. Observed permissions do
+not authorize startup. CI
+[37914986678](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37914986678)
+passed and was flashed only to `lk_a`. Warm Linux boot
+`2f645319-65d8-4975-ae7e-88592657a2b4` preserved USB/SSH and modem RAM
+preparation, but report-property allocation stopped before any EMI SMC.
+The zero snapshot placeholder was invalid; no protection state was measured.
+SCP rejected the known warm state with `-EBUSY`; no module reload was tried.
+
+Correction `dcb20ce71f` allocates an independent enlarged FDT through LMB
+within bootm mapping bounds rather than growing the old buffer in place. CI
+[37915946655](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37915946655)
+passed native tests, both ARM64 builds and LK packaging. Image SHA256
+`71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967`
+was verified and flashed to `lk_a`; `lk_b` and factory data were not changed.
+The phone enumerates pmOS USB, but locked macOS created no network port.
+Its EMI result and regressions remain unverified until unlock/reconnect.
+GPS navigation, GPU acceleration, camera capture and SIM/calls remain absent.
 
 ## Completion criteria
 

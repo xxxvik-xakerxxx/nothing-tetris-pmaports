@@ -2,6 +2,13 @@
 
 ## Latest installed checkpoint: r175
 
+Latest loader experiment: U-Boot `dcb20ce71f`, successful
+[CI 37915946655](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37915946655),
+is flashed only to `lk_a` for read-only secure modem EMI observation. Linux
+USB enumerates; runtime result is pending host unlock/reconnect. The previous
+fully read checkpoint below is retained as evidence, not assumed to validate
+this new loader. See [experiment and first failure](MODEM_SIM_EVIDENCE_PLAN.md#secure-emi-observation-experiment).
+
 Clean CI installation, 2026-10-09: full image run
 [37894315052](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894315052)
 at `ba605b03d8bff2b0db15cc03198948f0f16f756e` passed. Archive digest, all
