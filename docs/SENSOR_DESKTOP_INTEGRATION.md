@@ -45,7 +45,15 @@ The descriptor was installed live on r179 and the bus configuration reloaded.
 The proxy deactivated cleanly and was immediately reactivated while a client
 was present; accelerometer/light properties remained true, the HF inventory
 was unchanged and USB stayed up. Only the userspace proxy was restarted.
-Clean package activation and lifecycle validation remain pending.
+CI [37970239648](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37970239648)
+passed and built package `3.9-r2` from `d941aa6`. Its APK SHA256 is
+`ba8ce7185648dcc7d745c516a158fd4de9ff02a9722ace8e483c842f5b0d792c`.
+The hash-verified APK was installed offline through APK on the same r179 boot;
+the activation descriptor is package-owned, both services remain active and
+standard accelerometer/light properties are true. No failed system units or
+USB regression were observed. APK triggers regenerated initramfs/FIT using
+the unchanged kernel. Automatic activation on a new cold boot and lifecycle
+validation remain pending; live replacement is not a clean-image pass.
 
 ### Scalar callback optimization candidate
 

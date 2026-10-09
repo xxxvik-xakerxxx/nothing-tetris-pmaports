@@ -182,8 +182,10 @@ with firmware ready, 24 inventory entries, physical mask 31 and standard
 accelerometer/light properties true; USB remained up. This is a packaging
 defect, not clean-install automatic sensor support. Package `3.9-r2` adds
 standard D-Bus activation. Live descriptor installation and userspace proxy
-reactivation preserved the inventory and USB; clean package installation and
-lifecycle remain to be verified.
+reactivation preserved the inventory and USB. The verified `3.9-r2` APK from
+successful CI `37970239648` was then installed through APK without networking:
+the descriptor is now package-owned, both services remain active and no system
+units failed. New cold-boot activation and lifecycle remain to be verified.
 
 Source-only native CI
 [37968660008](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37968660008)
