@@ -385,5 +385,23 @@ denial checks; the same control must pass in the phone's full sandbox before
 any Android/vendor code runs. A failed control stops the experiment, never
 justifies relaxing the policy automatically.
 
-Build and phone load results remain pending. LOAD_OK will establish library
-loadability only, not solver startup, transport ownership, firmware download,+satellite acquisition, gpsd/GeoClue or a fix.
+CI `37897741457` passed and its archive matched GitHub's SHA256 digest.
+All nine staged-file hashes passed on installed r173, cold boot
+`a507d5d4-c1d4-4acf-9bba-c4724a6e1064`. The full phone control returned
+`failures=0` for all eight denials. The single vendor load attempt failed in
+Bionic Scudo before helper completion: a request for 8,650,752 KiB virtual
+address space exceeded the 512 MiB RLIMIT_AS. Tombstone IPC/ioctl attempts
+were denied as intended. USB/SSH and boot ID remained unchanged, with no
+failed system units. This is not a libmnl loadability pass.
+
+The revised launcher requires cgroup-v2 `memory.max <= 128 MiB` before any
+namespace/vendor work, and permits 16 GiB virtual space for Scudo's sparse
+reservation. The phone invocation must use a bounded transient systemd unit
+with MemoryMax=128M, MemorySwapMax=0, TasksMax=4 and RuntimeMaxSec=25. Existing
+seccomp, device/network/privilege denial, read-only root and watchdog remain
+unchanged. The control must pass again in that same bounded unit before load.
+CI and phone results for this revision remain pending.
+
+LOAD_OK will establish library
+loadability only, not solver startup, transport ownership, firmware download,
+satellite acquisition, gpsd/GeoClue or a fix.

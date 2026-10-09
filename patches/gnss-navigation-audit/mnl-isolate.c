@@ -106,6 +106,32 @@ static void limit(int resource, rlim_t maximum)
         die("setrlimit");
 }
 
+static int memory_bound(void)
+{
+    char group[4096], path[4096];
+    unsigned long long maximum;
+    FILE *file = fopen("/proc/self/cgroup", "r");
+    if (!file)
+        return -1;
+    if (!fgets(group, sizeof(group), file)) {
+        fclose(file);
+        return -1;
+    }
+    fclose(file);
+    if (strncmp(group, "0::/", 4) || !strchr(group, '\n'))
+        return -1;
+    group[strcspn(group, "\n")] = 0;
+    if (snprintf(path, sizeof(path), "/sys/fs/cgroup%s/memory.max", group + 3) >=
+        (int)sizeof(path))
+        return -1;
+    file = fopen(path, "r");
+    if (!file)
+        return -1;
+    int parsed = fscanf(file, "%llu", &maximum);
+    fclose(file);
+    return parsed == 1 && maximum && maximum <= (128ULL << 20) ? 0 : -1;
+}
+
 static void child(const char *root, const char *mode)
 {
     char proc[4096];
@@ -138,7 +164,8 @@ static void child(const char *root, const char *mode)
         die("drop privileges");
     limit(RLIMIT_CORE, 0);
     limit(RLIMIT_CPU, 5);
-    limit(RLIMIT_AS, 512UL << 20);
+    /* Bionic Scudo reserves 8.25 GiB without committing those pages. */
+    limit(RLIMIT_AS, 16ULL << 30);
     limit(RLIMIT_STACK, 8UL << 20);
     limit(RLIMIT_NOFILE, 16);
     if (syscall(__NR_close_range, 3U, ~0U, 0U))
@@ -173,6 +200,10 @@ int main(int argc, char **argv)
         geteuid() || argv[1][0] != '/' || stat(argv[1], &root) ||
         !S_ISDIR(root.st_mode) || root.st_uid || (root.st_mode & 022)) {
         fputs("Require root-owned non-writable absolute probe root and control/load mode\n", stderr);
+        return 2;
+    }
+    if (memory_bound()) {
+        fputs("Require a cgroup-v2 memory.max of at most 128 MiB before isolation\n", stderr);
         return 2;
     }
     if (unshare(CLONE_NEWNS | CLONE_NEWNET | CLONE_NEWPID) ||
