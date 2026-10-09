@@ -20,7 +20,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            p7zip-full e2fsprogs erofs-utils android-sdk-libsparse-utils python3
+            p7zip-full e2fsprogs erofs-utils android-sdk-libsparse-utils \
+            python3 python3-pyelftools build-essential pkg-config libxml2-dev libssl-dev git
       - name: Extract pinned generic B4.1 vendor assets
         run: python3 ci/extract-stock-port-assets.py
       - uses: actions/upload-artifact@v7
@@ -29,3 +30,32 @@ jobs:
           path: out/stock-port-assets/
           retention-days: 1
           if-no-files-found: error
+      - name: Verify GPS XML with native fault fixtures
+        run: |
+          sh patches/gnss-navigation-audit/run_xml_config_ci.sh \
+            out/stock-port-assets/vendor/etc/MNL_Config.xml
+      - name: Verify matching camera command encoding
+        run: |
+          mkdir -p upstream/connectivity-modules
+          git -C upstream/connectivity-modules init
+          git -C upstream/connectivity-modules remote add origin \
+            https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git
+          git -C upstream/connectivity-modules fetch --depth=1 origin \
+            e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+          git -C upstream/connectivity-modules checkout --detach FETCH_HEAD
+          python3 patches/camera-ccd-cq/check.py out/stock-port-assets \
+            --modules-repo upstream/connectivity-modules
+          sh patches/camera-ccd-cq/run-tests.sh
+      - name: Verify matching GPU CSF format
+        run: |
+          mkdir -p upstream/linux
+          git -C upstream/linux init
+          git -C upstream/linux remote add origin https://github.com/MT6878-mainline/linux.git
+          git -C upstream/linux sparse-checkout init --no-cone
+          git -C upstream/linux sparse-checkout set /drivers/gpu/drm/panthor/
+          git -C upstream/linux fetch --filter=blob:none --depth=1 origin \
+            d84b264a54a37611f2f46bc19363cb9b41606205
+          git -C upstream/linux checkout --detach FETCH_HEAD
+          python3 patches/gpu/csf_preflight.py \
+            out/stock-port-assets/vendor/firmware/mali_csffw.bin --kernel-tree upstream/linux
+          python3 patches/gpu/test_csf_preflight.py

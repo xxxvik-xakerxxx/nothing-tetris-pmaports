@@ -160,6 +160,7 @@ jobs:
           sh patches/gpu/run_gpueb_session_ci.sh
           sh patches/gpu/run_gpueb_owner_boundary_ci.sh
           sh patches/gpu/run_gpueb_fw_staging_ci.sh
+          python3 patches/gpu/test_csf_preflight.py
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py
@@ -206,6 +207,14 @@ jobs:
           sh patches/camera-camsv/run-tests.sh
           python3 patches/camera-composer/check.py --modules-repo upstream/connectivity-modules
           sh patches/camera-composer/run-tests.sh
+          sh patches/camera-ccd-cq/run-tests.sh
+      - name: Validate GNSS host services and second configuration
+        id: gnss_host_candidate
+        continue-on-error: true
+        run: |
+          sh patches/gnss-navigation-audit/run_agps_host_ci.sh
+          sh patches/gnss-navigation-audit/run_control_notify_ci.sh
+          sh patches/gnss-navigation-audit/run_second_config_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -241,12 +250,13 @@ jobs:
           fi
 
       - name: Require all transport candidates to pass
-        if: ${{ always() && (steps.modem_transport_candidate.outcome == 'failure' || steps.gpueb_transport_candidate.outcome == 'failure' || steps.camera_transport_candidate.outcome == 'failure') }}
+        if: ${{ always() && (steps.modem_transport_candidate.outcome == 'failure' || steps.gpueb_transport_candidate.outcome == 'failure' || steps.camera_transport_candidate.outcome == 'failure' || steps.gnss_host_candidate.outcome == 'failure') }}
         run: |
-          printf 'CCCI=%s GPUEB=%s camera=%s\n' \
+          printf 'CCCI=%s GPUEB=%s camera=%s GNSS=%s\n' \
             '${{ steps.modem_transport_candidate.outcome }}' \
             '${{ steps.gpueb_transport_candidate.outcome }}' \
-            '${{ steps.camera_transport_candidate.outcome }}'
+            '${{ steps.camera_transport_candidate.outcome }}' \
+            '${{ steps.gnss_host_candidate.outcome }}'
           exit 1
 
   build-gnss-bionic-adapter:
@@ -304,7 +314,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install package-matching kernel compiler
         run: |
-          apk add --no-cache build-base bc bison flex clang21 llvm21 lld21 \
+          apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
             openssl-dev perl python3 patch linux-headers
       - name: Compile isolated AArch64 candidate objects
         run: |
@@ -409,7 +419,7 @@ jobs:
       - name: Preserve configured kernel exports and DTB
         run: |
           python3 /work/scripts/collect-kernel-build-evidence.py \
-            /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA" --modem
+            /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA" --modem --diagnostics
       - name: Upload configured kernel evidence
         uses: actions/upload-artifact@v7
         with:

@@ -44,6 +44,19 @@ class EvidenceTests(unittest.TestCase):
             self.run_collect()
         self.assertFalse(self.out.exists())
 
+    def test_diagnostics_required_before_output(self):
+        with self.assertRaisesRegex(ValueError, "kernel evidence"):
+            collector.collect(self.root, self.out, "a" * 40, diagnostics=True)
+        self.assertFalse(self.out.exists())
+
+    def test_diagnostics_hashes_retained(self):
+        for name in collector.DIAGNOSTIC_FILES:
+            (self.kernel / name).write_bytes(b"compiled DT fixture")
+        result = collector.collect(self.root, self.out, "a" * 40, diagnostics=True)
+        self.assertEqual(len(result["sha256"]), len(collector.FILES) + 3)
+        for name in collector.DIAGNOSTIC_FILES:
+            self.assertEqual((self.out / name).read_bytes(), (self.kernel / name).read_bytes())
+
     def prepare_modem(self):
         linkdir = self.sources / "tetris-modem-link"
         for name in collector.MODEM_FILES:

@@ -21,6 +21,14 @@ It verifies both archive hashes and an independently pinned libMNL hash; this is
 not OEM signature verification. No Android service or firmware is executed and
 no handset NV/calibration is uploaded. The goal is the missing GPS XML, GPU CSF
 image and matching camera composer inputs, not reinstalling Android.
+Extraction [37941089972](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37941089972)
+completed: all 15 selected files passed size/hash checks, including the independent
+libMNL pin. The new XML decoder, owned AGPS datagram service, control notification
+and typed second-config constructor are source candidates, not navigation support.
+Matching libccd instructions now anchor a native bounded CQ encoder and its eight
+frame-cookie commands; the full CAMSV frame recipe and hardware completion remain
+incomplete. CSF format checks accept the actual B4.1 image, but GPU_ID, power,
+clock/voltage ownership and runtime firmware startup remain unverified.
 
 Follow-on r178 is on `main`; combined native validation
 [37934849844](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37934849844)
@@ -29,7 +37,7 @@ dedicated CCCI first-start/runtime-PM and typed secure-call adapter, GPUEB-owned
 whole-GPU power transaction, calibrated SENINF PHY/MAC register program,
 and read-only GNSS LNA metadata. Hardware ownership/session validators and
 transport/DMA integration remain incomplete; none is automatic hardware support.
-All three new kernel backends are compiled in an isolated output tree only;
+All three new kernel backends are selected for compilation in an isolated output tree only;
 shipping config and module packaging explicitly reject their activation.
 Native fixture success does not establish kernel API compatibility or hardware
 operation. The separate `kernel_smoke_only` workflow compiles the packaged
@@ -69,9 +77,20 @@ Prepared together, not yet installed or advertised as working:
   AArch64 standalone first-config/query fixtures passed on the phone in a
   verified hardware-denying sandbox; these used synthetic inputs, not fixes.
 
-Current r177 CI [37930775277](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37930775277)
+The r177 CI [37930775277](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37930775277)
 at `0f60b775fa3848057579296dddac5027f4c590ab` passed native validation and
-AArch64 Bionic fixture builds; full kernel/image compilation is still pending.
+AArch64 Bionic fixture builds and compiled the full kernel/install images.
+Diagnostic repackaging then rejected compiler-renumbered DT references, so no
+install image artifact was uploaded. The checker now compares typed references
+by node path and unchanged arguments, preserving exact non-reference properties;
+36 fault/delta tests pass. CI retains compiled diagnostic DTBs and publishes
+verified normal install images even if the separate diagnostic stage fails;
+the run still fails overall, and a failed diagnostic must never be flashed.
+Combined transport/native validation
+[37943848089](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37943848089)
+passed for CCCI, GPUEB and CAMSV/composer. Isolated kernel-object compilation
+stopped at a missing Bash build-tool dependency before compiling candidates;
+the dependency is now explicit. No candidate AArch64 API compatibility is claimed.
 Earlier fixture path, patch hunk count and isolated Media parent-config errors
 were repaired without suppressing warnings or sanitizers. No r177 image has
 been flashed. Native fault tests use Ubuntu with ASan/UBSan; the pmOS image

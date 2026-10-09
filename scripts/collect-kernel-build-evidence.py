@@ -11,6 +11,11 @@ FILES = (
     "include/config/kernel.release", "include/generated/compile.h",
     "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb",
 )
+DIAGNOSTIC_FILES = tuple("arch/arm64/boot/dts/mediatek/" + name + ".dtb" for name in (
+    "mt6878-nothing-tetris-vgpu-observe",
+    "mt6878-nothing-tetris-modem-preflight-off",
+    "mt6878-nothing-tetris-modem-preflight",
+))
 MODEM_FILES = (
     "Module.symvers", "modules.order", "ccci_util/ccci_util_lib.ko",
     "eccci/ccci_md_all.ko", "eccci/ccci_auxadc.ko",
@@ -20,7 +25,7 @@ MODEM_FILES = (
 )
 
 
-def collect(root, output, commit, modem=False):
+def collect(root, output, commit, modem=False, diagnostics=False):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected exact source commit")
     # pmbootstrap keeps abuild output here. Never recurse through mounted
@@ -32,7 +37,7 @@ def collect(root, output, commit, modem=False):
         raise ValueError(f"expected one configured kernel, found {len(candidates)}")
     kernel = candidates[0]
     payloads = {}
-    for name in FILES:
+    for name in (*FILES, *(DIAGNOSTIC_FILES if diagnostics else ())):
         path = kernel / name
         if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"missing, empty or symlinked kernel evidence: {name}")
@@ -85,5 +90,8 @@ if __name__ == "__main__":
     parser.add_argument("--commit", required=True)
     parser.add_argument("--modem", action="store_true",
                         help="Require all nine linked ARM64 modem modules")
+    parser.add_argument("--diagnostics", action="store_true",
+                        help="Require compiled isolated diagnostic DTBs")
     args = parser.parse_args()
-    print(json.dumps(collect(args.root, args.output, args.commit, args.modem), indent=2))
+    print(json.dumps(collect(args.root, args.output, args.commit, args.modem,
+                             args.diagnostics), indent=2))
