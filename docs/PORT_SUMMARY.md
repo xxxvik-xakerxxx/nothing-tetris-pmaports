@@ -16,10 +16,23 @@ RAM-only modem-load profile from successful
 was flashed to `lk_a` after archive/image/header verification. Stock `lk_b`
 was verified unchanged before the write and was not flashed. Reboot lost
 the fastboot status response; the phone subsequently enumerated its pmOS
-USB NCM interfaces. macOS has not registered a BSD network interface, so
-SSH and the new `/chosen` modem-load result remain unavailable. This is
-not a modem-load pass or a proven boot regression. Physical USB reconnect
-was requested; no further hardware experiment was attempted in this state.
+USB NCM interfaces. macOS initially did not register a BSD network interface.
+Physical USB reconnect restored the network interface and SSH, boot
+`efce2cb0-703d-490b-8dcb-ab527c42a8cd`, unchanged r173 kernel/rootfs.
+The modem result is `service-layout`, `-ENOSPC`, `failed-not-started`:
+authenticated ROM/DSP placement completed but service banks did not fit the
+single window. Bounded container/header reads confirmed 480 MiB MD memory,
+CONSYS `0xd80000`, NV cache `0x163780`, UDC disabled; offsets were derived
+from the actual container, not copied from the OTA archive. U-Boot `56de656803`
+allocates services separately without expanding the fixed modem-remap window.
+CI `37902382709` passed; the verified image was flashed only to `lk_a` and
+readback matched CI. On boot `d6ac0fdc-6f2e-47e5-b5c1-54c1fd8266cd`, the
+result is `service-initialization`, zero error, `ram-loaded-not-started`.
+DT contains the 512 MiB firmware reservation and separate `0x2690000`-byte
+service reservation. A hash-verified 32 MiB USB transfer passed. No modem
+execution is enabled; cold-start, protection/remap and CCCI handoff remain open.
+Display connector remains connected; no critical kernel-fault signature was
+found. The sensor service rejected the warm SCP handoff, requiring cold boot.
 The previous SCP-enabled `fef0154b` CI image remains available for rollback.
 
 Candidate status, 2026-10-09: r174 full kernel/image CI
@@ -29,8 +42,10 @@ bundle (`0110`, `0111`) and GNSS host-boundary checks passed native CI
 [37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
 at `a5d72a1`: 16,384 mode/fault cases, 512 rail/reference cases, 32 shutdown
 fault combinations and 262 pinned GNSS vectors, including negative mutants.
-Full r175 image CI `37894315052` is still building the kernel; installation
-and live testing remain pending. These changes do not enable
+Full r175 image CI
+[37894315052](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894315052)
+passed at `ba605b03d8bff2b0db15cc03198948f0f16f756e`; artifact verification,
+installation and live testing remain pending. These changes do not enable
 GPU/cameras, produce a GNSS fix or establish modem/SIM/calls. Installed state
 below records the r173 rootfs/kernel checkpoint before the loader update above.
 

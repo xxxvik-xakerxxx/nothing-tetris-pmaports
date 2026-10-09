@@ -1127,12 +1127,22 @@ signature checks, RAM placement and service initialization to
 `board_prep_linux`, with one attempt and sanitized first-failure diagnostics.
 Native and both ARM64 configuration builds passed CI `37896667322`.
 The verified image was flashed to `lk_a`; stock `lk_b` was retained.
-The phone enumerated pmOS USB after reboot, but the Mac did not register its
-network interface. Live modem-load diagnostics cannot yet be read; neither
-RAM-load success nor modem execution is claimed. See the current
+Physical USB reconnect restored SSH. The live failure is `service-layout`,
+`-ENOSPC`: authenticated ROM/DSP placement passed, but the additional service
+banks exceeded the single reservation. Header reads derived from the actual
+container confirm 480 MiB MD memory, CONSYS `0xd80000`, NV cache `0x163780`,
+UDC disabled. U-Boot `56de656803` preserves the fixed ATF modem-remap window
+and reserves service RAM separately, with overlap/DT rollback tests. CI
+`37902382709` passed and the image was installed only in `lk_a`, with hash
+readback matching CI. Boot `d6ac0fdc-6f2e-47e5-b5c1-54c1fd8266cd` returned
+`service-initialization`, zero error and `ram-loaded-not-started`. The DT
+reserves 512 MiB for firmware and `0x2690000` bytes separately for services;
+USB/SSH and a 32 MiB hash-verified transfer passed. This is a RAM-preparation
+pass, not modem execution; protection/remap and the CCCI handoff remain open.
+See the current
 [installed checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
 
-Next integration gate: read the live preparation result, establish the
+Next integration gate: repeat preparation on cold boot, establish the
 span-mapping consumer contract (the old U-Boot observation validator still
 rejects this large gap), apply/read back protection and remapping, and own
 boot/reset release before publishing a ready CCCI handoff. Modem boot, SIM

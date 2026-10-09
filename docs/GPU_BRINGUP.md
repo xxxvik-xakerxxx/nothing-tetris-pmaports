@@ -42,8 +42,9 @@ actual helper over all 32 fault combinations and rejects unguarded-write and
 overwritten-error mutants. Native CI
 [37894001985](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37894001985)
 passed these tests and the earlier mode/rail gates at `a5d72a1`. It does not
-instantiate USID 6 or enable GPU rails. Full r175 image and live testing remain
-pending.
+instantiate USID 6 or enable GPU rails. Full r175 CI `37894315052` passed at
+`ba605b03d8bf`; artifact verification and installation are in progress.
+Runtime VGPU/VSRAM ownership and acceleration are still not established.
 
 **Do not read `clk_summary`, `clk_dump` or per-clock hardware-state debugfs
 files on the current image.** The 2026-10-08 observation below caused an
