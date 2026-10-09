@@ -1,6 +1,42 @@
-# Port summary, 2026-10-08
+# Port summary, 2026-10-09
 
-## Latest installed checkpoint: r172
+## Latest installed checkpoint: r173
+
+CI [37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235),
+source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`, passed and was
+clean-installed to `super` and `userdata`. The archive matched GitHub's
+SHA256 digest; all three image hashes and all 7,661 sparse chunks passed
+verification. Expanded root image size is 2,783,969,280 bytes.
+
+First boot `1f027cdd-380e-4347-b8a8-149a79cf295c` reports
+`7.2.1-r173`, Linux `6.18.0 #174`. USB/SSH, a hash-verified 32 MiB transfer,
+root expansion to 104.5 GiB and the installed FIT hash passed. No systemd
+units failed; no panic, Oops, lockup, refcount or use-after-free signature
+was found in the captured kernel journal. Existing vendor warnings remain.
+DSI is connected/enabled and touchscreen input is registered; visual
+confirmation and the sensor cold-start check are pending.
+
+The installed SCP-enabled U-Boot `fef0154b0404210799a6851ac2c07dcbc9e9c736`
+was retained. Neither LK slot nor factory/calibration partitions was written.
+Sensor startup was disabled on the fresh image; its previous opt-in was
+restored for the next cold boot without loading modules on this warm boot.
+
+r173 fixes the vendor CCCI shared-memory mapping span, including the real
+`0x15fc0` cache padding gap, and rejects negative region IDs before indexing.
+The actual patched vendor functions passed CI regression tests. This does
+not enable modem DT, install/autoload the modem evidence modules or establish
+SIM/calls. GNSS navigation, GPU acceleration and cameras remain unverified.
+
+Image SHA256:
+
+- Boot: `229e3817796e5eaf1f81ce1cd40a61121394e2ba2dafd50fc48f681686f2679f`.
+- Sparse root: `81099c2756489746b6fb315568d1f17c331bbf719e1bc53935c74e7956ae589e`.
+- FIT: `546ff8935cfee651f5a1dbabdf363d3baa5079519a323618fa95a30d6c582950`.
+
+Private local evidence: `local/ci-run-37797116235/validation/` in the parent
+workspace. Lifecycle and other-unit testing remain open.
+
+## Previous installed checkpoint: r172
 
 CI [37753866853](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37753866853),
 attempt 2, source `17fbac0fbef455c1feb33526cf12eceee1e96e81`, passed and

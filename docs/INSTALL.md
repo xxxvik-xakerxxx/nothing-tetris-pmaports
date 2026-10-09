@@ -1,6 +1,6 @@
 # Installation and FAQ
 
-Updated: 2026-10-01. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
+Updated: 2026-10-09. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
 This is an experimental Linux port, not an Android ROM or a daily-driver release.
 
 > **Use at your own risk.** This project is provided as-is, without warranty.
@@ -87,11 +87,15 @@ The check needs `sha256sum` and `file` on the host. Also verify the separate
 U-Boot artifact against its own manifest and checksums. A matching checksum
 does not establish hardware/firmware compatibility.
 
-As checked on 2026-10-01, [CI 35746976417](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/35746976417)
-at `7c0ce0389c03d2820155bde72192aca95281de8f` built successfully and includes
-the sensor backend. It has not been recorded as a clean-tested complete image.
-The recorded clean-tested kernel baseline remains r167 from CI 35729169169,
-with the later sensor userspace files installed separately for live tests.
+The latest installed image is r173 from
+[CI 37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235),
+source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
+Its archive, image hashes and complete sparse structure were verified before
+a clean installation. First boot, USB/SSH, root expansion and installed FIT
+verification passed. Visual and sensor cold-start confirmation remain pending;
+see the current [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r173).
+Sensors are opt-in on a fresh image and require the matching SCP-enabled
+loader; the ordinary U-Boot artifact does not enable that profile.
 
 ## U-Boot prerequisite
 
