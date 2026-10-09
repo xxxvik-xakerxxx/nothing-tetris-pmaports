@@ -29,7 +29,9 @@ env:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
-  cancel-in-progress: true
+  # Image builds are expensive and may already have verified kernel output.
+  # Only cheap validation/smoke/PR runs may replace an earlier matching run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || inputs.kernel_smoke_only || inputs.validation_only }}
 
 jobs:
   validate-overlay:

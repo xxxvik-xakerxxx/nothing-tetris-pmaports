@@ -101,7 +101,12 @@ After adding that dependency and checking ThinLTO bitcode identity correctly,
 [37945710919](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37945710919)
 at `bd4df47` passed native validation, the Bionic fixtures and the isolated
 AArch64 object check for IMX882, SENINF graph/PHY, CCCI start and GPUEB power.
-The full r179 image is still building. This does not compile or activate every
+The full image stage was cancelled by a subsequent source-only push sharing
+its concurrency group. Replacement r179 run
+[37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510)
+is building at `0b904d6`; image runs now queue instead of cancelling an active
+image build. Cheap validation/smoke runs retain cancellation in their own groups.
+This does not compile or activate every
 research transport candidate, link candidate modules, or prove hardware function.
 Earlier fixture path, patch hunk count and isolated Media parent-config errors
 were repaired without suppressing warnings or sanitizers. No r177 image has
