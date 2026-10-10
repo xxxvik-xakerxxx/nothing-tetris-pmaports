@@ -54,7 +54,13 @@ execution remain pending. The first combined run,
 [CI 38039961381](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039961381),
 failed before compilation because the provider overlay lacked trailing context.
 Canonical context and a regression check now reject that old hunk; no compile
-success is inferred from the staging fix. The shipping provider/package is unchanged.
+success is inferred from the staging fix. The next run
+[CI 38042483164](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38042483164)
+passed GNU patch and exact staged-byte checks, then stopped because the isolated
+configuration had not requested `COMMON_CLK_MT6878_CAM`. The harness now
+explicitly requests both declared clock dependencies before `olddefconfig`;
+a regression test covers the real command construction and normal-build isolation.
+The shipping provider/package is unchanged.
 No preview, capture or successful camera support is claimed. See the
 [route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
 [native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md), plus

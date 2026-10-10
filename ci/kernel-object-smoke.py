@@ -227,6 +227,17 @@ def object_identity(target):
     return {"format": "ELF", "machine": "AArch64"}
 
 
+def config_options(kernel, output, research_owners):
+    options = [kernel / "scripts/config", "--file", output / ".config"]
+    enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE + CAM_MAIN_ENABLE +
+                        CAM_MAIN_REACHABLE if research_owners else ())
+    for symbol in dict.fromkeys(enabled):
+        options.extend(["-e", symbol])
+    for symbol in MODULES:
+        options.extend(["-m", symbol])
+    return options
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan-only", action="store_true")
@@ -293,14 +304,7 @@ def main():
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
-    options = [kernel / "scripts/config", "--file", output / ".config"]
-    enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE + CAM_MAIN_ENABLE
-                        if args.research_owners else ())
-    for symbol in enabled:
-        options.extend(["-e", symbol])
-    for symbol in MODULES:
-        options.extend(["-m", symbol])
-    run(options)
+    run(config_options(kernel, output, args.research_owners))
     make = ["make", "-C", kernel, f"O={output}", "ARCH=arm64", "LLVM=1", "-j4"]
     if args.research_owners:
         camera_dir = Path(next(iter(CAMERA_SOURCES.values()))).parent

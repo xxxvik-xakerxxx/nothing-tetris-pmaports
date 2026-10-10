@@ -71,6 +71,15 @@ class SmokeInputs(unittest.TestCase):
         self.assertGreater(len(plan["patches"]), 100)
         self.assertEqual(len(plan["objects"]), 6)
 
+    def test_research_requests_every_cam_main_dependency(self):
+        command = smoke.config_options(Path("kernel"), Path("objects"), True)
+        enabled = [command[i + 1] for i, value in enumerate(command) if value == "-e"]
+        for symbol in (*smoke.CAM_MAIN_ENABLE, *smoke.CAM_MAIN_REACHABLE):
+            self.assertIn(symbol, enabled)
+        self.assertEqual(len(enabled), len(set(enabled)))
+        normal = smoke.config_options(Path("kernel"), Path("objects"), False)
+        self.assertNotIn("COMMON_CLK_MT6878_CAM", normal)
+
     def test_research_staging_preserves_bytes_without_shipping_wiring(self):
         root = Path(__file__).resolve().parents[1]
         parent = self.package / "drivers/soc/mediatek"
