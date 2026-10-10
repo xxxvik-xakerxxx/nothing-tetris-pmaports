@@ -1,0 +1,43 @@
+diff --git a/board/mediatek/mt6878/tetris_modem_reserve.h b/board/mediatek/mt6878/tetris_modem_reserve.h
+--- a/board/mediatek/mt6878/tetris_modem_reserve.h
++++ b/board/mediatek/mt6878/tetris_modem_reserve.h
+@@ -20,4 +20,9 @@
+ int tetris_modem_reserve_services(void *fdt, unsigned long long capacity,
+ 				 unsigned long long *base);
++/* Internal boot owner: role0=NC, role1=cache, role2=PHY SIB. */
++int tetris_modem_reserve_boot_bank(void *fdt, unsigned int role,
++		unsigned long long capacity, unsigned long long *base);
++
++
+ int tetris_modem_load_diagnostic(void *fdt);
+ #endif
+diff --git a/board/mediatek/mt6878/tetris_modem_reserve.c b/board/mediatek/mt6878/tetris_modem_reserve.c
+--- a/board/mediatek/mt6878/tetris_modem_reserve.c
++++ b/board/mediatek/mt6878/tetris_modem_reserve.c
+@@ -244,3 +244,26 @@
+ 	return ret;
+ }
++
++int tetris_modem_reserve_boot_bank(void *fdt, unsigned int role,
++		unsigned long long capacity, unsigned long long *base)
++{
++	static const char *const names[] = {
++		"tetris-modem-boot-nc", "tetris-modem-boot-cache", "tetris-modem-boot-sib",
++	};
++	struct window_allocation allocation = {
++		.capacity = capacity, .alignment = TETRIS_MODEM_ALIGN,
++	};
++	const struct tetris_modem_allocator ops = {
++		.alloc = allocate_window, .release = release_window, .ctx = &allocation,
++	};
++	int ret;
++
++	if (!base || role > 2 || !capacity || capacity > TETRIS_MODEM_LIMIT ||
++	    (capacity & 0xffffULL) || (role < 2 && capacity != 0x8000000ULL))
++		return -EINVAL;
++	ret = reserve_region(fdt, &ops, names[role], capacity, TETRIS_MODEM_ALIGN);
++	if (!ret)
++		*base = allocation.base;
++	return ret;
++}
+ #endif
