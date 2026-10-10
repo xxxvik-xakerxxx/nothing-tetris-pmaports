@@ -38,10 +38,19 @@ for all three MT6878 Adie records, not this legacy file path. A new constructor
 reads that branch from the legitimate associated image and rejects unknown
 identity; it does not accept a caller-selected calibration flag. Missing modern
 calibration requires the source-derived modem MIPC message141 response
-(tags0x101/0x102/0x103), which remains unimplemented. The numeric constructor
+(tags0x101/0x102/0x103). A native adapter now makes that actual OEM request,
+requires status0 plus all three tags and releases request/response once while
+rejecting concurrent ownership. Its first-config bridge supplies only the
+proven C0/C1 words, not fabricated calibration tail bytes. The matching
+`libmipc.so` ABI/dependencies and tag-storage bounds must be audited before
+live use; the modem's CCCI port and responder are still absent. Native/Bionic
+and instruction-oracle CI for this adapter is pending. The numeric constructor
 also supplies the exact requested-buffer clamps and private-C-locale float
 text for 38 configuration bytes without clearing other unresolved fields.
-Native/Bionic and stock-instruction CI for these constructors is pending.
+Native/Bionic checks passed
+[CI 38028186248](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38028186248),
+and stock-instruction checks passed
+[CI 38028191300](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38028191300).
 See [numeric and capability sources](../patches/gnss-navigation-audit/SECOND_NUMERIC_AND_CAPABILITY.md).
 
 ## Earlier Config Fixture Evidence

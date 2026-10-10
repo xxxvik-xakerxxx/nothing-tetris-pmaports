@@ -13,9 +13,12 @@ publication into an owned final DT. Full ARM64 objects and the opt-in image link
 passed [CI 38027149560](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38027149560)
 at `94ead1146c`. This image is not installed. The earlier CI caught incorrect
 FDT pointer/lifetime handling; the final mapping now remains owned through
-handoff. The paired read-only Linux analysis consumer still needs native,
-ARM64 and real-export modpost checks, then a matching phone ABI build before
-one controlled private capture. Public CI uploads metadata only, never plaintext.
+handoff. The paired read-only Linux analysis consumer passed native sanitizer
+checks, isolated ARM64 compilation and modpost against actual kernel exports in
+[CI 38028106842](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38028106842).
+This is a minimal isolated kernel, not the phone's module ABI. A matching phone
+ABI build is still required before one controlled private capture. Public CI
+uploads metadata only, never plaintext.
 
 This implements a missing firmware-inspection transport, not GPUEB startup.
 Entry/data/BSS and the unauthenticated larger LK copy span, complete reset/power

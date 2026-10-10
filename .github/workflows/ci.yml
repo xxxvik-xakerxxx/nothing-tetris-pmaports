@@ -228,6 +228,7 @@ jobs:
           sh patches/gnss-navigation-audit/run_slot6_service_ci.sh
           sh patches/gnss-navigation-audit/run_nv_calibration_ci.sh
           sh patches/gnss-navigation-audit/run_second_numeric_ci.sh
+          sh patches/gnss-navigation-audit/run_mipc_calibration_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -305,6 +306,10 @@ jobs:
             patches/gnss-navigation-audit/b41_capability_branch.c \
             patches/gnss-navigation-audit/test_b41_second_numeric.c \
             -o out/b41-second-numeric-test
+          "$ndk/aarch64-linux-android28-clang" -std=c11 -O2 -Wall -Wextra -Werror -pthread \
+            patches/gnss-navigation-audit/b41_mipc_calibration.c \
+            patches/gnss-navigation-audit/test_b41_mipc_calibration.c \
+            -o out/b41-mipc-calibration-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
             patches/gnss-navigation-audit/b41_first_config.c \
             patches/gnss-navigation-audit/b41_first_queries.c \
