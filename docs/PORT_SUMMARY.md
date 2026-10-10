@@ -179,8 +179,9 @@ changes require their own check; no physical subsystem is enabled by this run.
   reservations before private argument publication. Its isolated
   `modem-metadata.yml` workflow tests public-stock producer/import round trips
   under ASan/UBSan and compiles the same 64 real driver objects with that overlay.
-  This new overlay's C checks are pending; the earlier 64-object success does not
-  cover it. It maps only the admitted AP tag buffer, not modem firmware or SMEM,
+  Both stages passed [CI 38052285012](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052285012)
+  at `190ea15`: 59 producer/import cases and all 64 real ARM64 objects, including
+  the actual metadata import/validation symbols. It maps only the admitted AP tag buffer, not modem firmware or SMEM,
   and neither grants protected-memory access nor enables modem registration.
   They are not packaged, automatically called or enabled on the
   phone; physical start, callback/DMA drain and forced removal remain unresolved.
@@ -232,7 +233,9 @@ changes require their own check; no physical subsystem is enabled by this run.
   preflights the complete stock XML global configuration before committing
   writes and sends sealed ADC snapshots as bounded atomic diagnostic packets.
   The isolated `gnss-xml-adc.yml` workflow executes only our native sanitizer
-  fixtures against pinned stock bytes. Native execution is pending; genuine
+  fixtures against pinned stock bytes. Native sanitizer execution passed
+  [CI 38052531292](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052531292)
+  at `0d7458d` (16 XML feature/profile executions plus the ADC fixture). Genuine
   Bionic libxml2/OpenSSL dependency builds, XML reader/SET ordering and actual
   ADC endpoint ownership remain required. It never calls vendor INIT or claims
   satellite acquisition.

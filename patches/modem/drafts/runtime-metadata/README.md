@@ -1,6 +1,6 @@
 # Owned runtime metadata candidate
 
-Frozen for parent review, disabled draft; C CI remains pending. No board hook, DT enablement, firmware start, SMC,
+Reviewed disabled candidate; native and actual ARM64 C CI passed. No board hook, DT enablement, firmware start, SMC,
 MMIO, protected-ROM read, or claim of SIM/CCCI readiness. No local C build.
 
 ## Executable path
@@ -148,9 +148,14 @@ reservation-before-mapping and real dependency call. Native mode requires BOTH
 It compiles actual producer/args lookup/import plus wire decoders with strict
 warnings and ASan/UBSan: 59 producer-to-import cases (including relocated valid
 allocations), wire decoder cases, and 53 actual OF/retention adapter cases with
-reference balance and failure-output immutability. Native fixtures are proposed,
-NOT locally executed. Actual ARM64-object CI remains required before acceptance;
-mocked OF/rmem boundaries and scalar replies are not a physical cold report.
+reference balance and failure-output immutability. Native fixtures and all 64
+actual ECCCI/CCMNI/util ARM64 objects passed
+[CI 38052285012](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052285012)
+at `190ea155e1a8343dbdb4f0992f06b92848c9cdac`. The native log records all 59
+producer/import cases; the object manifest verifies both metadata function
+symbols in the actual util objects. The preceding 47 camera/GPU objects also
+compiled in this isolated job. No local C build, module link or KUnit execution
+occurred. Mocked OF/rmem boundaries and scalar replies are not a physical cold report.
 Retention fixtures include failed-init surviving catalogue entries with NOMAP
 cleared (independently of compatible rejection), stale resources with one cleared
 middle/last PFN, missing/partial/gapped coverage, child/System RAM resources, and

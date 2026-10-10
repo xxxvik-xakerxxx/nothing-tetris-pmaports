@@ -110,6 +110,13 @@ producer or the separate OEM diagnostic endpoint. Actual slot0 RTC/FM/control,
 restart/internal RX stop and engine-wide configuration/transport dependencies
 remain separate. This does not clear native init or navigation gates.
 
-Next gate: native sanitizer execution and genuine Bionic dependency build/link
-in parent CI, then reviewed real loader/global ordering and backend ownership.
+Native ASan/UBSan execution passed
+[CI 38052531292](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052531292)
+at `0d7458d`: all16 XML feature/profile executions and the ADC fixture, using
+genuine host libxml2/OpenSSL and independently pinned stock bytes. Downloaded
+source/asset/binary manifests and the actual step result confirm native scope.
+No Bionic fixture or vendor engine was executed by this job.
+
+Next gate: genuine Bionic dependency build/link, then reviewed real
+loader/global ordering and backend ownership.
 Published43b4a2d ARM LOAD_OK remains load-only evidence, not engine INIT or fix.
