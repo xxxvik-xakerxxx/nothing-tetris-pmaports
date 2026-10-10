@@ -1,0 +1,10 @@
+config TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC
+	bool "Retain authenticated GPUEB primary for private analysis"
+	default n
+	depends on TETRIS_SCP_PREPARE_DIAGNOSTIC && TETRIS_SCP_SECURITY && LMB && OF_LIBFDT
+	depends on !TETRIS_GPUEB_TRANSFORM_DIAGNOSTIC
+	help
+	  One strict slot-A transform in the existing verified B4.1 crypto window.
+	  Keep only authenticated bytes in a dedicated no-map RAM reservation,
+	  publish to final Linux DT for private root-only analysis. No upload,
+	  reset release, clocks, rails, EMI programming or GPUEB execution.

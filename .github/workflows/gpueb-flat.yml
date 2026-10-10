@@ -1,0 +1,184 @@
+name: GPUEB flat retention validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpueb-flat-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UBOOT_REV: 94ead1146c93fef603db5c85820f2fb04c559c10
+  LINUX_REV: d84b264a54a37611f2f46bc19363cb9b41606205
+  FLAT_DIR: patches/gpu/flat-handoff-draft
+  SNAPSHOT_SHA: 70e67bcb0f8d7c0e737dba1329a7118b130c0ab319a825998d05d90274f9009d
+  PYTHON: /usr/bin/python3
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  native:
+    name: Signed factory input and native sanitizer faults
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      HOSTCC: gcc
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git curl ca-certificates libfdt-dev libssl-dev \
+            openssl python3 python3-cryptography python3-capstone p7zip-full
+      - name: Verify frozen bundle
+        working-directory: patches/gpu/flat-handoff-draft
+        run: |
+          printf '%s  SNAPSHOT.sha256\n' "$SNAPSHOT_SHA" | sha256sum --check --strict
+          sha256sum --check --strict SNAPSHOT.sha256
+      - name: Fetch complete pinned U-Boot tree
+        run: |
+          git init upstream/gpueb-flat-uboot
+          git -C upstream/gpueb-flat-uboot remote add origin https://github.com/xxxvik-xakerxxx/u-boot.git
+          git -C upstream/gpueb-flat-uboot fetch --depth=1 origin "$UBOOT_REV"
+          git -C upstream/gpueb-flat-uboot checkout --detach FETCH_HEAD
+          test "$(git -C upstream/gpueb-flat-uboot rev-parse HEAD)" = "$UBOOT_REV"
+          echo "TETRIS_UBOOT_TREE=$GITHUB_WORKSPACE/upstream/gpueb-flat-uboot" >> "$GITHUB_ENV"
+      - name: Reject frozen draft and production GPU source drift
+        run: |
+          for source in tetris_gpueb_flat.c tetris_gpueb_flat.h \
+            tetris_gpueb_flat_publish.c tetris_gpueb_flat_publish.h \
+            tetris_gpueb_flat_hook.c tetris_gpueb_flat_hook.h; do
+            cmp "$FLAT_DIR/$source" "$TETRIS_UBOOT_TREE/board/mediatek/mt6878/$source"
+          done
+      - name: Extract and authenticate public factory container
+        run: |
+          mkdir -p out
+          "$PYTHON" "$FLAT_DIR/extract_factory_gpueb.py" --out out/factory-gpueb
+          echo "TETRIS_GPUEB_FACTORY_CONTAINER=$GITHUB_WORKSPACE/out/factory-gpueb/gpueb.img" >> "$GITHUB_ENV"
+          echo "TETRIS_GPUEB_CONTAINER=$GITHUB_WORKSPACE/out/factory-gpueb/gpueb.img" >> "$GITHUB_ENV"
+      - name: Run all 18 frozen static checks
+        run: |
+          "$PYTHON" "$FLAT_DIR/test_flat.py" -v
+          "$PYTHON" "$FLAT_DIR/test_publication.py" -v
+          "$PYTHON" "$FLAT_DIR/test_hook_assets.py" -v
+      - name: Run strict ASAN and UBSAN native faults
+        run: sh "$FLAT_DIR/run-native-ci.sh"
+      - name: Record non-private validation provenance
+        run: |
+          mkdir -p out/reports
+          printf 'pmaports=%s\nuboot=%s\nfrozen_bundle=%s\nprivate_plaintext=not_supplied\nhardware=not_tested\n' \
+            "$GITHUB_SHA" "$UBOOT_REV" "$SNAPSHOT_SHA" > out/reports/native.txt
+          cp out/factory-gpueb/PROVENANCE.json out/reports/factory-provenance.json
+      - name: Upload metadata only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gpueb-flat-native-metadata-${{ github.run_id }}
+          path: out/reports/
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-consumer:
+    name: Isolated ARM64 consumer and real module exports
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Install ARM64 kernel dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git ca-certificates gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu flex bison bc libssl-dev libelf-dev kmod
+      - name: Verify frozen bundle
+        working-directory: patches/gpu/flat-handoff-draft
+        run: |
+          printf '%s  SNAPSHOT.sha256\n' "$SNAPSHOT_SHA" | sha256sum --check --strict
+          sha256sum --check --strict SNAPSHOT.sha256
+      - name: Fetch complete pinned Linux tree
+        run: |
+          git init upstream/gpueb-flat-linux
+          git -C upstream/gpueb-flat-linux remote add origin https://github.com/MT6878-mainline/linux.git
+          git -C upstream/gpueb-flat-linux fetch --depth=1 origin "$LINUX_REV"
+          git -C upstream/gpueb-flat-linux checkout --detach FETCH_HEAD
+          test "$(git -C upstream/gpueb-flat-linux rev-parse HEAD)" = "$LINUX_REV"
+      - name: Configure minimal isolated ARM64 kernel
+        run: |
+          kernel="$GITHUB_WORKSPACE/upstream/gpueb-flat-linux"
+          output="$GITHUB_WORKSPACE/out/kernel"
+          mkdir -p "$output"
+          make -C "$kernel" O="$output" tinyconfig
+          "$kernel/scripts/config" --file "$output/.config" \
+            -e MODULES -e MODULE_UNLOAD -e OF -e OF_FLATTREE \
+            -e OF_EARLY_FLATTREE -e OF_RESERVED_MEM -e CRYPTO \
+            -e CRYPTO_HASH -e CRYPTO_SHA256 -d DEBUG_INFO -d WERROR
+          make -C "$kernel" O="$output" olddefconfig
+          for symbol in MODULES OF OF_ADDRESS OF_RESERVED_MEM CRYPTO CRYPTO_HASH CRYPTO_SHA256; do
+            grep -qx "CONFIG_${symbol}=y" "$output/.config"
+          done
+      - name: Build kernel and modules to produce actual exports
+        run: |
+          make -C upstream/gpueb-flat-linux O="$GITHUB_WORKSPACE/out/kernel" \
+            -j"$(nproc)" vmlinux modules
+          test -s out/kernel/vmlinux
+          test -s out/kernel/Module.symvers
+          aarch64-linux-gnu-readelf -h out/kernel/vmlinux | grep -Eq 'Machine: +AArch64'
+      - name: Compile and modpost external consumer against real exports
+        run: |
+          module="$GITHUB_WORKSPACE/out/consumer"
+          mkdir -p "$module"
+          cp "$FLAT_DIR/gpueb-flat-analysis.c" "$module/"
+          cp "$FLAT_DIR/Makefile.kernel" "$module/Makefile"
+          make -C upstream/gpueb-flat-linux O="$GITHUB_WORKSPACE/out/kernel" \
+            M="$module" KCFLAGS='-Werror' modules
+          test -s "$module/gpueb-flat-analysis.ko"
+          aarch64-linux-gnu-readelf -h "$module/gpueb-flat-analysis.ko" | grep -Eq 'Machine: +AArch64'
+      - name: Emit ELF and verified import manifest only
+        run: |
+          mkdir -p out/reports
+          module=out/consumer/gpueb-flat-analysis.ko
+          aarch64-linux-gnu-readelf -h "$module" > out/reports/consumer-elf.txt
+          aarch64-linux-gnu-nm -u "$module" > out/reports/consumer-imports.txt
+          modinfo "$module" > out/reports/consumer-modinfo.txt
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          module = Path('out/consumer/gpueb-flat-analysis.ko')
+          symvers = Path('out/kernel/Module.symvers')
+          exports = {fields[1]: fields for line in symvers.read_text().splitlines()
+                     if len(fields := line.split()) >= 4}
+          imports = sorted({line.split()[-1] for line in subprocess.check_output(
+              ['aarch64-linux-gnu-nm', '-u', str(module)], text=True).splitlines()})
+          missing = sorted(set(imports) - exports.keys())
+          if missing:
+              raise SystemExit(f'Imports absent from real Module.symvers: {missing}')
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          report = {
+              'linux': os.environ['LINUX_REV'], 'pmaports': os.environ['GITHUB_SHA'],
+              'module_sha256': sha(module), 'config_sha256': sha(Path('out/kernel/.config')),
+              'symvers_sha256': sha(symvers), 'imports': {name: exports[name] for name in imports},
+              'architecture': 'AArch64', 'phone_abi_compatible': False,
+              'hardware_tested': False, 'scope': 'isolated compile and real-export modpost only',
+          }
+          Path('out/reports/consumer-manifest.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+      - name: Upload compile metadata only, not a phone module
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gpueb-flat-consumer-metadata-${{ github.run_id }}
+          path: out/reports/
+          if-no-files-found: error
+          retention-days: 14

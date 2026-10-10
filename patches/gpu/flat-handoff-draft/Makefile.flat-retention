@@ -1,0 +1,4 @@
+obj-$(CONFIG_TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC) += tetris_gpueb_layout.o
+obj-$(CONFIG_TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC) += tetris_gpueb_flat.o
+obj-$(CONFIG_TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC) += tetris_gpueb_flat_publish.o
+obj-$(CONFIG_TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC) += tetris_gpueb_flat_hook.o

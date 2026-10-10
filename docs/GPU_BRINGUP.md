@@ -2,6 +2,28 @@
 
 ## Current status
 
+Installed r179 and loader `d385921` still have no GPU acceleration. The cold
+authenticated GPUEB transform passed with 156064 signed bytes and unknown flat
+format; its temporary plaintext was erased. Display/touch and automatic sensors
+remain working, confirmed by the user after cold boot.
+
+Actual U-Boot now includes a separate default-off private flat-retention path:
+one authenticated transform, an exclusive erased-tail no-map reservation and
+publication into an owned final DT. Full ARM64 objects and the opt-in image link
+passed [CI 38027149560](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38027149560)
+at `94ead1146c`. This image is not installed. The earlier CI caught incorrect
+FDT pointer/lifetime handling; the final mapping now remains owned through
+handoff. The paired read-only Linux analysis consumer still needs native,
+ARM64 and real-export modpost checks, then a matching phone ABI build before
+one controlled private capture. Public CI uploads metadata only, never plaintext.
+
+This implements a missing firmware-inspection transport, not GPUEB startup.
+Entry/data/BSS and the unauthenticated larger LK copy span, complete reset/power
+ownership and accelerated Panthor rendering remain unresolved. See
+[retention integration](../patches/gpu/flat-handoff-draft/HOOK-INTEGRATION.md).
+
+## Earlier Supply Evidence
+
 r177 candidate describes disabled USID-6 VBUCK2/VGPU and MT6363 VSRAM_CPUM
 without attaching a GPU consumer. The existing MT6363 registration loop now
 honours disabled children. A partial MT6315 provider cannot register VBUCK1
