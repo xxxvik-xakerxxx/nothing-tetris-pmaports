@@ -204,6 +204,7 @@ jobs:
             --device-repo upstream/device-modules \
             --modules-repo upstream/connectivity-modules
           sh patches/camera-seninf/run-phy-tests.sh
+          sh patches/camera-seninf-route/run-tests.sh
       - name: Validate CAMSV DMA and composer handoff
         id: camera_transport_candidate
         continue-on-error: true

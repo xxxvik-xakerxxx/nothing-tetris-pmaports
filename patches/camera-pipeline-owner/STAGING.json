@@ -27,7 +27,19 @@
     "patches/camera-direct/direct-smoke.c",
     "patches/camera-direct-platform/mt6878-camsv-platform.c",
     "patches/camera-direct-platform/mt6878-camsv-platform.h",
-    "patches/camera-direct-platform/platform-smoke.c"
+    "patches/camera-direct-platform/platform-smoke.c",
+    "patches/camera-seninf/mt6878-seninf-mux.h",
+    "patches/camera-seninf/mt6878-seninf-phy.h",
+    "patches/camera-seninf/mt6878-seninf-phy-data.h",
+    "patches/camera-direct-hardware/mt6878-camsv-hardware.c",
+    "patches/camera-direct-hardware/mt6878-camsv-hardware.h",
+    "patches/camera-direct-hardware/hardware-smoke.c",
+    "patches/camera-smi-owner/smi-backend.c",
+    "patches/camera-smi-owner/smi-backend.h",
+    "patches/camera-seninf-route/mt6878-seninf-route.c",
+    "patches/camera-seninf-route/mt6878-seninf-route.h",
+    "patches/camera-seninf-route/mt6878-seninf-route-program.h",
+    "patches/camera-seninf-route/route-smoke.c"
   ],
   "objects": [
     "mt6878-camera-pipeline-owner.o",
@@ -38,13 +50,18 @@
     "mt6878-camsv-direct.o",
     "direct-smoke.o",
     "mt6878-camsv-platform.o",
-    "platform-smoke.o"
+    "platform-smoke.o",
+    "mt6878-camsv-hardware.o",
+    "hardware-smoke.o",
+    "smi-backend.o",
+    "mt6878-seninf-route.o",
+    "route-smoke.o"
   ],
   "fault_object": "owner-kunit.o",
   "required_enabled": [
     "DMA_SHARED_BUFFER", "RPMSG", "IOMMU_API", "MEDIA_SUPPORT",
     "MEDIA_CONTROLLER", "VIDEO_DEV", "VIDEO_V4L2_SUBDEV_API",
-    "VIDEOBUF2_DMA_CONTIG", "VIDEOBUF2_V4L2"
+    "VIDEOBUF2_DMA_CONTIG", "VIDEOBUF2_V4L2", "NVMEM", "MTK_SMI"
   ],
   "fault_required_enabled": ["KUNIT"],
   "unfrozen_prerequisites": [

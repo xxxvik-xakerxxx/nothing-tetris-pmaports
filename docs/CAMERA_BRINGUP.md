@@ -4,6 +4,24 @@ Status: inventory plus compile-only prerequisites. No camera rail, clock,
 reset, SENINF, CAMSYS, CCU, sensor, EEPROM, actuator, or flash node is approved
 for automatic probing.
 
+## Current Native Integration
+
+Source candidates now connect calibrated C-PHY/MAC, RAW/PDAF VC and CAMMUX
+routes, CAMSV capture, TG/VF shutdown and a narrow reset lease inside the
+existing Linux SMI provider. No consumer remaps that provider's registers.
+The combined CI stages 38 camera source files and compiles 26 ARM64 objects
+overall, including the actual SMI provider; compilation remains pending.
+The packaged PHY helper preserves configured state on failed shutdown, with
+every off-fault and refusal-to-replay covered by its CI fixture.
+
+Real MAC/PHY IRQ and TSREC consumers, shared mux allocation, prepared ACTIVE
+format exclusion and complete failed-stop lifetime still block activation.
+No preview, capture or successful camera support is claimed. See the
+[route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
+[native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md).
+
+## Earlier Evidence
+
 r177 includes a separate native V4L2 streaming candidate, patch `0112`, with
 mechanically copied B4.1 init, 4000x3000 preview and 4096x2304 video tables.
 It implements short exposure, analogue gain, VBLANK, HBLANK, pixel-array rate,

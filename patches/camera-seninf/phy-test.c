@@ -175,6 +175,7 @@ int main(void)
 	assert(mt6878_phy_setup(&backend, &tx, &plan, &in) == 0);
 	calls_before = fake.calls;
 	assert(mt6878_phy_off(&backend, &tx) == 0);
+	assert(!tx.configured);
 	off_calls = fake.calls - calls_before;
 	for (i = 1; i <= off_calls; i++) {
 		reset(&tx);
@@ -183,6 +184,9 @@ int main(void)
 		fake.fail_at = calls_before + i;
 		assert(mt6878_phy_off(&backend, &tx) == -EIO);
 		assert(fake.calls == calls_before + i && tx.bus.first_error == -EIO);
+		assert(tx.configured && tx.off_attempted);
+		assert(mt6878_phy_off(&backend, &tx) == -EIO);
+		assert(fake.calls == calls_before + i && tx.configured);
 	}
 	reset(&tx);
 	in.rg_csi = 0;

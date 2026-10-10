@@ -48,7 +48,12 @@ RESEARCH_SOURCES = {
     "patches/modem/mt6878_md_handoff_reservation.h": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.h",
     "patches/modem/mt6878_md_pss32.c": f"{RESEARCH_DIR}/mt6878_md_pss32.c",
     "patches/modem/mt6878_md_pss32.h": f"{RESEARCH_DIR}/mt6878_md_pss32.h",
+    "patches/camera-smi-owner/mt6878-smi-camera-reset.inc": "drivers/memory/mt6878-smi-camera-reset.inc",
+    "patches/camera-smi-owner/smi-camera-reset.h": "include/soc/mediatek/smi-camera-reset.h",
 }
+PROVIDER_PATCH = "patches/camera-smi-owner/provider.patch"
+# Use the existing provider Kbuild, never replace drivers/memory/Makefile.
+PROVIDER_OBJECTS = ("drivers/memory/mtk-smi.o",)
 RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
@@ -187,7 +192,7 @@ def main():
     manifest = plan(package)
     objects = OBJECTS
     if args.research_owners:
-        objects += RESEARCH_OBJECTS
+        objects += RESEARCH_OBJECTS + PROVIDER_OBJECTS
         manifest["objects"] = objects
         manifest["research_source_sha256"] = {
             name: hashlib.sha256(Path(name).read_bytes()).hexdigest()
@@ -195,6 +200,8 @@ def main():
         }
         manifest["research_source_sha256"][CAMERA_MANIFEST] = hashlib.sha256(
             Path(CAMERA_MANIFEST).read_bytes()).hexdigest()
+        manifest["research_source_sha256"][PROVIDER_PATCH] = hashlib.sha256(
+            Path(PROVIDER_PATCH).read_bytes()).hexdigest()
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -225,6 +232,8 @@ def main():
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
         stage_research_sources(kernel)
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
+             "-i", Path(PROVIDER_PATCH).resolve()])
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")

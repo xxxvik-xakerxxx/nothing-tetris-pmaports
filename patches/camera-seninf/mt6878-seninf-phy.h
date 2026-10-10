@@ -234,7 +234,8 @@ static inline int mt6878_phy_off(const struct mt6878_phy_backend *backend,
 		return tx->bus.first_error;
 	}
 	ret = mt6878_seninf_receiver_off(&backend->io, &tx->bus.plan, &tx->bus);
-	tx->configured = 0;
+	if (!ret)
+		tx->configured = 0;
 	return tx->bus.first_error ? tx->bus.first_error : ret;
 }
 

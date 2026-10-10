@@ -8,7 +8,7 @@ diff --git a/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy.h b/driver
 new file mode 100644
 --- /dev/null
 +++ b/drivers/media/platform/mediatek/seninf/mt6878-seninf-phy.h
-@@ -0,0 +1,241 @@
+@@ -0,0 +1,242 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#ifndef MT6878_SENINF_PHY_H
 +#define MT6878_SENINF_PHY_H
@@ -245,7 +245,8 @@ new file mode 100644
 +		return tx->bus.first_error;
 +	}
 +	ret = mt6878_seninf_receiver_off(&backend->io, &tx->bus.plan, &tx->bus);
-+	tx->configured = 0;
++	if (!ret)
++		tx->configured = 0;
 +	return tx->bus.first_error ? tx->bus.first_error : ret;
 +}
 +

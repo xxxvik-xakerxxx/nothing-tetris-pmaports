@@ -9,6 +9,8 @@ source-derived native stop acknowledgement and bounded parent reap. It does not
 start Android mnld or implement another NMEA parser. Native sanitizer fixtures
 and the complete Bionic ARM64 link passed
 [CI 38025448174](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025448174).
+Actual stock-code stop/join and mapped-library association fault checks also
+passed [CI 38025485686](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025485686).
 Configuration/calibration and the slot6 assistance receiver/response contract
 remain missing; no engine initialization or position-fix success is claimed.
 See [native integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).

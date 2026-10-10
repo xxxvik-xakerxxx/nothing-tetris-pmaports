@@ -162,17 +162,26 @@ passed the actual signed stock input, 37 bootstrap and 20 EMI sanitizer cases.
 The initial EMI fixture failure was a wrong CONSYS field offset, corrected
 without weakening the check. [U-Boot CI 38025178952](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38025178952)
 passed actual ARM64 bootstrap/secure/EMI sources and the full image at `a0f6855512`.
-The old bootstrap EMI phase still needs replacement, real bank remaps and the
-authenticated allocation lifetime must be connected. These objects have no
-active board caller; physical startup and SIM/calls remain unavailable. The
+The linked boot candidate now replaces the old EMI phase, derives metadata
+before authenticated-source release, retains separate aligned NC/cache banks,
+and verifies the stock remap readbacks before power/BROM completion.
+[CI 38026075076](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026075076)
+passed 41 integrated-bootstrap and 17 allocation-lifetime sanitizer cases,
+alongside the signed-input, 37 earlier bootstrap and 20 EMI cases. Integration
+into the actual loader and CCCI handoff is still pending. No active board
+caller exists; physical startup and SIM/calls remain unavailable. The
 installed loader remains `d385921`. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
 The camera platform consumer adds four source-derived IRQ handlers, native
 media-pipeline ownership, runtime-PM/clock references and controller-context
-stop. IRQ drain occurs outside the vb2 mutex. CAM_MAIN/SMI reset, calibrated
-SENINF/CAMMUX and TG/VF shutdown providers are still required; no video node
-is activated. Its two additional ARM64 objects passed the combined CI above. See
+stop. IRQ drain occurs outside the vb2 mutex. The source now includes native
+SMI common31 reset leases, calibration from nvmem/held CSI clock, restricted
+RAW/PDAF SENINF/CAMMUX routing and TG/VF shutdown. Combined native faults and
+26 actual ARM64 objects are the next CI gate, not hardware capture evidence.
+MAC/PHY IRQ, TSREC, allocation and prepared-format lifetime integration remain
+open; no video node is activated. The PHY shutdown helper now retains its
+configured state after failed shutdown and refuses replay. See
 [platform contract](../patches/camera-direct-platform/SOURCE-CONTRACT.md).
 
 ## Project rules

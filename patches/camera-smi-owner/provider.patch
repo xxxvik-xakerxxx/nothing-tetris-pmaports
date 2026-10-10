@@ -1,0 +1,46 @@
+diff --git a/drivers/memory/mtk-smi.c b/drivers/memory/mtk-smi.c
+--- a/drivers/memory/mtk-smi.c
++++ b/drivers/memory/mtk-smi.c
+@@ -12,6 +12,7 @@
+ #include <linux/io.h>
+ #include <linux/iopoll.h>
+ #include <linux/module.h>
++#include <linux/mutex.h>
+ #include <linux/of.h>
+ #include <linux/of_platform.h>
+ #include <linux/platform_device.h>
+@@ -149,7 +149,13 @@ struct mtk_smi {
+ 	struct device			*smi_common_dev; /* for sub common */
+ 	const struct mtk_smi_common_plat *plat;
++	struct mutex camera_reset_lock;
++	struct device *camera_reset_consumer;
++	u32 camera_reset_mask;
++	int camera_reset_error;
+ };
+ 
++#include "mt6878-smi-camera-reset.inc"
++
+ struct mtk_smi_larb { /* larb: local arbiter */
+ 	struct mtk_smi			smi;
+ 	void __iomem			*base;
+@@ -870,6 +877,10 @@ static int mtk_smi_common_probe(struct platform_device *pdev)
+ 	common->dev = dev;
+ 	common->plat = of_device_get_match_data(dev);
+ 
++	ret = mtk_smi_camera_probe_prepare(pdev, common, &clk_required);
++	if (ret)
++		return ret;
++
+ 	if (common->plat->has_gals) {
+ 		if (common->plat->type == MTK_SMI_GEN2)
+ 			clk_required = MTK_SMI_COM_GALS_REQ_CLK_NR;
+@@ -948,6 +959,9 @@ static int __maybe_unused mtk_smi_common_suspend(struct device *dev)
+ {
+ 	struct mtk_smi *common = dev_get_drvdata(dev);
+ 
++	if (READ_ONCE(common->camera_reset_consumer))
++		return -EBUSY;
++
+ 	clk_bulk_disable_unprepare(common->clk_num, common->clks);
+ 	return 0;
+ }
