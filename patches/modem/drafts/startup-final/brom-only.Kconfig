@@ -1,0 +1,15 @@
+# Review-only fragment. Main owns insertion/build wiring, no defconfig enables it.
+config TETRIS_MODEM_BROM_ONLY
+	bool "Tetris one-attempt cold modem BROM-only experiment"
+	depends on TARGET_MT6878 && LMB && OF_LIBFDT && TETRIS_SCP_SECURITY
+	depends on !TETRIS_MODEM_LOAD_DIAGNOSTIC
+	depends on !TETRIS_MODEM_RESERVE_DIAGNOSTIC
+	depends on !TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC
+	depends on !TETRIS_GPUEB_TRANSFORM_DIAGNOSTIC
+	default n
+	help
+	  Explicit CI diagnostic only. Requires matching stock cold BL2/ATF,
+	  slot A and disabled Linux MD power/preflight/CCCI nodes. Measures the
+	  actual selected UFS boot-LUN GFH and manufacturer-authenticates modem
+	  input before finite EMI/remap/power/BROM sequence. Leaves CCCI descriptor
+	  absent. No SIM readiness claim, automatic retry or default activation.

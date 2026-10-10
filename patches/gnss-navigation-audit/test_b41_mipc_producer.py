@@ -31,7 +31,10 @@ def check(path):
     md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
     def instruction(addr):
         i = next(md.disasm(read(addr, 4), addr))
-        return i.mnemonic, i.op_str
+        # Capstone 4 prints MOVZ, newer releases print its unshifted MOV alias.
+        # Keep exact operands/addresses and the whole-file SHA requirement.
+        mnemonic = "mov" if i.mnemonic == "movz" and "lsl" not in i.op_str else i.mnemonic
+        return mnemonic, i.op_str
     expected = {
         0x7f4c8: ("mov", "w0, #0x2710"),
         0x7f4a8: ("add", "x0, x0, #0x7b8"),

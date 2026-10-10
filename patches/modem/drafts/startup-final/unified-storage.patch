@@ -1,0 +1,115 @@
+diff --git a/board/mediatek/mt6878/tetris_modem_storage.h b/board/mediatek/mt6878/tetris_modem_storage.h
+--- a/board/mediatek/mt6878/tetris_modem_storage.h
++++ b/board/mediatek/mt6878/tetris_modem_storage.h
+@@ -6,6 +6,16 @@
+ #include "tetris_modem_emi_rows.h"
+ 
+ struct blk_desc;
++/* Same private authenticated snapshot transaction as legacy rows API.
++ * All metadata, including signed footer, commits after release/cache sync.
++ */
++int tetris_modem_load_slot_handoff_b41(struct blk_desc *dev, char slot,
++		const unsigned char root_pin[32], const struct tetris_scp_security_ops *ops,
++		void *destination, size_t capacity, unsigned int ccb_gear,
++		const char *phy_gear, const unsigned char preloader_sha256[32],
++		const struct tetris_modem_emi_resources *resources,
++		struct tetris_modem_boot_plan *plan,
++		struct tetris_modem_emi_rows *rows, unsigned char check_header[512]);
+ /* Cache pointer-free EMI metadata BEFORE snapshot release. Actual resources
+  * and resolved options belong to the load owner. All output follows successful
+  * staging release and payload cache synchronization. No execution/board hook.
+diff --git a/board/mediatek/mt6878/tetris_modem_storage.c b/board/mediatek/mt6878/tetris_modem_storage.c
+--- a/board/mediatek/mt6878/tetris_modem_storage.c
++++ b/board/mediatek/mt6878/tetris_modem_storage.c
+@@ -380,7 +380,7 @@
+ 	return 0;
+ }
+ 
+-int tetris_modem_load_slot_rows_b41(struct blk_desc *dev, char slot,
++static int load_slot_owned(struct blk_desc *dev, char slot,
+ 		const unsigned char root_pin[32],
+ 		const struct tetris_scp_security_ops *ops,
+ 		void *destination, size_t capacity, unsigned int ccb_gear,
+@@ -388,7 +388,7 @@
+ 		const char *phy_gear, const unsigned char preloader_sha256[32],
+ 		const struct tetris_modem_emi_resources *resources,
+ 		struct tetris_modem_boot_plan *plan,
+-		struct tetris_modem_emi_rows *rows)
++		struct tetris_modem_emi_rows *rows, unsigned char *check_header)
+ {
+ 	const struct tetris_modem_cache_ops cache = { .flush = flush_payload };
+ 	struct staging_allocation allocation = { 0 };
+@@ -397,6 +397,7 @@
+ 	struct tetris_modem_prepared_bundle prepared;
+ 	struct tetris_modem_boot_plan loaded;
+ 	struct tetris_modem_emi_rows produced;
++	unsigned char footer[512];
+ 	const unsigned char *source;
+ 	void *buffer = NULL;
+ 	size_t bytes, used;
+@@ -409,6 +410,10 @@
+ 	    !separate(destination, capacity, plan, sizeof(*plan)) ||
+ 	    !separate(destination, capacity, rows, sizeof(*rows)) ||
+ 	    !separate(plan, sizeof(*plan), rows, sizeof(*rows)) ||
++	    (check_header &&
++	     (!separate(destination, capacity, check_header, 512) ||
++	      !separate(plan, sizeof(*plan), check_header, 512) ||
++	      !separate(rows, sizeof(*rows), check_header, 512))) ||
+ 	    (((unsigned long)destination | capacity) & (ARCH_DMA_MINALIGN - 1)))
+ 		return -EINVAL;
+ 	ret = slot_storage(dev, slot, &storage);
+@@ -425,7 +430,8 @@
+ 	/* Storage DMA cannot alias destination or either published output. */
+ 	if (!separate(buffer, bytes, destination, capacity) ||
+ 	    !separate(buffer, bytes, plan, sizeof(*plan)) ||
+-	    !separate(buffer, bytes, rows, sizeof(*rows))) {
++	    !separate(buffer, bytes, rows, sizeof(*rows)) ||
++	    (check_header && !separate(buffer, bytes, check_header, 512))) {
+ 		ret = -EINVAL;
+ 		goto release;
+ 	}
+@@ -449,6 +455,9 @@
+ 		resources, ccb_gear, phy_gear, preloader_sha256, &produced);
+ 	if (ret)
+ 		goto release;
++	if (check_header)
++		memcpy(footer, source + prepared.bundle.members[0].payload_offset +
++			prepared.bundle.layout.rom_size - 512, 512);
+ 	loaded.layout = prepared.bundle.layout;
+ 	loaded.smem_inputs = prepared.smem_inputs;
+ 	loaded.smem = prepared.smem;
+@@ -477,6 +486,33 @@
+ 		return ret;
+ 	*plan = loaded;
+ 	*rows = produced;
++	if (check_header)
++		memcpy(check_header, footer, 512);
++	return 0;
++}
++
++int tetris_modem_load_slot_rows_b41(struct blk_desc *dev, char slot,
++		const unsigned char root_pin[32], const struct tetris_scp_security_ops *ops,
++		void *destination, size_t capacity, unsigned int ccb_gear,
++		const char *phy_gear, const unsigned char preloader_sha256[32],
++		const struct tetris_modem_emi_resources *resources,
++		struct tetris_modem_boot_plan *plan, struct tetris_modem_emi_rows *rows)
++{
++	return load_slot_owned(dev, slot, root_pin, ops, destination, capacity,
++		ccb_gear, phy_gear, preloader_sha256, resources, plan, rows, NULL);
++}
++
++int tetris_modem_load_slot_handoff_b41(struct blk_desc *dev, char slot,
++		const unsigned char root_pin[32], const struct tetris_scp_security_ops *ops,
++		void *destination, size_t capacity, unsigned int ccb_gear,
++		const char *phy_gear, const unsigned char preloader_sha256[32],
++		const struct tetris_modem_emi_resources *resources,
++		struct tetris_modem_boot_plan *plan, struct tetris_modem_emi_rows *rows,
++		unsigned char check_header[512])
++{
++	if (!check_header)
++		return -EINVAL;
++	return load_slot_owned(dev, slot, root_pin, ops, destination, capacity,
++		ccb_gear, phy_gear, preloader_sha256, resources, plan, rows, check_header);
+-	return 0;
+ }
+ #endif
