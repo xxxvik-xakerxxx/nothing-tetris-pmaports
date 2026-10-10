@@ -262,7 +262,7 @@ static void native_video_last_close_race(struct kunit *test)
 	for (i = 0; i < 2; i++)
 		get_device(&v->nodes[i].vdev.dev);
 	v4l2_fh_init(fh, &v->nodes[0].vdev);
-	v4l2_fh_add(fh);
+	v4l2_fh_add(fh, &file);
 	file.private_data = fh;
 	inode.i_rdev = MKDEV(VIDEO_MAJOR, v->nodes[0].vdev.minor);
 	v->nodes[0].queue.owner = fh;

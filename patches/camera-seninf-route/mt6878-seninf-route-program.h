@@ -141,17 +141,17 @@ static inline int mt6878_route_setup(const struct mt6878_seninf_backend *io,
 	if (!ret) \
 		ret = mt6878_seninf_update(io, &tx->bus, region, off, mask, value); \
 } while (0)
-#define WRITE(region, off, value) do { \
+#define TETRIS_ROUTE_WRITE(region, off, value) do { \
 	if (!ret) \
 		ret = mt6878_route_write(io, &tx->bus, region, off, value); \
 } while (0)
 	for (i = 0; i < 8; i++)
-		WRITE(MT6878_SENINF_BASE, b + 0x20 + i * 4, 0);
+		TETRIS_ROUTE_WRITE(MT6878_SENINF_BASE, b + 0x20 + i * 4, 0);
 	for (i = 0; i < 4; i++)
-		WRITE(MT6878_SENINF_BASE, b + 0x60 + i * 4, 0);
+		TETRIS_ROUTE_WRITE(MT6878_SENINF_BASE, b + 0x60 + i * 4, 0);
 	/* Preserve the vendor duplicate FORCEDT0 clear (not FORCEDT1). */
-	WRITE(MT6878_SENINF_ANALOG, mac + 0x110, 0);
-	WRITE(MT6878_SENINF_ANALOG, mac + 0x110, 0);
+	TETRIS_ROUTE_WRITE(MT6878_SENINF_ANALOG, mac + 0x110, 0);
+	TETRIS_ROUTE_WRITE(MT6878_SENINF_ANALOG, mac + 0x110, 0);
 	UPDATE(MT6878_SENINF_ANALOG, mac + 0x104, 0x3f000000, 0x2e000000);
 	UPDATE(MT6878_SENINF_ANALOG, mac + 0x104, 0x003f0000, 0x002d0000);
 	UPDATE(MT6878_SENINF_ANALOG, mac + 0x104, 0x00003f00, 0x00002c00);
@@ -188,7 +188,7 @@ static inline int mt6878_route_setup(const struct mt6878_seninf_backend *io,
 			return mt6878_seninf_error(&tx->bus, ret);
 	}
 #undef UPDATE
-#undef WRITE
+#undef TETRIS_ROUTE_WRITE
 	tx->configured = 1;
 	return 0;
 }
