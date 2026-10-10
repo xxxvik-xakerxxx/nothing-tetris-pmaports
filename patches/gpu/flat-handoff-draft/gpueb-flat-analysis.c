@@ -79,8 +79,8 @@ static ssize_t flat_read(struct file *file, char __user *out, size_t count,
 
 static const struct file_operations flat_fops = {
 	.owner = THIS_MODULE,
+	.open = nonseekable_open,
 	.read = flat_read,
-	.llseek = no_llseek,
 };
 
 static int flat_probe(struct platform_device *pdev)

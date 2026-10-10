@@ -30,7 +30,8 @@ set -- -std=gnu11 -g -O1 -fPIC -fsanitize=address,undefined -fno-omit-frame-poin
 for source in "$TETRIS_UBOOT_TREE/lib/asn1_decoder.c" "$out/tetris_scp_fields.asn1.c"; do
     name=$(basename "${source%.c}")
     "$cc" "$@" -Wno-unused-but-set-variable -Wno-unused-variable \
-        -Wno-unused-parameter -Wno-implicit-fallthrough -c "$source" -o "$out/$name.o"
+        -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-sign-compare \
+        -c "$source" -o "$out/$name.o"
 done
 for source in "$board/tetris_scp_security.c" "$board/tetris_scp_crypto.c" \
     "$board/tetris_gpueb_layout.c" "$dir/test-native.c" "$dir/tetris_gpueb_flat_publish.c"; do
