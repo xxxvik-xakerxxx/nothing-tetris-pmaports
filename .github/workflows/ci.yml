@@ -205,6 +205,9 @@ jobs:
             --modules-repo upstream/connectivity-modules
           sh patches/camera-seninf/run-phy-tests.sh
           sh patches/camera-seninf-route/run-tests.sh
+          python3 patches/camera-seninf-controller/generate-lifecycle.py --check
+          python3 patches/camera-native-capture/generate-pm-overlay.py --check
+          sh patches/camera-seninf-controller/run-tests.sh
       - name: Validate CAMSV DMA and composer handoff
         id: camera_transport_candidate
         continue-on-error: true

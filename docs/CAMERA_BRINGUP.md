@@ -16,11 +16,23 @@ after correcting the route caller's PHY argument order.
 The packaged PHY helper preserves configured state on failed shutdown, with
 every off-fault and refusal-to-replay covered by its CI fixture.
 
-Real MAC/PHY IRQ and TSREC consumers, shared mux allocation, prepared ACTIVE
-format exclusion and complete failed-stop lifetime still block activation.
+The next isolated closure now includes real MAC/PHY IRQ handling, TSREC
+shutdown, shared mux allocation, native ACTIVE-format exclusion, Linux-provider
+SENINF PM and concrete probe/frame/retirement integration. Failed stream-on
+has a separate owned abort: actual IRQ drain and sensor cleanup must precede
+route disconnect; Linux core's EALREADY is never shutdown proof. The complete
+48-source camera closure is staged with all 33 ARM64 objects, including the
+packaged GPU analysis consumer, SMI provider and two camera KUnit objects.
+Its native event fixtures and ARM64 compilation are pending CI; KUnit object
+compilation does not execute the kernel fixtures.
+
+Root video/vb2 registration, the complete clock/regulator/nvmem supplier DT,
+CAM_MAIN mapping ownership and removal lifetime still block activation.
+These new camera overlays are CI-only, not enabled in the phone's DT or package.
 No preview, capture or successful camera support is claimed. See the
 [route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
-[native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md).
+[native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md), plus
+[native PM/capture integration](../patches/camera-native-capture/SOURCE-CONTRACT.md).
 
 ## Earlier Evidence
 

@@ -1,0 +1,100 @@
+--- a/mt6878-seninf-graph.c
++++ b/mt6878-seninf-graph.c
+@@ -14,6 +14,7 @@
+ #include <media/v4l2-fwnode.h>
+ 
+ #include "mt6878-seninf-contract.h"
++#include "mt6878-seninf-controller.h"
+ 
+ enum { SENINF_SINK, SENINF_SOURCE, SENINF_PADS };
+ 
+@@ -73,6 +74,9 @@
+ 
+ 	if (format->pad >= SENINF_PADS || format->stream)
+ 		return -EINVAL;
++	if (format->which == V4L2_SUBDEV_FORMAT_ACTIVE &&
++	    media_entity_pipeline(&sd->entity))
++		return -EBUSY;
+ 	sink = v4l2_subdev_state_get_format(state, SENINF_SINK);
+ 	if (format->pad == SENINF_SINK) {
+ 		if (format->format.code != MEDIA_BUS_FMT_SRGGB10_1X10 ||
+@@ -228,19 +232,15 @@
+ 	.unbind = mt6878_seninf_unbound,
+ };
+ 
+-static int mt6878_seninf_stream(struct v4l2_subdev *sd, int enable)
+-{
+-	/* Do not forward stream-on to a sensor without PHY/mux/DMA programming. */
+-	return enable ? -EOPNOTSUPP : 0;
+-}
+-
+ static const struct v4l2_subdev_pad_ops mt6878_seninf_pad_ops = {
++	.enable_streams = mt6878_seninf_controller_enable,
++	.disable_streams = mt6878_seninf_controller_disable,
+ 	.get_fmt = v4l2_subdev_get_fmt,
+ 	.set_fmt = mt6878_seninf_set_format,
+ };
+ 
+ static const struct v4l2_subdev_video_ops mt6878_seninf_video_ops = {
+-	.s_stream = mt6878_seninf_stream,
++	.s_stream = v4l2_subdev_s_stream_helper,
+ };
+ 
+ static const struct v4l2_subdev_ops mt6878_seninf_ops = {
+--- a/mt6878-seninf-route.c
++++ b/mt6878-seninf-route.c
+@@ -129,7 +129,7 @@
+ 		ret = route_sensor(r, p);
+ 	if (ret)
+ 		return ret;
+-	ret = v4l2_subdev_call(r->sensor, video, s_stream, 0);
++	ret = v4l2_subdev_call(r->sensor, core, s_power, 0);
+ 	if (ret)
+ 		return route_error(r, ret);
+ 	r->source_stopped = true;
+--- a/mt6878-camsv-platform.c
++++ b/mt6878-camsv-platform.c
+@@ -118,11 +118,11 @@
+ 	attempted = d->pair.tx.hw_attempted;
+ 	mutex_unlock(&d->lock);
+ 	if (p->powered && attempted) {
+-		ret = v4l2_subdev_call(p->sensor, video, s_stream, 0);
++		/* Receiver owns native sensor stop and SENINF IRQ/route retirement.
++		 * Native disable retains enabled stream state on an actual failure.
++		 */
++		ret = v4l2_subdev_disable_streams(p->receiver, 1, 1);
+ 		if (ret)
+-			first = ret;
+-		ret = v4l2_subdev_call(p->receiver, video, s_stream, 0);
+-		if (ret && !first)
+ 			first = ret;
+ 	}
+ 	mutex_lock(&d->lock);
+--- a/mt6878-camsv-hardware.c
++++ b/mt6878-camsv-hardware.c
+@@ -9,6 +9,7 @@
+ #include <linux/slab.h>
+ #include <linux/unaligned.h>
+ #include "mt6878-camsv-hardware.h"
++#include "mt6878-seninf-controller.h"
+ 
+ /* Pinned e96 mtk_cam-sv-regs.h and ee2 drivers/memory/mtk-smi.c. */
+ #define CAM_MAIN_RESET 0x0058
+@@ -75,15 +76,9 @@
+ 				return -ENXIO;
+ 		return 0;
+ 	case MT6878_SV_ROUTE:
+-		/* Graph-only SENINF has no native stream/VC/CAMMUX programming owner.
+-		 * A PHY transaction alone cannot prove those distinct destinations.
+-		 */
+-		return -ENOLINK;
+ 	case MT6878_SV_STOPPED:
+-		/* No standard legacy s_stream getter proves sensor/CAMMUX OFF. Do not
+-		 * translate platform.drained or TG readback into complete route-off.
+-		 */
+-		return -ENOLINK;
++		return mt6878_seninf_controller_gate(
++			v4l2_get_subdev_hostdata(p->receiver), gate, job);
+ 	case MT6878_SV_COMPOSER:
+ 		return -EOPNOTSUPP; /* Frozen direct supplies its actual CQ producer. */
+ 	}

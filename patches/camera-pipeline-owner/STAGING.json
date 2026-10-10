@@ -39,7 +39,17 @@
     "patches/camera-seninf-route/mt6878-seninf-route.c",
     "patches/camera-seninf-route/mt6878-seninf-route.h",
     "patches/camera-seninf-route/mt6878-seninf-route-program.h",
-    "patches/camera-seninf-route/route-smoke.c"
+    "patches/camera-seninf-route/route-smoke.c",
+    "patches/camera-seninf-controller/mt6878-seninf-controller.c",
+    "patches/camera-seninf-controller/mt6878-seninf-controller.h",
+    "patches/camera-seninf-controller/mt6878-seninf-events.h",
+    "patches/camera-seninf-controller/controller-smoke.c",
+    "patches/camera-native-capture/mt6878-seninf-pm.c",
+    "patches/camera-native-capture/mt6878-seninf-pm.h",
+    "patches/camera-native-capture/mt6878-native-capture.c",
+    "patches/camera-native-capture/mt6878-native-capture.h",
+    "patches/camera-native-capture/native-smoke.c",
+    "patches/camera-native-capture/failed-start-test.c"
   ],
   "objects": [
     "mt6878-camera-pipeline-owner.o",
@@ -55,7 +65,13 @@
     "hardware-smoke.o",
     "smi-backend.o",
     "mt6878-seninf-route.o",
-    "route-smoke.o"
+    "route-smoke.o",
+    "mt6878-seninf-controller.o",
+    "controller-smoke.o",
+    "mt6878-seninf-pm.o",
+    "mt6878-native-capture.o",
+    "native-smoke.o",
+    "failed-start-test.o"
   ],
   "fault_object": "owner-kunit.o",
   "required_enabled": [

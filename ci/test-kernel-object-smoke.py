@@ -85,7 +85,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 20)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 26)
         self.assertEqual(smoke.PROVIDER_OBJECTS, ("drivers/memory/mtk-smi.o",))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
@@ -105,6 +105,39 @@ class SmokeInputs(unittest.TestCase):
         consumer = "\n".join(line[1:] for line in lines) + "\n"
         self.assertEqual(consumer, (root / "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text())
         self.assertIn("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m", (package / smoke.CONFIG).read_text())
+
+    def camera_overlay_fixture(self):
+        root = Path(__file__).resolve().parents[1]
+        smoke.stage_research_sources(self.package, root)
+        graph = self.package / smoke.CAMERA_GRAPH
+        graph.parent.mkdir(parents=True, exist_ok=True)
+        graph.write_bytes((root / "patches/camera-seninf/mt6878-seninf-graph.c").read_bytes())
+        spec = importlib.util.spec_from_file_location("lifecycle", root / "patches/camera-seninf-controller/generate-lifecycle.py")
+        lifecycle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lifecycle)
+        sensor = self.package / "drivers/media/i2c/imx882-tetris-stream.c"
+        sensor.parent.mkdir(parents=True)
+        sensor.write_text(lifecycle.sensor_source())
+        return root, graph, sensor
+
+    def test_native_camera_overlays_keep_production_graph_target(self):
+        root, graph, sensor = self.camera_overlay_fixture()
+        smoke.stage_camera_overlays(self.package, root)
+        self.assertIn("mt6878_seninf_pm_resume", graph.read_text())
+        self.assertIn("imx882_enable_streams", sensor.read_text())
+        destination = self.package / Path(next(iter(smoke.CAMERA_SOURCES.values()))).parent
+        self.assertFalse((destination / graph.name).exists())
+        self.assertIn("mt6878_native_capture_receiver_stop", (destination / "mt6878-camsv-platform.c").read_text())
+
+    def test_failed_overlay_does_not_publish_partial_graph(self):
+        root, graph, _ = self.camera_overlay_fixture()
+        original = graph.read_text().replace('#include "mt6878-seninf-contract.h"', '#include "stale-contract.h"')
+        graph.write_text(original)
+        with self.assertRaises(smoke.subprocess.CalledProcessError):
+            smoke.stage_camera_overlays(self.package, root)
+        self.assertEqual(graph.read_text(), original)
+        destination = self.package / Path(next(iter(smoke.CAMERA_SOURCES.values()))).parent
+        self.assertFalse((destination / graph.name).exists())
 
     def test_research_collision_fails_before_copying_other_sources(self):
         root = Path(__file__).resolve().parents[1]

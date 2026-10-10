@@ -63,6 +63,12 @@ RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878_md_pss32",
 ))
 CAMERA_MANIFEST = "patches/camera-pipeline-owner/STAGING.json"
+CAMERA_GRAPH = "drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.c"
+CAMERA_REVIEW_PATCHES = (
+    "patches/camera-seninf-controller/imx882-native-streams.patch",
+    "patches/camera-seninf-controller/native-bind.patch",
+    "patches/camera-native-capture/native-pm.patch",
+)
 
 
 def camera_staging(root):
@@ -168,6 +174,26 @@ def stage_research_sources(kernel, root=Path(".")):
         (kernel / directory / "Makefile").write_text("obj-y += " + " ".join(names) + "\n")
 
 
+def stage_camera_overlays(kernel, root=Path(".")):
+    destination = kernel / Path(next(iter(CAMERA_SOURCES.values()))).parent
+    graph = kernel / CAMERA_GRAPH
+    staged = destination / graph.name
+    if not graph.is_file() or staged.exists():
+        raise ValueError("camera overlay requires unique packaged graph source")
+    # Basename overlays share the isolated closure; keep the graph's production
+    # Kbuild target, never introduce a duplicate object or replace parent Kbuild.
+    shutil.copyfile(graph, staged)
+    try:
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
+             "-i", (root / CAMERA_REVIEW_PATCHES[0]).resolve()])
+        for name in CAMERA_REVIEW_PATCHES[1:]:
+            run(["patch", "--batch", "--fuzz=0", "-p1", "-d", destination,
+                 "-i", (root / name).resolve()])
+        shutil.copyfile(staged, graph)
+    finally:
+        staged.unlink()
+
+
 def object_identity(target):
     with target.open("rb") as stream:
         magic = stream.read(4)
@@ -205,6 +231,8 @@ def main():
             Path(CAMERA_MANIFEST).read_bytes()).hexdigest()
         manifest["research_source_sha256"][PROVIDER_PATCH] = hashlib.sha256(
             Path(PROVIDER_PATCH).read_bytes()).hexdigest()
+        for name in CAMERA_REVIEW_PATCHES:
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -237,6 +265,8 @@ def main():
         stage_research_sources(kernel)
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(PROVIDER_PATCH).resolve()])
+        stage_camera_overlays(kernel)
+        manifest["derived_camera_graph_sha256"] = hashlib.sha256((kernel / CAMERA_GRAPH).read_bytes()).hexdigest()
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
@@ -248,6 +278,9 @@ def main():
         options.extend(["-m", symbol])
     run(options)
     make = ["make", "-C", kernel, f"O={output}", "ARCH=arm64", "LLVM=1", "-j4"]
+    if args.research_owners:
+        camera_dir = Path(next(iter(CAMERA_SOURCES.values()))).parent
+        make.append(f"KCFLAGS=-I{kernel / camera_dir}")
     run([*make, "olddefconfig"])
     shutil.copyfile(output / ".config", report / "isolated.config")
     config = (output / ".config").read_text().splitlines()

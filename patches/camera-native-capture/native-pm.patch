@@ -1,0 +1,188 @@
+--- a/mt6878-seninf-graph.c
++++ b/mt6878-seninf-graph.c
+@@ -15,6 +15,8 @@
+ 
+ #include "mt6878-seninf-contract.h"
+ #include "mt6878-seninf-controller.h"
++#include "mt6878-seninf-pm.h"
++#include "mt6878-native-capture.h"
+ 
+ enum { SENINF_SINK, SENINF_SOURCE, SENINF_PADS };
+ 
+@@ -46,6 +48,7 @@
+ 	void __iomem *analog;
+ 	int irq, tsrec_irq;
+ 	unsigned int csi_port;
++	struct mt6878_seninf_pm native_pm;
+ };
+ 
+ static struct mt6878_seninf *to_seninf(struct v4l2_subdev *sd)
+@@ -356,6 +359,11 @@
+ 		if (ret)
+ 			return ret;
+ 	}
++	ret = mt6878_seninf_pm_init(&receiver->native_pm, dev,
++		receiver->domains, receiver->clocks, ARRAY_SIZE(receiver->clocks),
++		receiver->vcore, receiver->csi_port);
++	if (ret)
++		return dev_err_probe(dev, ret, "SENINF PM providers unavailable\n");
+ 	endpoint = fwnode_graph_get_endpoint_by_id(dev_fwnode(dev), SENINF_SINK, 0, 0);
+ 	if (!endpoint)
+ 		return -EINVAL;
+@@ -437,7 +445,7 @@
+ 		goto unregister_notifier;
+ 	}
+ 	fwnode_handle_put(endpoint);
+-	dev_info(dev, "resource/graph candidate registered; hardware streaming unavailable\n");
++	dev_info(dev, "native SENINF candidate registered; activation remains board-gated\n");
+ 	return 0;
+ unregister_notifier:
+ 	v4l2_async_nf_unregister(&receiver->notifier);
+@@ -453,6 +461,32 @@
+ 	return ret;
+ }
+ 
++int mt6878_seninf_native_bind(struct mt6878_seninf_controller *c,
++	struct mt6878_camsv_platform *capture)
++{
++	struct mt6878_seninf *receiver;
++
++	if (!capture || !capture->receiver || !capture->origin ||
++	    capture->receiver->ops != &mt6878_seninf_ops)
++		return -EINVAL;
++	receiver = to_seninf(capture->receiver);
++	if (receiver->sensor != capture->sensor ||
++	    receiver->sensor_pad != capture->origin->index)
++		return -ENOLINK;
++	return mt6878_seninf_controller_bind(c, to_platform_device(receiver->sd.dev),
++		capture, receiver->base, receiver->analog, receiver->clocks,
++		ARRAY_SIZE(receiver->clocks), receiver->domains, receiver->vcore,
++		receiver->clocks[3 + receiver->csi_port].clk, &receiver->cphy,
++		receiver->sensor_pad);
++}
++
++void __iomem *mt6878_seninf_native_base(struct v4l2_subdev *sd)
++{
++	if (!sd || sd->ops != &mt6878_seninf_ops)
++		return NULL;
++	return to_seninf(sd)->base;
++}
++
+ static void mt6878_seninf_remove(struct platform_device *pdev)
+ {
+ 	struct mt6878_seninf *receiver = platform_get_drvdata(pdev);
+@@ -467,13 +501,19 @@
+ 
+ static int mt6878_seninf_runtime_resume(struct device *dev)
+ {
+-	/* The graph skeleton cannot power a PHY without audited DVFS/mux logic. */
+-	return -EOPNOTSUPP;
++	struct mt6878_seninf *receiver = dev_get_drvdata(dev);
++
++	return mt6878_seninf_pm_resume(&receiver->native_pm);
+ }
+ 
+ static int mt6878_seninf_runtime_suspend(struct device *dev)
+ {
+-	return 0;
++	struct mt6878_seninf *receiver = dev_get_drvdata(dev);
++
++	/* Allocated controller retains the PM usage ref through failed cleanup. */
++	if (v4l2_get_subdev_hostdata(&receiver->sd))
++		return -EBUSY;
++	return mt6878_seninf_pm_suspend(&receiver->native_pm);
+ }
+ 
+ static const struct dev_pm_ops mt6878_seninf_pm = {
+@@ -492,6 +532,7 @@
+ 	.remove = mt6878_seninf_remove,
+ 	.driver = {
+ 		.name = "mt6878-seninf-graph",
++		.suppress_bind_attrs = true,
+ 		.of_match_table = mt6878_seninf_match,
+ 		.pm = pm_ptr(&mt6878_seninf_pm),
+ 	},
+--- a/mt6878-seninf-controller.c
++++ b/mt6878-seninf-controller.c
+@@ -22,9 +22,14 @@
+ 	if (!pm_runtime_active(&c->pdev->dev) || !c->capture->powered ||
+ 	    !pm_runtime_active(c->domains[0]) || !pm_runtime_active(c->domains[1]))
+ 		return -EHOSTDOWN;
+-	for (i = 0; i < c->num_clocks; i++)
++	/* Vendor enables CAM gates, CAMTM and selected CSI, not unused muxes
++	 * or all possible PLL sources. The selected mux holds its parent ref.
++	 */
++	for (i = 0; i < 3; i++)
+ 		if (!__clk_is_enabled(c->clocks[i].clk))
+ 			return -EHOSTDOWN;
++	if (!__clk_is_enabled(c->clocks[7].clk) || !__clk_is_enabled(c->route.csi_clock))
++		return -EHOSTDOWN;
+ 	/* Exact ee2 DT step0 tuple, but read actual provider metadata/voltage.
+ 	 * This owner does not choose/set a guessed rail or clock rate.
+ 	 */
+@@ -33,7 +38,7 @@
+ 	voltage = regulator_get_voltage(c->vcore);
+ 	if (voltage < 0)
+ 		return voltage;
+-	if (voltage < c->dvfs[5] || voltage > c->dvfs[6])
++	if (voltage < c->dvfs[5])
+ 		return -ERANGE;
+ 	return 0;
+ }
+@@ -118,7 +123,8 @@
+ 		return c->route.phy.configured && c->route.source_stopped ? 0 : -EPIPE;
+ 	if (action == MT6878_RECEIVER_OFF)
+ 		return c->irq_drained && c->route.source_stopped && c->route.route.disconnected &&
+-			c->capture->direct->pair.tx.quiesced ? 0 : -EBUSY;
++			(!c->capture->direct->pair.tx.hw_attempted ||
++			c->capture->direct->pair.tx.quiesced) ? 0 : -EBUSY;
+ 	return -EOPNOTSUPP;
+ }
+ 
+@@ -148,7 +154,8 @@
+ 	case MT6878_PHY_QUIESCED:
+ 		return c->irq_drained && c->tsrec_disabled &&
+ 			c->capture->drained && c->route.source_stopped &&
+-			c->route.route.disconnected && c->capture->direct->pair.tx.quiesced ? 0 : -EBUSY;
++			c->route.route.disconnected && (!c->capture->direct->pair.tx.hw_attempted ||
++			c->capture->direct->pair.tx.quiesced) ? 0 : -EBUSY;
+ 	}
+ 	return -EINVAL;
+ }
+--- a/mt6878-camsv-platform.c
++++ b/mt6878-camsv-platform.c
+@@ -4,6 +4,7 @@
+ #include <linux/pm_runtime.h>
+ #include <media/media-device.h>
+ #include "mt6878-camsv-platform.h"
++#include "mt6878-native-capture.h"
+ #include "mt6878-camera-irq-registers.h"
+ 
+ /* e96f60dc, mtkcam/camsys/isp7sp/cam/mtk_cam-sv-regs.h. */
+@@ -121,7 +122,7 @@
+ 		/* Receiver owns native sensor stop and SENINF IRQ/route retirement.
+ 		 * Native disable retains enabled stream state on an actual failure.
+ 		 */
+-		ret = v4l2_subdev_disable_streams(p->receiver, 1, 1);
++		ret = mt6878_native_capture_receiver_stop(p);
+ 		if (ret)
+ 			first = ret;
+ 	}
+--- a/mt6878-camsv-platform.h
++++ b/mt6878-camsv-platform.h
+@@ -10,6 +10,7 @@
+ #include "mt6878-camsv-direct.h"
+ 
+ struct mt6878_camsv_platform;
++struct mt6878_native_capture;
+ struct mt6878_camsv_platform_irq {
+ 	struct mt6878_camsv_platform *platform;
+ 	unsigned int index;
+@@ -20,6 +21,7 @@
+  */
+ struct mt6878_camsv_platform {
+ 	struct mt6878_camsv_direct *direct;
++	struct mt6878_native_capture *native_capture;
+ 	struct device *cam_main;
+ 	struct v4l2_subdev *sensor, *receiver;
+ 	struct media_pipeline pipeline;

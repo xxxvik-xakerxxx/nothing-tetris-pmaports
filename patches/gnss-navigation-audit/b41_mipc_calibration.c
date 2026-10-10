@@ -37,7 +37,10 @@ int b41_mipc_calibration_collect(const struct b41_capability_branch *branch,
     struct b41_mipc_calibration result;
     void *request = NULL, *response = NULL;
     uint32_t status;
-    int error, old_cancel;
+    int error;
+#ifndef __BIONIC__
+    int old_cancel;
+#endif
     if (!branch || !out)
         return -EINVAL;
     if (branch->capability[0xcc] != 1)
@@ -45,11 +48,16 @@ int b41_mipc_calibration_collect(const struct b41_capability_branch *branch,
     error = pthread_mutex_trylock(&owner);
     if (error)
         return -error;
+#ifndef __BIONIC__
+    /* Bionic has no pthread cancellation API. Native libc callers disable it
+     * while the process-global OEM owner and request/response are retained.
+     */
     error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancel);
     if (error) {
         pthread_mutex_unlock(&owner);
         return -error;
     }
+#endif
     SETCOM("/dev/ttyCMIPC5");
     mipc_msg_set_timeout_once(10000);
     error = -ENOTCONN;
@@ -90,7 +98,9 @@ cleanup:
     if (!error)
         *out = result;
     pthread_mutex_unlock(&owner);
+#ifndef __BIONIC__
     pthread_setcancelstate(old_cancel, NULL);
+#endif
     return error;
 }
 
