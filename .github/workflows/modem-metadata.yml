@@ -1,0 +1,70 @@
+name: Modem metadata producer and driver
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modem-metadata-candidate
+  cancel-in-progress: false
+
+jobs:
+  producer-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install native fixture dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential python3 p7zip-full
+      - name: Fetch exact vendor and bootloader producers
+        run: |
+          git init out/vendor
+          git -C out/vendor fetch --depth=1 https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git ee2be53cb75670b548948636a0db1d1ff112bf12
+          git init out/uboot
+          git -C out/uboot fetch --depth=1 https://github.com/MT6878-Mainline/u-boot.git 60cd9ade5b999732304f3b755c7dbe3d34307c13
+      - name: Extract only public modem firmware
+        run: python3 ci/extract-stock-modem.py
+      - name: Execute producer to actual import fixtures
+        run: |
+          python3 ci/test-modem-metadata-native.py
+          python3 ci/modem-metadata-native.py --vendor out/vendor --uboot out/uboot
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: modem-metadata-native-evidence
+          path: |
+            out/modem-metadata-native/
+            out/stock-modem/BUILD-MANIFEST.json
+          if-no-files-found: error
+
+  driver-objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install package-matching kernel compiler
+        run: |
+          apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
+            openssl-dev perl python3 patch linux-headers git
+      - name: Fetch exact bootloader planner
+        run: |
+          git init out/uboot
+          git -C out/uboot fetch --depth=1 https://github.com/MT6878-Mainline/u-boot.git 60cd9ade5b999732304f3b755c7dbe3d34307c13
+      - name: Compile actual isolated ARM64 driver stack
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 ci/kernel-object-smoke.py --research-owners
+          python3 patches/modem/drafts/runtime-object-ci/check_objects.py \
+            --metadata --uboot out/uboot
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: modem-metadata-arm64-evidence
+          path: out/kernel-object-smoke/
+          if-no-files-found: error

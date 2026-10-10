@@ -204,19 +204,57 @@ def compile_objects(kernel, output, vendor, manifest, smoke):
     manifest['generated_autoconf_sha256'] = sha(output / 'include/generated/autoconf.h')
 
 
+def stage_metadata(vendor, destination, uboot, manifest, diagnostics):
+    """Optional research overlay; keep the default/shipping stack unchanged."""
+    directory = HERE.parent / 'runtime-metadata'
+    candidate = load('runtime_metadata_objects', directory / 'check_metadata.py')
+    manifest['metadata_review_sha256'] = review(directory)
+    if candidate.layout_model(uboot) != (directory / 'layout_model.h').read_text():
+        raise ValueError('metadata planner differs from pinned U-Boot source')
+    generated, _ = candidate.build(vendor)
+    frozen = (directory / 'runtime-metadata.patch.vendor').read_text()
+    check_generated('runtime-metadata', generated, frozen, diagnostics, manifest)
+    run(['git', 'apply', '--check', '-'], cwd=destination, input=frozen, text=True)
+    run(['git', 'apply', '-'], cwd=destination, input=frozen, text=True)
+    for name in ('handoff.h', 'owned_tags.h', 'metadata_resources.h', 'layout_model.h', 'semantic.h'):
+        target = destination / candidate.PREFIX / name
+        if target.read_bytes() != (directory / name).read_bytes():
+            raise ValueError('staged metadata source drift: ' + name)
+    manifest['metadata_uboot_commit'] = candidate.UBOOT_PIN
+    manifest['overlays_sha256']['runtime-metadata'] = hashlib.sha256(frozen.encode()).hexdigest()
+    manifest['required_defined_symbols'].update({
+        'ccci_util/ccci_util_lib_fo.o': ['mtk_ccci_validate_owned_handoff'],
+        'ccci_util/ccci_util_boot_args.o': ['mtk_ccci_import_owned_tags'],
+    })
+    manifest['compiled_source_sha256'] = {
+        str(path.relative_to(destination)): sha(path)
+        for path in sorted(destination.rglob('*'))
+        if path.is_file() and not path.is_symlink() and
+           (str(path.relative_to(destination)).startswith(PREFIX) or
+            str(path.relative_to(destination)).startswith('include/'))
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plan-only', action='store_true')
     parser.add_argument('--work', type=Path, default=Path('/tmp/tetris-kernel-smoke'))
     parser.add_argument('--vendor', type=Path, help='git source containing the exact vendor commit')
+    parser.add_argument('--metadata', action='store_true', help='compile the isolated metadata overlay too')
+    parser.add_argument('--uboot', type=Path, help='git source containing the metadata producer pin')
     parser.add_argument('--report', type=Path, default=ROOT / 'out/kernel-object-smoke/runtime-objects.json')
     args = parser.parse_args()
     manifest, smoke, package = plan()
+    if args.metadata:
+        manifest['metadata_review_sha256'] = review(HERE.parent / 'runtime-metadata')
+        manifest['scope'] += '; metadata import only, no operational registration or SMEM grant'
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
     if os.environ.get('CI') != 'true' or os.environ.get('GITHUB_ACTIONS') != 'true':
         parser.error('staging and actual C compilation are GitHub CI-only')
+    if args.metadata and not args.uboot:
+        parser.error('--metadata requires --uboot with the exact producer pin')
     work = args.work.resolve()
     kernel = work / f'linux-{manifest["kernel"]["kernel_commit"]}'
     output = work / 'objects'
@@ -250,6 +288,9 @@ def main():
         destination = work / 'runtime-vendor'
         stage_vendor(vendor, destination, package, manifest,
                      args.report.parent / 'runtime-generation-diagnostics')
+        if args.metadata:
+            stage_metadata(vendor, destination, args.uboot.resolve(), manifest,
+                           args.report.parent / 'runtime-generation-diagnostics')
         compile_objects(kernel, output, destination, manifest, smoke)
         manifest['status'] = 'passed'
     except BaseException as failure:

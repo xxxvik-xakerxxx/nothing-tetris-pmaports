@@ -174,6 +174,14 @@ changes require their own check; no physical subsystem is enabled by this run.
   and compiles 64 real ECCCI/CCMNI/util translation units with production
   Kbuild/includes. Actual complete-stack ARM64 compilation passed the current
   combined check; operational linkage and hardware startup remain pending.
+  The new [metadata importer](../patches/modem/drafts/runtime-metadata/README.md)
+  validates the real U-Boot tag chain, full memory layouts and retained no-map
+  reservations before private argument publication. Its isolated
+  `modem-metadata.yml` workflow tests public-stock producer/import round trips
+  under ASan/UBSan and compiles the same 64 real driver objects with that overlay.
+  This new overlay's C checks are pending; the earlier 64-object success does not
+  cover it. It maps only the admitted AP tag buffer, not modem firmware or SMEM,
+  and neither grants protected-memory access nor enables modem registration.
   They are not packaged, automatically called or enabled on the
   phone; physical start, callback/DMA drain and forced removal remain unresolved.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).

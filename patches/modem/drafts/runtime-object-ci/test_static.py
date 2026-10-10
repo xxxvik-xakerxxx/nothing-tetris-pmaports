@@ -9,7 +9,7 @@ import re
 import subprocess
 import tempfile
 import unittest
-from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, check_generated
+from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, stage_metadata, check_generated
 
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
     'android_kernel_device_modules_6.1_nothing_mt6878'))
@@ -156,6 +156,36 @@ class ObjectTests(unittest.TestCase):
     def test_compile_rejected_outside_ci(self):
         env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')
         result = subprocess.run(['python3', '-B', str(HERE / 'check_objects.py')],
+            env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('GitHub CI-only', result.stderr)
+
+    def test_metadata_after_full_stack_without_activation(self):
+        data, _, package = plan()
+        uboot = Path(os.environ.get('TETRIS_UBOOT_TREE', ROOT.parent / 'u-boot-mt6878'))
+        with tempfile.TemporaryDirectory(prefix='metadata-stack-static-') as temp:
+            destination = Path(temp) / 'vendor'
+            with contextlib.redirect_stdout(io.StringIO()):
+                stage_vendor(VENDOR, destination, package, data)
+                stage_metadata(VENDOR, destination, uboot, data, Path(temp) / 'diagnostics')
+            self.assertIn('runtime-metadata', data['overlays_sha256'])
+            self.assertEqual(data['generation_reviews']['runtime-metadata']['status'], 'passed')
+            source = 'ccci_util/ccci_util_lib_fo.o'
+            self.assertIn('mtk_ccci_validate_owned_handoff', data['required_defined_symbols'][source])
+            self.assertIn(PREFIX + 'ccci_util/handoff.h', data['compiled_source_sha256'])
+            self.assertFalse(list(destination.rglob('*.o')))
+            self.assertFalse(list(destination.rglob('*.ko')))
+            candidate = load('metadata_stack_static', HERE.parent / 'runtime-metadata/check_metadata.py')
+            patch, _ = candidate.build(VENDOR)
+            self.assertNotIn('ccci_tetris_register_prepared(', patch)
+
+    def test_metadata_plan_and_compile_rejected_outside_ci(self):
+        env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')
+        result = subprocess.run(['python3', '-B', str(HERE / 'check_objects.py'),
+            '--metadata', '--plan-only'], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('metadata_review_sha256', result.stdout)
+        result = subprocess.run(['python3', '-B', str(HERE / 'check_objects.py'), '--metadata'],
             env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('GitHub CI-only', result.stderr)

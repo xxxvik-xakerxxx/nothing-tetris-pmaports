@@ -1,0 +1,1161 @@
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_boot_args.c b/drivers/misc/mediatek/ccci_util/ccci_util_boot_args.c
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_boot_args.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_boot_args.c
+@@ -13,6 +13,7 @@
+ #include <linux/skbuff.h>
+ #include <linux/of.h>
+ #include <linux/of_fdt.h>
++#include <linux/unaligned.h>
+ 
+ #include "mt-plat/mtk_ccci_common.h"
+ #include "ccci_util_log.h"
+@@ -102,6 +103,10 @@
+ 	return (int)s_args_tbl[idx].val_size;
+ }
+ EXPORT_SYMBOL(mtk_ccci_find_args_val);
++
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include "owned_tags.h"
++#endif
+ 
+ int mtk_ccci_add_new_args(const char key[], unsigned char val[],
+ 				unsigned int val_size, enum args_src source)
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_lib_fo.c b/drivers/misc/mediatek/ccci_util/ccci_util_lib_fo.c
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_lib_fo.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_lib_fo.c
+@@ -783,11 +783,17 @@
+ }
+ 
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include "handoff.h"
++#endif
++
+ static int __init collect_lk_boot_arguments(void)
+ {
+ 	/* Device tree method */
+ 	struct device_node *node = NULL;
+-//	int ret;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	int ret;
++#endif
+ 	unsigned int *raw_ptr;
+ 
+ 	node = of_find_compatible_node(NULL, NULL, "mediatek,mddriver");
+@@ -795,6 +801,13 @@
+ 		CCCI_UTIL_INF_MSG("device node no mediatek,mddriver node\n");
+ 		return -1;
+ 	}
++
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Metadata-only: bypass legacy parser and its protected SMEM maps. */
++	ret = tetris_collect_owned_metadata(node);
++	of_node_put(node);
++	return ret;
++#endif
+ 
+ 	raw_ptr = (unsigned int *)of_get_property(node, "ccci,modem_info_v2",
+ 			NULL);
+@@ -818,9 +831,21 @@
+ _common_process:
+ 	s_g_md_usage_case |= (1 << MD_SYS1);
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = lk_tag_inf_parsing_to_args_table();
++	if (ret)
++		return ret;
++#else
+ 	lk_tag_inf_parsing_to_args_table();
++#endif
+ 	mtk_ccci_dump_md_mem_layout();
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = mtk_ccci_md_smem_layout_init();
++	if (ret)
++		return ret;
++#else
+ 	mtk_ccci_md_smem_layout_init();
++#endif
+ 	md_mem_info_parsing();
+ 	dump_retrieve_info();
+ 	md_chk_hdr_info_parse();
+@@ -1268,6 +1293,11 @@
+ 
+ 	CCCI_UTIL_INF_MSG("%s 0.\n", __func__);
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Do not turn failed owned metadata import into legacy success. */
++	return collect_lk_boot_arguments();
++#endif
++
+ 	if (collect_lk_boot_arguments() == 0) {
+ 		CCCI_UTIL_INF_MSG("using v3.\n");
+ 		return 0;
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.c b/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.c
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.c
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.c
+@@ -30,9 +30,21 @@
+ 
+ static int __init ccci_util_init(void)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	int ret;
++#endif
+ 	ccci_log_init();
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = mtk_ccci_args_key_val_init();
++	if (ret)
++		return ret;
++	ret = ccci_util_fo_init();
++	if (ret)
++		return ret;
++#else
+ 	mtk_ccci_args_key_val_init();
+ 	ccci_util_fo_init();
++#endif
+ 	mtk_ccci_compatible_md_chk_hdr_parsing();
+ 	mtk_ccci_dump_args_info();
+ 	ccci_common_sysfs_init();
+diff --git a/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.h b/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.h
+--- a/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.h
++++ b/drivers/misc/mediatek/ccci_util/ccci_util_lib_main.h
+@@ -311,6 +311,13 @@
+ const char *ccci_get_md_cap_str(unsigned int val);
+ 
+ 
++/* AP-owned coherent tag mapping; no firmware/auth/access grant. */
++#include "metadata_resources.h"
++int mtk_ccci_import_owned_tags(const void __iomem *, unsigned int,
++		unsigned int, unsigned int, const struct tetris_metadata_banks *);
++struct device_node;
++int mtk_ccci_validate_owned_handoff(struct device_node *);
++
+ #define MAX_MD_NUM_AT_LK	(4)
+ 
+ #endif
+diff --git a/drivers/misc/mediatek/ccci_util/handoff.h b/drivers/misc/mediatek/ccci_util/handoff.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/handoff.h
+@@ -0,0 +1,318 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Observed boot result and AP tag reservation, not firmware/NS attestation. */
++#include <linux/of_reserved_mem.h>
++#include <linux/unaligned.h>
++#include <linux/ioport.h>
++#include <asm/page.h>
++#include "metadata_resources.h"
++
++struct tetris_nomap_cover {
++	u64 cursor, end;
++};
++
++static int tetris_nomap_resource(struct resource *resource, void *data)
++{
++	struct tetris_nomap_cover *cover = data;
++
++	/* arm64 request_standard_resources creates these top-level resources
++	 * from NOMAP memblock.memory, not from the reserved_mem catalogue.
++	 * walk_iomem_res_desc clips start/end and preserves flags/parent.
++	 */
++	if (resource->flags != IORESOURCE_MEM || resource->parent != &iomem_resource ||
++	    resource->start != cover->cursor || resource->end < resource->start ||
++	    resource->end >= cover->end)
++		return -EBADMSG;
++	cover->cursor = resource->end + 1;
++	return 0;
++}
++
++static int tetris_retained_nomap(u64 base, u64 capacity)
++{
++	struct tetris_nomap_cover cover;
++	u64 address;
++	int ret;
++
++	if (!capacity || base > U64_MAX - capacity ||
++	    ((base | capacity) & (PAGE_SIZE - 1)) ||
++	    (u64)(phys_addr_t)base != base || (u64)(phys_addr_t)(base + capacity - 1) != base + capacity - 1)
++		return -ERANGE;
++	cover.cursor = base;
++	cover.end = base + capacity;
++	ret = walk_iomem_res_desc(IORES_DESC_NONE, IORESOURCE_MEM, base,
++		cover.end - 1, &cover, tetris_nomap_resource);
++	if (ret || cover.cursor != cover.end)
++		return ret ? ret : -EBADMSG;
++	/* A negative map-memory query alone also accepts holes. Positive full
++	 * resource coverage above is required; then check every retained PFN.
++	 * arm64 exports pfn_is_map_memory and selects ARCH_KEEP_MEMBLOCK, so this
++	 * is usable by modules after init and detects later NOMAP clearing too.
++	 * Plain no-compatible reservations have no init/device release callback.
++	 * No physical memory is read; this is NOT NS/firmware permission evidence.
++	 */
++	for (address = base; address < cover.end; address += PAGE_SIZE) {
++		unsigned long pfn = (unsigned long)(address >> PAGE_SHIFT);
++
++		if ((u64)pfn != address >> PAGE_SHIFT || pfn_is_map_memory(pfn))
++			return -EBADMSG;
++	}
++	return 0;
++}
++
++static int tetris_owned_banks(struct tetris_metadata_banks *out)
++{
++	static const char * const paths[] = {
++		"/reserved-memory/tetris-modem-diagnostic",
++		"/reserved-memory/tetris-modem-boot-nc",
++		"/reserved-memory/tetris-modem-boot-cache",
++		"/reserved-memory/tetris-modem-linux-tags",
++	};
++	static const u64 capacities[] = { 0x20000000, 0x8000000, 0x8000000, 65536 };
++	struct tetris_metadata_banks banks = { 0 };
++	struct tetris_metadata_window *windows[] = {
++		&banks.firmware, &banks.nc, &banks.cache, &banks.tags,
++	};
++	struct device_node *owned[4] = { NULL, NULL, NULL, NULL };
++	struct device_node *parent = NULL, *root = NULL, *child = NULL, *memory = NULL;
++	struct device_node *sib = NULL;
++	const u8 *raw;
++	struct reserved_mem *reserved;
++	unsigned int i, j, seen = 0;
++	int length = 0, offset, ret = -EBADMSG;
++
++	parent = of_find_node_by_path("/reserved-memory");
++	root = of_find_node_by_path("/");
++	if (!root || !parent || !of_find_property(parent, "ranges", &length) || length)
++		goto out;
++	for (i = 0; i < 4; i++) {
++		u64 alignment = i == 3 ? 4096 : 0x2000000;
++
++		owned[i] = of_find_node_by_path(paths[i]);
++		if (!owned[i]) {
++			ret = -ENODATA;
++			goto out;
++		}
++		if (of_n_addr_cells(owned[i]) != 2 || of_n_size_cells(owned[i]) != 2 ||
++		    !of_find_property(owned[i], "no-map", &length) || length ||
++		    of_find_property(owned[i], "reusable", NULL) ||
++		    of_find_property(owned[i], "compatible", NULL))
++			goto out;
++		raw = of_get_property(owned[i], "reg", &length);
++		if (!raw || length != 16)
++			goto out;
++		windows[i]->base = get_unaligned_be64(raw);
++		windows[i]->capacity = get_unaligned_be64(raw + 8);
++		if (!windows[i]->base || (windows[i]->base & (alignment - 1)) ||
++		    windows[i]->capacity != capacities[i] ||
++		    windows[i]->base > U64_MAX - capacities[i] ||
++		    (i < 3 && windows[i]->base + capacities[i] > (1ULL << 35)))
++			goto out;
++		reserved = of_reserved_mem_lookup(owned[i]);
++		if (!reserved || (u64)reserved->base != windows[i]->base ||
++		    (u64)reserved->size != windows[i]->capacity)
++			goto out;
++		ret = tetris_retained_nomap(windows[i]->base, windows[i]->capacity);
++		if (ret)
++			goto out;
++		ret = -EBADMSG;
++	}
++	/* Source allocator rejects all overlapping static reservations, including
++	 * owned-bank aliases and full unused tails. Never adopt service-diagnostic.
++	 */
++	for_each_child_of_node(parent, child) {
++		raw = of_get_property(child, "reg", &length);
++		if (!raw) {
++			if (of_find_property(child, "reg", NULL))
++				goto out;
++			continue; /* source permits Linux dynamic allocations around ours */
++		}
++		if (length <= 0 || length % 16)
++			goto out;
++		for (offset = 0; offset < length; offset += 16) {
++			u64 base = get_unaligned_be64(raw + offset);
++			u64 capacity = get_unaligned_be64(raw + offset + 8);
++
++			if (!capacity || base > U64_MAX - capacity)
++				goto out;
++			for (j = 0; j < 4; j++) {
++				if (child == owned[j])
++					continue;
++				if (base < windows[j]->base + windows[j]->capacity &&
++				    windows[j]->base < base + capacity)
++					goto out;
++			}
++		}
++	}
++	/* find_dram requires all three MD allocations in ONE common DRAM bank.
++	 * Final producer's AP tags may be in another bank, but cannot straddle it.
++	 * This is source data from DT, never the current handset's addresses.
++	 */
++	raw = of_get_property(root, "#address-cells", &length);
++	if (!raw || length != 4 || get_unaligned_be32(raw) != 2)
++		goto out;
++	raw = of_get_property(root, "#size-cells", &length);
++	if (!raw || length != 4 || get_unaligned_be32(raw) != 2)
++		goto out;
++	for_each_node_by_type(memory, "memory") {
++		raw = of_get_property(memory, "reg", &length);
++		if (!raw || length <= 0 || length % 16)
++			goto out;
++		for (offset = 0; offset < length; offset += 16) {
++			u64 base = get_unaligned_be64(raw + offset);
++			u64 capacity = get_unaligned_be64(raw + offset + 8);
++			unsigned int within = 0;
++
++			if (!capacity || base > U64_MAX - capacity)
++				goto out;
++			for (j = 0; j < 4; j++) {
++				if (windows[j]->base >= base && windows[j]->base - base < capacity &&
++				    windows[j]->capacity <= capacity - (windows[j]->base - base))
++					within |= 1U << j;
++			}
++			if ((within & 7) == 7)
++				seen |= 7;
++			seen |= within & 8;
++		}
++	}
++	sib = of_find_node_by_path("/reserved-memory/tetris-modem-boot-sib");
++	if (seen != 15 || sib)
++		goto out;
++	*out = banks;
++	ret = 0;
++out:
++	of_node_put(sib);
++	of_node_put(memory);
++	of_node_put(child);
++	for (i = 0; i < 4; i++)
++		of_node_put(owned[i]);
++	of_node_put(parent);
++	of_node_put(root);
++	return ret;
++}
++
++static int tetris_brom_result(const u8 *raw, int length)
++{
++	static const unsigned int errors[] = { 4, 8, 16, 24, 32 };
++	unsigned int i;
++
++	if (!raw)
++		return -ENODATA;
++	if (length != 80 || get_unaligned_le32(raw) != 1)
++		return -EBADMSG;
++	/* Preserve producer order; positive values are malformed, not errno. */
++	for (i = 0; i < ARRAY_SIZE(errors); i++) {
++		s32 error = (s32)get_unaligned_le32(raw + errors[i]);
++
++		if (error)
++			return error < 0 ? error : -EBADMSG;
++	}
++	if (get_unaligned_le32(raw + 12) != 11 ||
++	    get_unaligned_le32(raw + 20) != 15 ||
++	    get_unaligned_le32(raw + 28) != 0 ||
++	    get_unaligned_le64(raw + 64) != 0x100000001ULL ||
++	    get_unaligned_le64(raw + 72) != 0x100000001ULL)
++		return -EAGAIN;
++	return 0;
++}
++
++static int tetris_descriptor_bytes(const u8 *raw, int length, u64 *base,
++		unsigned int *used)
++{
++	if (!raw)
++		return -ENODATA;
++	if (length != 32)
++		return -EBADMSG;
++	*base = get_unaligned_le64(raw);
++	*used = get_unaligned_le32(raw + 8);
++	if (!*base || (*base & 4095) || *base > U64_MAX - 65536 ||
++	    *used < 21 * 76 || *used > 65536 ||
++	    get_unaligned_le32(raw + 12) || get_unaligned_le32(raw + 16) != 2 ||
++	    get_unaligned_le32(raw + 20) != 21 ||
++	    get_unaligned_le32(raw + 24) || get_unaligned_le32(raw + 28))
++		return -EBADMSG;
++	return 0;
++}
++
++int mtk_ccci_validate_owned_handoff(struct device_node *consumer)
++{
++	static const struct { const char *name; u32 value; } scalars[] = {
++		{ "nothing,modem-brom-preflight-stage", 16 },
++		{ "nothing,modem-brom-preflight-status", 1 },
++		{ "nothing,modem-brom-preflight-error", 0 },
++		{ "nothing,modem-brom-loader-entered", 1 },
++		{ "nothing,modem-brom-publication-error", 0 },
++	};
++	struct device_node *chosen = NULL, *node;
++	struct tetris_metadata_banks banks;
++	const u8 *raw;
++	u64 base;
++	unsigned int used, i;
++	int length = 0, ret, count = 0;
++
++	if (!consumer || !of_device_is_compatible(consumer, "mediatek,mddriver"))
++		return -EINVAL;
++	for_each_compatible_node(node, NULL, "mediatek,mddriver")
++		count++;
++	if (count != 1)
++		return -EEXIST;
++	chosen = of_find_node_by_path("/chosen");
++	raw = of_get_property(chosen, "nothing,modem-brom-report", &length);
++	ret = tetris_brom_result(raw, length);
++	if (ret)
++		goto out;
++	for (i = 0; i < ARRAY_SIZE(scalars); i++) {
++		raw = of_get_property(chosen, scalars[i].name, &length);
++		if (!raw || length != 4 || get_unaligned_be32(raw) != scalars[i].value) {
++			ret = -EBADMSG;
++			goto out;
++		}
++	}
++	if (of_find_property(consumer, "ccci,modem_info", NULL)) {
++		ret = -EPROTONOSUPPORT;
++		goto out;
++	}
++	raw = of_get_property(consumer, "ccci,modem_info_v2", &length);
++	ret = tetris_descriptor_bytes(raw, length, &base, &used);
++	if (ret)
++		goto out;
++	ret = tetris_owned_banks(&banks);
++	if (ret)
++		goto out;
++	ret = banks.tags.base == base ? 0 : -EBADMSG;
++out:
++	of_node_put(chosen);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mtk_ccci_validate_owned_handoff);
++
++static int tetris_collect_owned_metadata(struct device_node *consumer)
++{
++	const u8 *raw;
++	void __iomem *mapped;
++	struct tetris_metadata_banks banks;
++	u64 base;
++	unsigned int used;
++	int length, ret;
++
++	ret = mtk_ccci_validate_owned_handoff(consumer);
++	if (ret)
++		return ret;
++	raw = of_get_property(consumer, "ccci,modem_info_v2", &length);
++	ret = tetris_descriptor_bytes(raw, length, &base, &used);
++	if (ret)
++		return ret;
++	if ((u64)(phys_addr_t)base != base)
++		return -ERANGE;
++	ret = tetris_owned_banks(&banks);
++	if (ret)
++		return ret;
++	if (banks.tags.base != base)
++		return -EBADMSG;
++	/* Map ONLY the source-created, cache-clean AP tag buffer. Never MD RAM. */
++	mapped = ioremap_wc((phys_addr_t)base, 65536);
++	if (!mapped)
++		return -ENOMEM;
++	ret = mtk_ccci_import_owned_tags(mapped, used, 2, 21, &banks);
++	iounmap(mapped);
++	/* No LK_LOAD_MD_EN, SMEM mapping/clearing or FSM READY publication. */
++	return ret;
++}
+diff --git a/drivers/misc/mediatek/ccci_util/layout_model.h b/drivers/misc/mediatek/ccci_util/layout_model.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/layout_model.h
+@@ -0,0 +1,317 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++/* Generated pure layout logic from U-Boot 60cd9ade5b999732304f3b755c7dbe3d34307c13. */
++#ifndef TETRIS_METADATA_LAYOUT_MODEL_H
++#define TETRIS_METADATA_LAYOUT_MODEL_H
++#define TETRIS_MODEM_MAX_BLOCKS 32
++
++struct tetris_modem_layout {
++	unsigned int memory_size;
++	unsigned int logical_image_size;
++	unsigned int rom_size;
++	unsigned int dsp_offset;
++	unsigned int dsp_capacity;
++	unsigned int dsp_size;
++	unsigned int region_count;
++};
++
++struct tetris_modem_block {
++	unsigned int offset;
++	unsigned int size;
++	unsigned int info;
++	unsigned int attributes;
++	unsigned long long physical;
++};
++
++struct tetris_modem_memory_map {
++	unsigned int count;
++	struct tetris_modem_block blocks[TETRIS_MODEM_MAX_BLOCKS];
++};
++
++struct tetris_modem_smem_entry {
++	unsigned int id;
++	unsigned int offset;
++	unsigned int size;
++	unsigned int flags;
++};
++
++struct tetris_modem_smem_inputs {
++	unsigned int drdi_version;
++	unsigned int udc_en;
++	unsigned int consys_size;
++	unsigned int nv_cache_size;
++	unsigned int ccb_gear;
++};
++
++struct tetris_modem_smem_plan {
++	struct tetris_modem_smem_entry nc[18];
++	struct tetris_modem_smem_entry cache[5];
++	unsigned int nc_capacity;
++	unsigned int cache_capacity;
++	unsigned int nc_rows;
++	unsigned int cache_rows;
++};
++
++static unsigned int word(const unsigned char *p)
++{
++	return (unsigned int)p[0] | (unsigned int)p[1] << 8 |
++		(unsigned int)p[2] << 16 | (unsigned int)p[3] << 24;
++}
++
++static int contained(unsigned int offset, unsigned int size, unsigned int total)
++{
++	return size && offset < total && size <= total - offset;
++}
++
++static int annotate(struct tetris_modem_memory_map *map, unsigned int offset,
++		    unsigned int size, unsigned int info, unsigned int attributes)
++{
++	unsigned int i;
++
++	if (!size)
++		return -EINVAL;
++	for (i = 0; i < map->count; i++) {
++		struct tetris_modem_block old = map->blocks[i];
++		struct tetris_modem_block parts[3];
++		unsigned int count = 0, end;
++
++		if (offset < old.offset || offset - old.offset >= old.size)
++			continue;
++		if (size > old.size - (offset - old.offset))
++			return -ERANGE;
++		if (offset == old.offset && size == old.size &&
++		    (old.info & info) == info &&
++		    (old.attributes & attributes) == attributes)
++			return -EINVAL;
++		end = offset + size;
++		if (offset != old.offset) {
++			parts[count] = old;
++			parts[count++].size = offset - old.offset;
++		}
++		parts[count] = old;
++		parts[count].offset = offset;
++		parts[count].size = size;
++		parts[count].info |= info;
++		parts[count++].attributes |= attributes;
++		if (end != old.offset + old.size) {
++			parts[count] = old;
++			parts[count].offset = end;
++			parts[count++].size = old.offset + old.size - end;
++		}
++		if (count - 1 > TETRIS_MODEM_MAX_BLOCKS - map->count)
++			return -E2BIG;
++		memmove(&map->blocks[i + count], &map->blocks[i + 1],
++			(map->count - i - 1) * sizeof(old));
++		memcpy(&map->blocks[i], parts, count * sizeof(old));
++		map->count += count - 1;
++		return 0;
++	}
++	return -ERANGE;
++}
++
++static int smem_place(struct tetris_modem_smem_entry *entries,
++		      const unsigned int *alignments, unsigned int count,
++		      unsigned int limit, unsigned int *capacity, unsigned int *rows)
++{
++	unsigned long long cursor = 0, offset;
++	unsigned int i;
++
++	*rows = count;
++	for (i = 0; i < count; i++) {
++		offset = cursor;
++		if (alignments[i])
++			offset = (cursor + alignments[i] - 1) &
++				 ~((unsigned long long)alignments[i] - 1);
++		if (offset != cursor)
++			(*rows)++;
++		cursor = offset + entries[i].size;
++		if (cursor > limit)
++			return -ERANGE;
++		entries[i].offset = offset;
++	}
++	cursor = (cursor + 0xffff) & ~0xffffULL;
++	if (!cursor || cursor > limit)
++		return -ERANGE;
++	*capacity = cursor;
++	return 0;
++}
++
++static int tetris_modem_plan_smem_b41(const struct tetris_modem_smem_inputs *inputs,
++			       struct tetris_modem_smem_plan *plan)
++{
++	static const unsigned int nc_ids[] = {
++		31, 12, 13, 37, 18, 14, 15, 33, 0, 16, 4, 7, 8, 9, 19, 20, 40, 41,
++	};
++	static const unsigned int nc_sizes[] = {
++		0x10000, 0x800, 0x6000, 0x8000, 0, 0x1000, 0x400, 0x200, 0x200,
++		0x8000, 0x1000, 0x2000, 0xb000, 0xd000, 0xb4400, 0x1e400, 0, 0x10000,
++	};
++	static const unsigned int nc_align[18] = { [17] = 0x1000 };
++	static const unsigned int cache_align[] = { 0x10000, 0x40, 0x100000, 0x10000, 0x80 };
++	struct tetris_modem_smem_plan out = { 0 };
++	unsigned int ccb_size, i;
++	int ret;
++
++	if (!inputs || !plan)
++		return -EINVAL;
++	if (inputs->drdi_version != 3 || inputs->udc_en > 1)
++		return -EINVAL;
++	switch (inputs->ccb_gear) {
++	case 0:
++	case 1:
++		ccb_size = 0x1600000;
++		break;
++	case 2:
++		ccb_size = 0xc00000;
++		break;
++	case 3:
++		ccb_size = 0;
++		break;
++	case 4:
++		ccb_size = 0x2000000;
++		break;
++	case 11:
++		ccb_size = 0x400000;
++		break;
++	case 12:
++		ccb_size = 0x4000000;
++		break;
++	case 13:
++		ccb_size = 0x6000000;
++		break;
++	case 16:
++		ccb_size = 0xc000000;
++		break;
++	default:
++		return -EINVAL;
++	}
++	for (i = 0; i < 18; i++) {
++		out.nc[i].id = nc_ids[i];
++		out.nc[i].size = nc_sizes[i];
++		out.nc[i].flags = 1;
++	}
++	out.cache[0] = (struct tetris_modem_smem_entry){ 22, 0, inputs->consys_size, 0x4a };
++	out.cache[1] = (struct tetris_modem_smem_entry){
++		32, 0, inputs->nv_cache_size ? inputs->nv_cache_size : 0x300000, 2,
++	};
++	out.cache[2] = (struct tetris_modem_smem_entry){ 1, 0, ccb_size, 2 };
++	out.cache[3] = (struct tetris_modem_smem_entry){ 28, 0, inputs->udc_en ? 0x80000 : 0, 2 };
++	out.cache[4] = (struct tetris_modem_smem_entry){ 24, 0, 0x60000, 2 };
++	ret = smem_place(out.nc, nc_align, 18, 0xa000000,
++			 &out.nc_capacity, &out.nc_rows);
++	if (ret)
++		return ret;
++	ret = smem_place(out.cache, cache_align, 5, 0x8000000,
++			 &out.cache_capacity, &out.cache_rows);
++	if (ret)
++		return ret;
++	*plan = out;
++	return 0;
++}
++
++static int tetris_metadata_memory(const unsigned char *chk, size_t rom_size,
++			     unsigned long long base, size_t capacity,
++			     struct tetris_modem_memory_map *map)
++{
++	struct tetris_modem_memory_map out = { 0 };
++	struct tetris_modem_layout layout;
++	const unsigned char *header;
++	unsigned int i;
++	int ret;
++
++	if (!map || !base || !capacity || capacity > 0xffffffffU ||
++	    base > ~0ULL - capacity)
++		return -EINVAL;
++	/* Caller checked the fixed CHK and all region bounds. No ROM read. */
++	memset(&layout, 0, sizeof(layout));
++	layout.memory_size = word(chk + 172);
++	layout.dsp_offset = word(chk + 184);
++	layout.dsp_capacity = word(chk + 188);
++	layout.region_count = word(chk + 192);
++	header = chk;
++	out.count = 1;
++	out.blocks[0].size = capacity;
++	ret = annotate(&out, 0, layout.memory_size, 0, 1);
++	if (ret)
++		return ret;
++	for (i = 0; i < layout.region_count; i++) {
++		ret = annotate(&out, word(header + 196 + 8 * i),
++			       word(header + 200 + 8 * i), 1U << i, 0);
++		if (ret)
++			return ret;
++	}
++	ret = annotate(&out, layout.dsp_offset, layout.dsp_capacity, 0, 2);
++	if (ret)
++		return ret;
++	for (i = 0; i < 8; i++) {
++		unsigned int offset = word(header + 0x11c + 8 * i);
++		unsigned int size = word(header + 0x120 + 8 * i);
++
++		if (!size)
++			continue;
++		if (!contained(offset, size, layout.memory_size) ||
++		    offset < rom_size ||
++		    (offset < layout.dsp_offset + layout.dsp_capacity &&
++		     layout.dsp_offset < offset + size))
++			return -ERANGE;
++		ret = annotate(&out, offset, size, 0, 4);
++		if (ret)
++			return ret;
++	}
++	/* Stock processes DRDI windows even when mode 3 skips the image load. */
++	for (i = 0; i < 3; i++) {
++		unsigned int field = i == 2 ? 0x164 : 0x16c + 8 * i;
++		unsigned int offset = word(header + field);
++		unsigned int size = word(header + field + 4);
++
++		if (!size)
++			continue;
++		if (!contained(offset, size, layout.memory_size))
++			return -ERANGE;
++		ret = annotate(&out, offset, size, 0, 0x20U << i);
++		if (ret)
++			return ret;
++	}
++	for (i = 0; i < out.count; i++)
++		out.blocks[i].physical = base + out.blocks[i].offset;
++	*map = out;
++	return 0;
++}
++
++static void padding(struct tetris_modem_memory_map *map)
++{
++	unsigned int i, candidates = 0, biggest = 0, index = 0;
++
++	/* Exact LK 0x27128..0x27260; one preset row (slot40) in this image. */
++	for (i = 0; i < map->count; i++) {
++		struct tetris_modem_block *b = &map->blocks[i];
++
++		if (b->attributes & 8) {
++			candidates++;
++		} else if (b->attributes & 4) {
++			if (i + 1 < map->count &&
++			    (b->info & map->blocks[i + 1].info & 0xff)) {
++				b->attributes |= 8;
++				candidates++;
++			} else {
++				b->attributes |= 0x10;
++			}
++		}
++	}
++	if (candidates <= 1) {
++		for (i = 0; i < map->count; i++)
++			if (map->blocks[i].attributes & 8)
++				map->blocks[i].attributes |= 0x10;
++		return;
++	}
++	for (i = 0; i < map->count; i++) {
++		const struct tetris_modem_block *b = &map->blocks[i];
++
++		if ((b->attributes & 0x18) == 8 && b->size > biggest) {
++			biggest = b->size;
++			index = i;
++		}
++	}
++	if (biggest)
++		map->blocks[index].attributes |= 0x10;
++}
++#endif
+diff --git a/drivers/misc/mediatek/ccci_util/metadata_resources.h b/drivers/misc/mediatek/ccci_util/metadata_resources.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/metadata_resources.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef TETRIS_METADATA_RESOURCES_H
++#define TETRIS_METADATA_RESOURCES_H
++struct tetris_metadata_window {
++	unsigned long long base, capacity;
++};
++struct tetris_metadata_banks {
++	struct tetris_metadata_window firmware, nc, cache, tags;
++};
++#endif
+diff --git a/drivers/misc/mediatek/ccci_util/owned_tags.h b/drivers/misc/mediatek/ccci_util/owned_tags.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/owned_tags.h
+@@ -0,0 +1,127 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included in ccci_util_boot_args.c. AP tag metadata only, no modem mappings. */
++#include "semantic.h"
++static unsigned char *tetris_owned_tags;
++static int tetris_owned_tags_error;
++static bool tetris_owned_tags_attempted;
++
++int mtk_ccci_import_owned_tags(const void __iomem *mapped, unsigned int size,
++		unsigned int version, unsigned int count, const struct tetris_metadata_banks *banks)
++{
++	static const struct {
++		const char *name;
++		unsigned int bytes, stride, maximum;
++	} profile[] = {
++		{ "hdr_count", 4, 0, 0 }, { "hdr_tbl_inf", 24, 0, 0 },
++		{ "smem_layout", 40, 0, 0 }, { "ccb_info", 16, 0, 0 },
++		{ "udc_layout", 8, 0, 0 }, { "md1_sib_info", 16, 0, 0 },
++		{ "md1_phy_cap", 4, 0, 0 }, { "md1_chk", 512, 0, 0 },
++		{ "md1img", 4, 0, 0 }, { "md_bank0_base", 8, 0, 0 },
++		{ "md_mem_layout", 0, 24, 32 }, { "nc_smem_layout_num", 4, 0, 0 },
++		{ "nc_smem_layout", 0, 40, 36 }, { "c_smem_layout_num", 4, 0, 0 },
++		{ "c_smem_layout", 0, 40, 10 }, { "md1_bank4_cache_info", 24, 0, 0 },
++		{ "md1_bank4_cache_layout", 120, 0, 0 },
++		{ "nc_smem_info_ext_num", 4, 0, 0 },
++		{ "nc_smem_info_ext", 288, 0, 0 },
++		{ "md1_smem_cahce_offset", 4, 0, 0 }, { "free_in_kernel", 4, 0, 0 },
++	};
++	unsigned char *snapshot = NULL;
++	unsigned int offsets[ARRAY_SIZE(profile)], lengths[ARRAY_SIZE(profile)];
++	unsigned int i, cursor = ARRAY_SIZE(profile) * 76;
++	int ret = -EBADMSG;
++
++	if (tetris_owned_tags_attempted)
++		return tetris_owned_tags_error ? tetris_owned_tags_error : -EALREADY;
++	tetris_owned_tags_attempted = true;
++	if (!s_init_done || !mapped || version != 2 || count != ARRAY_SIZE(profile) ||
++	    size < cursor || size > 65536 ||
++	    s_args_num > ARGS_KEY_VAL_MAX_KEY_NUM - ARRAY_SIZE(profile)) {
++		ret = -EINVAL;
++		goto fault;
++	}
++	ret = tetris_metadata_windows(banks);
++	if (ret)
++		goto fault;
++	ret = -EBADMSG;
++	snapshot = kmalloc(size, GFP_KERNEL);
++	if (!snapshot) {
++		ret = -ENOMEM;
++		goto fault;
++	}
++	/* One copy from an already-admitted AP-owned mapping, never protected ROM/SMEM.
++	 * Caller must keep that mapping coherent/stable for the duration of this copy.
++	 */
++	memcpy_fromio(snapshot, mapped, size);
++	for (i = 0; i < ARRAY_SIZE(profile); i++) {
++		const unsigned char *header = snapshot + i * 76;
++		unsigned int bytes = get_unaligned_le32(header + 68);
++		unsigned int name_size = strlen(profile[i].name) + 1;
++
++		if (memcmp(header, profile[i].name, name_size) ||
++		    memchr_inv(header + name_size, 0, 64 - name_size) ||
++		    get_unaligned_le32(header + 64) != cursor ||
++		    get_unaligned_le32(header + 72) !=
++			(i + 1 < count ? (i + 1) * 76 : 0) ||
++		    bytes > size - cursor ||
++		    (profile[i].bytes && bytes != profile[i].bytes) ||
++		    (profile[i].stride && (!bytes || bytes % profile[i].stride ||
++			bytes / profile[i].stride > profile[i].maximum)))
++			goto fault;
++		if (is_key_exist(profile[i].name, name_size) >= 0) {
++			ret = -EEXIST;
++			goto fault;
++		}
++		offsets[i] = cursor;
++		lengths[i] = bytes;
++		cursor += bytes;
++	}
++	if (cursor != size || get_unaligned_le32(snapshot + offsets[0]) != 1 ||
++	    get_unaligned_le32(snapshot + offsets[11]) != lengths[12] / 40 ||
++	    get_unaligned_le32(snapshot + offsets[13]) != lengths[14] / 40 ||
++	    get_unaligned_le32(snapshot + offsets[17]) != 18 ||
++	    get_unaligned_le32(snapshot + offsets[19]) != 0x8000000 ||
++	    get_unaligned_le32(snapshot + offsets[20]) != 0)
++		goto fault;
++	/* This is the producer's bounded B4.1 normal-Linux profile, not a
++	 * universal SKU claim and not reauthentication of the retained CHK copy.
++	 */
++	{
++		const unsigned char *chk = snapshot + offsets[7];
++		const unsigned char *hdr = snapshot + offsets[1];
++
++		if (memcmp(chk, "CHECK_HEADER", 12) || get_unaligned_le32(chk + 12) != 6 ||
++		    get_unaligned_le32(chk + 16) != 2 || get_unaligned_le32(chk + 20) != 14 ||
++		    chk[168] != 1 || get_unaligned_le32(chk + 508) != 512 ||
++		    get_unaligned_le32(hdr + 8) != get_unaligned_le32(chk + 172) ||
++		    hdr[12] || hdr[13] || hdr[14] != 14 ||
++		    get_unaligned_le64(hdr) != get_unaligned_le64(snapshot + offsets[9]) ||
++		    memchr_inv(snapshot + offsets[4], 0, lengths[4]) ||
++		    memchr_inv(snapshot + offsets[5], 0, lengths[5]) ||
++		    get_unaligned_le32(snapshot + offsets[6]) ||
++		    get_unaligned_le32(chk + 0x184))
++			goto fault;
++	}
++	ret = tetris_metadata_semantics(snapshot, offsets, lengths, banks);
++	if (ret)
++		goto fault;
++	/* All allocation/validation happens before publication. No fallible append
++	 * calls, shared-buffer bump allocator, or pointers into soon-unmapped LK I/O.
++	 * Existing util module init is the sole serialized importer, before consumers.
++	 */
++	for (i = 0; i < ARRAY_SIZE(profile); i++) {
++		struct args_key_val *arg = &s_args_tbl[s_args_num + i];
++
++		arg->key_size = strlen(profile[i].name) + 1;
++		memcpy(arg->key, profile[i].name, arg->key_size);
++		arg->val_size = lengths[i];
++		arg->source = FROM_KERNEL;
++		arg->pdata = snapshot + offsets[i];
++	}
++	tetris_owned_tags = snapshot;
++	s_args_num += ARRAY_SIZE(profile);
++	return 0;
++fault:
++	kfree(snapshot);
++	tetris_owned_tags_error = ret;
++	return ret;
++}
+diff --git a/drivers/misc/mediatek/ccci_util/semantic.h b/drivers/misc/mediatek/ccci_util/semantic.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/semantic.h
+@@ -0,0 +1,207 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Called ONLY after complete tag framing checks, against the private AP copy. */
++#include "metadata_resources.h"
++#include "layout_model.h"
++
++static int tetris_metadata_windows(const struct tetris_metadata_banks *banks)
++{
++	const struct tetris_metadata_window *windows[4];
++	unsigned int i, j;
++
++	if (!banks)
++		return -ENODATA;
++	windows[0] = &banks->firmware;
++	windows[1] = &banks->nc;
++	windows[2] = &banks->cache;
++	windows[3] = &banks->tags;
++	/* Exact current owned producer profile, not capacities inferred from CHK. */
++	if (windows[0]->capacity != 0x20000000ULL ||
++	    windows[1]->capacity != 0x8000000ULL ||
++	    windows[2]->capacity != 0x8000000ULL || windows[3]->capacity != 65536)
++		return -EPROTONOSUPPORT;
++	for (i = 0; i < 4; i++) {
++		unsigned long long alignment = i == 3 ? 4096 : 0x2000000;
++		const struct tetris_metadata_window *a = windows[i];
++
++		if (!a->base || (a->base & (alignment - 1)) ||
++		    a->base > ~0ULL - a->capacity ||
++		    (i < 3 && a->base + a->capacity > (1ULL << 35)))
++			return -ERANGE;
++		for (j = 0; j < i; j++) {
++			const struct tetris_metadata_window *b = windows[j];
++
++			if (a->base < b->base + b->capacity && b->base < a->base + a->capacity)
++				return -EEXIST;
++		}
++	}
++	return 0;
++}
++
++static int tetris_metadata_smem_row(const unsigned char *raw,
++		unsigned long long base, unsigned int id, unsigned int offset,
++		unsigned int size, unsigned int flags, unsigned int md_offset)
++{
++	/* Producer put_smem: AP virtual pointer and alignment are always zero.
++	 * A padding row deliberately uses the NEXT real row's ID and flags=4.
++	 */
++	if (get_unaligned_le64(raw) != base + offset ||
++	    get_unaligned_le64(raw + 8) || word(raw + 16) != id ||
++	    word(raw + 20) != offset || word(raw + 24) != size || word(raw + 28) ||
++	    word(raw + 32) != flags || word(raw + 36) != md_offset + offset)
++		return -EBADMSG;
++	return 0;
++}
++
++static int tetris_metadata_smem(const unsigned char *raw, unsigned int bytes,
++		const struct tetris_modem_smem_entry *entries, unsigned int count,
++		const struct tetris_metadata_window *bank, unsigned int md_offset)
++{
++	unsigned int i, cursor = 0, used = 0;
++	int ret;
++
++	for (i = 0; i < count; i++) {
++		const struct tetris_modem_smem_entry *entry = &entries[i];
++
++		if (entry->offset < cursor || entry->offset > bank->capacity ||
++		    entry->size > bank->capacity - entry->offset ||
++		    entry->offset > 0xffffffffU - md_offset ||
++		    entry->size > 0xffffffffU - md_offset - entry->offset)
++			return -ERANGE;
++		if (entry->offset > cursor) {
++			if (bytes - used < 40)
++				return -EBADMSG;
++			ret = tetris_metadata_smem_row(raw + used, bank->base, entry->id,
++				cursor, entry->offset - cursor, 4, md_offset);
++			if (ret)
++				return ret;
++			used += 40;
++		}
++		if (bytes - used < 40)
++			return -EBADMSG;
++		ret = tetris_metadata_smem_row(raw + used, bank->base, entry->id,
++			entry->offset, entry->size, entry->flags, md_offset);
++		if (ret)
++			return ret;
++		used += 40;
++		cursor = entry->offset + entry->size;
++	}
++	return used == bytes ? 0 : -EBADMSG;
++}
++
++static int tetris_metadata_semantics(const unsigned char *snapshot,
++		const unsigned int offsets[21], const unsigned int lengths[21],
++		const struct tetris_metadata_banks *banks)
++{
++	const unsigned char *chk = snapshot + offsets[7];
++	const unsigned char *hdr = snapshot + offsets[1];
++	struct tetris_modem_memory_map memory;
++	struct tetris_modem_smem_plan smem;
++	struct tetris_modem_smem_inputs inputs;
++	unsigned int logical = word(chk + 172), rom_size = word(snapshot + offsets[8]);
++	unsigned int dsp_offset = word(chk + 184), dsp_capacity = word(chk + 188);
++	unsigned int regions = word(chk + 192), i, j;
++	int ret;
++
++	ret = tetris_metadata_windows(banks);
++	if (ret)
++		return ret;
++	if (!logical || logical > banks->firmware.capacity ||
++	    !word(chk + 176) || word(chk + 176) > logical ||
++	    rom_size < 512 || rom_size > 64U * 1024 * 1024 || (rom_size & 15) ||
++	    rom_size > logical || !contained(dsp_offset, dsp_capacity, logical) ||
++	    dsp_offset < rom_size || !regions || regions > 8)
++		return -ERANGE;
++	if (get_unaligned_le64(hdr) != banks->firmware.base ||
++	    get_unaligned_le64(snapshot + offsets[9]) != banks->firmware.base ||
++	    memchr_inv(hdr + 15, 0, 9))
++		return -EBADMSG;
++	for (i = 0; i < regions; i++) {
++		unsigned int offset = word(chk + 196 + i * 8);
++		unsigned int size = word(chk + 200 + i * 8);
++
++		if (!contained(offset, size, logical))
++			return -ERANGE;
++		for (j = 0; j < i; j++) {
++			unsigned int previous = word(chk + 196 + j * 8);
++			unsigned int length = word(chk + 200 + j * 8);
++
++			if (offset < previous + length && previous < offset + size)
++				return -ERANGE;
++		}
++	}
++	/* Exact source-derived splitting + post-EMI padding attributes. No ROM
++	 * mapping and no invented DSP payload length: only retained CHK is used.
++	 */
++	ret = tetris_metadata_memory(chk, rom_size, banks->firmware.base,
++		banks->firmware.capacity, &memory);
++	if (ret)
++		return ret;
++	padding(&memory);
++	if (lengths[10] != memory.count * 24)
++		return -EBADMSG;
++	for (i = 0; i < memory.count; i++) {
++		const struct tetris_modem_block *block = &memory.blocks[i];
++		const unsigned char *raw = snapshot + offsets[10] + i * 24;
++
++		if (word(raw) != block->offset || word(raw + 4) != block->size ||
++		    word(raw + 8) != block->info || word(raw + 12) != block->attributes ||
++		    get_unaligned_le64(raw + 16) != block->physical)
++			return -EBADMSG;
++	}
++	inputs = (struct tetris_modem_smem_inputs) {
++		.drdi_version = word(chk + 0x190), .udc_en = word(chk + 0x184),
++		.consys_size = word(chk + 0x180), .nv_cache_size = word(chk + 0x18c),
++		.ccb_gear = 1, /* explicit source producer's normal Linux policy */
++	};
++	if (inputs.udc_en || !inputs.consys_size)
++		return -EPROTONOSUPPORT;
++	ret = tetris_modem_plan_smem_b41(&inputs, &smem);
++	if (ret)
++		return ret;
++	if (smem.nc_capacity > banks->nc.capacity || smem.cache_capacity > banks->cache.capacity ||
++	    lengths[12] != smem.nc_rows * 40 || lengths[14] != smem.cache_rows * 40)
++		return -ERANGE;
++	ret = tetris_metadata_smem(snapshot + offsets[12], lengths[12], smem.nc, 18,
++		&banks->nc, 0);
++	if (!ret)
++		ret = tetris_metadata_smem(snapshot + offsets[14], lengths[14], smem.cache, 5,
++			&banks->cache, 0x8000000);
++	if (ret)
++		return ret;
++	/* Every legacy mirror and summary must describe the very same plan. */
++	{
++		const unsigned char *raw = snapshot + offsets[2];
++
++		if (get_unaligned_le64(raw) != banks->nc.base || word(raw + 8) ||
++		    word(raw + 12) != smem.nc_capacity || memchr_inv(raw + 16, 0, 16) ||
++		    word(raw + 32) != smem.nc_capacity || word(raw + 36))
++			return -EBADMSG;
++		raw = snapshot + offsets[3];
++		if (get_unaligned_le64(raw) != banks->cache.base + smem.cache[2].offset ||
++		    word(raw + 8) != smem.cache[2].size || word(raw + 12))
++			return -EBADMSG;
++		raw = snapshot + offsets[15];
++		if (get_unaligned_le64(raw) != banks->cache.base || word(raw + 8) != 0x8000000 ||
++		    word(raw + 12) != smem.cache_capacity || word(raw + 16) != 5 || word(raw + 20))
++			return -EBADMSG;
++	}
++	for (i = 0; i < 5; i++) {
++		const unsigned char *raw = snapshot + offsets[16] + i * 24;
++
++		if (get_unaligned_le64(raw) != banks->cache.base + smem.cache[i].offset ||
++		    word(raw + 8) != smem.cache[i].offset || word(raw + 12) != smem.cache[i].size ||
++		    word(raw + 16) != smem.cache[i].id || word(raw + 20))
++			return -EBADMSG;
++	}
++	for (i = 0; i < 18; i++) {
++		const unsigned char *raw = snapshot + offsets[18] + i * 16;
++
++		if (word(raw) != smem.nc[i].offset || word(raw + 4) != smem.nc[i].offset ||
++		    word(raw + 8) != smem.nc[i].size || word(raw + 12) != smem.nc[i].id)
++			return -EBADMSG;
++	}
++	/* This closes layout consistency only. Signed platform selector and SMEM
++	 * admission remain absent; this function must never imply AUTH or READY.
++	 */
++	return 0;
++}
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+@@ -6,6 +6,9 @@
+ #include <linux/unaligned.h>
+ #include "ccci_hif.h"
+ #include "ccci_hif_internal.h"
++
++/* Owned metadata admission is supplied by ccci_util, before HIF links. */
++extern int mtk_ccci_validate_owned_handoff(struct device_node *);
+ 
+ static int tetris_ccci_descriptor(struct device_node *node)
+ {
+@@ -70,6 +73,9 @@
+ 	unsigned int i;
+ 	int ret;
+ 
++	ret = mtk_ccci_validate_owned_handoff(consumer->dev.of_node);
++	if (ret)
++		return ret;
+ 	ret = tetris_ccci_descriptor(consumer->dev.of_node);
+ 	if (ret)
+ 		return ret;
