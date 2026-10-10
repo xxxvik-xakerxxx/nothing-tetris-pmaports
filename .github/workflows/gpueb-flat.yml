@@ -2,19 +2,24 @@ name: GPUEB flat retention validation
 
 on:
   workflow_dispatch:
+    inputs:
+      native_only:
+        description: 'Repeat native faults only; retain the independent kernel/modpost run'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: gpueb-flat-${{ github.ref }}
+  group: gpueb-flat-${{ github.ref }}-${{ inputs.native_only && 'native' || 'full' }}
   cancel-in-progress: false
 
 env:
   UBOOT_REV: 94ead1146c93fef603db5c85820f2fb04c559c10
   LINUX_REV: d84b264a54a37611f2f46bc19363cb9b41606205
   FLAT_DIR: patches/gpu/flat-handoff-draft
-  SNAPSHOT_SHA: 70e67bcb0f8d7c0e737dba1329a7118b130c0ab319a825998d05d90274f9009d
+  SNAPSHOT_SHA: 662c580b3f2730ad263cdd7c578a82215e80fcaf3f9c67dbecb412d1fafa2be7
   PYTHON: /usr/bin/python3
 
 defaults:
@@ -85,6 +90,7 @@ jobs:
           retention-days: 14
 
   linux-consumer:
+    if: ${{ !inputs.native_only }}
     name: Isolated ARM64 consumer and real module exports
     runs-on: ubuntu-24.04
     timeout-minutes: 90
