@@ -72,7 +72,7 @@ int tetris_modem_build_linux_tags(const struct tetris_modem_boot_plan *loaded,
 	    expected.nc_capacity > r->nc.capacity || expected.cache_capacity > r->cache.capacity)
 		return -ERANGE;
 	memory_bytes = tetris_modem_encode_memory(&report->bootstrap.rows.memory,
-		r->firmware.base, loaded->layout.memory_size, p.memory, sizeof(p.memory));
+		r->firmware.base, r->firmware.capacity, p.memory, sizeof(p.memory));
 	nc_bytes = tetris_modem_encode_smem(expected.nc, 18, r->nc.base,
 		r->nc.capacity, 0, p.nc, sizeof(p.nc));
 	cache_bytes = tetris_modem_encode_smem(expected.cache, 5, r->cache.base,

@@ -82,6 +82,10 @@ hdr_count/hdr_tbl_inf, smem_layout, md1_chk/md1img, modern nc/c service tables,
 24-byte memory rows, legacy cache/NC rows and actual cahce-offset typo.
 It rejects active PHY/SIB or UDC outside this explicit normal Linux profile.
 free_in_kernel is0: signed padding flags do NOT authorize freeing MD-owned RAM.
+The memory layout covers the full owned firmware allocation, including the tail
+beyond the signed logical memory size; hdr_tbl_inf retains that logical size.
+Do not truncate the existing map or pass its smaller logical extent to the
+strict encoder. The CI fixture verifies complete contiguous allocation coverage.
 No guessed md_generation, table-version or secure-world MTEE success is emitted.
 Legacy cache row offsets are relative to the cache view; the independent
 md1_smem_cahce_offset tag supplies its128MiB bank4 placement. Cache-info's

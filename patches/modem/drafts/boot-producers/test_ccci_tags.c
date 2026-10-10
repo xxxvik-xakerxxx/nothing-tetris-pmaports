@@ -95,6 +95,20 @@ int main(int argc, char **argv)
 		assert(word(tag + 72) == (i + 1 < TETRIS_MODEM_LINUX_TAG_COUNT ? (i + 1) * 76 : 0));
 		if (!strcmp((char *)tag, "md1_chk"))
 			assert(size == 512 && !memcmp(buffer + at, footer, 512));
+		if (!strcmp((char *)tag, "md_mem_layout")) {
+			unsigned int row, end = 0;
+
+			assert(size && !(size % 24));
+			for (row = 0; row < size; row += 24) {
+				const unsigned char *block = buffer + at + row;
+
+				assert(word(block) == end);
+				assert(word(block + 4) <= report.bootstrap.resources.firmware.capacity - end);
+				end += word(block + 4);
+			}
+			assert(end == report.bootstrap.resources.firmware.capacity);
+			assert(end > plan.layout.memory_size); /* Preserve the owned allocation tail. */
+		}
 		if (!strcmp((char *)tag, "free_in_kernel"))
 			assert(size == 4 && !word(buffer + at));
 		if (!strcmp((char *)tag, "md1_smem_cahce_offset"))
