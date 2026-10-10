@@ -178,7 +178,15 @@ of data and unchanged legacy targets, reject bad size/seals/mode/alias, inject
 an actual XML pread EIO and final remount EACCES, and retain all13 descriptors
 until the terminal child reap while the parent's root remains unchanged.
 
-Next gate is native mount/sanitizer and Bionic compilation plus Linux actual
-sealed-pin vectors. Native reader/SET operation, complete config constructors,
+At `359042b9b2bf`, [CI 38074089440](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38074089440)
+passed all ten Python ownership tests without skips, including the actual
+Linux sealed-pin vectors. The native ARM64 ASAN/UBSAN mount fixture passed
+10/12/13-FD roots, XML copying, read-only/failure paths and terminal-reap
+lifetime. Downloaded source manifests match the commit. The independent
+unchanged Bionic load-only stage also reports `LOAD_OK` and terminal reap;
+it does not execute the new XML snapshot or call engine INIT.
+
+Next gate is reviewed executable admission for the thirteen-FD snapshot.
+Native reader/SET operation, complete config constructors,
 runtime libxml2/OpenSSL, legitimate CCCI/property readiness and RX shutdown
 remain separate unresolved gates. No navigation success or INIT claimed.

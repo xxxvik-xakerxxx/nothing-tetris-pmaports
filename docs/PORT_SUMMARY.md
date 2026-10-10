@@ -112,9 +112,15 @@ A separate sealed XML snapshot now extends the existing private loader root:
 the fixed independently pinned 5,087-byte vendor XML is transferred as the thirteenth descriptor,
 copied to `/vendor/etc/MNL_Config.xml`, then covered by the read-only remount.
 Original 10-provider/12-FD executable admission remains unchanged. Actual Linux
-sealing and native mount/copy/failure/reap cases are wired into the existing
-`gnss-sealed-load.yml` CI after its unchanged Bionic load-only stage; execution
-is pending. This does not admit INIT or provide missing CCCI/property/RX services.
+sealing and native mount/copy/failure/reap cases passed
+[CI 38074089440](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38074089440)
+at `359042b9b2bf`: all 10 descriptor-ownership tests ran without skips, and the
+real ARM64 sanitizer fixture passed 10/12/13-FD root construction, XML copy,
+read-only/failure paths and terminal-reap lifetime. Downloaded manifests match
+the source commit. The unchanged genuine Bionic stage independently reports
+`LOAD_OK` and successful terminal reap; engine INIT and hardware readiness are
+explicitly false. The new XML snapshot is not yet executable admission and
+does not provide missing CCCI/property/RX services or a GPS fix.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
