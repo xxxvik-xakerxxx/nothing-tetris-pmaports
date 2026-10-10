@@ -23,8 +23,9 @@ has a separate owned abort: actual IRQ drain and sensor cleanup must precede
 route disconnect; Linux core's EALREADY is never shutdown proof. The complete
 48-source camera closure is staged with all 33 ARM64 objects, including the
 packaged GPU analysis consumer, SMI provider and two camera KUnit objects.
-Its native event fixtures and ARM64 compilation are pending CI; KUnit object
-compilation does not execute the kernel fixtures.
+Its native event fixtures and all ARM64 objects passed
+[CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349).
+KUnit object compilation does not execute the kernel fixtures.
 
 Root video/vb2 registration, the complete clock/regulator/nvmem supplier DT,
 CAM_MAIN mapping ownership and removal lifetime still block activation.

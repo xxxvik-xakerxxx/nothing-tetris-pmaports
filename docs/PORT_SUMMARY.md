@@ -22,6 +22,16 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
+The table identifies the last readback-verified cold checkpoint. A subsequent
+opt-in BROM-only loader, `24e7c183c4e5fa279f2bc7c3d3ac60683f999157`, was
+written successfully to `lk_a` from
+[CI 38028430903](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38028430903).
+Image SHA256: `d288a4cafc79ddcbd4459d18a66ee849a60f953339d037e35414138ee7cbc396`.
+The phone enumerates as postmarketOS USB after reboot, but the Mac USB-network
+port is absent. New loader readback, the first BROM report and visual regression
+checks remain pending; this is not evidence of modem startup. No second attempt
+or hardware reset has been issued. The rootfs remains r179.
+
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
 See [installation guide and disclaimer](INSTALL.md) before flashing.
@@ -80,9 +90,25 @@ lifecycle or SKU. Earlier subsystem evidence is identified explicitly.
 
 ## Remaining hardware work
 
+The combined native PM/capture camera closure, packaged GPU analysis consumer,
+modem owner objects and GPS Bionic/native adapters passed
+[CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349):
+all 33 ARM64 objects compiled. Camera failed-start KUnit objects were compiled,
+not executed. This is not an installed image or proof of working hardware.
+The default-off owned modem BROM profile linked as a complete U-Boot image in
+[CI 38028430903](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38028430903)
+at `24e7c183c4`; its subsequent flash and pending checks are recorded above.
+Its runtime CCCI drivers stay disabled. Actual UFS/storage, atomic handoff
+publication and owned-loader fault checks passed
+[CI 38029702595](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029702595).
+Hardware providers in these fixtures are mocked; they are not physical BROM
+completion or executing-preloader attestation.
+
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
-  The actual boot-stage EMI/remap, physical power/BROM completion and complete
-  kernel handoff must be connected before SIM detection, network registration,
+  Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
+  the bounded boot-stage EMI/remap/power/BROM caller are now connected in the
+  opt-in U-Boot profile. Physical BROM completion and runtime CCCI handoff
+  remain unverified before SIM detection, network registration,
   calls, SMS or data can work. File signatures are not RAM attestation or READY.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 - **GPU:** Panthor and GPUEB groundwork exists. Transform-only firmware inspection
@@ -122,7 +148,7 @@ or rehash during placement. Independent manufacturer-signed B4.1 input
 [CI 37988706465](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37988706465)
 passed the actual public 90,214,400-byte `modem.img`, real crypto and sanitizer
 lifetime/fault fixtures. This caller does not establish physical EMI/power/BROM
-ownership; its ARM64 integration and hardware startup remain pending.
+ownership; its ARM64 integration passed, while hardware startup remains pending.
 
 The direct camera candidate builds coherent CQ memory in the kernel and uses
 native vb2 RAW/meta buffers. Its restricted single-frame path needs no CCD
@@ -168,9 +194,9 @@ and verifies the stock remap readbacks before power/BROM completion.
 [CI 38026075076](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026075076)
 passed 41 integrated-bootstrap and 17 allocation-lifetime sanitizer cases,
 alongside the signed-input, 37 earlier bootstrap and 20 EMI cases. Integration
-into the actual loader and CCCI handoff is still pending. No active board
-caller exists; physical startup and SIM/calls remain unavailable. The
-installed loader remains `d385921`. See
+into the actual loader is now present in `24e7c183c4`, including the opt-in
+one-attempt board caller. Runtime CCCI publication stays disabled in that
+diagnostic profile; physical completion and SIM/calls remain unverified. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
 The camera platform consumer adds four source-derived IRQ handlers, native

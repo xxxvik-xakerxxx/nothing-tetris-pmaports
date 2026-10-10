@@ -44,7 +44,12 @@ rejecting concurrent ownership. Its first-config bridge supplies only the
 proven C0/C1 words, not fabricated calibration tail bytes. The matching
 `libmipc.so` ABI/dependencies and tag-storage bounds must be audited before
 live use; the modem's CCCI port and responder are still absent. Native/Bionic
-and instruction-oracle CI for this adapter is pending. The numeric constructor
+adapter checks passed
+[CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349);
+the exact instruction oracle passed
+[CI 38029707052](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029707052).
+Capstone mnemonic and numeric display aliases are normalized without relaxing
+the image SHA, operands or call targets. The numeric constructor
 also supplies the exact requested-buffer clamps and private-C-locale float
 text for 38 configuration bytes without clearing other unresolved fields.
 Native/Bionic checks passed
