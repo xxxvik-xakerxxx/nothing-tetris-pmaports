@@ -205,6 +205,15 @@ were exercised by these runs.
   probe/engine as sealed descriptors, with a private read-only loader root.
   Linux mount-failure fixtures and an API28 root-builder object are CI inputs;
   actual launcher execution remains a separate gate.
+  [Stock CI 38048111345](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048111345)
+  passed complete pinned system/APEX extraction and real ten-provider sealed
+  closure checks. Downloaded provider bytes match the independent pins.
+  [CI 38048215570](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048215570)
+  passed the API28 root-builder compilation, modem callback fixtures and GPU
+  power fixture, but failed the Linux mount-fault assertion. Launcher execution
+  and combined kernel compilation are not certified by that run. GNSS isolation
+  now runs independently so its failure cannot hide other object results; full
+  install images still require all jobs to pass.
   Actual engine init/run, host services, exclusive RX ownership and bounded
   shutdown remain incomplete. Library loading is not a fix.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).

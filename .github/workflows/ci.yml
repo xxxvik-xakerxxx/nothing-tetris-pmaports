@@ -253,13 +253,6 @@ jobs:
           sh patches/gnss-navigation-audit/run_second_numeric_ci.sh
           sh patches/gnss-navigation-audit/run_mipc_calibration_ci.sh
           sh patches/gnss-navigation-audit/run_mipc_checked_tag_ci.sh
-      - name: Validate sealed GNSS loader root
-        run: |
-          python3 patches/gnss-navigation-audit/test_b41_mipc_probe_resources.py \
-            ProbeTests.test_seal_failure_retains_first_with_both_cleanup_faults \
-            ProbeTests.test_adapter_retains_frozen_policy_and_deadline
-          sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts
-          sh patches/gnss-navigation-audit/run_mipc_sealed_launch_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -406,6 +399,24 @@ jobs:
           path: out/
           if-no-files-found: error
 
+  gnss-sealed-loader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install native fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential python3 python3-pyelftools
+      - name: Validate sealed GNSS loader root
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_mipc_probe_resources.py \
+            ProbeTests.test_seal_failure_retains_first_with_both_cleanup_faults \
+            ProbeTests.test_adapter_retains_frozen_policy_and_deadline
+          sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts
+      - name: Exercise real sealed launcher and terminal reap
+        run: sh patches/gnss-navigation-audit/run_mipc_sealed_launch_ci.sh
+
   kernel-object-smoke:
     needs: validate-overlay
     if: ${{ inputs.research_owner_smoke || inputs.kernel_smoke_only || (github.event_name != 'pull_request' && !inputs.validation_only) }}
@@ -436,7 +447,7 @@ jobs:
           if-no-files-found: warn
 
   build-pmaports:
-    needs: [validate-overlay, kernel-object-smoke]
+    needs: [validate-overlay, kernel-object-smoke, gnss-sealed-loader, build-gnss-bionic-adapter]
     if: ${{ github.event_name != 'pull_request' && !inputs.validation_only && !inputs.kernel_smoke_only && !inputs.research_owner_smoke }}
     runs-on: ubuntu-latest
     container:
