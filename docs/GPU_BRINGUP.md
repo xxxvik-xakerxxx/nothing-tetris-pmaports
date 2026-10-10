@@ -34,8 +34,10 @@ A default-off native reset-controller adapter now reuses the sole SRAM/reset
 owner. It registers only assertion, with no invented deassert/status callback
 or successful OFF claim. Stop retains resources and reports failure until
 actual OFF/DMA-drain evidence exists. Eight static/source checks passed; the
-new actual ARM64 objects are staged in the combined CI, not packaged or
-activated. See [reset-provider boundary](../patches/gpu/reset-provider-draft/README.md).
+new actual reset/parent-provider ARM64 objects passed the 37-object combined
+[CI 38032210668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38032210668).
+They are not linked operational drivers, packaged or activated. See
+[reset-provider boundary](../patches/gpu/reset-provider-draft/README.md).
 
 ## Earlier Supply Evidence
 

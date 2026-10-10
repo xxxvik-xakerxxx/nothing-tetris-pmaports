@@ -32,8 +32,12 @@ queues, real notifier completion and retirement before vb2 cancellation.
 It retains buffers and supplier references after failed DMA retirement rather
 than completing a frame artificially. The isolated closure now stages 52 camera
 sources and 37 ARM64 objects overall, adding the video owner and GPU reset
-provider. Video compilation is requested with KUnit both enabled and disabled;
-new object results and KUnit execution remain pending. The complete
+provider. All 37 actual ARM64 objects passed
+[CI 38032210668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38032210668),
+including video compilation with KUnit enabled and disabled. The first run's
+missing V4L2 device include and old file-handle signature were corrected against
+Linux 6.18; the private route macro no longer shadows Linux's WRITE constant.
+Kernel fixture execution remains pending. The complete
 clock/regulator/nvmem supplier DT, genuine CAM_MAIN mapping lease, bound DMA
 supplier and cooperative removal policy still block activation. See
 [video registration contract](../patches/camera-native-video/SOURCE-CONTRACT.md).

@@ -103,6 +103,14 @@ publication and owned-loader fault checks passed
 [CI 38029702595](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029702595).
 Hardware providers in these fixtures are mocked; they are not physical BROM
 completion or executing-preloader attestation.
+The subsequent native RAW/meta video owner and sole-parent GPU reset provider
+also passed
+[CI 38032210668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38032210668):
+all 37 actual ARM64 objects plus both video KUnit configurations compiled.
+No kernel fixture execution, runtime registration, physical frame or GPU
+acceleration is implied. The matching full kernel/image build is running in
+[CI 38030432132](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030432132)
+with unchanged packaged inputs; the new video/reset sources remain isolated.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
@@ -110,6 +118,9 @@ completion or executing-preloader attestation.
   opt-in U-Boot profile. Physical BROM completion and runtime CCCI handoff
   remain unverified before SIM detection, network registration,
   calls, SMS or data can work. File signatures are not RAM attestation or READY.
+  Runtime activation also requires checked FSM/port publication, guards on
+  physical monitor ioctls, and retention of the actual driver-managed resources
+  across failed registration. Retaining `md_hw` alone does not retain devres.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 - **GPU:** Panthor and GPUEB groundwork exists. Transform-only firmware inspection
   succeeded on the preceding loader, then erased the buffer without starting
