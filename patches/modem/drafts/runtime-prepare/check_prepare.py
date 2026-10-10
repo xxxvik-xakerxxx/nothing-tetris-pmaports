@@ -96,7 +96,7 @@ def build(tree):
         spec.loader.exec_module(module)
         owner.apply_patch(work, module.integration(tree))
         files = {str(path.relative_to(work)): path.read_text()
-                 for path in work.rglob('*') if path.is_file()}
+                 for path in sorted(work.rglob('*')) if path.is_file()}
     before = dict(files)
     core = ROOT + 'ccci_core.c'
     anchor = '\tdev_class = class_create("ccci_node");'
@@ -316,7 +316,7 @@ def build(tree):
             dest = 'inc/'
         files[ROOT + dest + name] = (HERE / name).read_text()
     result = []
-    for path, new in files.items():
+    for path, new in sorted(files.items()):
         old = before.get(path, '')
         if old == new:
             continue

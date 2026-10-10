@@ -2,8 +2,12 @@
 import ast
 import os
 from pathlib import Path
+import re
+import subprocess
+import tempfile
 import unittest
-from check_prepare import replace, overlay, build
+from unittest.mock import patch
+from check_prepare import replace, overlay, build, PIN
 
 HERE = Path(__file__).resolve().parent
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', str(
@@ -11,6 +15,30 @@ VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', str(
 
 
 class PrepareTests(unittest.TestCase):
+    def test_canonical_patch_independent_of_directory_order(self):
+        normal, before, after = build(VENDOR)
+        original = Path.rglob
+        def reversed_rglob(path, pattern):
+            return iter(reversed(list(original(path, pattern))))
+        with patch.object(Path, 'rglob', reversed_rglob):
+            reversed_patch, reversed_before, reversed_after = build(VENDOR)
+        self.assertEqual((normal, before, after),
+                         (reversed_patch, reversed_before, reversed_after))
+        paths = re.findall(r'^diff --git a/(\S+) b/', normal, re.M)
+        self.assertEqual(paths, sorted(paths))
+        self.assertEqual(normal, (HERE / 'runtime-prepare.patch.vendor').read_text())
+
+    def test_generator_without_vendor_checkout(self):
+        normal, before, after = build(VENDOR)
+        with tempfile.TemporaryDirectory(prefix='prepare-no-checkout-') as temp:
+            repository = Path(temp) / 'source.git'
+            subprocess.run(['git', 'init', '--bare', str(repository)],
+                           check=True, capture_output=True, text=True)
+            subprocess.run(['git', '-C', str(repository), 'fetch', '--depth=1', str(VENDOR), PIN],
+                           check=True, capture_output=True, text=True)
+            self.assertFalse((repository / 'drivers').exists())
+            self.assertEqual((normal, before, after), build(repository))
+
     def test_syntax(self):
         for path in HERE.glob('*.py'):
             ast.parse(path.read_text())

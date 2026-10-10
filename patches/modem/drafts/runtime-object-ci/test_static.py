@@ -9,7 +9,7 @@ import re
 import subprocess
 import tempfile
 import unittest
-from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor
+from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, check_generated
 
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
     'android_kernel_device_modules_6.1_nothing_mt6878'))
@@ -48,6 +48,23 @@ def parent_patch_state(workflow):
 
 
 class ObjectTests(unittest.TestCase):
+    def test_generation_mismatch_preserved_not_relaxed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            diagnostics = Path(temp) / 'diagnostics'
+            manifest = {}
+            check_generated('prepare', 'same\n', 'same\n', diagnostics, manifest)
+            self.assertFalse(diagnostics.exists())
+            for generated in ('changed\n', 'same\nextra\n', ''):
+                with self.subTest(generated=generated):
+                    with self.assertRaisesRegex(ValueError, 'exact diagnostic diff'):
+                        check_generated('prepare', generated, 'same\n', diagnostics, manifest)
+                    self.assertEqual((diagnostics / 'prepare.generated.patch').read_text(), generated)
+                    self.assertEqual((diagnostics / 'prepare.frozen.patch').read_text(), 'same\n')
+                    self.assertTrue((diagnostics / 'prepare.diff').read_text())
+                    record = manifest['generation_reviews']['prepare']
+                    self.assertEqual(record['status'], 'failed')
+                    self.assertNotEqual(record['generated_sha256'], record['frozen_sha256'])
+
     def test_python_syntax(self):
         for path in HERE.glob('*.py'):
             ast.parse(path.read_text())

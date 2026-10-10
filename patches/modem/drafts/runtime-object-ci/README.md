@@ -81,9 +81,27 @@ python3 -B -m unittest discover -s patches/modem/drafts/runtime-object-ci -p tes
 Local validation is source/manifest/Python/patch-only. Actual C compilation is
 CI-pending. No phone operations or local C build performed.
 
-Seven source-only tests passed, including a fresh full vendor archive with all
+Nine source-only tests cover a fresh full vendor archive with all
 27 shipping devmods patches applied in real prepare order, all three overlays,
 and final touched-source equality against the frozen complete-stack checker.
 That test uses only source copies and patch application, never make/compiler.
-The parent integration patch also passes git apply --check. Both frozen runtime
-manifests validate unchanged. Do not interpret these checks as an ARM64 C pass.
+The parent integration patch is checked forward or explicitly reverse when
+already applied; its helper must remain inside the research-only branch.
+Do not interpret these checks as an ARM64 C pass.
+
+## Canonical Generation Fix
+
+CI 38045556287 completed the 39 parent ARM64 objects and four KUNIT=n objects,
+then failed the runtime prepare byte check BEFORE compiling CCCI64. The cause
+was filesystem-dependent `work.rglob()`/dictionary iteration in prepare.build,
+not the missing vendor checkout: its inputs are read with pinned git show.
+The reviewed prepare revision sorts input paths and emitted sections. All 23
+old/new sections are byte-identical, including hunk offsets and C/header bytes;
+only section order changed. Its frozen patch/manifest are explicitly revised,
+not normalized or silently accepted by this helper. Reversed directory traversal
+and a bare source repository without checkout are regression-tested.
+
+Generated patch equality remains an exact whole-text check. Any future mismatch
+retains generated/frozen patches, unified diff and both hashes under the report's
+runtime-generation-diagnostics directory. The failed runtime-objects.json points
+to those uploaded artifact files. Source drift still fails before staging/build.

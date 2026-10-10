@@ -145,7 +145,15 @@ The combined 39-object camera/GPU check and 64-object CCCI check in
 stopped before compilation at CAM_MAIN overlay application. The overlay's
 non-EOF hunk now has canonical line counts and full trailing context; the
 checker rejects the old malformed input and preserves patch diagnostics.
-Actual combined ARM64 compilation remains unverified until the corrected run.
+[CI 38045556287](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38045556287)
+subsequently compiled all 39 real ARM64 objects and the four video/CAM_MAIN
+objects with KUnit disabled. Its downloaded manifest is `passed` for that
+closure, not the entire run. The CCCI stage then failed before compilation:
+the prepare generator emitted sections in filesystem-dependent order. It now
+uses canonical path ordering; all 23 sections remain byte-identical, and
+reversed directory enumeration plus a bare fetched vendor repository are
+covered by regression checks. Actual CCCI compilation and module linkage remain
+unverified. No kernel fixtures or physical hardware were exercised by this run.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and

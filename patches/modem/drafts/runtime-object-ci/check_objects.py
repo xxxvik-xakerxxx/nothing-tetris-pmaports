@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reuse the research kernel staging; compile the real frozen vendor closure in CI."""
 import argparse
+import difflib
 import hashlib
 import importlib.util
 import json
@@ -83,17 +84,37 @@ def run(command, **kwargs):
     subprocess.run(list(map(str, command)), check=True, **kwargs)
 
 
-def stage_vendor(vendor, destination, package, manifest):
+def check_generated(name, generated, frozen, diagnostics, manifest):
+    record = {
+        'generated_sha256': hashlib.sha256(generated.encode()).hexdigest(),
+        'frozen_sha256': hashlib.sha256(frozen.encode()).hexdigest(),
+        'status': 'passed' if generated == frozen else 'failed',
+    }
+    manifest.setdefault('generation_reviews', {})[name] = record
+    if generated == frozen:
+        return
+    diagnostics.mkdir(parents=True, exist_ok=True)
+    for suffix, text in (('generated.patch', generated), ('frozen.patch', frozen),
+        ('diff', ''.join(difflib.unified_diff(frozen.splitlines(True),
+            generated.splitlines(True), fromfile=f'{name}.frozen', tofile=f'{name}.generated')))):
+        target = diagnostics / f'{name}.{suffix}'
+        target.write_text(text)
+        record[suffix] = str(target)
+    raise ValueError(f'regenerated {name} differs from frozen reviewed patch; '
+                     f'exact diagnostic diff: {diagnostics / (name + ".diff")}')
+
+
+def stage_vendor(vendor, destination, package, manifest, diagnostics=None):
     """Whole exact git snapshot, shipping prepare order, then all three overlays."""
     prepare = load('runtime_prepare_full_stack', HERE.parent / 'runtime-prepare/check_prepare.py')
     generated, _, expected = prepare.build(vendor)
     frozen = (HERE.parent / 'runtime-prepare/runtime-prepare.patch.vendor').read_text()
-    if generated != frozen:
-        raise ValueError('regenerated prepare differs from frozen reviewed patch')
+    diagnostics = diagnostics or destination.parent / 'runtime-generation-diagnostics'
+    check_generated('prepare', generated, frozen, diagnostics, manifest)
     ports = load('runtime_ports_full_stack', HERE.parent / 'runtime-ports/check_runtime_ports.py')
     runtime = ports.integration(vendor)
-    if runtime != (HERE.parent / 'runtime-ports/runtime-ports.patch.vendor').read_text():
-        raise ValueError('regenerated runtime-ports differs from frozen reviewed patch')
+    check_generated('runtime-ports', runtime,
+        (HERE.parent / 'runtime-ports/runtime-ports.patch.vendor').read_text(), diagnostics, manifest)
     owner = load('runtime_transport_owner', ROOT / 'patches/modem/check_transport_owner.py')
     destination.mkdir(exist_ok=False)
     archive = destination.parent / 'vendor-source.tar'
@@ -213,7 +234,8 @@ def main():
                  'https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git',
                  manifest['vendor_commit']])
         destination = work / 'runtime-vendor'
-        stage_vendor(vendor, destination, package, manifest)
+        stage_vendor(vendor, destination, package, manifest,
+                     args.report.parent / 'runtime-generation-diagnostics')
         compile_objects(kernel, output, destination, manifest, smoke)
         manifest['status'] = 'passed'
     except BaseException as failure:
