@@ -141,6 +141,13 @@ jobs:
           python3 patches/gnss-navigation-audit/test_b41_mipc_producer.py \
             out/stock-port-assets/vendor/bin/mnld
           sh patches/gnss-navigation-audit/run_mipc_calibration_ci.sh
+          sh patches/gnss-navigation-audit/run_mipc_checked_tag_ci.sh
+          export TETRIS_B41_MIPC_SO="$PWD/out/stock-port-assets/vendor/lib64/libmipc.so"
+          export TETRIS_MIPC_ACCESSOR_EMULATION=1
+          test -s "$TETRIS_B41_MIPC_SO"
+          python3 patches/gnss-navigation-audit/test_b41_mipc_elf_audit.py
+          python3 patches/gnss-navigation-audit/test_b41_mipc_exact_contract.py
+          python3 patches/gnss-navigation-audit/test_b41_mipc_accessor_oracle.py
       - name: Verify matching camera command encoding
         if: ${{ !cancelled() }}
         run: |

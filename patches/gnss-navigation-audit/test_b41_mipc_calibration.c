@@ -34,17 +34,20 @@ int mipc_msg_sync_timeout_with_cause(void *req, void **resp)
     *resp = fault == 4 ? NULL : fault == 5 ? &request : &response;
     return fault == 3 ? -1 : 0;
 }
-void *mipc_msg_get_val_ptr(void *msg, unsigned tag, void *opaque)
+void *mipc_msg_get_val_ptr(void *msg, unsigned tag, uint16_t *length)
 {
     unsigned index = tag == 0 ? 0 : tag - 0x100;
-    assert(msg == &response && opaque == NULL && index < 4);
+    assert(msg == &response && length != NULL && index < 4);
+    *length = sizeof(uint32_t);
     ++tags;
     /* Trylock rejects recursive competing ownership without changing output. */
     struct b41_mipc_calibration sentinel = {9, 8, 7}, copy = sentinel;
     assert(b41_mipc_calibration_collect(&branch, &copy) == -EBUSY);
     assert(memcmp(&sentinel, &copy, sizeof(copy)) == 0);
-    if (fault >= 7 && index == fault - 7)
+    if (fault >= 7 && fault <= 10 && index == fault - 7)
         return NULL;
+    if (fault >= 11 && index == (fault - 11) / 4)
+        *length = (fault - 11) % 4;
     return values + index;
 }
 void mipc_msg_deinit(void *msg)
@@ -68,7 +71,7 @@ int main(void)
     assert(b41_mipc_calibration_collect(&branch, &record) == -ENOTSUP);
     assert(!calls);
     branch.capability[0xcc] = 1;
-    for (fault = 0; fault <= 10; ++fault) {
+    for (fault = 0; fault <= 26; ++fault) {
         freed = finished = timeout = tags = 0;
         values[0] = fault == 6 ? 1 : 0;
         record = original;
@@ -79,6 +82,10 @@ int main(void)
             assert(tags == 4);
         } else {
             assert(rc < 0);
+            if (fault >= 11) {
+                assert(rc == -EMSGSIZE);
+                assert(tags == (fault - 11) / 4 + 1);
+            }
             assert(memcmp(&record, &original, sizeof(record)) == 0);
         }
         assert(finished == 1);

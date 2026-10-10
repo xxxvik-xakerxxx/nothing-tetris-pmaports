@@ -21,7 +21,8 @@ NAMES = ["build.prop", "etc/MNL_Config.xml", "bin/mnld", "firmware/mali_csffw.bi
          "etc/vintf/manifest/manifest_isphal.xml"]
 for prefix in ("", "mt6878/"):
     NAMES.append("bin/hw/" + prefix + "camerahalserver")
-    for library in ("libmnl.so", "libmipc.so", "libccd.so", "libispinterpreter_mtkcam.so",
+    for library in ("libmnl.so", "libmipc.so", "libmtkrillog.so", "libtrm.so",
+                    "libmtkproperty.so", "libccd.so", "libispinterpreter_mtkcam.so",
                     "libispfeature_mtkcam.v4l2.so", "libcam.halisp.imp.v4l2.so",
                     "libcam.halisp.v4l2.so", "libcam.halisp.TopCtrlMgr.so"):
         NAMES.append("lib64/" + prefix + library)

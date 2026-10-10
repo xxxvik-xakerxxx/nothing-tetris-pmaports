@@ -42,8 +42,15 @@ calibration requires the source-derived modem MIPC message141 response
 requires status0 plus all three tags and releases request/response once while
 rejecting concurrent ownership. Its first-config bridge supplies only the
 proven C0/C1 words, not fabricated calibration tail bytes. The matching
-`libmipc.so` ABI/dependencies and tag-storage bounds must be audited before
-live use; the modem's CCCI port and responder are still absent. Native/Bionic
+`libmipc.so` accessor is now pinned: argument3 is a `uint16_t*` length output,
+and a non-null returned pointer alone does not guarantee a four-byte word.
+The native adapter checks length for status, C0, C1 and temperature before any
+copy. New exact-asset/static checks passed locally; the current Mac offline
+emulator terminated with SIGILL, so actual getter vectors and new native/Bionic
+fault checks still require Linux CI. ELF dependencies and detached-RX lifetime
+remain incomplete before live use; the modem's CCCI port and responder are
+still absent. See [MIPC closure](../patches/gnss-navigation-audit/MIPC_B41_CLOSURE_CONTRACT.md).
+Earlier native/Bionic
 adapter checks passed
 [CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349);
 the exact instruction oracle passed

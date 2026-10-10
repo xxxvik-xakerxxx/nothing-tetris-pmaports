@@ -35,7 +35,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.research_owner_smoke && 'owner-smoke' || inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
   # Image builds are expensive and may already have verified kernel output.
   # Only cheap validation/smoke/PR runs may replace an earlier matching run.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || inputs.kernel_smoke_only || inputs.validation_only || inputs.research_owner_smoke }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || inputs.kernel_smoke_only == true || inputs.validation_only == true || inputs.research_owner_smoke == true }}
 
 jobs:
   validate-overlay:
@@ -232,6 +232,7 @@ jobs:
           sh patches/gnss-navigation-audit/run_nv_calibration_ci.sh
           sh patches/gnss-navigation-audit/run_second_numeric_ci.sh
           sh patches/gnss-navigation-audit/run_mipc_calibration_ci.sh
+          sh patches/gnss-navigation-audit/run_mipc_checked_tag_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -311,6 +312,7 @@ jobs:
             -o out/b41-second-numeric-test
           "$ndk/aarch64-linux-android28-clang" -std=c11 -O2 -Wall -Wextra -Werror -pthread \
             patches/gnss-navigation-audit/b41_mipc_calibration.c \
+            patches/gnss-navigation-audit/b41_mipc_checked_tag.c \
             patches/gnss-navigation-audit/test_b41_mipc_calibration.c \
             -o out/b41-mipc-calibration-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
@@ -713,6 +715,10 @@ jobs:
             exit 1
           }
           test "$(rootfs_modinfo -F name panthor)" = panthor
+          test "$(rootfs_modinfo -F name gpueb-flat-analysis)" = gpueb_flat_analysis
+          test "$(rootfs_modinfo -F vermagic gpueb-flat-analysis | cut -d ' ' -f 1)" = "$release"
+          rootfs_modinfo -F alias gpueb-flat-analysis |
+            grep -Fq 'Cnothing,tetris-gpueb-flat-analysis-v1'
           if grep -RIlE \
               '(panthor|pd9302a|clk-mt6878-cam|tetris-camera-audit|ccci[_-]|dpmaif|mt6375-bc12-(decode|lifecycle))' \
               "$rootfs/etc" "$rootfs/usr/lib/modules-load.d" \

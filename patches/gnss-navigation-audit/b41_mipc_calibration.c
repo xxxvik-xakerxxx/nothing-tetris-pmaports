@@ -1,35 +1,24 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "b41_mipc_calibration.h"
+#include "b41_mipc_checked_tag.h"
 #include <errno.h>
 #include <pthread.h>
 #include <string.h>
 
 /* Machine-level signatures recovered from mnld7f440..7f8a8. Return values of
  * SETCOM/timeout/deinit are unused by OEM: do not invent success contracts.
- * get_val_ptr's third parameter is deliberately opaque and ALWAYS NULL as in
- * the producer. No unsupported claim that it returns a length is made here.
- * libmipc must supply its own valid four-byte tag values until msg_deinit.
+ * The matching libmipc accessor writes a uint16 length through argument3.
+ * Check that length before consuming any borrowed word; OEM mnld omits it.
  */
 extern void SETCOM(const char *);
 extern void mipc_msg_set_timeout_once(unsigned);
 extern int mipc_init(const char *);
 extern void *mipc_msg_init(unsigned, unsigned);
 extern int mipc_msg_sync_timeout_with_cause(void *, void **);
-extern void *mipc_msg_get_val_ptr(void *, unsigned, void *);
 extern void mipc_msg_deinit(void *);
 extern void mipc_deinit(void);
 
 static pthread_mutex_t owner = PTHREAD_MUTEX_INITIALIZER;
-
-static int tag_word(void *message, unsigned tag, uint32_t *out)
-{
-    const void *value = mipc_msg_get_val_ptr(message, tag, NULL);
-    if (!value)
-        return -ENODATA;
-    /* OEM consumes ldr w at7f63c/678/718/760. memcpy avoids alignment UB. */
-    memcpy(out, value, sizeof(*out));
-    return 0;
-}
 
 int b41_mipc_calibration_collect(const struct b41_capability_branch *branch,
     struct b41_mipc_calibration *out)
@@ -76,18 +65,18 @@ int b41_mipc_calibration_collect(const struct b41_capability_branch *branch,
     /* Aliasing would make OEM double-deinit unsafe; reject and free once. */
     if (!response || response == request)
         goto cleanup;
-    error = tag_word(response, 0, &status);
+    error = b41_mipc_checked_tag_word(response, 0, &status);
     if (error)
         goto cleanup;
     if (status != 0) {
         error = -EREMOTEIO;
         goto cleanup;
     }
-    error = tag_word(response, 0x101, &result.c0);
+    error = b41_mipc_checked_tag_word(response, 0x101, &result.c0);
     if (!error)
-        error = tag_word(response, 0x102, &result.c1);
+        error = b41_mipc_checked_tag_word(response, 0x102, &result.c1);
     if (!error)
-        error = tag_word(response, 0x103, &result.temperature);
+        error = b41_mipc_checked_tag_word(response, 0x103, &result.temperature);
 cleanup:
     if (response && response != request)
         mipc_msg_deinit(response);
