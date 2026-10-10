@@ -50,7 +50,11 @@ claimed. Reset still returns `-EOPNOTSUPP` until joint SMI clamp and SCQ/route-o
 ownership is connected. The combined harness adds the real clock-provider and
 smoke objects, now 39 ARM64 objects, with KUnit enabled/disabled builds. Static
 overlay checks and all 16 harness input tests pass; compilation and KUnit
-execution remain pending. The shipping provider/package is unchanged.
+execution remain pending. The first combined run,
+[CI 38039961381](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039961381),
+failed before compilation because the provider overlay lacked trailing context.
+Canonical context and a regression check now reject that old hunk; no compile
+success is inferred from the staging fix. The shipping provider/package is unchanged.
 No preview, capture or successful camera support is claimed. See the
 [route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
 [native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md), plus

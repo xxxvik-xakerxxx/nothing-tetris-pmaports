@@ -24,11 +24,26 @@ def overlay_text(base, overlay):
     hunks = [i for i, line in enumerate(lines) if line.startswith("@@ ")]
     if len(hunks) != 1:
         raise ValueError("expected exactly one provider overlay hunk")
+    header = re.fullmatch(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", lines[hunks[0]])
+    if not header:
+        raise ValueError("invalid provider hunk header")
     body = lines[hunks[0] + 1:]
     old = "\n".join(line[1:] for line in body if line.startswith((" ", "-"))) + "\n"
     new = "\n".join(line[1:] for line in body if line.startswith((" ", "+"))) + "\n"
     if base.count(old) != 1:
         raise ValueError("provider overlay context is absent/ambiguous")
+    offset = base[:base.index(old)].count("\n") + 1
+    if int(header[1]) != offset or int(header[3]) != offset:
+        raise ValueError("provider hunk line numbers drifted from shipped base")
+    if int(header[2]) != old.count("\n") or int(header[4]) != new.count("\n"):
+        raise ValueError("provider hunk line counts are incorrect")
+    trailing = 0
+    for line in reversed(body):
+        if not line.startswith(" "):
+            break
+        trailing += 1
+    if trailing < 3 and not base.endswith(old):
+        raise ValueError("non-EOF hunk needs three trailing context lines for GNU patch")
     return base.replace(old, new, 1)
 
 
@@ -74,9 +89,18 @@ def main():
         tree = args.kernel_tree.resolve()
         if (tree / target).read_text() != base:
             raise ValueError("actual provider differs from packaged 0092 base")
-        subprocess.run(["patch", "--dry-run", "--batch", "--forward", "--fuzz=0", "-p1"],
-                       cwd=tree, input=overlay.read_text(), text=True,
-                       check=True, capture_output=True)
+        command = ["patch", "--dry-run", "--batch", "--forward", "--fuzz=0", "-p1"]
+        result = subprocess.run(command, cwd=tree, input=overlay.read_text(),
+                                text=True, capture_output=True)
+        if result.returncode:
+            version = subprocess.run(["patch", "--version"], text=True,
+                                     capture_output=True)
+            raise RuntimeError(
+                f"CAM_MAIN overlay dry-run failed: rc={result.returncode}, tree={tree}, "
+                f"base_sha256={hashlib.sha256(base.encode()).hexdigest()}\n"
+                f"command: {' '.join(command)}\n"
+                f"patch version: {version.stdout.strip()} {version.stderr.strip()}\n"
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
     if args.staged_tree:
         tree = args.staged_tree.resolve()
         if (tree / target).read_text() != expected:

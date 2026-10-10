@@ -52,8 +52,8 @@ sanitizer fixtures subsequently passed Linux
 [CI 38030808388](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030808388).
 The same extraction located `libmtkrillog.so`, `libtrm.so` and
 `libmtkproperty.so` in `vendor/lib64`. A versioned dependency audit resolves
-294 bindings across these and the pinned Bionic providers, but genuine
-`liblog.so` is still missing: both required logging symbols request `LIBLOG`.
+294 bindings across these and the pinned Bionic providers; this initial bundle
+lacked genuine `liblog.so`, whose two required logging symbols request `LIBLOG`.
 An NDK import stub is not accepted as an implementation. New native fault checks
 and Bionic compilation also passed
 [CI 38030803840](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030803840).
@@ -66,7 +66,13 @@ Native ptrace/sealing fixtures and API28 object compilation passed
 [CI 38038992764](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038992764).
 Actual vendor/system extraction now selects genuine `liblog` from the same
 pinned public archive, checks both implementation exports and records its
-digest; the first extraction is CI-pending. No replacement logging stub is used.
+digest. [CI 38039798135](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039798135)
+passed. The actual 102,352-byte `system/lib64/liblog.so` has SHA256
+`dce4ece329f925cdc0b181b3e5f11b54d92a24e49b1b90b121a4e0f960df84fd`;
+downloaded bytes match the extraction manifest. Resource acquisition with this
+independently recorded pin now passes the complete versioned ELF closure,
+including liblog's own dependencies. Provenance is pinned mirror hashes, not
+OEM signature verification. No replacement logging stub is used.
 There is still no executable sealed-fd loader handoff, legitimate property
 service or detached-RX join proof; the modem's CCCI port and responder are
 absent. No INIT or engine start is exposed by this code.

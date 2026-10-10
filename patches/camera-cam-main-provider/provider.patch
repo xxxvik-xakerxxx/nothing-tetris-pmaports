@@ -1,7 +1,7 @@
 diff --git a/drivers/clk/mediatek/clk-mt6878-cam.c b/drivers/clk/mediatek/clk-mt6878-cam.c
 --- a/drivers/clk/mediatek/clk-mt6878-cam.c
 +++ b/drivers/clk/mediatek/clk-mt6878-cam.c
-@@ -74,11 +74,14 @@
+@@ -75,12 +75,15 @@
  };
  MODULE_DEVICE_TABLE(of, of_match_clk_mt6878_cam);
  
@@ -18,3 +18,4 @@ diff --git a/drivers/clk/mediatek/clk-mt6878-cam.c b/drivers/clk/mediatek/clk-mt
 +		.suppress_bind_attrs = true,
  	},
  };
+ module_platform_driver(clk_mt6878_cam_drv);

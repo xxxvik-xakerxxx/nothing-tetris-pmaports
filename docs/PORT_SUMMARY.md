@@ -132,8 +132,20 @@ every local package source with the staged copy before a full build. No install
 image was produced; the new video/reset sources remain isolated.
 The corrected full install-image build is
 [CI 38038376683](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038376683);
-it is still running. Additional source-only candidates do not enable hardware
-in that image.
+it passed all jobs at `a3268afc0a3c41a13ff0a5e69de01faf58a78c47` and produced
+the r180 installation archive, SHA256
+`88d70c7f0ecc5361358fde8097959e3e204046aea9924261111be808c78cd93a`.
+Download/installation checks remain pending; the phone still uses r179. This
+image includes SensorProxy r2 but retains baseline loader `dcb20ce`; it must not
+silently replace the separately installed BROM-only diagnostic loader.
+Additional source-only candidates do not enable hardware in that image.
+
+The combined 39-object camera/GPU check and 64-object CCCI check in
+[CI 38039961381](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039961381)
+stopped before compilation at CAM_MAIN overlay application. The overlay's
+non-EOF hunk now has canonical line counts and full trailing context; the
+checker rejects the old malformed input and preserves patch diagnostics.
+Actual combined ARM64 compilation remains unverified until the corrected run.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
