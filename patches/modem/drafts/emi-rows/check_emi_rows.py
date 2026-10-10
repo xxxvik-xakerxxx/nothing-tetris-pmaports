@@ -23,6 +23,8 @@ def static_check():
     assert "(resources->nc.base | resources->cache.base) & 0x1ffffffULL" in build
     assert "intersect(resources->firmware.base, layout.memory_size" not in build
     assert build.count("intersect(resources->firmware.base, resources->firmware.capacity") == 2
+    fixture = (HERE / "test_emi_rows.c").read_text()
+    assert "memset(rom + rom_size - 512 + 0x180, 0, 4)" in fixture
     assert "ops->smc(ops->context, 0xc2000415U, 6, 40, r->role, 0" in program
     assert "tx->padding.words[j + 3] & ~r->policy[j]" in program
     assert "tetris_modem_program_emi_range" in program

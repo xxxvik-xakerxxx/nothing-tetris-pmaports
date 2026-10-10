@@ -129,7 +129,8 @@ int main(int argc, char **argv)
 	if (mode == 4)
 		resources.sib.base = 0xd0000000ULL;
 	if (mode == 5)
-		memset(rom + rom_size - 512 + 0x184, 0, 4);
+		/* CHKv6 CONSYS +0x180; +0x184 is UDC enable, not its size. */
+		memset(rom + rom_size - 512 + 0x180, 0, 4);
 	if (mode == 6)
 		resources.cache.base += 0x10000;
 	if (mode == 7)
