@@ -11,6 +11,12 @@
 
 static void sealed_child(struct b41_mipc_supervision *owner, const char *root, const char *mode)
 {
+    sigset_t signals;
+    /* Only the lease-owning parent blocks termination; restore child limits. */
+    if (sigemptyset(&signals) || sigprocmask(SIG_SETMASK, &signals, NULL))
+        die("restore child signal mask");
+    /* The parent log's soft limit must not truncate authenticated providers. */
+    limit(RLIMIT_FSIZE, 64UL << 20);
     char proc[4096];
     char *const environment[] = { "PATH=/", "LC_ALL=C",
         "LD_LIBRARY_PATH=/apex/com.android.runtime/lib64/bionic:/system/lib64:/vendor/lib64", NULL };
@@ -19,6 +25,7 @@ static void sealed_child(struct b41_mipc_supervision *owner, const char *root, c
     int rc = b41_mipc_loader_root_probe(root, owner->stage, B41_MIPC_PROVIDER_COUNT,
         owner->stage[B41_MIPC_PROVIDER_COUNT], owner->stage[B41_MIPC_PROVIDER_COUNT + 1]);
     if (rc) { errno = -rc; die("sealed provider root"); }
+    limit(RLIMIT_FSIZE, 1UL << 20);
     if (snprintf(proc, sizeof(proc), "%s/proc", root) >= (int)sizeof(proc)) {
         errno = ENAMETOOLONG; die("private proc path");
     }

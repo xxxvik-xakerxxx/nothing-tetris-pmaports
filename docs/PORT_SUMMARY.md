@@ -143,16 +143,17 @@ silently replace the separately installed BROM-only diagnostic loader.
 Additional source-only candidates do not enable hardware in that image.
 
 The current combined candidate check is
-[CI 38048742833](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048742833),
-fully passed at `630aa471e857d776d44a98d6064c36fefc22f57c`.
+[CI 38049548901](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38049548901),
+fully passed at `ff24af2dd6b6b515c27e11830c58b22ac2525945`.
 Downloaded manifests independently confirm 45 real camera/GPU/owner ARM64
 objects and 64 real ECCCI/CCMNI/util objects. Video, CAM_MAIN and all four joint
 camera objects also compile with KUnit disabled. Native modem callbacks, GPU
 power fault fixtures, GNSS mount/control-launch/timeout/reap fixtures and
 API28 Bionic builds passed. This is object/native-fixture evidence, not module
 linkage, kernel KUnit execution or physical subsystem support.
-The camera cold-power and lock/lifetime review corrections are the next gate;
-the successful run does not certify subsequent source changes.
+This includes the camera selected-clock/shared-VCORE and lock/lifetime
+corrections, plus genuine GNSS mid-copy fault fixtures. Subsequent source
+changes require their own check; no physical subsystem is enabled by this run.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
@@ -75,9 +76,19 @@ static void observe_blocked_control(pid_t child)
         if (!ready) { struct timespec delay = {0, 10000000}; assert(!nanosleep(&delay, NULL)); }
     }
     assert(ready);
+    assert(strstr(text, "SigBlk:\t0000000000000000"));
     assert(strstr(text, "CapEff:\t0000000000000000"));
     assert(strstr(text, "CapPrm:\t0000000000000000"));
     assert(strstr(text, "CapBnd:\t0000000000000000"));
+    child_path(path, sizeof(path), child, "root/vendor/lib64/libmnl.so");
+    struct stat library;
+    assert(!stat(path, &library) && library.st_size == (1UL << 20) + 17);
+    child_path(path, sizeof(path), child, "limits");
+    read_file(path, text, sizeof(text));
+    char *limit_row = strstr(text, "Max file size");
+    unsigned long soft, hard;
+    assert(limit_row && sscanf(limit_row, "Max file size %lu %lu", &soft, &hard) == 2);
+    assert(soft == (1UL << 20) && hard == (1UL << 20));
     child_path(path, sizeof(path), child, "fd");
     DIR *fds = opendir(path);
     assert(fds); /* Observing the nondumpable child requires CAP_SYS_PTRACE. */
@@ -114,6 +125,16 @@ static void run_case(enum scenario scenario)
             MFD_CLOEXEC | MFD_ALLOW_SEALING);
         assert(stage[i] >= 3);
         assert(write(stage[i], &i, sizeof(i)) == (ssize_t)sizeof(i));
+        if (i == B41_MIPC_PROVIDER_COUNT + 1) {
+            char bytes[65536];
+            memset(bytes, 'L', sizeof(bytes));
+            size_t remaining = (1UL << 20) + 17 - sizeof(i);
+            while (remaining) {
+                size_t count = remaining < sizeof(bytes) ? remaining : sizeof(bytes);
+                assert(write(stage[i], bytes, count) == (ssize_t)count);
+                remaining -= count;
+            }
+        }
         assert(!fchmod(stage[i], !i || i == B41_MIPC_PROVIDER_COUNT ? 0555 : 0444));
         assert(!fcntl(stage[i], F_ADD_SEALS,
             F_SEAL_SEAL | F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK));
@@ -141,6 +162,10 @@ static void run_case(enum scenario scenario)
         int fd = open(path, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0600);
         assert(fd >= 0 && !close(fd));
     }
+    sigset_t signals;
+    const struct rlimit log_bound = { 1UL << 20, 64UL << 20 };
+    assert(!setrlimit(RLIMIT_FSIZE, &log_bound));
+    assert(!sigfillset(&signals) && !sigprocmask(SIG_SETMASK, &signals, NULL));
     assert(!b41_mipc_sealed_probe_spawn(&owner, root, "control"));
     assert(owner.bind_attempted && owner.child > 0 && !owner.terminal);
     for (unsigned i = 0; i < owner.count; ++i) assert(fcntl(retained[i], F_GETFD) >= 0);

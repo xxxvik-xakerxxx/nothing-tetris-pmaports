@@ -417,6 +417,17 @@ jobs:
           sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts
       - name: Exercise real sealed launcher and terminal reap
         run: sh patches/gnss-navigation-audit/run_mipc_sealed_launch_ci.sh
+      - name: Compile dedicated sealed probe parent and check admission
+        run: |
+          here=patches/gnss-navigation-audit
+          cc -std=c11 -Wall -Wextra -Werror -pthread \
+            -ffunction-sections -fdata-sections -Wl,--gc-sections -I"$here" \
+            "$here/b41_sealed_probe_parent.c" "$here/b41_mipc_sealed_isolate.c" \
+            "$here/b41_mipc_loader_root.c" "$here/b41_mipc_supervised_child.c" \
+            "$here/b41_native_receiver_host.c" -o /tmp/b41-sealed-probe-parent
+          python3 "$here/test_b41_sealed_probe_cli.py"
+          python3 "$here/test_b41_sealed_probe_ci.py"
+          python3 ci/test-gnss-delegated-load.py
 
   kernel-object-smoke:
     needs: validate-overlay
