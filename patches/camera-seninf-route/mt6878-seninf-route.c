@@ -151,7 +151,7 @@ int mt6878_seninf_route_prepare(struct mt6878_seninf_route *r,
 	if (!ret)
 		ret = mt6878_route_preflight(&r->backend.io, p);
 	if (!ret)
-		ret = mt6878_phy_setup(&r->backend, &p->outputs[0], &in, &r->phy);
+		ret = mt6878_phy_setup(&r->backend, &r->phy, &p->outputs[0], &in);
 	if (!ret)
 		ret = mt6878_route_setup(&r->backend.io, p, &r->route);
 	return route_error(r, ret);
