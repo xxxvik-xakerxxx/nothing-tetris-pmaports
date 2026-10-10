@@ -1,0 +1,72 @@
+name: GNSS real Bionic XML dependencies
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gnss-bionic-xml
+  cancel-in-progress: false
+
+jobs:
+  bionic-backends:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential cmake ninja-build \
+            perl python3 python3-pyelftools unzip
+      - name: Obtain matching pinned Android NDK
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 300 \
+            https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip
+          test "$(stat -c %s /tmp/ndk.zip)" = 663956036
+          printf '%s  %s\n' 22105e410cf29afcf163760cc95522b9fb981121 /tmp/ndk.zip | sha1sum --check
+          unzip -q /tmp/ndk.zip -d /tmp
+      - name: Obtain pinned public stock inputs
+        uses: actions/download-artifact@v7
+        with:
+          name: tetris-b41-selected-stock-port-assets
+          run-id: 38048111345
+          github-token: ${{ github.token }}
+          path: out/selected-stock
+      - name: Check dependency admission before builds
+        run: |
+          python3 ci/test-gnss-bionic-deps.py
+          python3 patches/gnss-navigation-audit/test_b41_xml_adc_runner.py
+      - name: Build real target XML and crypto libraries
+        run: |
+          python3 ci/build-gnss-bionic-deps.py --ndk /tmp/android-ndk-r27d \
+            --work /tmp/tetris-bionic-dependencies --prefix "$PWD/out/bionic-deps"
+          sha256sum /tmp/ndk.zip > out/bionic-deps/NDK-SHA256SUMS
+      - name: Link our full XML and ADC fixtures against target libraries
+        id: link
+        run: |
+          export B41_BIONIC_CC=/tmp/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang
+          export B41_BIONIC_DEPS="$PWD/out/bionic-deps"
+          sh patches/gnss-navigation-audit/run_xml_adc_ci.sh bionic \
+            "$PWD/out/selected-stock/vendor/lib64/mt6878/libmnl.so" \
+            "$PWD/out/selected-stock/vendor/etc/MNL_Config.xml" \
+            "$PWD/out/selected-stock/vendor/bin/mnld" \
+            "$PWD/out/xml-adc-bionic"
+      - name: Record actual linking outcome
+        if: always()
+        run: |
+          mkdir -p out/xml-adc-bionic
+          printf '%s\n' \
+            '{"commit":"${{ github.sha }}","step_outcome":"${{ steps.link.outcome }}","mode":"real-arm64-api28-link","target_executed":false,"vendor_init_called":false,"hardware_readiness":false}' \
+            > out/xml-adc-bionic/RESULT.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gnss-bionic-xml-evidence
+          path: |
+            out/bionic-deps/
+            out/xml-adc-bionic/
+          if-no-files-found: error

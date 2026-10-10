@@ -239,6 +239,11 @@ changes require their own check; no physical subsystem is enabled by this run.
   Bionic libxml2/OpenSSL dependency builds, XML reader/SET ordering and actual
   ADC endpoint ownership remain required. It never calls vendor INIT or claims
   satellite acquisition.
+  The separate [real Bionic dependency build](../patches/gnss-navigation-audit/BIONIC_XML_DEPS.md)
+  now builds pinned official XML/crypto sources with the same NDK/API28 ARM64
+  compiler, checks their real exports/dependency closure and links both full
+  fixtures. Its first CI run is pending; it does not alter the sealed probe or
+  insert unreviewed libraries into the shipping provider chain.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Source and CI boundary

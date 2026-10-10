@@ -73,8 +73,10 @@ stubs, host include directories/libraries, or generated successful EVP/XML mocks
 are not substitutes. Runner checks actual AArch64 shared-library shape and
 defined EVP_Digest/xmlReadMemory exports, then requires complete no-undefined
 fixture linkage. These checks do not independently authenticate headers or ABI.
-There is currently no supplied target-built libxml2/OpenSSL artifact in this
-bundle; absence fails instead of claiming complete Bionic XML validation.
+The new [real dependency workflow](BIONIC_XML_DEPS.md) builds pinned official
+libxml2/OpenSSL sources with that same NDK/API28 compiler and then links these
+fixtures. Its first run is pending; an arbitrary development prefix or host
+library is still not a substitute for successful target build evidence.
 
 ```sh
 CI=true B41_BIONIC_CC="$NDK_CC" B41_BIONIC_DEPS="$TARGET_DEPS" \
