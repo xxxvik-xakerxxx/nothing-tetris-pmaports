@@ -124,8 +124,13 @@ that fixed thirteen-FD snapshot through the existing CLI, supervisor and
 isolated child. Legacy modes retain strict twelve-FD admission; limits,
 quarantine and terminal-reap ownership are unchanged. XML-control checks
 post-drop readability, absent `/data` and denied writes; XML-load uses only
-the original pinned dlopen probe. Offline checks and independent review pass;
-real ARM64 launch/execution is pending CI. This does not provide engine INIT,
+the original pinned dlopen probe. Offline checks and independent review pass.
+[CI 38074800655](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38074800655)
+at `d9a0a85f61c2` passed both legacy and XML-snapshot control/load on actual
+ARM64 Linux. Downloaded logs show unique `XML_ROOT_OK`, `LOAD_OK` and successful
+terminal reap for each route; the native launch fixture also passed wrong-count
+admission, XML control, startup failure and timeout/reap. Both result records
+explicitly leave engine INIT and hardware readiness false. This does not provide engine INIT,
 missing CCCI/property/RX services or a GPS fix.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.

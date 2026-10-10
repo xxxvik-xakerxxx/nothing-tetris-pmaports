@@ -199,8 +199,15 @@ lifetime. Downloaded source manifests match the commit. The independent
 unchanged Bionic load-only stage also reports `LOAD_OK` and terminal reap;
 it does not execute the new XML snapshot or call engine INIT.
 
-The new executable XML-snapshot admission and launch fault fixture are wired
-into the same workflow; their real ARM64 execution is pending a new CI run.
+At `d9a0a85f61c2`, [CI 38074800655](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38074800655)
+passed both legacy and XML-snapshot control/load on actual ARM64 Linux.
+Downloaded XML-control logs contain exactly one `XML_ROOT_OK` after the eight
+existing denials; XML-load contains `LOAD_OK`. All four runs have unique
+successful terminal reap, and both result records leave engine INIT/hardware
+readiness false. The native launch fixture also passes strict wrong-count
+admission, XML control, startup failure and timeout/reap. Its intentional
+nonempty-root fault reports `Directory not empty`; this is not an execution
+failure. Downloaded manifests match the tested source commit.
 Native reader/SET operation, complete config constructors,
 runtime libxml2/OpenSSL, legitimate CCCI/property readiness and RX shutdown
 remain separate unresolved gates. No navigation success or INIT claimed.
