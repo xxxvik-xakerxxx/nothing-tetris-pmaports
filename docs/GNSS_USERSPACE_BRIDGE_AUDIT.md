@@ -1,6 +1,19 @@
 # GNSS v051 userspace bridge audit
 
-## Current r177 Boundary
+## Current Integration Boundary
+
+Installed r179 still has no verified navigation fix. The main branch now
+contains a native receiver owner/controller: real gpsdl identity and descriptor
+transfer, separate NMEA/application outputs, report/control event delivery,
+source-derived native stop acknowledgement and bounded parent reap. It does not
+start Android mnld or implement another NMEA parser. Native sanitizer fixtures
+and the complete Bionic ARM64 link passed
+[CI 38025448174](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025448174).
+Configuration/calibration and the slot6 assistance receiver/response contract
+remain missing; no engine initialization or position-fix success is claimed.
+See [native integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).
+
+## Earlier Config Fixture Evidence
 
 Standalone AArch64 Bionic config/query fixtures from successful job
 `build-gnss-bionic-adapter` in [CI 37928044937](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37928044937)

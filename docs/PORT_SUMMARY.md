@@ -140,17 +140,32 @@ fault tests and AArch64 Bionic builds passed
 Engine initialization, firmware readiness and a position fix remain
 unverified. See [integration](../patches/gnss-navigation-audit/NAVIGATION_HOST_INTEGRATION.md).
 
+The native receiver controller now retains the real loader association, gpsdl
+descriptors, callback/output worker and supervised stop procedure together.
+Report/restart/prohibition events wake a controller instead of invoking Android
+FM or position publication. Stop requires actual native joins and parent reap;
+a timeout is not successful teardown. Native sanitizer tests and the complete
+AArch64 Bionic link passed
+[CI 38025448174](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025448174)
+at `788d8fc`. First/second configuration, calibration and slot6 assistance remain
+unresolved, so no engine initialization was attempted. See
+[native resource integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).
+
 The modem boot-stage candidate now implements concrete EMI/remap/lock,
 source-derived NS BL33 clock/isolation/power/bus ordering and four-word BROM
 completion. First-error reporting and finite stock-order failure shutdown are
-separate. [CI 37991128306](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37991128306)
-passed all 37 native sanitizer fault cases plus the actual signed stock input.
-Active EMI row production and physical startup remain incomplete;
-[U-Boot CI 37992519175](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37992519175)
-passed real ARM64 bootstrap/secure objects and the full image at `a52243d8d5`.
-Those objects have no active caller. The installed loader remains `d385921`.
-The bootstrap is not enabled
-by a board hook and does not expose SIM/calls. See
+separate. The complete EMI producer derives active rows32..43 from signed
+metadata and distinct firmware/NC/cache/SIB allocations, including real slot40
+padding and its exact preset policy. Full reservations cannot overlap.
+[CI 38025322548](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025322548)
+passed the actual signed stock input, 37 bootstrap and 20 EMI sanitizer cases.
+The initial EMI fixture failure was a wrong CONSYS field offset, corrected
+without weakening the check. [U-Boot CI 38025178952](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38025178952)
+passed actual ARM64 bootstrap/secure/EMI sources and the full image at `a0f6855512`.
+The old bootstrap EMI phase still needs replacement, real bank remaps and the
+authenticated allocation lifetime must be connected. These objects have no
+active board caller; physical startup and SIM/calls remain unavailable. The
+installed loader remains `d385921`. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
 The camera platform consumer adds four source-derived IRQ handlers, native
