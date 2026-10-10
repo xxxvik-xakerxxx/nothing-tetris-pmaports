@@ -117,8 +117,21 @@ The new batch decoder shares one owned XML snapshot, digest, DOM and locale
 across all19 GET results before SET preflight. It preserves atomic outputs and
 global commit; invalid batches cannot publish a prefix. Native wrappers now
 check one digest/DOM per stock application plus late-failure and input-mutation
-cases. This optimization's native and Bionic checks are pending; it is not a
-measured phone startup improvement.
+cases. The changed backend passed native ASan/UBSan
+[CI 38065800131](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065800131)
+and genuine API28 dependency builds/full fixture linkage
+[CI 38065806550](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065806550)
+at `d86ce980b7535ea7728ebcf8c448fedec8de7d61`. Downloaded source hashes match
+all12 staged inputs. This is not a measured phone startup improvement. Batch
+GET validation now precedes SET preflight, rather than interleaving them; the
+first encountered error still latches and cannot publish partial state.
+
+Pinned B4.1 startup calls `4fd044` before XML reader policy `4fd20c`; `4fd06c`
+clears `0x3f8` bytes of the actual globals. Applying this sidecar before that
+OEM initializer would therefore erase its writes. The global constructor is
+not a runtime configuration hook until that ordering is correctly integrated.
+Category5 serialized XML output is routed through NMEA/log output, not proven
+DSP configuration transport. Neither observation permits clearing INIT gates.
 
 Native ASan/UBSan execution passed
 [CI 38052531292](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052531292)

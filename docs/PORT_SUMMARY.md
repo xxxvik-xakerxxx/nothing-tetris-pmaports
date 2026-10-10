@@ -246,7 +246,14 @@ changes require their own check; no physical subsystem is enabled by this run.
   passed the real dependency builds and both full target links at `7963a02`.
   Target execution remains untested. It does not alter the sealed probe or
   insert unreviewed libraries into the shipping provider chain. The subsequent
-  one-snapshot batch XML optimization still requires native and target checks.
+  one-snapshot batch XML optimization passed native
+  [CI 38065800131](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065800131)
+  and full target linkage
+  [CI 38065806550](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065806550)
+  at `d86ce98`. There is no phone performance measurement or target execution.
+  The OEM startup initializer clears the globals before reading XML; pre-init
+  sidecar writes are not a runtime configuration solution. Source-backed reader
+  ordering and real endpoint ownership remain unresolved.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Source and CI boundary
