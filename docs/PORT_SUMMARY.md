@@ -143,11 +143,12 @@ silently replace the separately installed BROM-only diagnostic loader.
 Additional source-only candidates do not enable hardware in that image.
 
 The current combined candidate check is
-[CI 38049548901](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38049548901),
-fully passed at `ff24af2dd6b6b515c27e11830c58b22ac2525945`.
-Downloaded manifests independently confirm 45 real camera/GPU/owner ARM64
+[CI 38050988309](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050988309),
+fully passed at `d6c3a6b7b445bdd555c712dfe82cbc6e23b63b26`.
+Downloaded manifests independently confirm 47 real camera/GPU/owner ARM64
 objects and 64 real ECCCI/CCMNI/util objects. Video, CAM_MAIN and all four joint
-camera objects also compile with KUnit disabled. Native modem callbacks, GPU
+camera objects, both repeat-capture objects and their native/platform consumers
+also compile with KUnit disabled. Native modem callbacks, GPU
 power fault fixtures, GNSS mount/control-launch/timeout/reap fixtures and
 API28 Bionic builds passed. This is object/native-fixture evidence, not module
 linkage, kernel KUnit execution or physical subsystem support.
@@ -195,7 +196,7 @@ changes require their own check; no physical subsystem is enabled by this run.
   cycle keeps IRQ/MMIO/queue ownership stable, waits for actual DONE-triggered
   stop work, verifies DMA/PHY OFF, then allocates fresh CQ/transactions.
   Premature stop before DONE is rejected; timeout remains latched and blocks
-  rearm. Its two objects and rebuilt consumers enter a 47-object CI check.
+  rearm. Its two objects and rebuilt consumers passed the 47-object CI check.
   Repeated capture and a physical frame remain unproven.
   See [camera research](CAMERA_BRINGUP.md).
 - **GNSS:** matching stock engine/config and transport contracts are retained.

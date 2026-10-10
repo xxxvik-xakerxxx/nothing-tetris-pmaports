@@ -85,7 +85,12 @@ stale old-sequence DONE through actual camsv_done, missing/failed DMA OFF throug
 production epoch_done. Prepared, NOT executed; no successful mock supplier.
 check.py verifies ordering/no supplier teardown/no scalar error clearing and
 overlays; generate-overlays.py --check verifies deterministic worker/final-retire
-overlays. Next gates: parent lock/lifetime review, ARM objects, KUnit execution,
+overlays. Both new ARM64 objects and changed native/platform/video consumers
+passed KUNIT=y/n compilation in
+[CI 38050988309](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050988309)
+at `d6c3a6b`. Downloaded manifests confirm all 47 objects and source identities.
+This does not execute the KUnit fixtures or prove a physical frame.
+Next gates: kernel fixture execution, complete supplier DT/lifetime admission,
 then separately authorized repeated capture and regression tests.
 test-completion-order.py runs five source-only mutation fixtures preventing
 premature stop, abort before error publication, timeout fallthrough and late-DONE

@@ -6,65 +6,33 @@ for automatic probing.
 
 ## Current Native Integration
 
-Source candidates now connect calibrated C-PHY/MAC, RAW/PDAF VC and CAMMUX
-routes, CAMSV capture, TG/VF shutdown and a narrow reset lease inside the
-existing Linux SMI provider. No consumer remaps that provider's registers.
-The combined CI stages 38 camera source files and compiles 26 ARM64 objects
-overall, including the actual SMI provider. Native fault cases and all objects
-passed [CI 38026834337](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026834337)
-after correcting the route caller's PHY argument order.
-The packaged PHY helper preserves configured state on failed shutdown, with
-every off-fault and refusal-to-replay covered by its CI fixture.
+Current source connects calibrated C-PHY/MAC, RAW/PDAF VC/CAMMUX routes,
+SENINF IRQ/TSREC drain, CAMSV capture, media/V4L2 MMAP queues and native PM.
+The cold-frame path performs real sensor OFF and receiver drain before a
+joint SMI/CAM_MAIN reset and the calibrated ON/CQ/DMA path. Its selected-clock,
+shared-VCORE and lock/lifetime checks follow the actual vendor recipe.
+Existing provider leases cover accesses; consumers do not remap supplier MMIO.
 
-The next isolated closure now includes real MAC/PHY IRQ handling, TSREC
-shutdown, shared mux allocation, native ACTIVE-format exclusion, Linux-provider
-SENINF PM and concrete probe/frame/retirement integration. Failed stream-on
-has a separate owned abort: actual IRQ drain and sensor cleanup must precede
-route disconnect; Linux core's EALREADY is never shutdown proof. The complete
-48-source camera closure is staged with all 33 ARM64 objects, including the
-packaged GPU analysis consumer, SMI provider and two camera KUnit objects.
-Its native event fixtures and all ARM64 objects passed
-[CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349).
-KUnit object compilation does not execute the kernel fixtures.
+The isolated reusable frame cycle retains MMIO, IRQ registrations, queues and
+mutex addresses between frames. It waits for actual DONE-triggered stop work,
+requires DMA/PHY OFF, retires coherent CQ, then installs a fresh transaction.
+Timeout/error remains sticky and forbids rearm. This is a bounded RAW/PDAF
+snapshot cycle, not continuous preview or idle-power optimization.
 
-A new root owner implements actual media/V4L2 registration, RAW/meta MMAP
-queues, real notifier completion and retirement before vb2 cancellation.
-It retains buffers and supplier references after failed DMA retirement rather
-than completing a frame artificially. The isolated closure now stages 52 camera
-sources and 37 ARM64 objects overall, adding the video owner and GPU reset
-provider. All 37 actual ARM64 objects passed
-[CI 38032210668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38032210668),
-including video compilation with KUnit enabled and disabled. The first run's
-missing V4L2 device include and old file-handle signature were corrected against
-Linux 6.18; the private route macro no longer shadows Linux's WRITE constant.
-Kernel fixture execution remains pending. The complete
-clock/regulator/nvmem supplier DT, genuine CAM_MAIN mapping lease, bound DMA
-supplier and cooperative removal policy still block activation. See
-[video registration contract](../patches/camera-native-video/SOURCE-CONTRACT.md).
-These new camera overlays are CI-only, not enabled in the phone's DT or package.
-The isolated [CAM_MAIN provider](../patches/camera-cam-main-provider/SOURCE-CONTRACT.md)
-now exposes a synchronous same-task lease of its existing syscon regmap. Actual
-runtime-PM acquisition, module/device references and the supplier mutex cover
-each access and retirement; no second mapping or persistent capture lease is
-claimed. Reset still returns `-EOPNOTSUPP` until joint SMI clamp and SCQ/route-off
-ownership is connected. The combined harness adds the real clock-provider and
-smoke objects, now 39 ARM64 objects, with KUnit enabled/disabled builds. Static
-overlay checks and all 16 harness input tests pass; compilation and KUnit
-execution remain pending. The first combined run,
-[CI 38039961381](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039961381),
-failed before compilation because the provider overlay lacked trailing context.
-Canonical context and a regression check now reject that old hunk; no compile
-success is inferred from the staging fix. The next run
-[CI 38042483164](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38042483164)
-passed GNU patch and exact staged-byte checks, then stopped because the isolated
-configuration had not requested `COMMON_CLK_MT6878_CAM`. The harness now
-explicitly requests both declared clock dependencies before `olddefconfig`;
-a regression test covers the real command construction and normal-build isolation.
-The shipping provider/package is unchanged.
-No preview, capture or successful camera support is claimed. See the
-[route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
-[native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md), plus
-[native PM/capture integration](../patches/camera-native-capture/SOURCE-CONTRACT.md).
+The full combined GPU/camera ownership check passed 47 actual ARM64 objects in
+[CI 38050988309](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050988309)
+at `d6c3a6b`. Downloaded manifests identify the compiled source bytes; new epoch,
+native/platform/video, joint-reset and CAM_MAIN objects also compile with KUnit
+disabled. Source/overlay and completion-order regression checks passed.
+KUnit compilation is not kernel fixture execution or a physical frame.
+
+Activation still requires complete supplier DT, module identity/calibration,
+bound IOMMU/DMA ownership and cooperative lifetime/removal. These overlays are
+CI-only, not enabled in the phone's DT/package. No preview/capture support is
+claimed. See [repeat-cycle contract](../patches/camera-repeat-capture/SOURCE-CONTRACT.md),
+[cold-frame contract](../patches/camera-joint-reset/SOURCE-CONTRACT.md),
+[video registration](../patches/camera-native-video/SOURCE-CONTRACT.md) and
+[native PM integration](../patches/camera-native-capture/SOURCE-CONTRACT.md).
 
 ## Earlier Evidence
 
