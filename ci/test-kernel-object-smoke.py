@@ -85,7 +85,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 26)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 30)
         self.assertEqual(smoke.PROVIDER_OBJECTS, ("drivers/memory/mtk-smi.o",))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))

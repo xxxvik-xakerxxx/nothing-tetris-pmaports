@@ -1,0 +1,11 @@
+diff --git a/drivers/media/i2c/imx882-tetris-stream.c b/drivers/media/i2c/imx882-tetris-stream.c
+--- a/drivers/media/i2c/imx882-tetris-stream.c
++++ b/drivers/media/i2c/imx882-tetris-stream.c
+@@ -656,6 +656,7 @@
+ 	.driver = {
+ 		.name = "tetris-imx882-stream",
++		.suppress_bind_attrs = true,
+ 		.of_match_table = imx882_camera_of_match,
+ 		.pm = pm_sleep_ptr(&imx882_camera_pm),
+ 	},
+ };

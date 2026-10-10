@@ -2,10 +2,12 @@
 
 ## Current status
 
-Installed r179 and loader `d385921` still have no GPU acceleration. The cold
+The last readback-verified r179/`d385921` checkpoint has no GPU acceleration. The cold
 authenticated GPUEB transform passed with 156064 signed bytes and unknown flat
 format; its temporary plaintext was erased. Display/touch and automatic sensors
 remain working, confirmed by the user after cold boot.
+The subsequent BROM-only loader flash and pending readback are recorded in
+[port summary](PORT_SUMMARY.md); GPU retention is disabled in that experiment.
 
 Actual U-Boot now includes a separate default-off private flat-retention path:
 one authenticated transform, an exclusive erased-tail no-map reservation and
@@ -27,6 +29,13 @@ This implements a missing firmware-inspection transport, not GPUEB startup.
 Entry/data/BSS and the unauthenticated larger LK copy span, complete reset/power
 ownership and accelerated Panthor rendering remain unresolved. See
 [retention integration](../patches/gpu/flat-handoff-draft/HOOK-INTEGRATION.md).
+
+A default-off native reset-controller adapter now reuses the sole SRAM/reset
+owner. It registers only assertion, with no invented deassert/status callback
+or successful OFF claim. Stop retains resources and reports failure until
+actual OFF/DMA-drain evidence exists. Eight static/source checks passed; the
+new actual ARM64 objects are staged in the combined CI, not packaged or
+activated. See [reset-provider boundary](../patches/gpu/reset-provider-draft/README.md).
 
 ## Earlier Supply Evidence
 

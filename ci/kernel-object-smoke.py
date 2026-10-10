@@ -45,6 +45,10 @@ RESEARCH_SOURCES = {
     "patches/gpu/sram-owner/mt6878-gpueb-sram.h": f"{RESEARCH_DIR}/mt6878-gpueb-sram.h",
     "patches/gpu/sram-owner/mt6878-gpueb-sram-core.c": f"{RESEARCH_DIR}/mt6878-gpueb-sram-core.c",
     "patches/gpu/sram-owner/mt6878-gpueb-sram-core.h": f"{RESEARCH_DIR}/mt6878-gpueb-sram-core.h",
+    "patches/gpu/reset-owner-draft/mt6878-gpueb-reset.c": f"{RESEARCH_DIR}/mt6878-gpueb-reset.c",
+    "patches/gpu/reset-owner-draft/mt6878-gpueb-reset.h": f"{RESEARCH_DIR}/mt6878-gpueb-reset.h",
+    "patches/gpu/reset-provider-draft/mt6878-gpueb-reset-provider.c": f"{RESEARCH_DIR}/mt6878-gpueb-reset-provider.c",
+    "patches/gpu/reset-provider-draft/mt6878-gpueb-reset-provider.h": f"{RESEARCH_DIR}/mt6878-gpueb-reset-provider.h",
     "patches/modem/mt6878_md_startup_scope.c": f"{RESEARCH_DIR}/mt6878_md_startup_scope.c",
     "patches/modem/mt6878_md_startup_scope.h": "include/linux/soc/mediatek/mt6878_md_startup_scope.h",
     "patches/modem/mt6878_md_handoff_reservation.c": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.c",
@@ -59,6 +63,7 @@ PROVIDER_PATCH = "patches/camera-smi-owner/provider.patch"
 PROVIDER_OBJECTS = ("drivers/memory/mtk-smi.o",)
 RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
+    "mt6878-gpueb-reset", "mt6878-gpueb-reset-provider",
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
     "mt6878_md_pss32",
 ))
@@ -83,7 +88,7 @@ def camera_staging(root):
     for source in sources:
         path = Path(source)
         if (not source.startswith("patches/camera-") or ".." in path.parts
-                or path.suffix not in (".c", ".h")):
+                or path.suffix not in (".c", ".h", ".inc")):
             raise ValueError("unsafe camera source path")
         target = f"{destination}/{path.name}"
         if target in mapping.values():
@@ -302,6 +307,27 @@ def main():
         print(name + ": " + json.dumps(identities[name]), flush=True)
     if list(output.rglob("*.ko")) or (output / "vmlinux").exists():
         raise ValueError("object-only CI must not produce runtime modules or kernel")
+    if args.research_owners:
+        # Also compile the actual video owner without its private KUnit cases.
+        # No fixture execution or change to the shipping kernel configuration.
+        video_objects = tuple(name for name in CAMERA_OBJECTS
+                              if Path(name).name in ("mt6878-native-video.o", "video-smoke.o"))
+        if len(video_objects) != 2:
+            raise ValueError("video variant requires both explicit objects")
+        run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
+        run([*make, "olddefconfig"])
+        if any(line.startswith("CONFIG_KUNIT=")
+               for line in (output / ".config").read_text().splitlines()):
+            raise ValueError("video KUnit-disabled configuration did not resolve")
+        shutil.copyfile(output / ".config", report / "video-kunit-disabled.config")
+        for name in video_objects:
+            (output / name).unlink()
+        run([*make, *video_objects])
+        manifest["video_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in video_objects
+        }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")

@@ -27,8 +27,16 @@ Its native event fixtures and all ARM64 objects passed
 [CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349).
 KUnit object compilation does not execute the kernel fixtures.
 
-Root video/vb2 registration, the complete clock/regulator/nvmem supplier DT,
-CAM_MAIN mapping ownership and removal lifetime still block activation.
+A new root owner implements actual media/V4L2 registration, RAW/meta MMAP
+queues, real notifier completion and retirement before vb2 cancellation.
+It retains buffers and supplier references after failed DMA retirement rather
+than completing a frame artificially. The isolated closure now stages 52 camera
+sources and 37 ARM64 objects overall, adding the video owner and GPU reset
+provider. Video compilation is requested with KUnit both enabled and disabled;
+new object results and KUnit execution remain pending. The complete
+clock/regulator/nvmem supplier DT, genuine CAM_MAIN mapping lease, bound DMA
+supplier and cooperative removal policy still block activation. See
+[video registration contract](../patches/camera-native-video/SOURCE-CONTRACT.md).
 These new camera overlays are CI-only, not enabled in the phone's DT or package.
 No preview, capture or successful camera support is claimed. See the
 [route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and

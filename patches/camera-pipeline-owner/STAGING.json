@@ -49,7 +49,11 @@
     "patches/camera-native-capture/mt6878-native-capture.c",
     "patches/camera-native-capture/mt6878-native-capture.h",
     "patches/camera-native-capture/native-smoke.c",
-    "patches/camera-native-capture/failed-start-test.c"
+    "patches/camera-native-capture/failed-start-test.c",
+    "patches/camera-native-video/mt6878-native-video.c",
+    "patches/camera-native-video/mt6878-native-video.h",
+    "patches/camera-native-video/video-smoke.c",
+    "patches/camera-native-video/video-lifetime-test.inc"
   ],
   "objects": [
     "mt6878-camera-pipeline-owner.o",
@@ -71,12 +75,14 @@
     "mt6878-seninf-pm.o",
     "mt6878-native-capture.o",
     "native-smoke.o",
-    "failed-start-test.o"
+    "failed-start-test.o",
+    "mt6878-native-video.o",
+    "video-smoke.o"
   ],
   "fault_object": "owner-kunit.o",
   "required_enabled": [
     "DMA_SHARED_BUFFER", "RPMSG", "IOMMU_API", "MEDIA_SUPPORT",
-    "MEDIA_CONTROLLER", "VIDEO_DEV", "VIDEO_V4L2_SUBDEV_API",
+    "MEDIA_CONTROLLER", "VIDEO_DEV", "VIDEO_V4L2_SUBDEV_API", "V4L2_ASYNC",
     "VIDEOBUF2_DMA_CONTIG", "VIDEOBUF2_V4L2", "NVMEM", "MTK_SMI"
   ],
   "fault_required_enabled": ["KUNIT"],

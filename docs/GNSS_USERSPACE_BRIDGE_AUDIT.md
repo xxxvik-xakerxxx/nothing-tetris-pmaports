@@ -46,8 +46,15 @@ proven C0/C1 words, not fabricated calibration tail bytes. The matching
 and a non-null returned pointer alone does not guarantee a four-byte word.
 The native adapter checks length for status, C0, C1 and temperature before any
 copy. New exact-asset/static checks passed locally; the current Mac offline
-emulator terminated with SIGILL, so actual getter vectors and new native/Bionic
-fault checks still require Linux CI. ELF dependencies and detached-RX lifetime
+emulator terminated with SIGILL; that run is not counted as a pass. The actual
+getter's 72 bounded instruction vectors, exact ELF/ABI checks and native
+sanitizer fixtures subsequently passed Linux
+[CI 38030808388](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030808388).
+The same extraction located `libmtkrillog.so`, `libtrm.so` and
+`libmtkproperty.so` in `vendor/lib64`; transitive/runtime closure still requires
+audit. New native fault checks and Bionic compilation also passed
+[CI 38030803840](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030803840).
+ELF dependencies and detached-RX lifetime
 remain incomplete before live use; the modem's CCCI port and responder are
 still absent. See [MIPC closure](../patches/gnss-navigation-audit/MIPC_B41_CLOSURE_CONTRACT.md).
 Earlier native/Bionic

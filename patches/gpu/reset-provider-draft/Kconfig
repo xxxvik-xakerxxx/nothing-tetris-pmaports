@@ -1,0 +1,9 @@
+config MTK_MT6878_GPUEB_RESET_PROVIDER
+	tristate "MT6878 GPUEB parent-owned reset checkpoint (draft)"
+	depends on ARM64 && OF && PM && RESET_CONTROLLER
+	default n
+	help
+	  Register an assertion-only reset provider from a fixed, already powered
+	  unified GPUEB parent. Requires the reviewed SRAM/reset helper objects
+	  in the same integration. No automatic probe, firmware upload or start.
+	  Stop containment retains all claims until reboot; not physical OFF.
