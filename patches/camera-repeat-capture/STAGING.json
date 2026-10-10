@@ -1,0 +1,19 @@
+{
+  "scope": "new isolated reusable capture-cycle candidate; no activation or runtime success",
+  "destination": "drivers/media/platform/mediatek/tetris-camera-owner-smoke",
+  "sources": [
+    "patches/camera-repeat-capture/mt6878-capture-epoch.c",
+    "patches/camera-repeat-capture/mt6878-capture-epoch.h",
+    "patches/camera-repeat-capture/epoch-smoke.c",
+    "patches/camera-repeat-capture/epoch-test.inc"
+  ],
+  "objects": ["mt6878-capture-epoch.o", "epoch-smoke.o"],
+  "requires_staged_manifests": ["patches/camera-joint-reset/STAGING.json"],
+  "review_overlay": "patches/camera-repeat-capture/epoch-owner.patch",
+  "additional_review_overlay": "patches/camera-repeat-capture/epoch-stop-lock.patch",
+  "final_retire_overlay": "patches/camera-repeat-capture/epoch-final-retire.patch",
+  "worker_overlay": "patches/camera-repeat-capture/epoch-video.patch",
+  "overlay_destination": "drivers/media/platform/mediatek/tetris-camera-owner-smoke",
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime": "Per-frame drain/joint reset/PHY-off/CQ free then fresh transaction/coherent CQ. Stable MMIO/IRQ registration/PM refs/direct mutex/vb2 queues. Apply worker after video-cold overlay; full native teardown only streamoff/close. Failed hardware retains sticky errors and cannot rearm. ARM API compile, KUnit execution and lifetime review pending."
+}

@@ -1,0 +1,100 @@
+--- a/mt6878-native-video.c
++++ b/mt6878-native-video.c
+@@ -10,6 +10,7 @@
+ #include <media/v4l2-ioctl.h>
+ #include "mt6878-native-video.h"
+ #include "mt6878-camera-joint-reset.h"
++#include "mt6878-capture-epoch.h"
+ 
+ struct native_node {
+ 	struct video_device vdev;
+@@ -25,7 +26,7 @@
+ struct mt6878_native_video {
+ 	struct mt6878_native_video_suppliers suppliers;
+ 	struct mt6878_native_capture capture;
+-	struct mt6878_camera_joint_reset joint_reset;
++	struct mt6878_capture_epoch *epoch;
+ 	struct media_device media;
+ 	struct v4l2_device v4l2;
+ 	struct v4l2_async_notifier notifier;
+@@ -195,6 +196,8 @@
+ {
+ 	struct mt6878_native_video *v = container_of(work, struct mt6878_native_video, frame_work);
+ 	struct vb2_v4l2_buffer *raw, *pdaf;
++	struct mt6878_capture_epoch *previous, *next;
++	struct mt6878_camsv_job layout;
+ 	int ret;
+ 
+ 	mutex_lock(&v->capture.direct.lock);
+@@ -219,16 +222,38 @@
+ 		return;
+ 	}
+ 	mutex_unlock(&v->capture.direct.lock);
+-	ret = mt6878_camera_cold_frame(&v->joint_reset, &v->capture, raw, pdaf,
+-		&v->suppliers.layout, &v->suppliers.config, v->suppliers.port, 0);
+-	if (!ret && !wait_for_completion_timeout(&v->capture.platform.stopped,
+-		msecs_to_jiffies(1000))) {
+-		ret = -ETIMEDOUT;
+-		mt6878_camsv_platform_stop_async(&v->capture.platform);
+-	}
++	if (!v->epoch) {
++		v->epoch = mt6878_capture_epoch_alloc(&v->capture);
++		if (IS_ERR(v->epoch)) {
++			ret = PTR_ERR(v->epoch);
++			v->epoch = NULL;
++			goto frame_result;
++		}
++	}
++	layout = v->suppliers.layout;
++	if (v->epoch->warm)
++		layout.sequence = v->epoch->layout.sequence;
++	ret = mt6878_capture_epoch_submit(v->epoch, raw, pdaf,
++		&layout, &v->suppliers.config, v->suppliers.port, 0);
++	if (!ret)
++		ret = mt6878_capture_epoch_retire(v->epoch, msecs_to_jiffies(1000));
++	if (!ret) {
++		previous = v->epoch;
++		next = mt6878_capture_epoch_next(previous);
++		if (IS_ERR(next)) {
++			ret = PTR_ERR(next);
++		} else {
++			v->epoch = next;
++			ret = mt6878_capture_epoch_free(previous);
++		}
++	}
++frame_result:
+ 	mutex_lock(&v->capture.direct.lock);
+-	if (!ret)
+-		ret = v->capture.platform.stop_error;
++	if (!ret && !v->stopping) {
++		v->nodes[0].pending = NULL;
++		v->nodes[1].pending = NULL;
++		v->used = false; /* Fresh epoch exists after real retirement/rearm. */
++	}
+ 	if (ret && !v->first_error)
+ 		v->first_error = ret;
+ 	if (ret) {
+@@ -255,6 +280,11 @@
+ 	mutex_unlock(&v->capture.direct.lock);
+ 	cancel_work_sync(&v->frame_work);
+ 	ret = mt6878_native_capture_retire(&v->capture, msecs_to_jiffies(1500));
++	if (!ret && v->epoch) {
++		ret = mt6878_capture_epoch_free(v->epoch);
++		if (!ret)
++			v->epoch = NULL;
++	}
+ 	if (ret) {
+ 		v->quarantined = true;
+ 		dev_err(&v->suppliers.pdev->dev,
+@@ -384,8 +414,10 @@
+ {
+ 	struct mt6878_native_video *v = file_node(file)->owner;
+ 
+-	if (v->stopping || v->used)
++	if (v->stopping)
+ 		return -ESHUTDOWN;
++	if (v->used)
++		return -EAGAIN; /* Stop/rearm still owns the completed pair. */
+ 	return vb2_ioctl_qbuf(file, priv, buf);
+ }
+ 

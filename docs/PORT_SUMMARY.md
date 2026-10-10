@@ -191,8 +191,13 @@ changes require their own check; no physical subsystem is enabled by this run.
   is running. The new isolated one-shot first-frame path performs actual sensor
   OFF/IRQ drain/receiver disconnect, joint SMI/CAM_MAIN reset, then the existing
   calibrated ON/CQ/DMA path. Its four objects and staged sensor callback gate
-  enter the combined 45-object CI check; repeated capture and a physical frame
-  are not yet proven. See [camera research](CAMERA_BRINGUP.md).
+  passed the combined 45-object CI check. The new isolated repeated-frame
+  cycle keeps IRQ/MMIO/queue ownership stable, waits for actual DONE-triggered
+  stop work, verifies DMA/PHY OFF, then allocates fresh CQ/transactions.
+  Premature stop before DONE is rejected; timeout remains latched and blocks
+  rearm. Its two objects and rebuilt consumers enter a 47-object CI check.
+  Repeated capture and a physical frame remain unproven.
+  See [camera research](CAMERA_BRINGUP.md).
 - **GNSS:** matching stock engine/config and transport contracts are retained.
   The load-only adapter now stages ten pinned real providers plus the original
   probe/engine as sealed descriptors, with a private read-only loader root.

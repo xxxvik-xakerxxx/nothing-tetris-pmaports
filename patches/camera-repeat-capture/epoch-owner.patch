@@ -1,0 +1,19 @@
+--- a/mt6878-native-capture.h
++++ b/mt6878-native-capture.h
+@@ -5,6 +5,8 @@
+ #include "mt6878-seninf-controller.h"
+ #include "smi-backend.h"
+ 
++struct mt6878_capture_epoch;
++
+ /* Lifetime is the native video driver's, never IRQ/work-stack storage.
+  * Probe/bind is resource-only. Failed retirement forbids supplier/devres free.
+  */
+@@ -15,6 +17,7 @@
+ 	struct mt6878_camsv_hardware hardware;
+ 	struct mt6878_seninf_controller controller;
+ 	struct device *smi;
++	struct mt6878_capture_epoch *epoch; /* Sidecar exclusive record, not HW readiness. */
+ 	bool receiver_ref, smi_ref, bound, abort_attempted;
+ 	bool reset_attempted, reset_completed;
+ 	int abort_error, first_error;

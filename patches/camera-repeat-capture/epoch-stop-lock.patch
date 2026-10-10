@@ -1,0 +1,23 @@
+--- a/mt6878-camsv-platform.c
++++ b/mt6878-camsv-platform.c
+@@ -127,6 +127,11 @@
+ 			first = ret;
+ 	}
+ 	mutex_lock(&d->lock);
++	/* Native SMI clamp requires reset ownership for the entire stop pulse.
++	 * IRQ/receiver drain finished; queue precedes reset as in native setup.
++	 */
++	if (p->native_capture)
++		mutex_lock(&p->native_capture->reset_lock);
+ 	latch_error(d, first);
+ 	/* No caller-written quiesced flag. Direct stop verifies the real route,
+ 	 * IRQ drain, TG/VF and then performs its bounded reset transaction.
+@@ -135,6 +140,8 @@
+ 	ret = first ? first : mt6878_camsv_direct_stop(d);
+ 	p->stop_error = ret;
++	if (p->native_capture)
++		mutex_unlock(&p->native_capture->reset_lock);
+ 	mutex_unlock(&d->lock);
+ 	mutex_unlock(&p->lifecycle);
+ 	complete_all(&p->stopped);
+ }

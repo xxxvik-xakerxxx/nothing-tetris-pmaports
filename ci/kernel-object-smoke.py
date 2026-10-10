@@ -129,6 +129,16 @@ if set(CAMERA_JOINT_SOURCES.values()) & set(RESEARCH_SOURCES.values()):
     raise ValueError("duplicate camera joint-reset staging destination")
 RESEARCH_SOURCES.update(CAMERA_JOINT_SOURCES)
 RESEARCH_OBJECTS += CAMERA_JOINT_OBJECTS
+CAMERA_REPEAT_MANIFEST = "patches/camera-repeat-capture/STAGING.json"
+CAMERA_REPEAT_CHECK = "patches/camera-repeat-capture/check.py"
+CAMERA_REPEAT_SOURCES, CAMERA_REPEAT_OBJECTS, _ = camera_staging(
+    Path(__file__).resolve().parents[1], CAMERA_REPEAT_MANIFEST)
+if set(CAMERA_REPEAT_SOURCES.values()) & set(RESEARCH_SOURCES.values()):
+    raise ValueError("duplicate repeat-capture staging destination")
+RESEARCH_SOURCES.update(CAMERA_REPEAT_SOURCES)
+RESEARCH_OBJECTS += CAMERA_REPEAT_OBJECTS
+CAMERA_REPEAT_PATCHES = tuple("patches/camera-repeat-capture/" + name for name in (
+    "epoch-owner.patch", "epoch-stop-lock.patch", "epoch-final-retire.patch", "epoch-video.patch"))
 CAM_MAIN_MANIFEST = "patches/camera-cam-main-provider/STAGING.json"
 CAM_MAIN_CHECK = "patches/camera-cam-main-provider/check-staging.py"
 CAM_MAIN_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAM_MAIN_MANIFEST).read_text())
@@ -226,6 +236,13 @@ def stage_camera_overlays(kernel, root=Path(".")):
         staged.unlink()
 
 
+def stage_camera_repeat(kernel, root=Path(".")):
+    destination = kernel / Path(next(iter(CAMERA_SOURCES.values()))).parent
+    for name in CAMERA_REPEAT_PATCHES:
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", destination,
+             "-i", (root / name).resolve()])
+
+
 def object_identity(target):
     with target.open("rb") as stream:
         magic = stream.read(4)
@@ -281,6 +298,10 @@ def main():
             Path(PROVIDER_PATCH).read_bytes()).hexdigest()
         for name in CAMERA_REVIEW_PATCHES:
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        for name in (CAMERA_REPEAT_MANIFEST, CAMERA_REPEAT_CHECK,
+                     "patches/camera-repeat-capture/test-completion-order.py",
+                     "patches/camera-repeat-capture/generate-overlays.py", *CAMERA_REPEAT_PATCHES):
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
         for name in (CAM_MAIN_MANIFEST, CAM_MAIN_CHECK, CAM_MAIN_PLAN["overlay"]):
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
     if args.plan_only:
@@ -318,6 +339,14 @@ def main():
         stage_camera_overlays(kernel)
         run(["python3", "patches/camera-joint-reset/check.py",
              "--staged-only", "--kernel-tree", kernel])
+        # Verify the cold chain first; the repeat worker delegates to that chain.
+        run(["python3", CAMERA_REPEAT_CHECK])
+        stage_camera_repeat(kernel)
+        manifest["derived_camera_sources_sha256"] = {
+            destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
+            for destination in (*CAMERA_SOURCES.values(), *CAMERA_JOINT_SOURCES.values(),
+                                *CAMERA_REPEAT_SOURCES.values())
+        }
         run(["python3", CAM_MAIN_CHECK, "--kernel-tree", kernel])
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(CAM_MAIN_PLAN["overlay"]).resolve()])
@@ -363,7 +392,12 @@ def main():
         if len(video_objects) != 2:
             raise ValueError("video variant requires both explicit objects")
         cam_main_objects = tuple(CAM_MAIN_PLAN["provider_objects"] + CAM_MAIN_PLAN["research_objects"])
-        variant_objects = video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS
+        repeat_consumers = tuple(name for name in CAMERA_OBJECTS
+                                 if Path(name).name in ("mt6878-native-capture.o", "mt6878-camsv-platform.o"))
+        if len(repeat_consumers) != 2:
+            raise ValueError("repeat-capture variant requires both actual consumers")
+        variant_objects = (video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS +
+                           CAMERA_REPEAT_OBJECTS + repeat_consumers)
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
@@ -387,6 +421,11 @@ def main():
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in CAMERA_JOINT_OBJECTS
+        }
+        manifest["camera_repeat_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in (*CAMERA_REPEAT_OBJECTS, *repeat_consumers)
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

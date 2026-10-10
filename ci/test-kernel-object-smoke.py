@@ -95,7 +95,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 37)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 39)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o"))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
@@ -163,6 +163,22 @@ class SmokeInputs(unittest.TestCase):
         self.assertEqual(graph.read_text(), original)
         destination = self.package / Path(next(iter(smoke.CAMERA_SOURCES.values()))).parent
         self.assertFalse((destination / graph.name).exists())
+
+    def test_repeat_worker_follows_cold_overlay_and_keeps_graph(self):
+        root, graph, _ = self.camera_overlay_fixture()
+        smoke.stage_camera_overlays(self.package, root)
+        before = graph.read_bytes()
+        smoke.stage_camera_repeat(self.package, root)
+        self.assertEqual(graph.read_bytes(), before)
+        destination = self.package / Path(next(iter(smoke.CAMERA_SOURCES.values()))).parent
+        video = (destination / "mt6878-native-video.c").read_text()
+        self.assertIn("mt6878_capture_epoch_submit(v->epoch", video)
+        self.assertIn("mt6878_camera_cold_probe(&v->capture", video)
+        self.assertLess(video.index("cancel_work_sync(&v->frame_work)"),
+                        video.index("mt6878_capture_epoch_free(v->epoch)"))
+        for name in smoke.CAMERA_REPEAT_OBJECTS:
+            self.assertIn(name, smoke.RESEARCH_OBJECTS)
+            self.assertNotIn(name, smoke.OBJECTS)
 
     def test_research_collision_fails_before_copying_other_sources(self):
         root = Path(__file__).resolve().parents[1]

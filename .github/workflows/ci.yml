@@ -226,6 +226,8 @@ jobs:
           sh patches/camera-seninf-controller/run-tests.sh
           python3 patches/camera-joint-reset/test-sensor-off.py
           python3 patches/camera-joint-reset/test-cold-joint.py
+          python3 patches/camera-repeat-capture/check.py
+          python3 patches/camera-repeat-capture/test-completion-order.py
           python3 patches/camera-joint-reset/check.py \
             --modules-repo upstream/connectivity-modules
       - name: Validate CAMSV DMA and composer handoff

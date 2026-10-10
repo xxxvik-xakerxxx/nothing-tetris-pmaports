@@ -1,0 +1,16 @@
+--- a/mt6878-native-capture.c
++++ b/mt6878-native-capture.c
+@@ -41,8 +41,11 @@
+ 	 */
+ 	mutex_lock(&c->core);
+ 	mutex_lock(&n->direct.lock);
+-	if (c->requested != 2 || c->irq_enabled || c->route.phy.attempted ||
+-	    c->route.route.attempted || n->direct.pair.tx.hw_attempted)
++	if (c->requested != 2 || c->irq_enabled || (c->route.phy.attempted && (!c->route.phy.off_attempted ||
++	    c->route.phy.configured || c->route.phy.bus.first_error ||
++	    !c->route.source_stopped || !c->irq_drained)) ||
++	    (c->route.route.attempted && !c->route.route.disconnected) ||
++	    (n->direct.pair.tx.hw_attempted && !n->direct.pair.tx.quiesced))
+ 		ret = -EBUSY;
+ 	else {
+ 		v4l2_set_subdev_hostdata(n->platform.receiver, NULL);
