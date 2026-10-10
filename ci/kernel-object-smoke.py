@@ -114,6 +114,18 @@ CAMERA_SOURCES, CAMERA_OBJECTS, CAMERA_ENABLE = camera_staging(Path(__file__).re
 CAMERA_SELECTORS = ("MEDIA_TEST_SUPPORT", "V4L_TEST_DRIVERS", "VIDEO_VIVID")
 RESEARCH_SOURCES.update(CAMERA_SOURCES)
 RESEARCH_OBJECTS += CAMERA_OBJECTS
+CAM_MAIN_MANIFEST = "patches/camera-cam-main-provider/STAGING.json"
+CAM_MAIN_CHECK = "patches/camera-cam-main-provider/check-staging.py"
+CAM_MAIN_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAM_MAIN_MANIFEST).read_text())
+if (set(CAM_MAIN_PLAN["sources"].values()) & set(RESEARCH_SOURCES.values()) or
+        any(Path(name).is_absolute() or ".." in Path(name).parts
+            for name in (*CAM_MAIN_PLAN["sources"], *CAM_MAIN_PLAN["sources"].values()))):
+    raise ValueError("unsafe or duplicate CAM_MAIN staging input")
+RESEARCH_SOURCES.update(CAM_MAIN_PLAN["sources"])
+RESEARCH_OBJECTS += tuple(CAM_MAIN_PLAN["research_objects"])
+PROVIDER_OBJECTS += tuple(CAM_MAIN_PLAN["provider_objects"])
+CAM_MAIN_ENABLE = tuple(CAM_MAIN_PLAN["required_enabled"])
+CAM_MAIN_REACHABLE = tuple(CAM_MAIN_PLAN["required_reachable"])
 
 
 def block(source, key):
@@ -238,6 +250,8 @@ def main():
             Path(PROVIDER_PATCH).read_bytes()).hexdigest()
         for name in CAMERA_REVIEW_PATCHES:
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        for name in (CAM_MAIN_MANIFEST, CAM_MAIN_CHECK, CAM_MAIN_PLAN["overlay"]):
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -271,12 +285,17 @@ def main():
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(PROVIDER_PATCH).resolve()])
         stage_camera_overlays(kernel)
+        run(["python3", CAM_MAIN_CHECK, "--kernel-tree", kernel])
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
+             "-i", Path(CAM_MAIN_PLAN["overlay"]).resolve()])
+        run(["python3", CAM_MAIN_CHECK, "--staged-tree", kernel])
         manifest["derived_camera_graph_sha256"] = hashlib.sha256((kernel / CAMERA_GRAPH).read_bytes()).hexdigest()
     output = args.work / "objects"
     output.mkdir()
     shutil.copyfile(package / CONFIG, output / ".config")
     options = [kernel / "scripts/config", "--file", output / ".config"]
-    enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE if args.research_owners else ())
+    enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE + CAM_MAIN_ENABLE
+                        if args.research_owners else ())
     for symbol in enabled:
         options.extend(["-e", symbol])
     for symbol in MODULES:
@@ -296,6 +315,9 @@ def main():
         for symbol in CAMERA_ENABLE:
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated camera dependency missing: {symbol}")
+        for symbol in CAM_MAIN_REACHABLE:
+            if not any(f"CONFIG_{symbol}={value}" in config for value in ("y", "m")):
+                raise ValueError(f"isolated CAM_MAIN dependency missing: {symbol}")
     run([*make, "-k", *objects])
     identities = {}
     for name in objects:
@@ -308,25 +330,32 @@ def main():
     if list(output.rglob("*.ko")) or (output / "vmlinux").exists():
         raise ValueError("object-only CI must not produce runtime modules or kernel")
     if args.research_owners:
-        # Also compile the actual video owner without its private KUnit cases.
+        # Also compile the real video and clock owners without private KUnit cases.
         # No fixture execution or change to the shipping kernel configuration.
         video_objects = tuple(name for name in CAMERA_OBJECTS
                               if Path(name).name in ("mt6878-native-video.o", "video-smoke.o"))
         if len(video_objects) != 2:
             raise ValueError("video variant requires both explicit objects")
+        cam_main_objects = tuple(CAM_MAIN_PLAN["provider_objects"] + CAM_MAIN_PLAN["research_objects"])
+        variant_objects = video_objects + cam_main_objects
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
                for line in (output / ".config").read_text().splitlines()):
             raise ValueError("video KUnit-disabled configuration did not resolve")
         shutil.copyfile(output / ".config", report / "video-kunit-disabled.config")
-        for name in video_objects:
+        for name in variant_objects:
             (output / name).unlink()
-        run([*make, *video_objects])
+        run([*make, *variant_objects])
         manifest["video_kunit_disabled_objects"] = {
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in video_objects
+        }
+        manifest["cam_main_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in cam_main_objects
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

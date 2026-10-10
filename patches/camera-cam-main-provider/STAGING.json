@@ -1,0 +1,22 @@
+{
+  "scope": "additive isolated object CI only; no shipped linkage or activation",
+  "requires_packaged_patch": "0092-clk-mediatek-mt6878-camera-main.patch",
+  "sources": {
+    "patches/camera-cam-main-provider/cam-main-lease.inc": "drivers/clk/mediatek/cam-main-lease.inc",
+    "patches/camera-cam-main-provider/cam-main-lease-test.inc": "drivers/clk/mediatek/cam-main-lease-test.inc",
+    "patches/camera-cam-main-provider/cam-main-lease.h": "include/soc/mediatek/cam-main-lease.h",
+    "patches/camera-cam-main-provider/provider-smoke.c": "drivers/soc/mediatek/tetris-owner-smoke/cam-main-lease-smoke.c"
+  },
+  "overlay": "patches/camera-cam-main-provider/provider.patch",
+  "overlay_target": "drivers/clk/mediatek/clk-mt6878-cam.c",
+  "provider_objects": ["drivers/clk/mediatek/clk-mt6878-cam.o"],
+  "research_objects": ["drivers/soc/mediatek/tetris-owner-smoke/cam-main-lease-smoke.o"],
+  "required_enabled": ["PM", "OF", "COMMON_CLK", "MFD_SYSCON"],
+  "required_reachable": ["COMMON_CLK_MT6878", "COMMON_CLK_MT6878_CAM"],
+  "config_variants": [
+    {"KUNIT": "y"},
+    {"KUNIT": "n"}
+  ],
+  "parent_integration": "Merge sources once into RESEARCH_SOURCES; append research_objects only to RESEARCH_OBJECTS, provider_objects to PROVIDER_OBJECTS. Existing research-directory Makefile owns smoke target; never replace drivers/clk/mediatek/Makefile. Overlay after packaged stack and staging, before either config build.",
+  "kunit_runtime": "Object builds do not execute fixtures. Runtime needs provider plus native clock/PM/syscon/KUnit linkage in a CI test kernel; no real provider registration or hardware success is exercised by these tests."
+}

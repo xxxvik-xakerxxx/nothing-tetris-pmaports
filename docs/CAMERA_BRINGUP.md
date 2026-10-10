@@ -42,6 +42,15 @@ clock/regulator/nvmem supplier DT, genuine CAM_MAIN mapping lease, bound DMA
 supplier and cooperative removal policy still block activation. See
 [video registration contract](../patches/camera-native-video/SOURCE-CONTRACT.md).
 These new camera overlays are CI-only, not enabled in the phone's DT or package.
+The isolated [CAM_MAIN provider](../patches/camera-cam-main-provider/SOURCE-CONTRACT.md)
+now exposes a synchronous same-task lease of its existing syscon regmap. Actual
+runtime-PM acquisition, module/device references and the supplier mutex cover
+each access and retirement; no second mapping or persistent capture lease is
+claimed. Reset still returns `-EOPNOTSUPP` until joint SMI clamp and SCQ/route-off
+ownership is connected. The combined harness adds the real clock-provider and
+smoke objects, now 39 ARM64 objects, with KUnit enabled/disabled builds. Static
+overlay checks and all 16 harness input tests pass; compilation and KUnit
+execution remain pending. The shipping provider/package is unchanged.
 No preview, capture or successful camera support is claimed. See the
 [route contract](../patches/camera-seninf-route/SOURCE-CONTRACT.md) and
 [native SMI operation](../patches/camera-smi-owner/SOURCE-CONTRACT.md), plus

@@ -85,8 +85,9 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 30)
-        self.assertEqual(smoke.PROVIDER_OBJECTS, ("drivers/memory/mtk-smi.o",))
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 31)
+        self.assertEqual(smoke.PROVIDER_OBJECTS, (
+            "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o"))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
         for name in smoke.CAMERA_OBJECTS:
