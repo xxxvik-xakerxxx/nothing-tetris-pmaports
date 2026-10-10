@@ -25,7 +25,7 @@ static void *run(void *context)
         status = b41_host_adapter_take(w->adapter, &event);
         if (!status) {
             /* Keep navigation output and AGPS frame work on one queue consumer. */
-            status = b41_navigation_dispatch_event(w->ipc, &event);
+            status = w->dispatch(w->ipc, &event);
             if (status) { fail(w, status); break; }
             continue;
         }
@@ -74,6 +74,7 @@ int b41_frame_worker_start(struct b41_frame_worker *w,
     if (status) { (void)close(wake); (void)close(done); return -status; }
     status = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     w->adapter = adapter; w->ipc = ipc; w->wake_fd = wake; w->done_fd = done;
+    if (!w->dispatch) w->dispatch = b41_navigation_dispatch_event;
     w->exposed = 0; w->receiver_count = count;
     atomic_init(&w->stop_requested, 0); atomic_init(&w->failure, 0);
     for (unsigned i = 0; i < count; ++i) { w->receiver[i] = fds[i]; w->identity[i] = identity[i]; }

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "b41_native_arguments.h"
+#include "b41_slot6_service.h"
 #include <errno.h>
 #include <string.h>
 
@@ -100,12 +101,15 @@ int b41_native_arguments_prepare(struct b41_native_arguments_owner *o,
     if (status) goto fail;
     status = b41_native_control_bind(&o->control, &callbacks);
     if (status) goto fail;
+    status = b41_slot6_service_bind(&o->adapter, &callbacks);
+    if (status) goto fail;
     status = b41_navigation_output_take(&o->output, app, raw);
     if (status) goto fail;
     status = b41_navigation_output_bind(&o->output);
     if (status) goto fail;
     status = b41_engine_arguments_build(b, &callbacks, &arguments);
     if (status < 0) goto fail;
+    o->worker.dispatch = b41_slot6_service_dispatch;
     status = b41_frame_worker_start(&o->worker, &o->adapter, ipc, fds, count);
     if (status) goto fail;
     status = b41_frame_worker_expose(&o->worker);

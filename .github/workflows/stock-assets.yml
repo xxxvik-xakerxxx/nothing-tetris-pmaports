@@ -121,6 +121,12 @@ jobs:
             out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
           sh patches/gnss-navigation-audit/run_library_association_ci.sh \
             out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
+      - name: Verify actual slot6 string callback and owned service delivery
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_slot6_string_producer.py \
+            out/stock-port-assets/vendor/bin/mnld
+          sh patches/gnss-navigation-audit/run_slot6_service_ci.sh
       - name: Verify scoped modem startup and immutable handoff boundaries
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_startup_scope.py --native-ci --vendor upstream/device-modules

@@ -13,6 +13,10 @@ struct b41_frame_worker {
     enum b41_worker_state state;
     struct b41_host_adapter *adapter;
     struct b41_agps_owner *ipc;
+    /* Optional source-specific envelope dispatcher, set before start and
+     * immutable until process exit. NULL selects the existing navigation ABI.
+     */
+    int (*dispatch)(struct b41_agps_owner *, const struct b41_host_event *);
     atomic_int stop_requested, failure;
     unsigned exposed;
     int wake_fd, done_fd, receiver[2];

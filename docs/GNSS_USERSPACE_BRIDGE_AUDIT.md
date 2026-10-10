@@ -11,8 +11,13 @@ and the complete Bionic ARM64 link passed
 [CI 38025448174](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025448174).
 Actual stock-code stop/join and mapped-library association fault checks also
 passed [CI 38025485686](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38025485686).
-Configuration/calibration and the slot6 assistance receiver/response contract
-remain missing; no engine initialization or position-fix success is claimed.
+Slot6 selectors0/1 now copy the source-derived NUL-string/control envelopes
+into the same host queue and send through the existing owned IPC channel.
+Native preparation binds this callback and selects its dispatcher before
+starting the sole worker. Native/Bionic CI for this addition is pending.
+Configuration/calibration, other assistance controls and actual receiver
+responses remain missing; no engine initialization or position-fix success
+is claimed. See [slot6 service](../patches/gnss-navigation-audit/SLOT6_STRING_SERVICE.md).
 See [native integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).
 
 ## Earlier Config Fixture Evidence
