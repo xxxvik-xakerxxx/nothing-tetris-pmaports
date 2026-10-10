@@ -9,7 +9,32 @@
 #include "b41_mipc_sealed_isolate.h"
 #include "b41_mipc_loader_root.h"
 
-static void sealed_child(struct b41_mipc_supervision *owner, const char *root, const char *mode)
+static int xml_control(void)
+{
+    struct stat info;
+    char bytes[5087];
+    size_t used = 0;
+    int fd = open("/vendor/etc/MNL_Config.xml", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, &info) || !S_ISREG(info.st_mode) ||
+        info.st_size != (off_t)sizeof(bytes) || (info.st_mode & 0777) != 0444)
+        die("sealed XML control metadata");
+    while (used < sizeof(bytes)) {
+        ssize_t n = read(fd, bytes + used, sizeof(bytes) - used);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) die("sealed XML control read");
+        used += (size_t)n;
+    }
+    if (close(fd)) die("sealed XML control close");
+    if (!lstat("/data", &info) || errno != ENOENT) die("unexpected XML data root");
+    fd = open("/vendor/etc/MNL_Config.xml", O_WRONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd >= 0 || (errno != EROFS && errno != EACCES)) die("XML write not denied");
+    puts("XML_ROOT_OK: fixed config readable; data absent; writes denied");
+    fflush(stdout);
+    return 0;
+}
+
+static void sealed_child(struct b41_mipc_supervision *owner, const char *root,
+    const char *mode, int xml_snapshot)
 {
     sigset_t signals;
     /* Only the lease-owning parent blocks termination; restore child limits. */
@@ -22,8 +47,12 @@ static void sealed_child(struct b41_mipc_supervision *owner, const char *root, c
         "LD_LIBRARY_PATH=/apex/com.android.runtime/lib64/bionic:/system/lib64:/vendor/lib64", NULL };
     char *const probe[] = { "/apex/com.android.runtime/bin/linker64", "/probe",
         "/vendor/lib64/libmnl.so", NULL };
-    int rc = b41_mipc_loader_root_probe(root, owner->stage, B41_MIPC_PROVIDER_COUNT,
-        owner->stage[B41_MIPC_PROVIDER_COUNT], owner->stage[B41_MIPC_PROVIDER_COUNT + 1]);
+    int rc = xml_snapshot ?
+        b41_mipc_loader_root_probe_xml(root, owner->stage, B41_MIPC_PROVIDER_COUNT,
+            owner->stage[B41_MIPC_PROVIDER_COUNT], owner->stage[B41_MIPC_PROVIDER_COUNT + 1],
+            owner->stage[B41_MIPC_PROVIDER_COUNT + 2]) :
+        b41_mipc_loader_root_probe(root, owner->stage, B41_MIPC_PROVIDER_COUNT,
+            owner->stage[B41_MIPC_PROVIDER_COUNT], owner->stage[B41_MIPC_PROVIDER_COUNT + 1]);
     if (rc) { errno = -rc; die("sealed provider root"); }
     limit(RLIMIT_FSIZE, 1UL << 20);
     if (snprintf(proc, sizeof(proc), "%s/proc", root) >= (int)sizeof(proc)) {
@@ -42,17 +71,22 @@ static void sealed_child(struct b41_mipc_supervision *owner, const char *root, c
     limit(RLIMIT_STACK, 8UL << 20); limit(RLIMIT_NOFILE, 16);
     if (syscall(__NR_close_range, 3U, ~0U, 0U)) die("close child inherited descriptors");
     if (filter()) die("existing seccomp");
-    if (!strcmp(mode, "control")) _exit(control());
+    if (!strcmp(mode, "control")) {
+        int error = control();
+        if (!error && xml_snapshot) error = xml_control();
+        _exit(error);
+    }
     execve(probe[0], probe, environment);
     die("exec sealed load-only probe");
 }
 
-int b41_mipc_sealed_probe_spawn(struct b41_mipc_supervision *owner,
-    const char *root, const char *mode)
+static int sealed_spawn(struct b41_mipc_supervision *owner,
+    const char *root, const char *mode, int xml_snapshot)
 {
     struct timespec now;
     if (!owner || !owner->entered || owner->bind_attempted || owner->terminal ||
-        owner->count != B41_MIPC_PROVIDER_COUNT + 2 || !root || root[0] != '/' ||
+        owner->count != B41_MIPC_PROVIDER_COUNT + 2 + (unsigned)xml_snapshot ||
+        !root || root[0] != '/' ||
         !mode || (strcmp(mode, "control") && strcmp(mode, "load"))) return -EINVAL;
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return -errno;
     if (now.tv_sec > owner->deadline.tv_sec ||
@@ -63,6 +97,18 @@ int b41_mipc_sealed_probe_spawn(struct b41_mipc_supervision *owner,
     if (unshare(CLONE_NEWNET | CLONE_NEWPID)) return -errno;
     pid_t pid = fork();
     if (pid < 0) return -errno;
-    if (!pid) sealed_child(owner, root, mode);
+    if (!pid) sealed_child(owner, root, mode, xml_snapshot);
     return b41_mipc_supervision_bind(owner, pid);
+}
+
+int b41_mipc_sealed_probe_spawn(struct b41_mipc_supervision *owner,
+    const char *root, const char *mode)
+{
+    return sealed_spawn(owner, root, mode, 0);
+}
+
+int b41_mipc_sealed_xml_probe_spawn(struct b41_mipc_supervision *owner,
+    const char *root, const char *mode)
+{
+    return sealed_spawn(owner, root, mode, 1);
 }

@@ -143,13 +143,26 @@ not a claim that the native reader has executed in this snapshot.
 Per-device NV/calibration is not copied, overwritten or generalized here.
 
 The original10-provider and12-FD root APIs retain the original target set and
-do not create `/vendor/etc`. The existing load-only CLI/parent/isolate remain
-UNCHANGED and reject13-FD admission. Do not hand the extended resources to
-that launcher. A future reviewed GNSS caller must transfer thirteen FDs into
-the existing supervisor and invoke the new snapshot API in its owned child;
-this extension provides no new spawn/exec, engine INIT, CCCI handshake or
-property permissions. It removes the source-to-private-root XML path gap,
-not the remaining native navigation readiness gates.
+do not create `/vendor/etc`. Original `control`/`load` modes still require
+exactly twelve descriptors and reject thirteen-FD admission. The separate
+`xml-control`/`xml-load` modes now admit exactly thirteen descriptors through
+the same dedicated CLI/parent and supervisor. The selected-artifact producer
+reuses the fixed XML admission helper, not an operator-selected XML path/pin.
+`b41_mipc_sealed_xml_probe_spawn` invokes the new snapshot API in the owned
+child, while the original spawn still rejects thirteen descriptors. Both
+routes use the same frozen filter, privilege drop, resource limits, twenty-
+second absolute deadline, quarantine and terminal-reap ownership.
+
+XML-control checks the fixed 5,087-byte config is readable after privilege
+drop/seccomp, `/data` is absent and writing the config is denied. It does not
+call the OEM XML reader or authenticate bytes independently of the Python
+producer. XML-load executes the same independently pinned dlopen-only probe;
+no engine INIT, CCCI handshake, property permissions or new executable is
+admitted. The CI runner performs legacy control/load first, then XML
+control/load with separate logs, cgroups and result records. A control fault
+prevents the corresponding load; no retry or readiness grant is added.
+The outer destructive CI service budget covers four operations instead of
+two; individual admission/execution and cleanup deadlines are unchanged.
 
 ### Focused CI validation
 
@@ -186,7 +199,8 @@ lifetime. Downloaded source manifests match the commit. The independent
 unchanged Bionic load-only stage also reports `LOAD_OK` and terminal reap;
 it does not execute the new XML snapshot or call engine INIT.
 
-Next gate is reviewed executable admission for the thirteen-FD snapshot.
+The new executable XML-snapshot admission and launch fault fixture are wired
+into the same workflow; their real ARM64 execution is pending a new CI run.
 Native reader/SET operation, complete config constructors,
 runtime libxml2/OpenSSL, legitimate CCCI/property readiness and RX shutdown
 remain separate unresolved gates. No navigation success or INIT claimed.

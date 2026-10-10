@@ -119,8 +119,14 @@ real ARM64 sanitizer fixture passed 10/12/13-FD root construction, XML copy,
 read-only/failure paths and terminal-reap lifetime. Downloaded manifests match
 the source commit. The unchanged genuine Bionic stage independently reports
 `LOAD_OK` and successful terminal reap; engine INIT and hardware readiness are
-explicitly false. The new XML snapshot is not yet executable admission and
-does not provide missing CCCI/property/RX services or a GPS fix.
+explicitly false. A new separate `xml-control`/`xml-load` route now carries
+that fixed thirteen-FD snapshot through the existing CLI, supervisor and
+isolated child. Legacy modes retain strict twelve-FD admission; limits,
+quarantine and terminal-reap ownership are unchanged. XML-control checks
+post-drop readability, absent `/data` and denied writes; XML-load uses only
+the original pinned dlopen probe. Offline checks and independent review pass;
+real ARM64 launch/execution is pending CI. This does not provide engine INIT,
+missing CCCI/property/RX services or a GPS fix.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.

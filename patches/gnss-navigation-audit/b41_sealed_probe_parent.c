@@ -57,7 +57,7 @@ static int dedicated(void)
     return error;
 }
 
-static int admitted_descriptors(const int *stage)
+static int admitted_descriptors(const int *stage, unsigned count)
 {
     DIR *directory = opendir("/proc/self/fd");
     if (!directory) return -errno;
@@ -70,7 +70,7 @@ static int admitted_descriptors(const int *stage)
         if (number(entry->d_name, &fd)) { error = -EPROTO; break; }
         if (fd < 3 || fd == (unsigned)inventory) continue;
         unsigned admitted = 0;
-        for (unsigned i = 0; i < 12; ++i) admitted |= fd == (unsigned)stage[i];
+        for (unsigned i = 0; i < count; ++i) admitted |= fd == (unsigned)stage[i];
         if (!admitted) { error = -EPERM; break; }
     }
     if (!error && errno) error = -errno;
@@ -81,22 +81,26 @@ static int admitted_descriptors(const int *stage)
 int main(int argc, char **argv)
 {
     struct b41_mipc_supervision owner = {0};
-    int stage[12], first = 0;
+    int stage[13], first = 0;
     unsigned long long deadline_ns, cleanup_ns, value;
     char root[] = "/run/b41-sealed-probe-XXXXXX";
     struct stat run;
     /* This executable is a trusted root admission endpoint, not an ELF oracle.
      * Python admits independently pinned copies before exec transfers ownership. */
-    if (argc != 16 || geteuid() || (strcmp(argv[1], "load") && strcmp(argv[1], "control")) ||
+    if (argc < 2) return 2;
+    int xml_snapshot = !strcmp(argv[1], "xml-load") || !strcmp(argv[1], "xml-control");
+    const char *mode = xml_snapshot ? argv[1] + 4 : argv[1];
+    unsigned count = xml_snapshot ? 13 : 12;
+    if (argc != (int)count + 4 || geteuid() || (strcmp(mode, "load") && strcmp(mode, "control")) ||
         number(argv[2], &deadline_ns) || number(argv[3], &cleanup_ns) ||
         deadline_ns > LLONG_MAX || cleanup_ns > LLONG_MAX || cleanup_ns < deadline_ns ||
         cleanup_ns - deadline_ns > 5000000000ULL || trusted_stdio() || dedicated()) return 2;
-    for (unsigned i = 0; i < 12; ++i) {
+    for (unsigned i = 0; i < count; ++i) {
         if (number(argv[i + 4], &value) || value < 3 || value > INT_MAX) return 2;
         stage[i] = (int)value;
         if (fcntl(stage[i], F_SETFD, FD_CLOEXEC)) return 2;
     }
-    if (admitted_descriptors(stage)) return 2;
+    if (admitted_descriptors(stage, count)) return 2;
     const struct rlimit log_bound = { 1024 * 1024, 64 * 1024 * 1024 };
     if (setrlimit(RLIMIT_FSIZE, &log_bound)) return 2;
     /* No handler/reaper can consume child status or release the sole lease. */
@@ -108,14 +112,15 @@ int main(int argc, char **argv)
         (long)(deadline_ns % 1000000000ULL) };
     struct timespec cleanup = { (time_t)(cleanup_ns / 1000000000ULL),
         (long)(cleanup_ns % 1000000000ULL) };
-    first = b41_mipc_supervision_prepare(&owner, stage, 12, &deadline, &cleanup);
+    first = b41_mipc_supervision_prepare(&owner, stage, count, &deadline, &cleanup);
     if (first) return 2;
     if (lstat("/run", &run) || !S_ISDIR(run.st_mode) || run.st_uid || (run.st_mode & 022) ||
         !mkdtemp(root)) {
         b41_mipc_supervision_abort_unstarted(&owner);
         return 2;
     }
-    first = b41_mipc_sealed_probe_spawn(&owner, root, argv[1]);
+    first = xml_snapshot ? b41_mipc_sealed_xml_probe_spawn(&owner, root, mode) :
+        b41_mipc_sealed_probe_spawn(&owner, root, mode);
     if (!owner.bind_attempted) {
         int error = b41_mipc_supervision_abort_unstarted(&owner);
         if (!first) first = error;

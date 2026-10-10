@@ -113,18 +113,20 @@ static void observe_blocked_control(pid_t child)
     assert(strstr(text, "\nPid:\t1\n"));
 }
 
-enum scenario { CONTROL, START_FAILURE, DEADLINE };
+enum scenario { CONTROL, START_FAILURE, DEADLINE, XML_CONTROL };
 
 static void run_case(enum scenario scenario)
 {
     char root[] = "/tmp/b41-sealed-launch-XXXXXX", path[256];
     assert(mkdtemp(root));
-    int stage[B41_MIPC_PROVIDER_COUNT + 2], retained[B41_MIPC_PROVIDER_COUNT + 2];
-    for (unsigned i = 0; i < B41_MIPC_PROVIDER_COUNT + 2; ++i) {
+    unsigned count = B41_MIPC_PROVIDER_COUNT + (scenario == XML_CONTROL ? 3 : 2);
+    int stage[B41_MIPC_PROVIDER_COUNT + 3], retained[B41_MIPC_PROVIDER_COUNT + 3];
+    for (unsigned i = 0; i < count; ++i) {
         stage[i] = retained[i] = memfd_create("mount-fixture-not-authenticated-ELF",
             MFD_CLOEXEC | MFD_ALLOW_SEALING);
         assert(stage[i] >= 3);
         assert(write(stage[i], &i, sizeof(i)) == (ssize_t)sizeof(i));
+        if (i == B41_MIPC_PROVIDER_COUNT + 2) assert(!ftruncate(stage[i], 5087));
         if (i == B41_MIPC_PROVIDER_COUNT + 1) {
             char bytes[65536];
             memset(bytes, 'L', sizeof(bytes));
@@ -142,7 +144,7 @@ static void run_case(enum scenario scenario)
     struct b41_mipc_supervision owner = {0};
     struct timespec deadline = future(10), cleanup = future(15);
     assert(!b41_mipc_supervision_prepare(&owner, stage,
-        B41_MIPC_PROVIDER_COUNT + 2, &deadline, &cleanup));
+        count, &deadline, &cleanup));
     int output[2];
     assert(!pipe2(output, O_CLOEXEC));
     assert(fcntl(output[1], F_SETPIPE_SZ, 4096) == 4096);
@@ -166,7 +168,14 @@ static void run_case(enum scenario scenario)
     const struct rlimit log_bound = { 1UL << 20, 64UL << 20 };
     assert(!setrlimit(RLIMIT_FSIZE, &log_bound));
     assert(!sigfillset(&signals) && !sigprocmask(SIG_SETMASK, &signals, NULL));
-    assert(!b41_mipc_sealed_probe_spawn(&owner, root, "control"));
+    /* Wrong-count admission must fail before changing namespaces or binding. */
+    if (scenario == XML_CONTROL) {
+        assert(b41_mipc_sealed_probe_spawn(&owner, root, "control") == -EINVAL);
+        assert(!b41_mipc_sealed_xml_probe_spawn(&owner, root, "control"));
+    } else {
+        assert(b41_mipc_sealed_xml_probe_spawn(&owner, root, "control") == -EINVAL);
+        assert(!b41_mipc_sealed_probe_spawn(&owner, root, "control"));
+    }
     assert(owner.bind_attempted && owner.child > 0 && !owner.terminal);
     for (unsigned i = 0; i < owner.count; ++i) assert(fcntl(retained[i], F_GETFD) >= 0);
     assert(b41_mipc_supervision_abort_unstarted(&owner) == -EINVAL);
@@ -176,7 +185,7 @@ static void run_case(enum scenario scenario)
         assert(snprintf(path, sizeof(path), "%s/apex", root) < (int)sizeof(path));
         assert(access(path, F_OK) == -1 && errno == ENOENT);
     }
-    if (scenario == CONTROL) {
+    if (scenario == CONTROL || scenario == XML_CONTROL) {
         char text[32768];
         size_t used = 0;
         while ((n = read(output[0], text + used, sizeof(text) - used - 1)) > 0) {
@@ -186,10 +195,13 @@ static void run_case(enum scenario scenario)
         assert(!n);
         text[used] = 0;
         assert(strstr(text, "CONTROL: eight network/device/namespace/privilege denials, failures=0"));
+        assert(!!strstr(text, "XML_ROOT_OK: fixed config readable; data absent; writes denied") ==
+            (scenario == XML_CONTROL));
     }
     int rc = b41_mipc_supervision_finish(&owner);
     assert(owner.reaped && owner.terminal);
-    if (scenario == CONTROL) assert(!rc && WIFEXITED(owner.wait_status) && !WEXITSTATUS(owner.wait_status));
+    if (scenario == CONTROL || scenario == XML_CONTROL)
+        assert(!rc && WIFEXITED(owner.wait_status) && !WEXITSTATUS(owner.wait_status));
     else if (scenario == START_FAILURE)
         assert(rc == -ECHILD && WIFEXITED(owner.wait_status) && WEXITSTATUS(owner.wait_status) == 125);
     else assert(rc == -ETIMEDOUT && owner.wait_owner.escalated &&
@@ -208,7 +220,7 @@ int main(void)
 {
     assert(geteuid() == 0);
     for (int fd = 0; fd < 3; ++fd) assert(fcntl(fd, F_GETFD) >= 0);
-    for (enum scenario which = CONTROL; which <= DEADLINE; ++which) {
+    for (enum scenario which = CONTROL; which <= XML_CONTROL; ++which) {
         /* Namespace changes remain in a dedicated launcher, not the test parent. */
         pid_t launcher = fork();
         assert(launcher >= 0);
@@ -217,6 +229,6 @@ int main(void)
         assert(waitpid(launcher, &status, 0) == launcher);
         assert(WIFEXITED(status) && !WEXITSTATUS(status));
     }
-    puts("sealed launch fixture: control, startup failure, timeout/reap passed");
+    puts("sealed launch fixture: control, XML control, startup failure, timeout/reap passed");
     return 0;
 }

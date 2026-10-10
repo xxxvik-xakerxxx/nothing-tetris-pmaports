@@ -14,6 +14,7 @@ import b41_sealed_probe_ci as runner
 CONTROL = "CONTROL: eight network/device/namespace/privilege denials, failures=0\n"
 LOAD = "LOAD_OK: no vendor API called; no dlclose or destructors\n"
 TERMINAL = "TERMINAL: status=0 first=0\n"
+XML = "XML_ROOT_OK: fixed config readable; data absent; writes denied\n"
 
 
 class RunnerTests(unittest.TestCase):
@@ -30,6 +31,18 @@ class RunnerTests(unittest.TestCase):
     def test_exact_control_load_terminal_protocol(self):
         runner.verify_result("control", CONTROL + TERMINAL, 0)
         runner.verify_result("load", LOAD + TERMINAL, 0)
+        runner.verify_result("xml-control", CONTROL + XML + TERMINAL, 0)
+        runner.verify_result("xml-load", LOAD + TERMINAL, 0)
+
+    def test_xml_control_requires_exact_separate_acknowledgement(self):
+        for mode, text in (("xml-control", CONTROL + TERMINAL),
+                           ("xml-control", CONTROL + XML + XML + TERMINAL),
+                           ("control", CONTROL + XML + TERMINAL),
+                           ("xml-load", LOAD + XML + TERMINAL)):
+            with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                runner.verify_result(mode, text, 0)
+        with self.assertRaises(ValueError):
+            runner.verify_result("init", LOAD + TERMINAL, 0)
 
     def test_reject_false_success_and_nonterminal(self):
         cases = [(CONTROL, 0), (CONTROL + TERMINAL, 1),
@@ -127,6 +140,23 @@ class RunnerTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "control failed"):
                     runner.main()
             self.assertEqual([call.args[0] for call in execute.call_args_list], ["control"])
+            self.assertFalse((results / "RESULT.json").exists())
+
+    def test_xml_control_failure_prevents_xml_load(self):
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory) / "results"
+            args = SimpleNamespace(selected_stock=Path("/selected"), probe_artifact=Path("/probe-ci"),
+                parent=Path("/root/native-parent"), cgroup_parent=Path("/sys/fs/cgroup/delegated"),
+                results=results, mnl_layout="vendor/lib64/libmnl.so", xml_snapshot=True)
+            with patch.object(runner.sys, "argv", ["runner"]), patch.object(runner, "require_ci"), \
+                    patch.object(runner.argparse.ArgumentParser, "parse_args", return_value=args), \
+                    patch.object(runner, "trusted_parent", return_value=77), patch.object(runner.os, "close"), \
+                    patch.object(runner, "delegated_parent", return_value=args.cgroup_parent), \
+                    patch.object(runner, "trusted_ancestors", return_value=results), \
+                    patch.object(runner, "run_one", side_effect=RuntimeError("XML control failed")) as execute:
+                with self.assertRaisesRegex(RuntimeError, "XML control failed"):
+                    runner.main()
+            self.assertEqual([call.args[0] for call in execute.call_args_list], ["xml-control"])
             self.assertFalse((results / "RESULT.json").exists())
 
 

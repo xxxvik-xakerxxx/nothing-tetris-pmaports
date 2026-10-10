@@ -11,4 +11,10 @@
  */
 int b41_mipc_sealed_probe_spawn(struct b41_mipc_supervision *owner,
     const char *root, const char *mode);
+/* Separate thirteen-FD admission with the fixed sealed XML at slot12.
+ * Same load-only executable and constraints; no engine INIT or hardware grant.
+ * mode remains control/load, not an operator-selected program.
+ */
+int b41_mipc_sealed_xml_probe_spawn(struct b41_mipc_supervision *owner,
+    const char *root, const char *mode);
 #endif

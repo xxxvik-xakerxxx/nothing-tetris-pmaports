@@ -45,13 +45,13 @@ jobs:
           printf '%s  %s\n' \
             011a0dd90ab2043fd2eb8312024f000769d093b8e1b58e0e3540509122e7c214 \
             out/probe/probe | sha256sum --check
-      - name: Execute actual control then sealed Bionic load
+      - name: Execute legacy and XML-snapshot control then sealed Bionic load
         id: execute
         run: |
           unit="tetris-sealed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           sudo -n systemd-run --unit="$unit" --wait --pipe \
             --property=Delegate=memory --property=MemoryMax=256M \
-            --property=MemorySwapMax=0 --property=RuntimeMaxSec=90s \
+            --property=MemorySwapMax=0 --property=RuntimeMaxSec=150s \
             --property=KillMode=control-group \
             --setenv=CI=true --setenv=PYTHONDONTWRITEBYTECODE=1 \
             --setenv="TETRIS_UNIT=$unit.service" \
@@ -79,6 +79,8 @@ jobs:
             2>&1 | tee out/xml-fixture-evidence/ownership.log
           sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts \
             2>&1 | tee out/xml-fixture-evidence/mounts.log
+          sh patches/gnss-navigation-audit/run_mipc_sealed_launch_ci.sh \
+            2>&1 | tee out/xml-fixture-evidence/launch.log
           printf 'commit=%s\nstock_run=38048111345\nprobe_run=37898372984\nmode=separate-xml-root-no-init\n' \
             "$GITHUB_SHA" > out/xml-fixture-evidence/BUILD-MANIFEST
       - name: Retain actual results and containment diagnostics

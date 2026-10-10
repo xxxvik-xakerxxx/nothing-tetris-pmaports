@@ -27,3 +27,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$here/b41_sealed_probe_ci.py" \
     --probe-artifact "$TETRIS_B41_PROBE_ARTIFACT" \
     --parent "$build/parent" --results "$build/results" \
     --cgroup-parent "$TETRIS_CGROUP_PARENT" --mnl-layout "$TETRIS_MNL_LAYOUT"
+PYTHONDONTWRITEBYTECODE=1 python3 "$here/b41_sealed_probe_ci.py" \
+    --selected-stock "$TETRIS_B41_SELECTED_STOCK" \
+    --probe-artifact "$TETRIS_B41_PROBE_ARTIFACT" \
+    --parent "$build/parent" --results "$build/xml-results" --xml-snapshot \
+    --cgroup-parent "$TETRIS_CGROUP_PARENT" --mnl-layout "$TETRIS_MNL_LAYOUT"

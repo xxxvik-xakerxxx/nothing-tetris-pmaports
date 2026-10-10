@@ -7,14 +7,14 @@ from pathlib import Path
 import stat
 import time
 
-from b41_mipc_probe_resources import ProbeResources, PROBE_SHA, MNL_SHA
+from b41_mipc_probe_resources import ProbeXmlResources, PROBE_SHA, MNL_SHA
 from b41_mipc_provider_resources import LoaderResources, _close_preserving
 from b41_mipc_sealed_stage import seal_provider
 
 
-class SelectedProbeResources(ProbeResources):
+class SelectedProbeResources(ProbeXmlResources):
     """Reuse ProbeResources ownership with independent selected/probe artifacts."""
-    def __init__(self, selected, probe_artifact, mnl_layout):
+    def __init__(self, selected, probe_artifact, mnl_layout, *, xml_snapshot=False):
         if mnl_layout not in ("vendor/lib64/libmnl.so", "vendor/lib64/mt6878/libmnl.so"):
             raise ValueError("explicit selected-artifact libmnl layout required")
         self.base = LoaderResources(selected, selected)
@@ -35,6 +35,8 @@ class SelectedProbeResources(ProbeResources):
                     raise
                 else:
                     os.close(source)
+            if xml_snapshot:
+                self._append_xml(selected)
         except BaseException as error:
             _close_preserving(self, error)
             raise
@@ -77,7 +79,7 @@ def arguments():
     parser.add_argument("--log", required=True, type=Path)
     parser.add_argument("--mnl-layout", required=True,
                         choices=("vendor/lib64/libmnl.so", "vendor/lib64/mt6878/libmnl.so"))
-    parser.add_argument("--mode", required=True, choices=("control", "load"))
+    parser.add_argument("--mode", required=True, choices=("control", "load", "xml-control", "xml-load"))
     return parser.parse_args()
 
 
@@ -93,7 +95,9 @@ def main():
     parent = trusted_parent(args.parent)
     resources, moved = None, []
     try:
-        resources = SelectedProbeResources(args.selected_stock, args.probe_artifact, args.mnl_layout)
+        options = {"xml_snapshot": True} if args.mode.startswith("xml-") else {}
+        resources = SelectedProbeResources(args.selected_stock, args.probe_artifact, args.mnl_layout,
+                                          **options)
         moved = resources.move()
         for fd in moved:
             os.set_inheritable(fd, True)

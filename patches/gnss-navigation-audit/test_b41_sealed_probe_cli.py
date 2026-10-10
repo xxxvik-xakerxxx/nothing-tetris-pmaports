@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 import b41_sealed_probe_cli as cli
+import b41_mipc_probe_resources as producer
 
 
 class AdmissionTests(unittest.TestCase):
@@ -44,6 +45,35 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(caught.exception.errno, errno.EBADMSG)
         self.assertIn("source cleanup", caught.exception.__notes__[0])
         self.assertIn("base cleanup", caught.exception.__notes__[1])
+
+    def test_explicit_xml_uses_same_fixed_pin_and_selected_source(self):
+        base = Mock()
+        base.move.return_value = list(range(20, 30))
+        with patch.object(cli, "LoaderResources", return_value=base), \
+                patch.object(cli.os, "open", side_effect=[8, 9, 10]) as opened, \
+                patch.object(cli, "seal_provider", side_effect=[30, 31]), \
+                patch.object(producer, "seal_provider", return_value=32) as xml_seal, \
+                patch.object(cli.os, "fstat", return_value=SimpleNamespace(st_size=producer.XML_SIZE)), \
+                patch.object(cli.os, "fchmod") as modes, patch.object(cli.os, "close"):
+            resources = cli.SelectedProbeResources("selected", "independent-probe",
+                "vendor/lib64/mt6878/libmnl.so", xml_snapshot=True)
+            self.assertEqual(opened.call_args_list[-1].args[0], Path("selected") / producer.XML_TARGET)
+            xml_seal.assert_called_once_with(10, producer.XML_SHA)
+            self.assertEqual(modes.call_args_list[-1].args, (32, 0o444))
+            self.assertEqual(resources.move(), list(range(20, 33)))
+
+    def test_xml_failure_releases_pair_once_and_preserves_first_errno(self):
+        base = Mock()
+        with patch.object(cli, "LoaderResources", return_value=base), \
+                patch.object(cli.os, "open", side_effect=[8, 9, OSError(errno.ENOENT, "missing XML")]), \
+                patch.object(cli, "seal_provider", side_effect=[30, 31]), \
+                patch.object(cli.os, "fchmod"), patch.object(cli.os, "close") as close:
+            with self.assertRaises(OSError) as caught:
+                cli.SelectedProbeResources("selected", "probe", "vendor/lib64/libmnl.so",
+                    xml_snapshot=True)
+            self.assertEqual(caught.exception.errno, errno.ENOENT)
+            base.close.assert_called_once()
+            self.assertEqual([call.args[0] for call in close.call_args_list], [8, 9, 30, 31])
 
     def test_no_engine_mode_or_arbitrary_library_layout(self):
         required = ["cli", "--selected-stock", "selected", "--probe-artifact", "probe",
@@ -96,7 +126,10 @@ class AdmissionTests(unittest.TestCase):
         self.assertIn("while (!owner.reaped)", parent)
         self.assertLess(parent.index("while (!owner.reaped)"), parent.index("rmdir(root)"))
         self.assertIn("owner.wait_error ? owner.wait_error : error", parent)
-        self.assertIn("admitted_descriptors(stage)", parent)
+        self.assertIn("admitted_descriptors(stage, count)", parent)
+        self.assertIn('unsigned count = xml_snapshot ? 13 : 12', parent)
+        self.assertIn('argc != (int)count + 4', parent)
+        self.assertIn('b41_mipc_sealed_xml_probe_spawn(&owner, root, mode)', parent)
         self.assertIn("os.execve(parent, argv", wrapper)
         for text in (parent, wrapper):
             self.assertNotIn("mnl_run(", text)

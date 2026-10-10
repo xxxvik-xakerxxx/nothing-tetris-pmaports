@@ -50,15 +50,20 @@ def enter(group, arguments):
 
 
 def verify_result(mode, text, returncode):
+    if mode not in ("control", "load", "xml-control", "xml-load"):
+        raise ValueError("fixed load-only mode required")
     if returncode != 0:
         raise RuntimeError(f"{mode} parent exited {returncode}; retain logs")
     if "QUARANTINE:" in text or len(re.findall(r"^TERMINAL: status=0 first=0$", text, re.M)) != 1:
         raise RuntimeError("missing unique successful terminal reap acknowledgement")
     expected = ("CONTROL: eight network/device/namespace/privilege denials, failures=0"
-                if mode == "control" else
+                if mode in ("control", "xml-control") else
                 "LOAD_OK: no vendor API called; no dlclose or destructors")
     if text.splitlines().count(expected) != 1 or "LOAD_FAILED:" in text:
         raise RuntimeError(f"missing actual {mode} output")
+    xml_output = "XML_ROOT_OK: fixed config readable; data absent; writes denied"
+    if text.splitlines().count(xml_output) != (1 if mode == "xml-control" else 0):
+        raise RuntimeError("unexpected or missing XML root control acknowledgement")
 
 
 def run_one(mode, args, group_parent, results):
@@ -123,6 +128,7 @@ def main():
     parser.add_argument("--results", required=True, type=Path)
     parser.add_argument("--mnl-layout", required=True,
         choices=("vendor/lib64/libmnl.so", "vendor/lib64/mt6878/libmnl.so"))
+    parser.add_argument("--xml-snapshot", action="store_true")
     args = parser.parse_args()
     require_ci()
     for name in ("selected_stock", "probe_artifact", "parent", "cgroup_parent", "results"):
@@ -134,10 +140,12 @@ def main():
     results = trusted_ancestors(args.results)
     results.mkdir(mode=0o700, exist_ok=False)
     rows = []
-    for mode in ("control", "load"):
+    xml_snapshot = getattr(args, "xml_snapshot", False)
+    for mode in (("xml-control", "xml-load") if xml_snapshot else ("control", "load")):
         rows.append(run_one(mode, args, delegation, results))
     (results / "RESULT.json").write_text(json.dumps({"status": "load-only-passed",
-        "engine_init_called": False, "hardware_readiness": False, "runs": rows}, indent=2) + "\n")
+        "xml_snapshot": xml_snapshot, "engine_init_called": False,
+        "hardware_readiness": False, "runs": rows}, indent=2) + "\n")
     print(f"Actual sealed control/load and terminal reap passed; logs: {results}")
 
 
