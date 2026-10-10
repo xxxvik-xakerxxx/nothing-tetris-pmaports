@@ -124,6 +124,7 @@ jobs:
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
       - name: Validate staged modem lifecycle callbacks
         run: |
+          export TETRIS_VENDOR_TREE="$PWD/upstream/device-modules"
           python3 patches/modem/drafts/runtime-prepare/test_static.py
           python3 patches/modem/drafts/runtime-object-ci/test_static.py
           python3 patches/modem/drafts/runtime-lifecycle/test_static.py
