@@ -69,7 +69,7 @@ class SmokeInputs(unittest.TestCase):
     def test_real_package_inputs(self):
         plan = smoke.plan(Path(__file__).resolve().parents[1] / smoke.PACKAGE)
         self.assertGreater(len(plan["patches"]), 100)
-        self.assertEqual(len(plan["objects"]), 5)
+        self.assertEqual(len(plan["objects"]), 6)
 
     def test_research_staging_preserves_bytes_without_shipping_wiring(self):
         root = Path(__file__).resolve().parents[1]
@@ -93,6 +93,18 @@ class SmokeInputs(unittest.TestCase):
             makefile = self.package / Path(name).parent / "Makefile"
             self.assertIn(Path(name).name, makefile.read_text())
         self.assertNotIn("owner-kunit.o", (self.package / smoke.RESEARCH_DIR / "Makefile").read_text())
+
+    def test_packaged_flat_consumer_matches_verified_source(self):
+        root = Path(__file__).resolve().parents[1]
+        package = root / smoke.PACKAGE
+        patch_text = (package / "0120-misc-tetris-gpueb-authenticated-ram-analysis.patch").read_text()
+        section = patch_text.split("+++ b/drivers/misc/gpueb-flat-analysis.c\n", 1)[1]
+        header, *lines = section.splitlines()
+        self.assertTrue(header.startswith("@@ -0,0 +1,"))
+        self.assertTrue(all(line.startswith("+") for line in lines))
+        consumer = "\n".join(line[1:] for line in lines) + "\n"
+        self.assertEqual(consumer, (root / "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text())
+        self.assertIn("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m", (package / smoke.CONFIG).read_text())
 
     def test_research_collision_fails_before_copying_other_sources(self):
         root = Path(__file__).resolve().parents[1]

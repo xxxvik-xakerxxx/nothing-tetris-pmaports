@@ -17,7 +17,10 @@ handoff. The paired read-only Linux analysis consumer passed native sanitizer
 checks, isolated ARM64 compilation and modpost against actual kernel exports in
 [CI 38028106842](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38028106842).
 This is a minimal isolated kernel, not the phone's module ABI. A matching phone
-ABI build is still required before one controlled private capture. Public CI
+ABI build is still required before one controlled private capture. The kernel
+package now carries this optional module, with its source checked byte-for-byte
+against the verified consumer. Ordinary DTs do not instantiate it; the next
+package/image and lifecycle gates remain pending. Public CI
 uploads metadata only, never plaintext.
 
 This implements a missing firmware-inspection transport, not GPUEB startup.

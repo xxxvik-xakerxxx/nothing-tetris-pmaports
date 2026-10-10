@@ -18,6 +18,7 @@ CONFIG = "config-postmarketos-mediatek-mt6878.aarch64"
 MODULES = (
     "VIDEO_IMX882_TETRIS", "VIDEO_MT6878_SENINF_GRAPH",
     "MTK_MT6878_CCCI_FIRST_START", "MTK_MT6878_GPUEB_POWER",
+    "TETRIS_GPUEB_FLAT_ANALYSIS",
 )
 ENABLE = (
     "MEDIA_SUPPORT", "MEDIA_CAMERA_SUPPORT", "VIDEO_DEV",
@@ -30,11 +31,13 @@ OBJECTS = (
     "drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.o",
     "drivers/soc/mediatek/mt6878-ccci-start.o",
     "drivers/pmdomain/mediatek/mt6878-gpueb-power.o",
+    "drivers/misc/gpueb-flat-analysis.o",
 )
 STRICT_PATCHES = frozenset((
     "0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch",
     "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
     "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch",
+    "0120-misc-tetris-gpueb-authenticated-ram-analysis.patch",
 ))
 RESEARCH_DIR = "drivers/soc/mediatek/tetris-owner-smoke"
 RESEARCH_SOURCES = {
