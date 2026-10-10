@@ -88,6 +88,27 @@ jobs:
             --native-ci --uboot upstream/u-boot
           python3 patches/modem/drafts/ufs-producer-faults/check_producer_faults.py \
             --native-ci --owned-loader-ci --uboot upstream/u-boot
+      - name: Fetch pinned native CCCI runtime sources
+        run: |
+          git init upstream/device-modules
+          git -C upstream/device-modules remote add origin \
+            https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git
+          git -C upstream/device-modules sparse-checkout init --no-cone
+          git -C upstream/device-modules sparse-checkout set /drivers/misc/mediatek/eccci/
+          git -C upstream/device-modules fetch --filter=blob:none --depth=1 origin \
+            ee2be53cb75670b548948636a0db1d1ff112bf12
+          git -C upstream/device-modules checkout --detach FETCH_HEAD
+      - name: Verify actual CCCI registration and unpublished preparation faults
+        run: |
+          (cd patches/modem/drafts/runtime-ports && sha256sum --check --strict REVIEW.sha256)
+          (cd patches/modem/drafts/runtime-prepare && sha256sum --check --strict REVIEW.sha256)
+          python3 patches/modem/drafts/runtime-ports/test_static.py
+          TETRIS_VENDOR_TREE="$PWD/upstream/device-modules" \
+            python3 patches/modem/drafts/runtime-prepare/test_static.py
+          python3 patches/modem/drafts/runtime-ports/check_runtime_ports.py \
+            --vendor upstream/device-modules --native-ci
+          python3 patches/modem/drafts/runtime-prepare/check_prepare.py \
+            --vendor upstream/device-modules --native-ci
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && hashFiles('out/stock-modem/BUILD-MANIFEST.json') != '' }}
         with:

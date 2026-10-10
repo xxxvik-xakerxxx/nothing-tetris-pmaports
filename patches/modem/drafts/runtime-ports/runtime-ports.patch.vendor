@@ -1,0 +1,259 @@
+diff --git a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+--- a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
++++ b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+@@ -1712,12 +1712,23 @@
+ 	return 0;
+ }
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include <linux/sizes.h>
++#include "ccci_tetris_dependencies.h"
++#endif
++
+ static int ccci_modem_probe(struct platform_device *plat_dev)
+ {
+ 	struct ccci_dev_cfg dev_cfg;
+ 	int ret;
+ 	struct md_hw_info *md_hw;
+ 	unsigned long long time_total = sched_clock();
++
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	ret = tetris_ccci_dependencies(plat_dev);
++	if (ret)
++		return ret;
++#endif
+ 
+ 	/* Allocate modem hardware info structure memory */
+ 	md_hw = kzalloc(sizeof(struct md_hw_info), GFP_KERNEL);
+diff --git a/drivers/misc/mediatek/eccci/ccci_core.c b/drivers/misc/mediatek/eccci/ccci_core.c
+--- a/drivers/misc/mediatek/eccci/ccci_core.c
++++ b/drivers/misc/mediatek/eccci/ccci_core.c
+@@ -91,6 +91,10 @@
+ 	return bootmode;
+ }
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#include "ccci_tetris_char_node.h"
++#endif
++
+ int ccci_register_dev_node(const char *name, int major_id, int minor)
+ {
+ 	int ret = 0;
+diff --git a/drivers/misc/mediatek/eccci/port/port_t.h b/drivers/misc/mediatek/eccci/port/port_t.h
+--- a/drivers/misc/mediatek/eccci/port/port_t.h
++++ b/drivers/misc/mediatek/eccci/port/port_t.h
+@@ -40,6 +40,13 @@
+ 	PORT_DBG_DUMP_IMS,
+ };
+ struct port_t;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++struct cdev;
++struct file_operations;
++int ccci_tetris_publish_char(struct cdev **, const struct file_operations *,
++			    const char *, dev_t);
++void ccci_tetris_unpublish_char(struct cdev **, dev_t);
++#endif
+ struct port_ops {
+ 	/* must-have */
+ 	int (*init)(struct port_t *port);
+@@ -116,6 +123,9 @@
+ 	struct sk_buff_head port_rx_list;
+ 	atomic_t is_up; /*for ccmni status*/
+ 	spinlock_t flag_lock;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	struct cdev *owned_cdev;
++#endif
+ };
+ /****************************************************************************/
+ /* API Region called by ccci port object */
+diff --git a/drivers/misc/mediatek/eccci/port/port_char.c b/drivers/misc/mediatek/eccci/port/port_char.c
+--- a/drivers/misc/mediatek/eccci/port/port_char.c
++++ b/drivers/misc/mediatek/eccci/port/port_char.c
+@@ -92,7 +92,9 @@
+ 
+ static int port_char_init(struct port_t *port)
+ {
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 	struct cdev *dev = NULL;
++#endif
+ 	int ret = 0;
+ 
+ 	CCCI_DEBUG_LOG(0, CHAR,
+@@ -101,6 +103,12 @@
+ 	port->skb_from_pool = 1;
+ 	port->interception = 0;
+ 	if (port->flags & PORT_F_WITH_CHAR_NODE) {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++		ret = ccci_tetris_publish_char(&port->owned_cdev, &char_dev_fops,
++			port->name, MKDEV(port->major, port->minor_base + port->minor));
++		if (ret)
++			return ret;
++#else
+ 		dev = kmalloc(sizeof(struct cdev), GFP_KERNEL);
+ 		if (unlikely(!dev)) {
+ 			CCCI_ERROR_LOG(0, CHAR,
+@@ -113,6 +121,7 @@
+ 				port->minor_base + port->minor), 1);
+ 		ret = ccci_register_dev_node(port->name, port->major,
+ 				port->minor_base + port->minor);
++#endif
+ 		port->flags |= PORT_F_ADJUST_HEADER;
+ 	}
+ 
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+@@ -0,0 +1,103 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Private to md_sys1_platform.c; no firmware, MMIO or power operations. */
++#include <linux/device.h>
++#include <linux/of.h>
++#include <linux/of_platform.h>
++#include <linux/unaligned.h>
++#include "ccci_hif.h"
++#include "ccci_hif_internal.h"
++
++static int tetris_ccci_descriptor(struct device_node *node)
++{
++	const u8 *raw;
++	int length;
++	u64 base;
++	u32 used;
++
++	raw = of_get_property(node, "ccci,modem_info_v2", &length);
++	if (!raw)
++		return -ENODATA;
++	if (length != 32)
++		return -EBADMSG;
++	/* This vendor ABI is raw little-endian bytes, NOT FDT cells. */
++	base = get_unaligned_le64(raw);
++	used = get_unaligned_le32(raw + 8);
++	/* The frozen producer allocates at 4096 alignment, independently of PAGE_SIZE. */
++	if (!base || (base & 4095) || used < 21 * 76 || used > SZ_64K ||
++	    base > U64_MAX - SZ_64K || get_unaligned_le32(raw + 12) ||
++	    get_unaligned_le32(raw + 16) != 2 ||
++	    get_unaligned_le32(raw + 20) != 21 ||
++	    get_unaligned_le32(raw + 24) || get_unaligned_le32(raw + 28))
++		return -EBADMSG;
++	/* Shape validation only: does not map tags or authenticate firmware. */
++	return 0;
++}
++
++static int tetris_ccci_supplier(const char *compatible,
++				struct platform_device **supplier)
++{
++	struct device_node *node, *selected = NULL;
++	struct platform_device *pdev;
++
++	for_each_compatible_node(node, NULL, compatible) {
++		if (!of_device_is_available(node))
++			continue;
++		if (selected) {
++			of_node_put(selected);
++			of_node_put(node);
++			return -EINVAL;
++		}
++		selected = of_node_get(node);
++	}
++	if (!selected)
++		return -ENODEV;
++	pdev = of_find_device_by_node(selected);
++	of_node_put(selected);
++	if (!pdev)
++		return -EPROBE_DEFER;
++	*supplier = pdev;
++	return 0;
++}
++
++static int tetris_ccci_dependencies(struct platform_device *consumer)
++{
++	static const char * const compatibles[] = {
++		"mediatek,ccci_ccif", "mediatek,dpmaif",
++	};
++	static const unsigned int ids[] = { CCIF_HIF_ID, DPMAIF_HIF_ID };
++	struct platform_device *suppliers[2] = { NULL, NULL };
++	struct device_link *link;
++	unsigned int i;
++	int ret;
++
++	ret = tetris_ccci_descriptor(consumer->dev.of_node);
++	if (ret)
++		return ret;
++	for (i = 0; i < ARRAY_SIZE(suppliers); i++) {
++		ret = tetris_ccci_supplier(compatibles[i], &suppliers[i]);
++		if (ret)
++			goto out;
++		/* Managed links order probing/unbind, without runtime-PM power-on. */
++		link = device_link_add(&consumer->dev, &suppliers[i]->dev,
++					  DL_FLAG_AUTOREMOVE_CONSUMER);
++		if (!link) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		if (!device_is_bound(&suppliers[i]->dev) ||
++		    !READ_ONCE(ccci_hif[ids[i]]) ||
++		    !READ_ONCE(ccci_hif_op[ids[i]])) {
++			ret = -EPROBE_DEFER;
++			goto out;
++		}
++	}
++out:
++	/* Driver core drops AUTOREMOVE_CONSUMER links on failed probe/unbind.
++	 * add may return an existing link: never delete an unowned shared link.
++	 */
++	for (i = ARRAY_SIZE(suppliers); i; i--) {
++		if (suppliers[i - 1])
++			put_device(&suppliers[i - 1]->dev);
++	}
++	return ret;
++}
+diff --git a/drivers/misc/mediatek/eccci/ccci_tetris_char_node.h b/drivers/misc/mediatek/eccci/ccci_tetris_char_node.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/ccci_tetris_char_node.h
+@@ -0,0 +1,44 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included in ccci_core.c, where the actual CCCI dev_class is owned. */
++#include <linux/cdev.h>
++
++int ccci_tetris_publish_char(struct cdev **owned,
++		const struct file_operations *fops, const char *name, dev_t number)
++{
++	struct cdev *cdev;
++	struct device *device;
++	int ret;
++
++	if (!owned || *owned || !fops || !name)
++		return -EINVAL;
++	if (IS_ERR_OR_NULL(dev_class))
++		return -ENODEV;
++	cdev = cdev_alloc();
++	if (!cdev)
++		return -ENOMEM;
++	cdev->owner = fops->owner;
++	cdev->ops = fops;
++	ret = cdev_add(cdev, number, 1);
++	if (ret) {
++		kobject_put(&cdev->kobj);
++		return ret;
++	}
++	device = device_create(dev_class, NULL, number, NULL, "%s", name);
++	if (IS_ERR(device)) {
++		ret = PTR_ERR(device);
++		cdev_del(cdev);
++		return ret;
++	}
++	*owned = cdev;
++	return 0;
++}
++
++/* Removes publication, NOT port storage. Open files may still reference it. */
++void ccci_tetris_unpublish_char(struct cdev **owned, dev_t number)
++{
++	if (!owned || !*owned)
++		return;
++	device_destroy(dev_class, number);
++	cdev_del(*owned);
++	*owned = NULL;
++}

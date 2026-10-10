@@ -125,9 +125,14 @@ image was produced; the new video/reset sources remain isolated.
   opt-in U-Boot profile. Physical BROM completion and runtime CCCI handoff
   remain unverified before SIM detection, network registration,
   calls, SMS or data can work. File signatures are not RAM attestation or READY.
-  Runtime activation also requires checked FSM/port publication, guards on
-  physical monitor ioctls, and retention of the actual driver-managed resources
-  across failed registration. Retaining `md_hw` alone does not retain devres.
+  Isolated [runtime preparation](../patches/modem/drafts/runtime-prepare/README.md)
+  now checks FSM/all-port preparation and separates private resource-only probe
+  from explicit registration after a real device bind. Physical monitor ioctls
+  remain denied even after registration. Failed publication retains bound devres
+  rather than just `md_hw`. Both overlays apply to the complete packaged vendor
+  adaptation/owner stack and pass static review; native and ARM64 compilation
+  remain pending. They are not packaged, automatically called or enabled on the
+  phone; physical start, callback/DMA drain and forced removal remain unresolved.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 - **GPU:** Panthor and GPUEB groundwork exists. Transform-only firmware inspection
   succeeded on the preceding loader, then erased the buffer without starting
