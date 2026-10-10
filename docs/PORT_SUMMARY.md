@@ -27,10 +27,14 @@ opt-in BROM-only loader, `24e7c183c4e5fa279f2bc7c3d3ac60683f999157`, was
 written successfully to `lk_a` from
 [CI 38028430903](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38028430903).
 Image SHA256: `d288a4cafc79ddcbd4459d18a66ee849a60f953339d037e35414138ee7cbc396`.
-The phone enumerates as postmarketOS USB after reboot, but the Mac USB-network
-port is absent. New loader readback, the first BROM report and visual regression
-checks remain pending; this is not evidence of modem startup. No second attempt
-or hardware reset has been issued. The rootfs remains r179.
+After unlocking the Mac and reconnecting USB, networking and SSH recovered.
+The installed `lk_a` prefix matches the exact 3,304,336-byte image digest;
+`u-boot,version` identifies `24e7c183c4e5`, and stock `lk_b` is unchanged.
+Warm boot `0f370e51-eef2-4218-bb45-e4720900ea67` has no
+`nothing,modem-brom-report`; it therefore does not establish whether the BROM
+attempt ran. SCP stops at preflight with `-EBUSY`, so sensor transport does not
+start. No module reload or hardware reset was issued. A cold boot, first modem
+report and visual regression checks remain pending. The rootfs remains r179.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
@@ -108,9 +112,12 @@ also passed
 [CI 38032210668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38032210668):
 all 37 actual ARM64 objects plus both video KUnit configurations compiled.
 No kernel fixture execution, runtime registration, physical frame or GPU
-acceleration is implied. The matching full kernel/image build is running in
+acceleration is implied. The matching full kernel/image build failed in
 [CI 38030432132](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030432132)
-with unchanged packaged inputs; the new video/reset sources remain isolated.
+after compiling the kernel: the overlay staging script omitted the SensorProxy
+D-Bus `.service` source. Staging now includes it and an offline test compares
+every local package source with the staged copy before a full build. No install
+image was produced; the new video/reset sources remain isolated.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and

@@ -715,6 +715,7 @@ validate_sensor_transport() {
 	grep -Fxq 'TimeoutStartSec=65' "$device_pkg/nothing-tetris-sensors.service"
 	grep -Fq '/usr/libexec/nothing-tetris-sensors' "$device_pkg/APKBUILD"
 	python3 "$repo_root/scripts/tests/test-sensor-startup.py"
+	python3 "$repo_root/scripts/tests/test-sensor-package-staging.py"
 
 	if grep -El '^[[:space:]]*(mtk-mbox|mtk_rpmsg_mbox|mtk_tinysys_ipi|scp|hf_manager|sensorhub)[[:space:]]*$' \
 		"$device_pkg"/*.conf >/dev/null 2>&1; then

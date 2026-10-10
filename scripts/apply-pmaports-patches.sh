@@ -46,4 +46,5 @@ cp "$repo_root"/integrations/sensor-proxy/APKBUILD \
 	"$repo_root"/integrations/sensor-proxy/*.h \
 	"$repo_root"/integrations/sensor-proxy/*.patch \
 	"$repo_root"/integrations/sensor-proxy/*.conf \
+	"$repo_root"/integrations/sensor-proxy/*.service \
 	"$repo_root"/integrations/sensor-proxy/*.rules "$sensor_pkg/"
