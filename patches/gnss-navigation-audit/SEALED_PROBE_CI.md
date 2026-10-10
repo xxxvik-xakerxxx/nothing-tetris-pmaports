@@ -110,3 +110,13 @@ Logs, per-mode result JSON and service diagnostics are
 collected even when a step fails. Native ARM64 compilation and actual loading
 are independent of the x86 compile-only gate in the main CI; neither enables
 GNSS on the phone or calls the engine's initialization function.
+
+Actual run
+[38050310221](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050310221)
+passed at `43b4a2d`. Downloaded control/load logs and result JSON independently
+confirm both successful terminal reaps and empty containment. The actual
+linker emits a warning for absent Android-generated linker configuration but
+loads the independently pinned library successfully. `engine_init_called` and
+`hardware_readiness` remain false. General validation, native parent compilation,
+inherited-signal/file-limit regression and API28 compilation also passed
+[38050314277](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050314277).

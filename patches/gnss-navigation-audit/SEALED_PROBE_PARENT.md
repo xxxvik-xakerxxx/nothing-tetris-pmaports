@@ -91,7 +91,9 @@ not unloading/reinitializing or calling forced exit an RX stop/join.
 independently pinned original dlopen-only probe with the real linker and library
 paths; it calls no vendor entry point and does not unload/reinitialize. Native
 parent compilation, actual control/namespace checks, sealed load and terminal
-reap are the NEXT CI gates, not passed hardware claims.
+reap passed on ARM64 in
+[CI 38050310221](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050310221)
+at `43b4a2d`. These are load-only results, not hardware claims.
 
 INIT remains blocked on complete first/second semantic configuration and
 legitimate per-device calibration, property service/branch provenance, real

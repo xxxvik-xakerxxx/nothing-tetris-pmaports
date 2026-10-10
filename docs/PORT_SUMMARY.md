@@ -196,17 +196,22 @@ changes require their own check; no physical subsystem is enabled by this run.
 - **GNSS:** matching stock engine/config and transport contracts are retained.
   The load-only adapter now stages ten pinned real providers plus the original
   probe/engine as sealed descriptors, with a private read-only loader root.
-  Linux mount-failure fixtures and an API28 root-builder object are CI inputs;
-  the actual control-mode launcher passed the current combined check. Genuine
-  ELF load, engine initialization and a physical fix remain separate gates.
+  The dedicated native parent and actual sealed Bionic load passed on ARM64 in
+  [CI 38050310221](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050310221)
+  at `43b4a2d`. Downloaded logs confirm real control denials, `LOAD_OK`, terminal
+  reap with status0 and empty containment. Parent log limits do not truncate
+  provider copying, and the child restores its signal mask before setup.
+  General validation/native fixtures/API28 builds also passed
+  [CI 38050314277](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050314277).
+  Engine initialization and a physical fix remain separate gates.
   [Stock CI 38048111345](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048111345)
   passed complete pinned system/APEX extraction and real ten-provider sealed
   closure checks. Downloaded provider bytes match the independent pins.
-  CI caught an unusable anonymous-memfd bind operation (`EINVAL`). The corrected
-  bounded copy reads sealed FDs into a private tmpfs and remounts the snapshot
-  read-only before execution. Native isolation now runs independently so its
-  failure cannot hide other object results; full install images still require
-  all jobs to pass.
+  The bounded copy reads sealed FDs into a private tmpfs and remounts the snapshot
+  read-only before execution. Native isolation runs independently; full install
+  images still require all jobs to pass. The ARM64 load-only service uses
+  destructive CI-only failure containment, never runtime quarantine or a
+  hardware-readiness claim.
   Actual engine init/run, host services, exclusive RX ownership and bounded
   shutdown remain incomplete. Library loading is not a fix.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).

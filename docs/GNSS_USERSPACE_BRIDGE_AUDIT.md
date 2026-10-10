@@ -73,9 +73,17 @@ downloaded bytes match the extraction manifest. Resource acquisition with this
 independently recorded pin now passes the complete versioned ELF closure,
 including liblog's own dependencies. Provenance is pinned mirror hashes, not
 OEM signature verification. No replacement logging stub is used.
-There is still no executable sealed-fd loader handoff, legitimate property
-service or detached-RX join proof; the modem's CCCI port and responder are
-absent. No INIT or engine start is exposed by this code.
+The executable sealed-fd handoff now passed on actual ARM64 in
+[CI 38050310221](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38050310221)
+at `43b4a2d`: real isolation controls, original independently pinned load-only
+probe, genuine B4.1 `libmnl.so`, successful terminal reap and empty containment.
+Downloaded logs contain `LOAD_OK` and status0; the linker warns about absent
+Android-generated linker configuration, but resolves the selected providers.
+The run does not call an engine API or execute unload/destructors.
+See [sealed CLI](../patches/gnss-navigation-audit/SEALED_PROBE_CI.md).
+Legitimate property service, modem CCCI responder, full semantic configuration
+and actual engine RX shutdown remain missing. No INIT or engine start is exposed
+by this code; library loading is not a navigation fix.
 See [MIPC closure](../patches/gnss-navigation-audit/MIPC_B41_CLOSURE_CONTRACT.md).
 Earlier native/Bionic
 adapter checks passed
