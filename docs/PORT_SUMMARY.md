@@ -33,29 +33,27 @@ from [CI 37990994952](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/379
 download hashes and installed `lk_a` readback match. Stock `lk_b` digest remains
 `812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.
 Warm boot reached r179 and restored USB/SSH, but SCP again rejected inherited
-TCM with `-EBUSY`; sensors did not start. Full poweroff was issued and the cold
-GPUEB/sensor test is awaiting physical power-on. No GPU power/start writes occur.
-
-The user confirmed normal display/touch. USB/SSH and a hash-verified userspace
-binary transfer passed. First warm boot reported SCP preflight `-EBUSY`;
-warm sensor recovery remains unresolved. Cold boot
-`8fa11d20-8b2e-4b16-a326-097b73728dc2` reported
-`secure-handoff-prepared`, error zero.
+TCM with `-EBUSY`; sensors did not start. After full poweroff and user-confirmed
+cold power-on, boot `eb3d9a5e-43b2-4bc8-8447-286a5de4f441` reports prepared SCP,
+error zero, automatically active sensor services, 24 inventory entries and mask
+31. USB/SSH remain functional and no system units failed. The user confirmed
+display, touch, both rotations and automatic brightness. GPUEB reports
+`verified-erased`, error zero, 156,064 authenticated bytes and segment format
+UNKNOWN (zero count/span/entry): neither ELF nor MTK PT. No GPU power/start
+writes occur; the LK copy-span mismatch remains unresolved.
 
 The clean image lacked the SensorProxy D-Bus activation descriptor, so sensors
-did not start automatically. A standard service start brought up real firmware,
-24 inventory entries and physical mask 31. Package `3.9-r2` fixes activation
+initially required a standard service start. Package `3.9-r2` fixes activation
 through the existing standard systemd/D-Bus service, not a second daemon or
 boot polling script. [Package CI 37970239648](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37970239648)
 passed at `d941aa6`; APK SHA256:
 `ba8ce7185648dcc7d745c516a158fd4de9ff02a9722ace8e483c842f5b0d792c`.
 
-The verified APK is installed and owns the activation descriptor. Before the
-latest loader test, both services were active, accelerometer/light properties
-were true, no system units failed and USB remained up. Only the userspace proxy
-was restarted; modules were not
-reloaded. APK triggers regenerated initramfs/FIT with the unchanged kernel.
-Automatic activation on a new cold boot and full lifecycle remain unverified.
+The verified APK owns the activation descriptor; its triggers regenerated
+initramfs/FIT without changing the kernel. Automatic activation passed the
+cold boot above without manual service or module startup. A fresh image
+containing r2, repeat boots and full lifecycle remain unverified. Warm sensor
+recovery still fails at SCP preflight, separately from D-Bus activation.
 
 ## Hardware summary
 
@@ -67,7 +65,7 @@ lifecycle or SKU. Earlier subsystem evidence is identified explicitly.
 | Boot, UFS/root expansion | Works for tested setup | Clean r179 reaches userspace with writable expanded root; other firmware/SKUs remain unverified. |
 | Native display | Partial | Route and frame-end updates are in main; user confirms no stripes/flicker. Fixed 60 Hz/software rendering; 120 Hz and full power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
-| Sensors | Partial | Five physical classes emit real data; correct rotation, automatic brightness and proximity UI were confirmed previously. Activation packaging fixed; new cold boot, calibration, warm boot, suspend and smooth brightness remain. |
+| Sensors | Partial | Five physical classes emit real data; rotation, automatic brightness and local-call proximity tested. Automatic startup passed one cold boot with r2; repeats, calibration, warm boot, suspend and smooth brightness remain. |
 | USB/NCM/SSH | Partial | Clean boots and transfer gates pass; reconnect/suspend lifecycle remains. |
 | Wi-Fi / Bluetooth | Partial | Earlier association/traffic and Bluetooth discovery demonstrated; profiles, coexistence and suspend remain. |
 | Audio | Partial | Earlier speaker paths and microphone capture demonstrated; cellular audio and full route/lifecycle coverage remain. |
@@ -147,8 +145,11 @@ source-derived NS BL33 clock/isolation/power/bus ordering and four-word BROM
 completion. First-error reporting and finite stock-order failure shutdown are
 separate. [CI 37991128306](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37991128306)
 passed all 37 native sanitizer fault cases plus the actual signed stock input.
-Active EMI row production and physical startup remain incomplete; real U-Boot
-ARM64 compilation is queued in CI 37992519175. It is not enabled
+Active EMI row production and physical startup remain incomplete;
+[U-Boot CI 37992519175](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37992519175)
+passed real ARM64 bootstrap/secure objects and the full image at `a52243d8d5`.
+Those objects have no active caller. The installed loader remains `d385921`.
+The bootstrap is not enabled
 by a board hook and does not expose SIM/calls. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
