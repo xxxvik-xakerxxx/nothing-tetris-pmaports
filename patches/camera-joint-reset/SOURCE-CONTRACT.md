@@ -60,12 +60,50 @@ cleanup, reset, extra mapping-lease retirement, controller_prepare, coherent
 CQ/vb2 submit, native arm and V4L2 stream-on. No retire/removal gap. Existing
 video preflight checks RAW/PDAF/CQ layout and IOVAs before entry.
 
-Native lock -> lifecycle -> receiver active state -> sensor active state ->
-core -> queue (preflight only). Sensor power-off precedes active-state
+Native lock -> lifecycle -> receiver active state -> core -> queue -> sensor
+active state. This matches controller enable's core -> queue -> sensor callback
+order. Queue is released before polling and never reacquired under sensor
+state. Sensor power-off precedes active-state
 locking because its callback locks the sensor mutex. IRQ drain precedes
 state/core/queue locks. Queue unlock precedes SCQ polling and SMI callbacks.
 Extra supplier lease retire runs after other locks unwind, BEFORE native
 unlock. Static supplier ownership still must protect asynchronous DMA.
+
+## Reviewed cold-path fixes (Newton)
+
+P1: cold_power incorrectly required all 12 clocks and voltage <= DVFS step[6].
+Actual native PM enables CAM gates 0..2, CAMTM 7 and selected CSI 3+port;
+clock 8 is the selected parent, unused mux/PLL branches are not independent
+enable votes. Cold checks now match this and reject a port/CSI mismatch.
+Shared VCORE must be >= step[5]. step[6] is not a global safety ceiling:
+native PM votes step[5]..INT_MAX and the regulator core/provider constraints
+bound the actual rail. No unused clock is enabled or shared rail lowered.
+Sources: camera-native-capture/mt6878-seninf-pm.c resume and
+native-pm.patch controller power hunk; pinned e96 mtk_cam-seninf-drv.c
+set_csi_clk at 3355+, set_vcore_power at 3548+ (3596..3598 accepts a higher
+shared voltage, votes minimum..INT_MAX), runtime_resume at 3730+.
+
+P2: sensor-state-before-core conflicted with controller enable's actual
+core -> queue -> sensor-state order. Receiver-state exclusion usually
+prevents this specific concurrent ABBA, so this is an inconsistent hierarchy,
+not evidence of an observed hardware deadlock. Joint now follows the actual
+callback order; IRQ drain/s_power(0) remain outside core/state/queue locks.
+
+P2: cold_frame's unlocked bound test did not protect its supplier pointer.
+Entry now validates relations under native lock, pins CAM_MAIN with get_device,
+drops native lock before taking supplier exclusion, then revalidates bound,
+retired, capture/controller/subdevice/supplier identity and device bindings
+under native lock before PM/stream/resource dereferences. Supplier pin is
+balanced on every path. Joint repeats validation under lifecycle too.
+The negative unbound fast reject is not relied upon for positive validation.
+
+REQUIRED PARENT CONTRACT: native capture storage and all registered supplier
+bindings must outlive the WHOLE synchronous API call. Video retire excludes
+new queueing and cancel_work_sync drains frame_work before native retire;
+unregister/supplier policy must preserve that exclusion. A temporary supplier
+device reference does not exclude sensor unbind or license freeing capture
+storage. Native revalidation strengthens the protected path, not replaces
+parent lifetime ownership. No new ownership flag is invented.
 
 Only after reset AND mapping-lease cleanup succeed are completed flags
 published. Cleanup failure latches transaction/native first errors, clears
@@ -118,3 +156,7 @@ lock order and all four ARM objects, then run fixtures before activation.
 Real genpd/clock/rail/nvmem suppliers must bind. Existing forced supplier
 removal prohibition and failed-stop lifetime remain required. No capture
 success, image activation or elimination of runtime gates is claimed.
+test-cold-joint.py adds ten source-regression checks for these reviewed
+power/locking/lifetime defects. They do not execute C or establish runtime
+lockdep/PM safety. All four joint/cold/probe/smoke ARM objects must be rebuilt
+after these changes; previous successful CI did not contain these fixes.

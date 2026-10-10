@@ -10,6 +10,14 @@ struct mt6878_camera_joint_reset {
 	struct mt6878_camera_cold_reset cold;
 };
 
+/* All entry points require persistent capture/transaction storage and parent
+ * lifetime exclusion for the WHOLE call: prevent supplier unbind/unregister
+ * and drain frame work before native retirement or storage destruction.
+ * The temporary CAM_MAIN device pin is not a substitute for this ownership.
+ * Negative READ_ONCE(bound) admission avoids an uninitialized owner mutex;
+ * positive admission always requires protected native revalidation.
+ */
+
 /* One synchronous control-task transaction. Caller owns persistent native
  * capture storage/supplier PM leases, but must hold no queue/reset/core lock.
  * Requires the controller's actual prepared-and-disconnected STOPPED route;

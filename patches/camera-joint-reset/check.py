@@ -91,6 +91,14 @@ def main(argv=None):
     for operation in ("disable_cammux", "set_cammux_src", "switch_to_cammux_inner_page"):
         assert operation in phy, operation
     assert "tsrec_n_settings_clear" in show("mtk_cam-seninf-tsrec.c")
+    pm = (HERE.parent / "camera-native-capture/mt6878-seninf-pm.c").read_text()
+    assert "csi = 3 + p->port" in pm and "enable_clock(p, 7)" in pm
+    assert "regulator_set_voltage(p->vcore, p->step[5], INT_MAX)" in pm
+    drv = show("mtk_cam-seninf-drv.c")
+    assert "vcore_voltage, INT_MAX" in drv
+    assert "regulator_get_voltage(core->dvfsrc_vcore_power) < vcore_voltage" in drv
+    assert "clk_prepare_enable(core->clk[CLK_TOP_CAMTM])" in drv
+    cold_power_contract((HERE / "mt6878-camera-cold-reset.c").read_text())
     code = (HERE / "mt6878-camera-joint-reset.c").read_text()
     for forbidden in ("ioremap", "request_mem_region", "synchronize_irq", "enable_irq",
                       "pm_runtime_put_sync_suspend", "regmap_init"):
@@ -135,6 +143,7 @@ def main(argv=None):
         sensor_off_contract((args.kernel_tree / SENSOR_PATH).read_text())
     assert cold.index("cold_mapping(&c->pdev->dev)") < cold.index("synchronize_irq(")
     assert body.index("joint_finish(transaction, n, ret, cleanup)") < body.index("mutex_unlock(&n->lock)")
+    joint_lock_contract(code)
     with tempfile.TemporaryDirectory(prefix="camera-video-cold-check-") as name:
         tree = Path(name)
         source = HERE.parent / "camera-native-video/mt6878-native-video.c"
@@ -144,6 +153,47 @@ def main(argv=None):
                                 text=True, capture_output=True)
         assert result.returncode == 0, result.stdout + result.stderr
     print("Pinned joint-reset source/order/ownership guards PASS; no C/KUnit/hardware execution")
+
+
+def cold_power_contract(code):
+    power = code.split("static int cold_power(", 1)[1].split("static int cold_mapping(", 1)[0]
+    assert "i < c->num_clocks" not in power and "i < 3" in power
+    assert "c->clocks[7].clk" in power and "c->route.csi_clock" in power
+    assert "c->clocks[3 + port].clk" in power
+    assert "voltage <=" not in power and "voltage > c->dvfs[6]" not in power
+    assert "return voltage >= c->dvfs[5] ? 0 : -ERANGE;" in power
+
+
+def joint_lock_contract(code):
+    body = code.split("static int joint_run(", 1)[1].split("int mt6878_camera_joint_reset(", 1)[0]
+    sequence = ["mt6878_camera_cold_prepare(",
+                "receiver_state = v4l2_subdev_lock_and_get_active_state(",
+                "mutex_lock(&n->controller.core)", "mutex_lock(&n->direct.lock)",
+                "sensor_state = v4l2_subdev_lock_and_get_active_state(",
+                "joint_preflight(n, layout,", "mutex_unlock(&n->direct.lock)",
+                "readl_poll_timeout("]
+    last = -1
+    for item in sequence:
+        index = body.index(item)
+        assert index > last, item
+        last = index
+    pin = code.split("static int joint_supplier_get(", 1)[1].split("static int joint_preflight(", 1)[0]
+    assert pin.index("!READ_ONCE(n->bound)") < pin.index("mutex_lock(&n->lock)")
+    assert pin.index("mutex_lock(&n->lock)") < pin.index("get_device(n->platform.cam_main)")
+    frame = code.split("int mt6878_camera_cold_frame(", 1)[1]
+    order = ["joint_supplier_get(n, &supplier)", "mt6878_cam_main_prepare(supplier, &lease)",
+             "mutex_lock(&n->lock)", "joint_bound(n, supplier)",
+             "pm_runtime_resume_and_get(n->smi)"]
+    last = -1
+    for item in order:
+        index = frame.index(item)
+        assert index > last, item
+        last = index
+    validate = code.split("static int joint_bound(", 1)[1].split("static int joint_supplier_get(", 1)[0]
+    for item in ("lockdep_assert_held(&n->lock)", "!n->bound", "p->retired",
+                 "p->direct != &n->direct", "c->capture != p",
+                 "p->cam_main != supplier", "c->route.sensor != p->sensor"):
+        assert item in validate, item
 
 
 if __name__ == "__main__":

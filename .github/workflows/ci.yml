@@ -225,6 +225,7 @@ jobs:
           python3 patches/camera-native-capture/generate-pm-overlay.py --check
           sh patches/camera-seninf-controller/run-tests.sh
           python3 patches/camera-joint-reset/test-sensor-off.py
+          python3 patches/camera-joint-reset/test-cold-joint.py
           python3 patches/camera-joint-reset/check.py \
             --modules-repo upstream/connectivity-modules
       - name: Validate CAMSV DMA and composer handoff

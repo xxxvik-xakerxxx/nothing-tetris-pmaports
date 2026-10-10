@@ -142,26 +142,17 @@ image includes SensorProxy r2 but retains baseline loader `dcb20ce`; it must not
 silently replace the separately installed BROM-only diagnostic loader.
 Additional source-only candidates do not enable hardware in that image.
 
-The combined 39-object camera/GPU check and 64-object CCCI check in
-[CI 38039961381](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38039961381)
-stopped before compilation at CAM_MAIN overlay application. The overlay's
-non-EOF hunk now has canonical line counts and full trailing context; the
-checker rejects the old malformed input and preserves patch diagnostics.
-[CI 38045556287](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38045556287)
-subsequently compiled all 39 real ARM64 objects and the four video/CAM_MAIN
-objects with KUnit disabled. Its downloaded manifest is `passed` for that
-closure, not the entire run. The CCCI stage then failed before compilation:
-the prepare generator emitted sections in filesystem-dependent order. It now
-uses canonical path ordering; all 23 sections remain byte-identical, and
-reversed directory enumeration plus a bare fetched vendor repository are
-covered by regression checks.
-[CI 38046813569](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38046813569)
-then reached actual CCCI compilation and rejected an incompatible pointer
-assignment in our registered-prepare adapter. The allocation has the exact
-`md_sys1_info` size; the adapter now explicitly converts the allocator's byte
-pointer. Strict compiler diagnostics remain enabled. Complete CCCI compilation
-and module linkage remain unverified. No kernel fixtures or physical hardware
-were exercised by these runs.
+The current combined candidate check is
+[CI 38048742833](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048742833),
+fully passed at `630aa471e857d776d44a98d6064c36fefc22f57c`.
+Downloaded manifests independently confirm 45 real camera/GPU/owner ARM64
+objects and 64 real ECCCI/CCMNI/util objects. Video, CAM_MAIN and all four joint
+camera objects also compile with KUnit disabled. Native modem callbacks, GPU
+power fault fixtures, GNSS mount/control-launch/timeout/reap fixtures and
+API28 Bionic builds passed. This is object/native-fixture evidence, not module
+linkage, kernel KUnit execution or physical subsystem support.
+The camera cold-power and lock/lifetime review corrections are the next gate;
+the successful run does not certify subsequent source changes.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
@@ -179,7 +170,8 @@ were exercised by these runs.
   The [actual runtime-object helper](../patches/modem/drafts/runtime-object-ci/README.md)
   stages all 27 shipping vendor adaptations before owner/port/prepare overlays
   and compiles 64 real ECCCI/CCMNI/util translation units with production
-  Kbuild/includes. Actual complete-stack ARM64 compilation remains pending.
+  Kbuild/includes. Actual complete-stack ARM64 compilation passed the current
+  combined check; operational linkage and hardware startup remain pending.
   They are not packaged, automatically called or enabled on the
   phone; physical start, callback/DMA drain and forced removal remain unresolved.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
@@ -204,16 +196,16 @@ were exercised by these runs.
   The load-only adapter now stages ten pinned real providers plus the original
   probe/engine as sealed descriptors, with a private read-only loader root.
   Linux mount-failure fixtures and an API28 root-builder object are CI inputs;
-  actual launcher execution remains a separate gate.
+  the actual control-mode launcher passed the current combined check. Genuine
+  ELF load, engine initialization and a physical fix remain separate gates.
   [Stock CI 38048111345](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048111345)
   passed complete pinned system/APEX extraction and real ten-provider sealed
   closure checks. Downloaded provider bytes match the independent pins.
-  [CI 38048215570](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048215570)
-  passed the API28 root-builder compilation, modem callback fixtures and GPU
-  power fixture, but failed the Linux mount-fault assertion. Launcher execution
-  and combined kernel compilation are not certified by that run. GNSS isolation
-  now runs independently so its failure cannot hide other object results; full
-  install images still require all jobs to pass.
+  CI caught an unusable anonymous-memfd bind operation (`EINVAL`). The corrected
+  bounded copy reads sealed FDs into a private tmpfs and remounts the snapshot
+  read-only before execution. Native isolation now runs independently so its
+  failure cannot hide other object results; full install images still require
+  all jobs to pass.
   Actual engine init/run, host services, exclusive RX ownership and bounded
   shutdown remain incomplete. Library loading is not a fix.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).

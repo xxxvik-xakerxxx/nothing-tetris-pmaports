@@ -8,15 +8,62 @@
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <stddef.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__ || __SIZEOF_POINTER__ != 8
+#error This syscall fault fixture requires little-endian 64-bit native CI
+#endif
+
+#define LONG_SIZE (65536u + 17u)
+static unsigned char long_payload[LONG_SIZE];
+
+static void check_payload(int fd, size_t length)
+{
+    unsigned char bytes[4096];
+    size_t offset = 0;
+    assert(length <= LONG_SIZE);
+    while (offset < length) {
+        size_t amount = length - offset;
+        if (amount > sizeof(bytes)) amount = sizeof(bytes);
+        ssize_t n = pread(fd, bytes, amount, (off_t)offset);
+        assert(n > 0 && (size_t)n <= amount);
+        assert(!memcmp(bytes, long_payload + offset, (size_t)n));
+        offset += (size_t)n;
+    }
+}
+
+static void deny_second_read(int source)
+{
+    /* Native CI is little-endian 64-bit: pread64 offset is argument 3.
+     * Permit the complete first chunk; fail only its real next syscall.
+     */
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_pread64, 0, 7),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[0])),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (unsigned)source, 0, 5),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[3])),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 65536, 0, 3),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[3]) + 4),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EIO),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+    };
+    struct sock_fprog program = { .len = sizeof(filter) / sizeof(filter[0]), .filter = filter };
+    assert(!prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0));
+    assert(!prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program));
+}
 
 static void deny_mount_flags(unsigned flags)
 {
@@ -41,7 +88,7 @@ static struct timespec future(unsigned seconds)
     return t;
 }
 
-static void failed_mount(const int *providers, unsigned denied_flags)
+static void failed_root(const int *providers, unsigned denied_flags, int copy_error)
 {
     char root[] = "/tmp/b41-loader-fault-XXXXXX";
     assert(mkdtemp(root));
@@ -59,12 +106,31 @@ static void failed_mount(const int *providers, unsigned denied_flags)
     assert(child >= 0);
     if (!child) {
         close(report[0]); close(release[1]);
-        deny_mount_flags(denied_flags);
+        if (copy_error == EIO) deny_second_read(owner.stage[0]);
+        else if (copy_error == EFBIG) {
+            const struct rlimit bound = {8192, 8192};
+            assert(signal(SIGXFSZ, SIG_IGN) != SIG_ERR);
+            assert(!setrlimit(RLIMIT_FSIZE, &bound));
+        } else deny_mount_flags(denied_flags);
+        int expected = copy_error ? -copy_error : -EACCES;
         int result = b41_mipc_loader_root(root, owner.stage, owner.count);
-        if (result != -EACCES)
+        if (result != expected)
             fprintf(stderr, "loader root fault flags=%u returned=%d expected=%d\n",
-                    denied_flags, result, -EACCES);
-        assert(result == -EACCES); /* Real tmpfs/remount denial, not unshare failure. */
+                    denied_flags, result, expected);
+        assert(result == expected);
+        if (copy_error) {
+            char partial[512];
+            assert(snprintf(partial, sizeof(partial), "%s/apex/com.android.runtime/bin/linker64",
+                root) < (int)sizeof(partial));
+            int fd = open(partial, O_RDONLY | O_CLOEXEC);
+            struct stat info;
+            off_t length = copy_error == EIO ? 65536 : 8192;
+            assert(fd >= 0 && !fstat(fd, &info));
+            assert(info.st_size == length && (info.st_mode & 0777) == 0600);
+            /* Reading the copied prefix does not hit the denied source fd. */
+            check_payload(fd, (size_t)length);
+            assert(!close(fd));
+        }
         assert(write(report[1], &result, sizeof(result)) == (ssize_t)sizeof(result));
         char byte;
         assert(read(release[0], &byte, 1) == 1);
@@ -74,9 +140,10 @@ static void failed_mount(const int *providers, unsigned denied_flags)
     assert(!b41_mipc_supervision_bind(&owner, child));
     int failure;
     assert(read(report[0], &failure, sizeof(failure)) == (ssize_t)sizeof(failure));
-    assert(failure == -EACCES && !owner.reaped);
+    assert(failure == (copy_error ? -copy_error : -EACCES) && !owner.reaped);
     for (unsigned i = 0; i < B41_MIPC_PROVIDER_COUNT; ++i)
         assert(fcntl(retained[i], F_GETFD) >= 0);
+    check_payload(retained[0], LONG_SIZE);
     char unchanged[512];
     assert(snprintf(unchanged, sizeof(unchanged), "%s/apex", root) < (int)sizeof(unchanged));
     assert(access(unchanged, F_OK) == -1 && errno == ENOENT);
@@ -93,6 +160,8 @@ int main(void)
 {
     /* Filesystem fixture only: these bytes are NOT library authentication. */
     assert(geteuid() == 0);
+    for (unsigned i = 0; i < LONG_SIZE; ++i)
+        long_payload[i] = (unsigned char)((i * 37u + 11u) % 251u);
     char root[] = "/tmp/b41-loader-root-XXXXXX";
     assert(mkdtemp(root));
     int fd[B41_MIPC_PROVIDER_COUNT + 2];
@@ -100,7 +169,8 @@ int main(void)
     for (unsigned i = 0; i < B41_MIPC_PROVIDER_COUNT + 2; ++i) {
         fd[i] = memfd_create("filesystem-fixture-not-ELF", MFD_ALLOW_SEALING | MFD_CLOEXEC);
         assert(fd[i] >= 0);
-        assert(write(fd[i], &i, sizeof(i)) == (ssize_t)sizeof(i));
+        if (!i) assert(write(fd[i], long_payload, LONG_SIZE) == (ssize_t)LONG_SIZE);
+        else assert(write(fd[i], &i, sizeof(i)) == (ssize_t)sizeof(i));
         assert(!fchmod(fd[i], i == 0 || i == B41_MIPC_PROVIDER_COUNT ? 0555 : 0444));
         assert(!fcntl(fd[i], F_ADD_SEALS, seals));
     }
@@ -115,8 +185,10 @@ int main(void)
     }
     assert(b41_mipc_loader_root(root, oversized, B41_MIPC_PROVIDER_COUNT) == -EFBIG);
     for (unsigned i = 0; i < 2; ++i) assert(!close(oversized[i]));
-    failed_mount(fd, MS_NOSUID | MS_NODEV);
-    failed_mount(fd, MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV);
+    failed_root(fd, MS_NOSUID | MS_NODEV, 0);
+    failed_root(fd, MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV, 0);
+    failed_root(fd, 0, EIO);
+    failed_root(fd, 0, EFBIG);
     pid_t child = fork();
     assert(child >= 0);
     if (!child) {
@@ -139,8 +211,14 @@ int main(void)
             assert(from.st_size == mounted.st_size);
             assert((from.st_mode & 0777) == (mounted.st_mode & 0777));
             assert(from.st_ino != mounted.st_ino || from.st_dev != mounted.st_dev);
-            unsigned value;
-            assert(read(opened, &value, sizeof(value)) == (ssize_t)sizeof(value) && value == i);
+            if (!i) {
+                assert(mounted.st_size == LONG_SIZE);
+                check_payload(opened, LONG_SIZE);
+                check_payload(fd[i], LONG_SIZE);
+            } else {
+                unsigned value;
+                assert(read(opened, &value, sizeof(value)) == (ssize_t)sizeof(value) && value == i);
+            }
             close(opened);
             assert(open(target, O_WRONLY) == -1 && errno == EROFS);
             assert(pwrite(fd[i], "X", 1, 0) == -1 && errno == EPERM);

@@ -51,6 +51,50 @@ static int irq_off(int irq)
 	return 0;
 }
 
+static int joint_bound(struct mt6878_native_capture *n, struct device *supplier)
+{
+	struct mt6878_camsv_platform *p = &n->platform;
+	struct mt6878_seninf_controller *c = &n->controller;
+
+	lockdep_assert_held(&n->lock);
+	if (!n->bound || p->retired || p->direct != &n->direct ||
+	    p->native_capture != n || c->capture != p || !n->smi ||
+	    n->hardware.platform != p || n->hardware.smi_device != n->smi ||
+	    !c->pdev || c->route.core_lock != &c->core ||
+	    c->route.sensor != p->sensor || c->route.receiver != p->receiver ||
+	    !p->cam_main || (supplier && p->cam_main != supplier) ||
+	    !p->receiver || !p->sensor || !p->receiver->dev || !p->sensor->dev ||
+	    !p->receiver->active_state || !p->sensor->active_state)
+		return -ENODEV;
+	if (n->first_error)
+		return n->first_error;
+	if (!device_is_bound(p->cam_main) || !device_is_bound(n->smi) ||
+	    !device_is_bound(p->receiver->dev) || !device_is_bound(p->sensor->dev))
+		return -ENODEV;
+	return 0;
+}
+
+static int joint_supplier_get(struct mt6878_native_capture *n, struct device **supplier)
+{
+	int ret;
+
+	/* Negative admission only: an unbound/zero owner has no initialized lock.
+	 * A positive observation cannot replace the locked validation below.
+	 */
+	if (!n || !supplier || !READ_ONCE(n->bound))
+		return -ENODEV;
+	/* Parent lifetime exclusion protects capture storage/initialized mutex.
+	 * Pin the supplier while native refs are still protected, then drop native
+	 * lock BEFORE provider exclusion to preserve supplier-first lock ordering.
+	 */
+	mutex_lock(&n->lock);
+	ret = joint_bound(n, NULL);
+	if (!ret)
+		*supplier = get_device(n->platform.cam_main);
+	mutex_unlock(&n->lock);
+	return ret;
+}
+
 static int joint_preflight(struct mt6878_native_capture *n,
 	const struct mt6878_camsv_job *layout, struct mt6878_camera_cold_reset *cold)
 {
@@ -105,6 +149,7 @@ static int joint_run(struct mt6878_camera_joint_reset *transaction,
 	struct mt6878_cam_main_lease **supplied, unsigned int port, unsigned int pixel_mode)
 {
 	struct mt6878_cam_main_lease *lease = NULL;
+	struct device *supplier = NULL;
 	struct v4l2_subdev_state *receiver_state, *sensor_state;
 	struct regmap *cam_main;
 	void __iomem *scq;
@@ -115,9 +160,10 @@ static int joint_run(struct mt6878_camera_joint_reset *transaction,
 	ret = joint_once(transaction);
 	if (ret || !n || !layout)
 		return ret ? ret : -EINVAL;
-	if (!n->bound || !n->platform.cam_main || !n->platform.receiver ||
-	    !n->platform.sensor || !n->platform.receiver->active_state ||
-	    !n->platform.sensor->active_state)
+	/* Reject an uninitialized/unbound owner without touching supplier pointers.
+	 * Positive validation still happens under native lock after supplier pin.
+	 */
+	if (!READ_ONCE(n->bound))
 		return -ENODEV;
 	if (supplied)
 		lockdep_assert_held(&n->lock);
@@ -133,9 +179,14 @@ static int joint_run(struct mt6878_camera_joint_reset *transaction,
 		lease = *supplied;
 		*supplied = NULL; /* This transaction owns retirement on every exit. */
 	} else {
-		ret = mt6878_cam_main_prepare(n->platform.cam_main, &lease);
+		ret = joint_supplier_get(n, &supplier);
 		if (ret)
 			return ret;
+		ret = mt6878_cam_main_prepare(supplier, &lease);
+		if (ret) {
+			put_device(supplier);
+			return ret;
+		}
 	}
 	cam_main = mt6878_cam_main_regmap(lease);
 	if (IS_ERR(cam_main)) {
@@ -145,8 +196,13 @@ static int joint_run(struct mt6878_camera_joint_reset *transaction,
 	if (!supplied)
 		mutex_lock(&n->lock);
 	native_locked = true;
+	ret = joint_bound(n, supplier);
+	if (ret)
+		goto retire_lease;
 	mutex_lock(&n->platform.lifecycle);
-	ret = joint_once(transaction);
+	ret = joint_bound(n, supplier);
+	if (!ret)
+		ret = joint_once(transaction);
 	if (ret)
 		goto unlock_lifecycle;
 	if (supplied) {
@@ -160,22 +216,23 @@ static int joint_run(struct mt6878_camera_joint_reset *transaction,
 		if (ret)
 			goto unlock_lifecycle;
 	}
-	/* Native receiver stream callbacks take receiver state before sensor
-	 * state. Hold both across the pulse, excluding new stream attempts.
+	/* Match native enable callback: receiver state -> core -> queue -> sensor
+	 * state. Queue is released before the bounded reset poll, not reacquired
+	 * under sensor state. s_power(0) already completed outside these locks.
 	 */
 	receiver_state = v4l2_subdev_lock_and_get_active_state(n->platform.receiver);
+	mutex_lock(&n->controller.core);
+	mutex_lock(&n->direct.lock);
 	sensor_state = v4l2_subdev_lock_and_get_active_state(n->platform.sensor);
 	if (v4l2_subdev_is_streaming(n->platform.receiver) ||
 	    v4l2_subdev_is_streaming(n->platform.sensor)) {
 		ret = -EBUSY;
-		goto unlock_states;
+		goto unlock_queue;
 	}
-	mutex_lock(&n->controller.core);
-	mutex_lock(&n->direct.lock);
 	ret = joint_preflight(n, layout, supplied ? &transaction->cold : NULL);
-	mutex_unlock(&n->direct.lock);
 	if (ret)
-		goto unlock_core;
+		goto unlock_queue;
+	mutex_unlock(&n->direct.lock);
 	mutex_lock(&n->reset_lock);
 	transaction->attempted = true;
 	reset_started = true;
@@ -213,10 +270,12 @@ finish:
 			n->first_error = ret;
 	}
 	mutex_unlock(&n->reset_lock);
-unlock_core:
-	mutex_unlock(&n->controller.core);
+	goto unlock_states;
+unlock_queue:
+	mutex_unlock(&n->direct.lock);
 unlock_states:
 	v4l2_subdev_unlock_state(sensor_state);
+	mutex_unlock(&n->controller.core);
 	v4l2_subdev_unlock_state(receiver_state);
 unlock_lifecycle:
 	mutex_unlock(&n->platform.lifecycle);
@@ -225,6 +284,7 @@ retire_lease:
 	 * native capture refs, SMI error/clamp quarantine or DMA on failure.
 	 */
 	cleanup = mt6878_cam_main_retire(&lease);
+	put_device(supplier);
 	/* Keep native retirement excluded until supplier PM cleanup is known.
 	 * An early mapping error has not yet acquired native lock; acquire it
 	 * before recording a genuine cleanup error on the persistent owner.
@@ -258,17 +318,26 @@ int mt6878_camera_cold_frame(struct mt6878_camera_joint_reset *transaction,
 	unsigned int pixel_mode)
 {
 	struct mt6878_cam_main_lease *lease = NULL;
+	struct device *supplier = NULL;
 	int ret, cleanup;
 
-	if (!n || !n->bound || !transaction || !raw || !pdaf || !layout || !config)
+	if (!n || !transaction || !raw || !pdaf || !layout || !config)
 		return -EINVAL;
 	ret = joint_once(transaction);
 	if (ret)
 		return ret;
-	ret = mt6878_cam_main_prepare(n->platform.cam_main, &lease);
+	ret = joint_supplier_get(n, &supplier);
 	if (ret)
 		return ret;
+	ret = mt6878_cam_main_prepare(supplier, &lease);
+	if (ret) {
+		put_device(supplier);
+		return ret;
+	}
 	mutex_lock(&n->lock);
+	ret = joint_bound(n, supplier);
+	if (ret)
+		goto retire_unused;
 	if (n->first_error || n->direct.pair.tx.attempted || n->receiver_ref) {
 		ret = n->first_error ? n->first_error : -EALREADY;
 		goto retire_unused;
@@ -323,6 +392,7 @@ retire_unused:
 	}
 out:
 	mutex_unlock(&n->lock);
+	put_device(supplier);
 	return ret;
 }
 

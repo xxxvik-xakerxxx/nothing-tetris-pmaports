@@ -39,6 +39,15 @@ new actual reset/parent-provider ARM64 objects passed the 37-object combined
 They are not linked operational drivers, packaged or activated. See
 [reset-provider boundary](../patches/gpu/reset-provider-draft/README.md).
 
+The native MFG0/bound-parent ownership transaction passed actual ARM64 object
+compilation and the production-TU fault fixture in the fully successful combined
+[CI 38048742833](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38048742833)
+at `630aa47`. It acquires the real parent runtime-PM supplier before the existing
+SRAM/reset provider. A failed power transition retains references and first
+error, but releases the task-owned device mutex. The fixture mocks kernel APIs;
+it is not physical power evidence. No platform caller, firmware upload,
+deassertion, GPUEB boot or accelerated render node is enabled by this candidate.
+
 ## Earlier Supply Evidence
 
 r177 candidate describes disabled USID-6 VBUCK2/VGPU and MT6363 VSRAM_CPUM

@@ -12,7 +12,7 @@ static int cold_irq_off(int irq)
 	return data && irq_has_action(irq) && irqd_irq_disabled(data) ? 0 : -EBUSY;
 }
 
-static int cold_power(struct mt6878_native_capture *n)
+static int cold_power(struct mt6878_native_capture *n, unsigned int port)
 {
 	struct mt6878_seninf_controller *c = &n->controller;
 	unsigned int i;
@@ -21,15 +21,26 @@ static int cold_power(struct mt6878_native_capture *n)
 	if (!pm_runtime_active(&c->pdev->dev) || !n->platform.powered ||
 	    !pm_runtime_active(c->domains[0]) || !pm_runtime_active(c->domains[1]))
 		return -EHOSTDOWN;
-	for (i = 0; i < c->num_clocks; i++)
+	/* Match native PM's actual 0..2 + CAMTM + selected CSI ownership.
+	 * Unselected muxes/PLL alternatives are not owned enable references.
+	 */
+	if (port > 1 || c->num_clocks != 12 ||
+	    !clk_is_match(c->route.csi_clock, c->clocks[3 + port].clk))
+		return -EINVAL;
+	for (i = 0; i < 3; i++)
 		if (!__clk_is_enabled(c->clocks[i].clk))
 			return -EHOSTDOWN;
+	if (!__clk_is_enabled(c->clocks[7].clk) || !__clk_is_enabled(c->route.csi_clock))
+		return -EHOSTDOWN;
 	if (c->dvfs[4] * 1000000ULL != clk_get_rate(c->route.csi_clock))
 		return -EOPNOTSUPP;
 	voltage = regulator_get_voltage(c->vcore);
 	if (voltage < 0)
 		return voltage;
-	return voltage >= c->dvfs[5] && voltage <= c->dvfs[6] ? 0 : -ERANGE;
+	/* Shared VCORE: native PM votes step[5]..INT_MAX, regulator core enforces
+	 * provider constraints. step[6] is not a global upper safety limit.
+	 */
+	return voltage >= c->dvfs[5] ? 0 : -ERANGE;
 }
 
 /* Exact e96 PHY3.1 set_cammux_src/disable sequence, already traced by the
@@ -166,7 +177,7 @@ int mt6878_camera_cold_prepare(struct mt6878_camera_cold_reset *cold,
 		return -EBUSY;
 	ret = cold_mapping(&c->pdev->dev);
 	if (!ret)
-		ret = cold_power(n);
+		ret = cold_power(n, port);
 	for (i = 0; !ret && i < 4; i++)
 		ret = cold_irq_off(n->direct.resources.irqs[i]);
 	if (!ret)
@@ -258,7 +269,7 @@ int mt6878_camera_cold_verify(struct mt6878_camera_cold_reset *cold,
 		    !test_bit(cold->plan.cammux[i], &c->cammuxes) ||
 		    cold->plan.cammux[i] != job->sv_id * 8 + (i ? job->pdaf_tag : job->raw_tag))
 			return -ESTALE;
-	ret = cold_power(n);
+	ret = cold_power(n, cold->plan.outputs[0].port);
 	return ret ? ret : cold_readback(cold);
 }
 
