@@ -17,8 +17,8 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | Experimental `7012ed17a238be57b70037183d78d8854fcc835e`, slot `lk_a` |
-| U-Boot image SHA256 | `b960a5973befb0964df8afe9b853a684045e50879b911c21b6a3810eaf6139ec` |
+| U-Boot | Experimental `cd96ef3cb114b345ee773c89f3f0d43c2ae11417`, slot `lk_a` |
+| U-Boot image SHA256 | `4e64ee87d9310e2120ad03852142356b8de49234ca212a0abc0e8c94764e9001` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -58,9 +58,20 @@ stage 15 and publication error 0. The cold-OFF check refuses before firmware
 reservation/copy or SMEM writes; bootstrap/hardware fields remain unobserved.
 The current 80-byte record omits the loaded owner's sampled failing register.
 Reporting-only correction `cd96ef3cb114b345ee773c89f3f0d43c2ae11417` is in
-the user's U-Boot master and [CI 38069046288](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38069046288).
-It exports that existing sample, retaining the v1 ABI and every OFF guard;
-the new image is not yet installed. No Linux MMIO probe or modem retry is permitted.
+the user's U-Boot master; [CI 38069046288](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38069046288)
+passed native/libfdt fault fixtures, actual ARM objects and the complete image.
+Independent review found no P1/P2 issues. The verified 3,306,496-byte image was
+installed only in `lk_a`; installed prefix hash and version match.
+Its new independent BE fields preserve the v1 ABI and expose the already
+sampled loaded-owner register without extra hardware access. The first report
+still has loaded stage 2 / `-EBUSY`, report-fetch 0 and publication error 0;
+valid loaded observation is address `0x1c001e00`, value `0x4200000d`.
+`PWR_ON` is set, ACK30 is set and ACK31 is clear. This is not strict OFF and
+does not establish authenticated firmware load or modem startup.
+After `board:poweroff`, Preloader briefly appeared and pmOS returned; the
+first report was preserved, but this boot is not claimed as a confirmed cold
+start. A physical power-off with USB disconnected, ten-second wait and normal
+power-on is pending. No Linux MMIO probe, guard bypass or modem retry occurred.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
 On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
@@ -68,7 +79,7 @@ reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
 journal were preserved before further changes. The user confirmed normal
 display, touch, both rotations and automatic brightness for `60cd`; the
-corresponding visual check for `7012ed17` remains pending. The rootfs remains
+corresponding visual check for the latest loader remains pending. The rootfs remains
 r179; r180 is downloaded but not installed, and runtime CCCI stays disabled.
 
 New candidates, not hardware support: [SMEM transaction](../patches/modem/drafts/runtime-smem/README.md)
