@@ -61,6 +61,9 @@ static void failed_mount(const int *providers, unsigned denied_flags)
         close(report[0]); close(release[1]);
         deny_mount_flags(denied_flags);
         int result = b41_mipc_loader_root(root, owner.stage, owner.count);
+        if (result != -EACCES)
+            fprintf(stderr, "loader root fault flags=%u returned=%d expected=%d\n",
+                    denied_flags, result, -EACCES);
         assert(result == -EACCES); /* Real denial at bind/remount, not unshare failure. */
         assert(write(report[1], &result, sizeof(result)) == (ssize_t)sizeof(result));
         char byte;
