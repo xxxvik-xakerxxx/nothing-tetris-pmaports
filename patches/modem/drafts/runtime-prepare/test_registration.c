@@ -40,7 +40,7 @@ struct md_sys1_info { char peer_wakelock_name[32]; void *peer_wake_lock; };
 struct ccci_modem;
 struct md_ops { int (*init)(struct ccci_modem *); };
 struct ccci_modem {
-	void *private_data;
+	unsigned char *private_data;
 	struct { int md_capability; } per_md_data;
 	struct md_hw_info *hw_info;
 	struct platform_device *plat_dev;
@@ -87,6 +87,7 @@ static bool device_is_bound(struct device *dev) { return dev->bound; }
 static struct ccci_modem *ccci_md_alloc(int size)
 {
 	struct ccci_modem *md;
+	assert(size == (int)sizeof(struct md_sys1_info));
 	if (fault == 1)
 		return NULL;
 	md = calloc(1, sizeof(*md));
@@ -146,7 +147,7 @@ static void __module_get(struct module *m) { m->pins++; }
 static void cold_reset(void)
 {
 	if (tetris_prepared_md) {
-		struct md_sys1_info *info = tetris_prepared_md->private_data;
+		struct md_sys1_info *info = (struct md_sys1_info *)tetris_prepared_md->private_data;
 		free(info->peer_wake_lock);
 		free(tetris_prepared_md->trm_wake_lock);
 		free(info);

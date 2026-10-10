@@ -1,0 +1,47 @@
+--- a/mt6878-native-video.c
++++ b/mt6878-native-video.c
+@@ -9,6 +9,7 @@
+ #include <media/v4l2-device.h>
+ #include <media/v4l2-ioctl.h>
+ #include "mt6878-native-video.h"
++#include "mt6878-camera-joint-reset.h"
+ 
+ struct native_node {
+ 	struct video_device vdev;
+@@ -24,6 +25,7 @@
+ struct mt6878_native_video {
+ 	struct mt6878_native_video_suppliers suppliers;
+ 	struct mt6878_native_capture capture;
++	struct mt6878_camera_joint_reset joint_reset;
+ 	struct media_device media;
+ 	struct v4l2_device v4l2;
+ 	struct v4l2_async_notifier notifier;
+@@ -217,7 +219,7 @@
+ 		return;
+ 	}
+ 	mutex_unlock(&v->capture.direct.lock);
+-	ret = mt6878_native_capture_frame(&v->capture, raw, pdaf,
++	ret = mt6878_camera_cold_frame(&v->joint_reset, &v->capture, raw, pdaf,
+ 		&v->suppliers.layout, &v->suppliers.config, v->suppliers.port, 0);
+ 	if (!ret && !wait_for_completion_timeout(&v->capture.platform.stopped,
+ 		msecs_to_jiffies(1000))) {
+@@ -659,8 +661,8 @@
+ 		ret = -EINVAL;
+ 		goto fail;
+ 	}
+-	ret = mt6878_native_capture_probe(&v->capture, s->pdev, s->dma, s->cam_main,
+-		s->smi, v->receiver, sensor, source->index, s->cam_main_base, s->cam_main_size);
++	ret = mt6878_camera_cold_probe(&v->capture, s->pdev, s->dma, s->cam_main,
++		s->smi, v->receiver, sensor, source->index);
+ 	if (ret)
+ 		goto fail;
+ 	/* Resource-only bind acquired the existing sensor/receiver pipeline.
+@@ -787,7 +789,7 @@
+ 		return -EINVAL;
+ 	*result = NULL;
+ 	if (!s || !s->pdev || !s->dma || !s->cam_main || !s->smi || !s->receiver ||
+-	    IS_ERR_OR_NULL(s->cam_main_base) || s->cam_main_size < 0x5c || s->port > 1 ||
++	    s->port > 1 ||
+ 	    s->dma == &s->pdev->dev || !device_is_bound(&s->pdev->dev) ||
+ 	    !device_is_bound(s->dma) || !device_is_bound(s->cam_main) ||
+ 	    !device_is_bound(s->smi) ||

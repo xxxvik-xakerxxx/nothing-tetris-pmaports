@@ -49,6 +49,10 @@ RESEARCH_SOURCES = {
     "patches/gpu/reset-owner-draft/mt6878-gpueb-reset.h": f"{RESEARCH_DIR}/mt6878-gpueb-reset.h",
     "patches/gpu/reset-provider-draft/mt6878-gpueb-reset-provider.c": f"{RESEARCH_DIR}/mt6878-gpueb-reset-provider.c",
     "patches/gpu/reset-provider-draft/mt6878-gpueb-reset-provider.h": f"{RESEARCH_DIR}/mt6878-gpueb-reset-provider.h",
+    "patches/gpu/mfg0-supplier-draft/mt6878-gpueb-mfg0.c": f"{RESEARCH_DIR}/mt6878-gpueb-mfg0.c",
+    "patches/gpu/mfg0-supplier-draft/mt6878-gpueb-mfg0.h": f"{RESEARCH_DIR}/mt6878-gpueb-mfg0.h",
+    "patches/gpu/bound-parent-draft/mt6878-gpueb-control.c": f"{RESEARCH_DIR}/mt6878-gpueb-control.c",
+    "patches/gpu/bound-parent-draft/mt6878-gpueb-control.h": f"{RESEARCH_DIR}/mt6878-gpueb-control.h",
     "patches/modem/mt6878_md_startup_scope.c": f"{RESEARCH_DIR}/mt6878_md_startup_scope.c",
     "patches/modem/mt6878_md_startup_scope.h": "include/linux/soc/mediatek/mt6878_md_startup_scope.h",
     "patches/modem/mt6878_md_handoff_reservation.c": f"{RESEARCH_DIR}/mt6878_md_handoff_reservation.c",
@@ -64,6 +68,7 @@ PROVIDER_OBJECTS = ("drivers/memory/mtk-smi.o",)
 RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
     "mt6878-gpueb-reset", "mt6878-gpueb-reset-provider",
+    "mt6878-gpueb-mfg0", "mt6878-gpueb-control",
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
     "mt6878_md_pss32",
 ))
@@ -73,11 +78,12 @@ CAMERA_REVIEW_PATCHES = (
     "patches/camera-seninf-controller/imx882-native-streams.patch",
     "patches/camera-seninf-controller/native-bind.patch",
     "patches/camera-native-capture/native-pm.patch",
+    "patches/camera-joint-reset/video-cold.patch",
 )
 
 
-def camera_staging(root):
-    data = json.loads((root / CAMERA_MANIFEST).read_text())
+def camera_staging(root, manifest=CAMERA_MANIFEST):
+    data = json.loads((root / manifest).read_text())
     destination = data["destination"]
     if destination != "drivers/media/platform/mediatek/tetris-camera-owner-smoke":
         raise ValueError("unexpected camera staging destination")
@@ -94,7 +100,9 @@ def camera_staging(root):
         if target in mapping.values():
             raise ValueError("camera basename collision")
         mapping[source] = target
-    names = [*data["objects"], data["fault_object"]]
+    names = [*data["objects"]]
+    if "fault_object" in data:
+        names.append(data["fault_object"])
     if len(set(names)) != len(names):
         raise ValueError("duplicate camera object")
     for name in names:
@@ -102,7 +110,7 @@ def camera_staging(root):
             raise ValueError("unsafe camera object path")
         if f"{destination}/{Path(name).with_suffix('.c')}" not in mapping.values():
             raise ValueError("camera object lacks production source")
-    symbols = [*data["required_enabled"], *data["fault_required_enabled"]]
+    symbols = [*data.get("required_enabled", []), *data.get("fault_required_enabled", [])]
     if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*", name) for name in symbols):
         raise ValueError("invalid camera config symbol")
     return mapping, tuple(f"{destination}/{name}" for name in names), tuple(symbols)
@@ -114,6 +122,13 @@ CAMERA_SOURCES, CAMERA_OBJECTS, CAMERA_ENABLE = camera_staging(Path(__file__).re
 CAMERA_SELECTORS = ("MEDIA_TEST_SUPPORT", "V4L_TEST_DRIVERS", "VIDEO_VIVID")
 RESEARCH_SOURCES.update(CAMERA_SOURCES)
 RESEARCH_OBJECTS += CAMERA_OBJECTS
+CAMERA_JOINT_MANIFEST = "patches/camera-joint-reset/STAGING.json"
+CAMERA_JOINT_SOURCES, CAMERA_JOINT_OBJECTS, _ = camera_staging(
+    Path(__file__).resolve().parents[1], CAMERA_JOINT_MANIFEST)
+if set(CAMERA_JOINT_SOURCES.values()) & set(RESEARCH_SOURCES.values()):
+    raise ValueError("duplicate camera joint-reset staging destination")
+RESEARCH_SOURCES.update(CAMERA_JOINT_SOURCES)
+RESEARCH_OBJECTS += CAMERA_JOINT_OBJECTS
 CAM_MAIN_MANIFEST = "patches/camera-cam-main-provider/STAGING.json"
 CAM_MAIN_CHECK = "patches/camera-cam-main-provider/check-staging.py"
 CAM_MAIN_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAM_MAIN_MANIFEST).read_text())
@@ -257,6 +272,11 @@ def main():
         }
         manifest["research_source_sha256"][CAMERA_MANIFEST] = hashlib.sha256(
             Path(CAMERA_MANIFEST).read_bytes()).hexdigest()
+        manifest["research_source_sha256"][CAMERA_JOINT_MANIFEST] = hashlib.sha256(
+            Path(CAMERA_JOINT_MANIFEST).read_bytes()).hexdigest()
+        joint_check = "patches/camera-joint-reset/check.py"
+        manifest["research_source_sha256"][joint_check] = hashlib.sha256(
+            Path(joint_check).read_bytes()).hexdigest()
         manifest["research_source_sha256"][PROVIDER_PATCH] = hashlib.sha256(
             Path(PROVIDER_PATCH).read_bytes()).hexdigest()
         for name in CAMERA_REVIEW_PATCHES:
@@ -296,6 +316,8 @@ def main():
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(PROVIDER_PATCH).resolve()])
         stage_camera_overlays(kernel)
+        run(["python3", "patches/camera-joint-reset/check.py",
+             "--staged-only", "--kernel-tree", kernel])
         run(["python3", CAM_MAIN_CHECK, "--kernel-tree", kernel])
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(CAM_MAIN_PLAN["overlay"]).resolve()])
@@ -341,7 +363,7 @@ def main():
         if len(video_objects) != 2:
             raise ValueError("video variant requires both explicit objects")
         cam_main_objects = tuple(CAM_MAIN_PLAN["provider_objects"] + CAM_MAIN_PLAN["research_objects"])
-        variant_objects = video_objects + cam_main_objects
+        variant_objects = video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
@@ -360,6 +382,11 @@ def main():
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in cam_main_objects
+        }
+        manifest["camera_joint_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in CAMERA_JOINT_OBJECTS
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

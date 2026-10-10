@@ -10,6 +10,7 @@ import stat
 import shutil
 import struct
 import subprocess
+import zipfile
 
 RELEASE = "Tetris_B4.1-260415-1709"
 BASE = f"https://github.com/spike0en/nothing_archive/releases/download/{RELEASE}"
@@ -22,6 +23,24 @@ MAX_IMAGE = 4 * 1024 * 1024 * 1024
 MAX_LIBLOG = 16 * 1024 * 1024
 # Same pinned logical archive: root-level member verified in cached CI listing.
 SYSTEM_IMAGE_SIZE = 1039855616
+SYSTEM_IMAGE_SHA = "ce53560d05e6caa8ad8c27a4c85eefbb93479b879e8c610be650be6b689108e6"
+RUNTIME_APEX_SHA = "f60104339cc839557d35caa922981cb4d37d87ee0d46a9db5e9264eda7092180"
+RUNTIME_APEX_SIZE = 8372224
+RUNTIME_PAYLOAD_SHA = "3f5261a35da1c7bd5cbf8f8b74b935b94261580bae3dc904b75a2dc9d3741127"
+RUNTIME_PAYLOAD_SIZE = 8261632
+# Source paths and independent bytes: local/agent-results/mnl-runtime/REPORT.md.
+BIONIC_PROVIDERS = (
+    ("/bin/linker64", "apex/com.android.runtime/bin/linker64", 2279440,
+     "4a8dd94eb2d0e59184247892ba5232f7dcbe88eb8c5a43e3a9e4c9c4d4ba7844"),
+    ("/lib64/bionic/libc.so", "apex/com.android.runtime/lib64/bionic/libc.so", 1256744,
+     "1e365bc2da9ca1e830801ce49f389e6e7fcbc0be7d82824924026af8751f8648"),
+    ("/lib64/bionic/libm.so", "apex/com.android.runtime/lib64/bionic/libm.so", 265360,
+     "25c852fca54f103e1a8ac2785a51ef2db2ea21ae9a89295d156ec63cbeb90e40"),
+    ("/lib64/bionic/libdl.so", "apex/com.android.runtime/lib64/bionic/libdl.so", 50760,
+     "ec8a5f55630b6b41ad94b8bbdc6da308e36903709ce759bf2a3a59640715ae32"),
+    ("/system/lib64/libc++.so", "system/lib64/libc++.so", 1049704,
+     "2267f93b8b3c9d1967f1833d5f71c7312213c43bb291250cf772800763037fb9"),
+)
 SYSTEM_LIBLOG_PATHS = ("/system/lib64/liblog.so", "/lib64/liblog.so")
 NAMES = ["build.prop", "etc/MNL_Config.xml", "bin/mnld", "firmware/mali_csffw.bin",
          "etc/init/camerahalserver.rc", "etc/vintf/manifest/manifest_cameraprovider.xml",
@@ -77,6 +96,96 @@ def filesystem(image):
     if ext4_magic == b"\x53\xef":
         return "ext4"
     raise ValueError("unsupported stock filesystem")
+
+
+def require_pin(path, size, expected):
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_size != size or digest(path) != expected:
+        raise ValueError(f"pinned asset identity mismatch: {path.name}")
+
+
+def selected_file(raw, kind, name, target, size, expected):
+    """Read one fixed image path, without mount, recursion or writable debugfs."""
+    allowed = {row[0] for row in BIONIC_PROVIDERS} | {"/system/apex/com.android.runtime.apex"}
+    if name not in allowed or kind not in ("ext4", "erofs") or not 0 < size <= MAX_LIBLOG:
+        raise ValueError("unapproved runtime file selection")
+    if target.exists() or target.is_symlink():
+        raise ValueError("runtime destination already exists")
+    if kind == "ext4":
+        metadata = subprocess.check_output(["debugfs", "-R", f"stat {name}", str(raw)],
+                                           text=True, timeout=30)
+        file_type = re.search(r"Type:\s+(\w+)", metadata)
+        file_size = re.search(r"\bSize:\s+(\d+)", metadata)
+        if ("Inode:" not in metadata or not file_type or file_type[1] != "regular" or
+                not file_size or int(file_size[1]) != size):
+            raise ValueError("invalid selected runtime inode")
+        subprocess.run(["debugfs", "-R", f"dump {name} {target}", str(raw)],
+                       check=True, stdout=subprocess.DEVNULL, timeout=30)
+    else:
+        # The child deadline also bounds a blocked pipe read; never dump the tree.
+        with target.open("xb") as output:
+            process = subprocess.Popen(["timeout", "30", "dump.erofs", f"--path={name}",
+                                        "--cat", str(raw)], stdout=subprocess.PIPE)
+            try:
+                data = process.stdout.read(size + 1)
+                if len(data) != size or process.wait(timeout=35):
+                    raise ValueError("invalid selected runtime byte count or extraction")
+                output.write(data)
+            finally:
+                process.stdout.close()
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+    require_pin(target, size, expected)
+
+
+def selected_apex_payload(apex, target):
+    """Select one regular bounded ZIP member; never extractall or use member paths."""
+    require_pin(apex, RUNTIME_APEX_SIZE, RUNTIME_APEX_SHA)
+    with zipfile.ZipFile(apex) as archive:
+        entries = archive.infolist()
+        candidates = [entry for entry in entries if entry.filename == "apex_payload.img"]
+        if len(entries) > 64 or len(candidates) != 1:
+            raise ValueError("ambiguous or oversized runtime APEX directory")
+        entry = candidates[0]
+        mode = entry.external_attr >> 16
+        if (entry.is_dir() or stat.S_IFMT(mode) not in (0, stat.S_IFREG) or
+                entry.flag_bits & 1 or entry.file_size != RUNTIME_PAYLOAD_SIZE or
+                entry.compress_size > RUNTIME_APEX_SIZE):
+            raise ValueError("invalid runtime APEX payload member")
+        with archive.open(entry) as source, target.open("xb") as output:
+            data = source.read(RUNTIME_PAYLOAD_SIZE + 1)
+            if len(data) != RUNTIME_PAYLOAD_SIZE:
+                raise ValueError("invalid runtime payload length")
+            output.write(data)
+    require_pin(target, RUNTIME_PAYLOAD_SIZE, RUNTIME_PAYLOAD_SHA)
+    if filesystem(target) != "ext4":
+        raise ValueError("pinned runtime APEX payload must be ext4")
+
+
+def extract_bionic_providers(system_raw, kind, work, out):
+    """Five source-pinned providers in the same CI artifact; no cached root input."""
+    require_pin(system_raw, SYSTEM_IMAGE_SIZE, SYSTEM_IMAGE_SHA)
+    if kind != "erofs":
+        raise ValueError("pinned B4.1 system must be EROFS")
+    apex = work / "runtime.apex"
+    selected_file(system_raw, kind, "/system/apex/com.android.runtime.apex", apex,
+                  RUNTIME_APEX_SIZE, RUNTIME_APEX_SHA)
+    payload = work / "runtime-apex-payload.img"
+    selected_apex_payload(apex, payload)
+    rows = []
+    for name, relative, size, expected in BIONIC_PROVIDERS:
+        target = out / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source, filesystem_kind = (system_raw, kind) if name.startswith("/system/") else (payload, "ext4")
+        selected_file(source, filesystem_kind, name, target, size, expected)
+        target.chmod(0o644)
+        rows.append({"path": relative, "size": size, "sha256": expected,
+                     "image_path": name, "container": "system.img" if name.startswith("/system/")
+                     else "com.android.runtime.apex/apex_payload.img"})
+    return {"apex_image_path": "/system/apex/com.android.runtime.apex",
+            "apex_sha256": RUNTIME_APEX_SHA, "payload_sha256": RUNTIME_PAYLOAD_SHA,
+            "payload_filesystem": "ext4", "providers": rows}
 
 
 def extract_system_liblog(raw, kind, work, target):
@@ -210,6 +319,7 @@ def main():
     system_image = work / "image" / "system.img"
     manifest["vendor_image_sha256"] = digest(image)
     manifest["system_image_sha256"] = digest(system_image)
+    require_pin(system_image, SYSTEM_IMAGE_SIZE, SYSTEM_IMAGE_SHA)
     # Both selected images now exist; never redownload the OTA for system.
     for suffix, _, _ in PARTS:
         (work / f"{RELEASE}-image-logical.7z.{suffix}").unlink()
@@ -276,6 +386,8 @@ def main():
     manifest["system_liblog"] = extract_system_liblog(system_raw, kind, work, target)
     manifest["files"].append({"path": "system/lib64/liblog.so", "size": target.stat().st_size,
                               "sha256": digest(target)})
+    manifest["bionic_runtime"] = extract_bionic_providers(system_raw, kind, work, out)
+    manifest["files"].extend(manifest["bionic_runtime"]["providers"])
     manifest["status"] = "extracted; identity matched; runtime contracts untested"
     manifest["trust"] = "pinned mirror hashes plus independent libMNL pin; not OEM signature verification"
     (out / "BUILD-MANIFEST.json").write_text(json.dumps(manifest, indent=2) + "\n")

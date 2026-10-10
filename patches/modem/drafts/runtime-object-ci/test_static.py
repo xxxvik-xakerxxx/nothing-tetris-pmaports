@@ -89,7 +89,7 @@ class ObjectTests(unittest.TestCase):
         self.assertIn('ccci_tetris_owner_entry();', before[core + 'fsm/ccci_fsm.c'])
         self.assertIn('ccci_tetris_register_prepared', after[core + 'fsm/register_prepare.h'])
         self.assertIn('class_create("ccci_node")', after[core + 'ccci_core.c'])
-        for name in ('runtime-ports', 'runtime-prepare'):
+        for name in ('runtime-ports', 'runtime-prepare', 'runtime-lifecycle'):
             review(HERE.parent / name)
 
     def test_review_drift_rejected(self):
@@ -142,7 +142,12 @@ class ObjectTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 stage_vendor(VENDOR, Path(temp) / 'vendor', package, data)
             self.assertEqual(set(data['overlays_sha256']),
-                {'owner', 'runtime-ports', 'runtime-prepare'})
+                {'owner', 'runtime-ports', 'runtime-prepare', 'runtime-lifecycle'})
+            lifecycle = load('static_lifecycle_actual_bytes', HERE.parent / 'runtime-lifecycle/check_lifecycle.py')
+            _, _, expected = lifecycle.build(VENDOR)
+            self.assertEqual((Path(temp) / 'vendor' / lifecycle.SOURCE).read_text(), expected)
+            self.assertEqual(data['lifecycle_source_sha256'],
+                data['compiled_source_sha256'][lifecycle.SOURCE])
             for root, objects in data['objects'].items():
                 for name in objects:
                     source = PREFIX + root + '/' + str(Path(name).with_suffix('.c'))
@@ -152,6 +157,13 @@ class ObjectTests(unittest.TestCase):
         env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')
         result = subprocess.run(['python3', '-B', str(HERE / 'check_objects.py')],
             env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('GitHub CI-only', result.stderr)
+
+    def test_native_callback_runner_rejected_outside_ci(self):
+        env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')
+        result = subprocess.run(['python3', '-B', str(HERE / 'check_native_callbacks.py'),
+            '--vendor', str(VENDOR)], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('GitHub CI-only', result.stderr)
 

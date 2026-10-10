@@ -1,0 +1,14 @@
+{
+  "scope": "isolated candidate object only; no binding, shipping linkage or activation",
+  "sources": {
+    "patches/gpu/mfg0-supplier-draft/mt6878-gpueb-mfg0.c": "drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.c",
+    "patches/gpu/mfg0-supplier-draft/mt6878-gpueb-mfg0.h": "drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.h"
+  },
+  "objects": ["drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.o"],
+  "required_enabled": ["PM", "OF"],
+  "requires_packaged_patch": "0035-pmdomain-mediatek-mt6878-mfg0-data.patch",
+  "static_gate": "python3 -B patches/gpu/mfg0-supplier-draft/test_supplier.py",
+  "native_gate": "CI=true sh patches/gpu/mfg0-supplier-draft/run-native-ci.sh",
+  "native_gate_scope": "CI only; production TU with mocked kernel APIs, not hardware or PM correctness",
+  "runtime_gate": "Reviewed disabled parent/domain configuration and same-task bound-parent control caller. No native runtime test authorized by this manifest."
+}

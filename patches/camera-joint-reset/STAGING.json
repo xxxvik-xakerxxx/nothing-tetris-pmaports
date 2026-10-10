@@ -1,0 +1,33 @@
+{
+  "scope": "additive isolated kernel object candidate only; no activation",
+  "destination": "drivers/media/platform/mediatek/tetris-camera-owner-smoke",
+  "sources": [
+    "patches/camera-joint-reset/mt6878-camera-joint-reset.c",
+    "patches/camera-joint-reset/mt6878-camera-joint-reset.h",
+    "patches/camera-joint-reset/mt6878-camera-cold-reset.c",
+    "patches/camera-joint-reset/mt6878-camera-cold-reset.h",
+    "patches/camera-joint-reset/cold-probe.c",
+    "patches/camera-joint-reset/joint-reset-test.inc",
+    "patches/camera-joint-reset/joint-smoke.c"
+  ],
+  "objects": ["mt6878-camera-joint-reset.o", "mt6878-camera-cold-reset.o", "cold-probe.o", "joint-smoke.o"],
+  "review_overlay": "patches/camera-joint-reset/video-cold.patch",
+  "requires_sensor_overlay": {
+    "path": "patches/camera-seninf-controller/imx882-native-streams.patch",
+    "after": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0112-media-i2c-imx882-v4l2-controls.patch",
+    "before": "patches/camera-joint-reset/video-cold.patch",
+    "target": "drivers/media/i2c/imx882-tetris-stream.c",
+    "verification": "python3 patches/camera-joint-reset/check.py --modules-repo MODULES_REPO --kernel-tree STAGED_KERNEL_TREE"
+  },
+  "overlay_destination": "drivers/media/platform/mediatek/tetris-camera-owner-smoke",
+  "requires_staged_manifests": [
+    "patches/camera-pipeline-owner/STAGING.json",
+    "patches/camera-cam-main-provider/STAGING.json"
+  ],
+  "requires_provider_headers": [
+    "include/soc/mediatek/cam-main-lease.h",
+    "include/soc/mediatek/smi-camera-reset.h"
+  ],
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime": "One-shot first-frame experiment per owner lifetime, not repeatable camera lifecycle. Requires the isolated IMX882 native-streams overlay before cold entry. Cold frame uses real OFF-only IRQ/sensor/owned route cleanup before joint reset, then existing calibrated controller ON sequence. Video overlay is isolated/review-only. Parent power/reset/lock-order review + four ARM objects and KUnit execution before any activation."
+}

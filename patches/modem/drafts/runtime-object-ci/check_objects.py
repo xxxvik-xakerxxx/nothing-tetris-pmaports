@@ -75,7 +75,7 @@ def plan():
     staging.update(kernel=kernel_plan, vendor_prepare=patches, vendor_kcflags=flags,
         package_sha256=sha(package / 'APKBUILD'), staging_sha256=sha(HERE / 'STAGING.json'),
         frozen_reviews={name: review(HERE.parent / name)
-                        for name in ('runtime-ports', 'runtime-prepare')})
+                        for name in ('runtime-ports', 'runtime-prepare', 'runtime-lifecycle')})
     return staging, smoke, package
 
 
@@ -132,6 +132,20 @@ def stage_vendor(vendor, destination, package, manifest, diagnostics=None):
     for name, text in expected.items():
         if (destination / name).read_text() != text:
             raise ValueError(f'full installed adaptation differs from frozen checker: {name}')
+    lifecycle = load('runtime_lifecycle_full_stack', HERE.parent / 'runtime-lifecycle/check_lifecycle.py')
+    lifecycle_patch, old, new = lifecycle.build(vendor)
+    frozen_lifecycle = (HERE.parent / 'runtime-lifecycle/runtime-lifecycle.patch.vendor').read_text()
+    check_generated('runtime-lifecycle', lifecycle_patch, frozen_lifecycle, diagnostics, manifest)
+    source = destination / lifecycle.SOURCE
+    if source.read_text() != old:
+        raise ValueError('lifecycle input differs from exact prepared source')
+    # The original three-overlay equality check above MUST precede this overlay.
+    run(['git', 'apply', '--check', '-'], cwd=destination, input=frozen_lifecycle, text=True)
+    run(['git', 'apply', '-'], cwd=destination, input=frozen_lifecycle, text=True)
+    if source.read_text() != new:
+        raise ValueError('staged lifecycle source differs from reviewed complete-stack bytes')
+    bundles.append(('runtime-lifecycle', frozen_lifecycle))
+    manifest['lifecycle_source_sha256'] = sha(source)
     manifest['overlays_sha256'] = {name: hashlib.sha256(patch.encode()).hexdigest()
                                   for name, patch in bundles}
     manifest['compiled_source_sha256'] = {

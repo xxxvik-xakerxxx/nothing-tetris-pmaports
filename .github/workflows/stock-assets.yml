@@ -45,6 +45,11 @@ jobs:
         run: python3 ci/test-extract-stock-port-assets.py
       - name: Extract pinned generic B4.1 vendor assets
         run: python3 ci/extract-stock-port-assets.py
+      - name: Verify real sealed GNSS provider closure
+        run: |
+          export TETRIS_B41_STOCK_ROOT="$PWD/out/stock-port-assets"
+          export TETRIS_BIONIC_ROOT="$PWD/out/stock-port-assets"
+          sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh providers
       - name: Verify owned GPUEB SRAM and quarantined partial startup
         if: ${{ !cancelled() }}
         env:

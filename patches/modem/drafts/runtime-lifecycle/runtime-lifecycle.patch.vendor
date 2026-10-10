@@ -1,0 +1,57 @@
+diff --git a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+--- a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
++++ b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+@@ -1159,6 +1159,10 @@
+ 
+ int ccci_modem_syssuspend(void)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Preparation does not own physical HIF lifecycle or diagnostics. */
++	return -EOPNOTSUPP;
++#endif
+ 	struct ccci_modem *md;
+ 
+ 	CCCI_DEBUG_LOG(0, TAG, "%s only for MD\n", __func__);
+@@ -1170,6 +1174,10 @@
+ 
+ void ccci_modem_sysresume(void)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Preparation does not own physical HIF lifecycle or diagnostics. */
++	return;
++#endif
+ 	struct ccci_modem *md;
+ 
+ 	CCCI_DEBUG_LOG(0, TAG, "%s should be no used\n", __func__);
+@@ -1250,10 +1258,15 @@
+ static ssize_t ccci_md_attr_show(struct kobject *kobj, struct attribute *attr,
+ 	char *buf)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Preparation does not own physical HIF lifecycle or diagnostics. */
++	return -EOPNOTSUPP;
++#endif
+ 	ssize_t len = 0;
+ 	struct ccci_md_attribute *a = container_of(attr,
+ 		struct ccci_md_attribute, attr);
+ 
++	(void)kobj;
+ 	if (a->show)
+ 		len = a->show(a->modem, buf);
+ 
+@@ -1263,10 +1276,15 @@
+ static ssize_t ccci_md_attr_store(struct kobject *kobj, struct attribute *attr,
+ 	const char *buf, size_t count)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++	/* Preparation does not own physical HIF lifecycle or diagnostics. */
++	return -EOPNOTSUPP;
++#endif
+ 	ssize_t len = 0;
+ 	struct ccci_md_attribute *a = container_of(attr,
+ 		struct ccci_md_attribute, attr);
+ 
++	(void)kobj;
+ 	if (a->store)
+ 		len = a->store(a->modem, buf, count);
+ 

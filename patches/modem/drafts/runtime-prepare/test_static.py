@@ -69,6 +69,23 @@ class PrepareTests(unittest.TestCase):
         self.assertGreater(source.index('ccci_tetris_fsm_run();'), source.index('tetris_sysfs_register(md);'))
         self.assertIn('cmpxchg(&tetris_registration_error, 0, failure)', source)
 
+    def test_private_storage_conversion_has_real_allocation_provenance(self):
+        source = (HERE / 'register_prepare.h').read_text()
+        conversion = source.index('info = (struct md_sys1_info *)md->private_data;')
+        for prerequisite in ('md = ccci_md_alloc(sizeof(*info));',
+                             'if (!md)', 'if (!md->private_data)'):
+            self.assertLess(source.index(prerequisite), conversion)
+        self.assertLess(conversion, source.index('tetris_prepared_md = md;'))
+        allocator = subprocess.check_output(['git', '-C', str(VENDOR), 'show',
+            f'{PIN}:drivers/misc/mediatek/eccci/fsm/modem_sys1.c'], text=True)
+        self.assertIn('md->private_data = kzalloc(private_size, GFP_KERNEL);', allocator)
+        header = subprocess.check_output(['git', '-C', str(VENDOR), 'show',
+            f'{PIN}:drivers/misc/mediatek/eccci/modem_sys.h'], text=True)
+        self.assertRegex(header, r'unsigned char\s*\*private_data;')
+        fixture = (HERE / 'test_registration.c').read_text()
+        self.assertIn('unsigned char *private_data;', fixture)
+        self.assertIn('assert(size == (int)sizeof(struct md_sys1_info));', fixture)
+
     def test_complete_stack_start_and_monitor_boundaries(self):
         _, before, after = build(VENDOR)
         base = 'drivers/misc/mediatek/eccci/'

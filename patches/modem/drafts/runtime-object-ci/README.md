@@ -1,7 +1,7 @@
 # Actual ARM64 CCCI runtime object closure
 
-Independent CI helper. Frozen runtime-ports/runtime-prepare, kernel smoke,
-packaging and workflows are not edited. No fixture/mock source is compiled.
+Independent CI helper. Reviewed runtime patches are identity-checked; kernel
+smoke, packaging and workflows are not edited. The ARM64 path compiles no mocks.
 This is object compilation, NOT modpost, link, load, physical startup or SIM/calls.
 Forced removal remains unsupported; successful compilation supplies no permission.
 
@@ -42,9 +42,13 @@ validation remains a separate prerequisite.
 Archives the exact pinned FULL vendor tree with real include dependencies.
 Applies every devmods patch from APKBUILD prepare() in actual shipping order
 with the shipping patch policy. Then git-apply checks/applies owner bundle,
-runtime-ports and runtime-prepare. Regenerates both runtime overlays and requires
-byte equality with their frozen patches. Checks every touched final source
-against the frozen complete-stack checker. Drift is an error, not skipped.
+runtime-ports and runtime-prepare. Regenerates them and requires byte equality
+with their frozen patches. Checks every touched source against the complete-stack
+checker BEFORE the fourth runtime-lifecycle overlay. Then checks regenerated
+lifecycle patch equality, exact pre-overlay source bytes, git apply and exact
+post-overlay modem_sys1.c bytes. Its hash is recorded independently and matches
+compiled_source_sha256. Drift is an error, not skipped. Frozen lifecycle C/patch
+is unchanged; its static test now also reverse-checks integrated staging.
 
 Preserves production vendor Makefiles/includes; no replacement Kbuild, extracted
 functions, stubs or fake headers. External selection/owner C define follows
@@ -81,8 +85,8 @@ python3 -B -m unittest discover -s patches/modem/drafts/runtime-object-ci -p tes
 Local validation is source/manifest/Python/patch-only. Actual C compilation is
 CI-pending. No phone operations or local C build performed.
 
-Nine source-only tests cover a fresh full vendor archive with all
-27 shipping devmods patches applied in real prepare order, all three overlays,
+Ten source-only tests cover a fresh full vendor archive with all
+27 shipping devmods patches applied in real prepare order, all four overlays,
 and final touched-source equality against the frozen complete-stack checker.
 That test uses only source copies and patch application, never make/compiler.
 The parent integration patch is checked forward or explicitly reverse when
@@ -105,3 +109,19 @@ Generated patch equality remains an exact whole-text check. Any future mismatch
 retains generated/frozen patches, unified diff and both hashes under the report's
 runtime-generation-diagnostics directory. The failed runtime-objects.json points
 to those uploaded artifact files. Source drift still fails before staging/build.
+
+## Native Callback Runner
+
+Ubuntu GitHub CI only, CI=true and GITHUB_ACTIONS=true:
+
+```sh
+python3 patches/modem/drafts/runtime-object-ci/check_native_callbacks.py --vendor /path/to/pinned/vendor
+```
+
+This separate runner uses the SAME complete four-overlay staging and exact final
+source identity. It extracts real callbacks from that staged modem_sys1.c, not an
+old standalone draft, and runs the frozen strict Wall/Wextra/Werror ASAN/UBSAN
+fixture in owner modes 0 and 1. It writes native-runtime-callbacks.json under the
+existing object artifact directory, including first error on failure. Native
+fixture success is not an ARM64, device lifecycle or physical permission claim.
+No workflow edits are included; parent chooses its Ubuntu native CI invocation.

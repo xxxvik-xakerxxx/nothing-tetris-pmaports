@@ -433,7 +433,7 @@ diff --git a/drivers/misc/mediatek/eccci/fsm/register_prepare.h b/drivers/misc/m
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
-@@ -0,0 +1,240 @@
+@@ -0,0 +1,242 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/* Included in modem_sys1.c; all publication is marked before vendor callbacks. */
 +#include "ccci_hif_internal.h"
@@ -539,7 +539,9 @@ new file mode 100644
 +		ret = -ENOMEM;
 +		goto free_md;
 +	}
-+	info = md->private_data;
++	/* Fresh, exclusively owned ccci_md_alloc(sizeof(*info)) allocation above;
++	 * its byte-pointer API returns kzalloc-aligned storage of this exact type. */
++	info = (struct md_sys1_info *)md->private_data;
 +	md->per_md_data.md_capability = cfg->capability;
 +	md->hw_info = hw;
 +	md->plat_dev = pdev;

@@ -135,7 +135,9 @@ The corrected full install-image build is
 it passed all jobs at `a3268afc0a3c41a13ff0a5e69de01faf58a78c47` and produced
 the r180 installation archive, SHA256
 `88d70c7f0ecc5361358fde8097959e3e204046aea9924261111be808c78cd93a`.
-Download/installation checks remain pending; the phone still uses r179. This
+The archive and all three image hashes were independently verified; all 7,678
+root sparse chunks passed size/CRC/extent checks (2,783,969,280 expanded bytes).
+Installation remains pending; the phone still uses r179. This
 image includes SensorProxy r2 but retains baseline loader `dcb20ce`; it must not
 silently replace the separately installed BROM-only diagnostic loader.
 Additional source-only candidates do not enable hardware in that image.
@@ -152,8 +154,14 @@ closure, not the entire run. The CCCI stage then failed before compilation:
 the prepare generator emitted sections in filesystem-dependent order. It now
 uses canonical path ordering; all 23 sections remain byte-identical, and
 reversed directory enumeration plus a bare fetched vendor repository are
-covered by regression checks. Actual CCCI compilation and module linkage remain
-unverified. No kernel fixtures or physical hardware were exercised by this run.
+covered by regression checks.
+[CI 38046813569](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38046813569)
+then reached actual CCCI compilation and rejected an incompatible pointer
+assignment in our registered-prepare adapter. The allocation has the exact
+`md_sys1_info` size; the adapter now explicitly converts the allocator's byte
+pointer. Strict compiler diagnostics remain enabled. Complete CCCI compilation
+and module linkage remain unverified. No kernel fixtures or physical hardware
+were exercised by these runs.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
@@ -179,12 +187,24 @@ unverified. No kernel fixtures or physical hardware were exercised by this run.
   succeeded on the preceding loader, then erased the buffer without starting
   GPUEB. The verified 156,064-byte interval does not explain LK's 258,744-byte
   SRAM copy. Authenticated upload layout, power/IRQ ownership and firmware boot
-  remain unresolved. See [GPU research](GPU_BRINGUP.md).
+  remain unresolved. A new isolated bound-parent transaction acquires native
+  MFG0 runtime PM before registering the existing SRAM/reset owner. Power errors
+  retain lifetime references but release the synchronous device mutex. Its two
+  real ARM64 objects and native fault fixture are now CI inputs, not shipping
+  activation. See [GPU research](GPU_BRINGUP.md).
 - **Camera:** IMX882 V4L2 tables, SENINF and CAMSV/CQ candidates exist. Native CQ
   generation is available; power/reset, sensor-to-receiver stream, IRQ/DMA stop
   and a real capture controller remain. No Android HAL or proprietary composer
-  is running. See [camera research](CAMERA_BRINGUP.md).
+  is running. The new isolated one-shot first-frame path performs actual sensor
+  OFF/IRQ drain/receiver disconnect, joint SMI/CAM_MAIN reset, then the existing
+  calibrated ON/CQ/DMA path. Its four objects and staged sensor callback gate
+  enter the combined 45-object CI check; repeated capture and a physical frame
+  are not yet proven. See [camera research](CAMERA_BRINGUP.md).
 - **GNSS:** matching stock engine/config and transport contracts are retained.
+  The load-only adapter now stages ten pinned real providers plus the original
+  probe/engine as sealed descriptors, with a private read-only loader root.
+  Linux mount-failure fixtures and an API28 root-builder object are CI inputs;
+  actual launcher execution remains a separate gate.
   Actual engine init/run, host services, exclusive RX ownership and bounded
   shutdown remain incomplete. Library loading is not a fix.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).

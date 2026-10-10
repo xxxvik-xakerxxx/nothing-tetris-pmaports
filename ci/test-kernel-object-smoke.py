@@ -3,6 +3,7 @@
 
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -94,7 +95,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 31)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 37)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o"))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
@@ -115,6 +116,16 @@ class SmokeInputs(unittest.TestCase):
         consumer = "\n".join(line[1:] for line in lines) + "\n"
         self.assertEqual(consumer, (root / "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text())
         self.assertIn("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m", (package / smoke.CONFIG).read_text())
+
+    def test_gpu_power_staging_matches_reviewed_manifests(self):
+        root = Path(__file__).resolve().parents[1]
+        for bundle in ("mfg0-supplier-draft", "bound-parent-draft"):
+            manifest = json.loads((root / "patches/gpu" / bundle / "STAGING.json").read_text())
+            for source, destination in manifest["sources"].items():
+                self.assertEqual(smoke.RESEARCH_SOURCES[source], destination)
+            for name in manifest["objects"]:
+                self.assertIn(name, smoke.RESEARCH_OBJECTS)
+                self.assertNotIn(name, smoke.OBJECTS)
 
     def camera_overlay_fixture(self):
         root = Path(__file__).resolve().parents[1]
@@ -138,6 +149,10 @@ class SmokeInputs(unittest.TestCase):
         destination = self.package / Path(next(iter(smoke.CAMERA_SOURCES.values()))).parent
         self.assertFalse((destination / graph.name).exists())
         self.assertIn("mt6878_native_capture_receiver_stop", (destination / "mt6878-camsv-platform.c").read_text())
+        video = (destination / "mt6878-native-video.c").read_text()
+        self.assertIn("mt6878_camera_cold_frame(&v->joint_reset", video)
+        self.assertIn("mt6878_camera_cold_probe(&v->capture", video)
+        self.assertNotIn("mt6878_native_capture_frame(&v->capture", video)
 
     def test_failed_overlay_does_not_publish_partial_graph(self):
         root, graph, _ = self.camera_overlay_fixture()

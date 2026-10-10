@@ -103,7 +103,9 @@ static int tetris_common_prepare_locked(struct platform_device *pdev,
 		ret = -ENOMEM;
 		goto free_md;
 	}
-	info = md->private_data;
+	/* Fresh, exclusively owned ccci_md_alloc(sizeof(*info)) allocation above;
+	 * its byte-pointer API returns kzalloc-aligned storage of this exact type. */
+	info = (struct md_sys1_info *)md->private_data;
 	md->per_md_data.md_capability = cfg->capability;
 	md->hw_info = hw;
 	md->plat_dev = pdev;

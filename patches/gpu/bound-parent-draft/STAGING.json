@@ -1,0 +1,12 @@
+{
+  "scope": "isolated object review only; bound-parent work caller not activated",
+  "sources": {
+    "patches/gpu/bound-parent-draft/mt6878-gpueb-control.c": "drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-control.c",
+    "patches/gpu/bound-parent-draft/mt6878-gpueb-control.h": "drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-control.h"
+  },
+  "objects": ["drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-control.o"],
+  "requires": ["revised mfg0-supplier-draft C/H", "existing sram-owner C/H/core", "existing reset-owner-draft", "existing reset-provider-draft"],
+  "required_enabled": ["PM", "OF", "RESET_CONTROLLER"],
+  "static_gate": "python3 -B patches/gpu/bound-parent-draft/test_control.py",
+  "runtime_gate": "No activation. Parent must implement fixed bound-parent serialized work and lifetime retention; no probe error unwind or forced supplier detach."
+}

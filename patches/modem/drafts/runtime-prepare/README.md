@@ -17,6 +17,13 @@ privately acquired resources and latch the first failure. Hardware getter clock
 and syscon failures propagate; acquired L2SRAM/sequencer mappings are unmapped.
 OF IRQ mappings may pre-exist and are NOT disposed without ownership proof.
 
+Private storage uses the pinned unsigned-char-pointer API. The explicit
+md_sys1_info conversion follows fresh ccci_md_alloc(sizeof(*info)) and both NULL
+checks; that allocator uses aligned kzalloc for the exact requested private size.
+No inherited storage or caller-provided type is accepted. The native fixture
+uses the same byte pointer and asserts the exact allocation size, preserving
+strict incompatible-pointer diagnostics rather than masking them with void*.
+
 Success means ONLY privately prepared resources. Probe does not publish
 modem_sys, platform_data, FSM entries, monitor, port proxy, sysfs or workers;
 it does not run metadata memory setup or core registration. There is no fallible

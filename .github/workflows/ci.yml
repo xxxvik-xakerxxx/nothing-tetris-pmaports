@@ -122,6 +122,13 @@ jobs:
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
+      - name: Validate staged modem lifecycle callbacks
+        run: |
+          python3 patches/modem/drafts/runtime-prepare/test_static.py
+          python3 patches/modem/drafts/runtime-object-ci/test_static.py
+          python3 patches/modem/drafts/runtime-lifecycle/test_static.py
+          python3 patches/modem/drafts/runtime-object-ci/check_native_callbacks.py \
+            --vendor upstream/device-modules
       - name: Validate isolated modem power sequencing
         run: python3 scripts/check-mt6878-modem-power.py upstream/linux --native-ci
       - name: Validate CCCI first-start backend
@@ -169,6 +176,12 @@ jobs:
           sh patches/gpu/run_gpueb_owner_boundary_ci.sh
           sh patches/gpu/run_gpueb_fw_staging_ci.sh
           python3 patches/gpu/test_csf_preflight.py
+      - name: Validate GPUEB bound-parent power ownership
+        run: |
+          export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
+          python3 patches/gpu/mfg0-supplier-draft/test_supplier.py
+          python3 patches/gpu/bound-parent-draft/test_control.py
+          sh patches/gpu/mfg0-supplier-draft/run-native-ci.sh
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py
@@ -210,6 +223,9 @@ jobs:
           python3 patches/camera-seninf-controller/generate-lifecycle.py --check
           python3 patches/camera-native-capture/generate-pm-overlay.py --check
           sh patches/camera-seninf-controller/run-tests.sh
+          python3 patches/camera-joint-reset/test-sensor-off.py
+          python3 patches/camera-joint-reset/check.py \
+            --modules-repo upstream/connectivity-modules
       - name: Validate CAMSV DMA and composer handoff
         id: camera_transport_candidate
         continue-on-error: true
@@ -236,6 +252,13 @@ jobs:
           sh patches/gnss-navigation-audit/run_second_numeric_ci.sh
           sh patches/gnss-navigation-audit/run_mipc_calibration_ci.sh
           sh patches/gnss-navigation-audit/run_mipc_checked_tag_ci.sh
+      - name: Validate sealed GNSS loader root
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_mipc_probe_resources.py \
+            ProbeTests.test_seal_failure_retains_first_with_both_cleanup_faults \
+            ProbeTests.test_adapter_retains_frozen_policy_and_deadline
+          sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts
+          sh patches/gnss-navigation-audit/run_mipc_sealed_launch_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -361,6 +384,10 @@ jobs:
             -c patches/gnss-navigation-audit/b41_mipc_supervised_child.c \
             -o out/b41-mipc-supervised-child.o
           "$ndk/llvm-readelf" -h out/b41-mipc-supervised-child.o | grep 'Machine:.*AArch64'
+          "$ndk/aarch64-linux-android28-clang" -std=c11 -O2 -Wall -Wextra -Werror \
+            -c patches/gnss-navigation-audit/b41_mipc_loader_root.c \
+            -o out/b41-mipc-loader-root.o
+          "$ndk/llvm-readelf" -h out/b41-mipc-loader-root.o | grep 'Machine:.*AArch64'
           for binary in out/b41-*-test; do
             "$ndk/llvm-readelf" -h "$binary" | grep 'Machine:.*AArch64'
             "$ndk/llvm-readelf" -d "$binary" > "$binary.DYNAMIC"
@@ -371,7 +398,7 @@ jobs:
           done
           printf 'commit=%s\nndk=r27d\nmode=callback-tests-no-vendor-engine\n' \
             "$GITHUB_SHA" > out/BUILD-MANIFEST
-          (cd out && sha256sum b41-*-test b41-mipc-supervised-child.o > SHA256SUMS)
+          (cd out && sha256sum b41-*-test b41-mipc-supervised-child.o b41-mipc-loader-root.o > SHA256SUMS)
       - uses: actions/upload-artifact@v7
         with:
           name: gnss-bionic-adapter-tests

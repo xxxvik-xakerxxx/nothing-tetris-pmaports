@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Offline metadata/selection tests; no images, downloads or asset execution."""
 import importlib.util
+import hashlib
+import io
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 from elftools.common.exceptions import ELFError
 
 SPEC = importlib.util.spec_from_file_location("stock_assets",
@@ -111,6 +115,154 @@ class SelectionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     assets.extract_system_liblog(work / "unused", "erofs", work, work / "out")
                 command.assert_not_called()
+
+
+class RuntimeTests(unittest.TestCase):
+    def test_five_fixed_paths_no_hwasan_or_debug(self):
+        self.assertEqual([row[0] for row in assets.BIONIC_PROVIDERS],
+            ["/bin/linker64", "/lib64/bionic/libc.so", "/lib64/bionic/libm.so",
+             "/lib64/bionic/libdl.so", "/system/lib64/libc++.so"])
+        self.assertEqual(len({row[1] for row in assets.BIONIC_PROVIDERS}), 5)
+
+    def test_pin_rejects_size_hash_and_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bytes"
+            path.write_bytes(b"fixture")
+            pin = hashlib.sha256(b"fixture").hexdigest()
+            assets.require_pin(path, 7, pin)
+            for size, expected in ((8, pin), (7, "0" * 64)):
+                with self.assertRaises(ValueError):
+                    assets.require_pin(path, size, expected)
+            link = path.with_name("symlink")
+            link.symlink_to(path)
+            with self.assertRaises(ValueError):
+                assets.require_pin(link, 7, pin)
+
+    def test_unapproved_path_refused_before_subprocess(self):
+        with patch.object(assets.subprocess, "check_output") as command:
+            for name in ("/bin/../bin/linker64", "/system/bin/sh", "/lib64/bionic/hwasan/libc.so"):
+                with self.assertRaises(ValueError):
+                    assets.selected_file(Path("unused"), "ext4", name, Path("unused"), 10, "0" * 64)
+            command.assert_not_called()
+
+    def test_readonly_ext4_exact_inode_and_pin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "selected"
+            data = b"non-executable mechanics fixture"
+            def dump(command, **kwargs):
+                self.assertEqual(command[:3], ["debugfs", "-R", f"dump /bin/linker64 {target}"])
+                self.assertNotIn("-w", command)
+                self.assertEqual(kwargs["timeout"], 30)
+                target.write_bytes(data)
+            with patch.object(assets.subprocess, "check_output",
+                    return_value=f"Inode: 2 Type: regular Size: {len(data)}"), \
+                    patch.object(assets.subprocess, "run", side_effect=dump):
+                assets.selected_file(Path("unused"), "ext4", "/bin/linker64", target,
+                                     len(data), hashlib.sha256(data).hexdigest())
+            self.assertEqual(target.read_bytes(), data)
+            with self.assertRaises(ValueError):
+                assets.selected_file(Path("unused"), "ext4", "/bin/linker64", target, len(data), "0" * 64)
+
+    def test_ext4_missing_symlink_wrong_size_never_dumped(self):
+        for metadata in ("", "Inode: 2 Type: symlink Size: 10", "Inode: 2 Type: regular Size: 11"):
+            with tempfile.TemporaryDirectory() as directory, \
+                    patch.object(assets.subprocess, "check_output", return_value=metadata), \
+                    patch.object(assets.subprocess, "run") as dump:
+                with self.assertRaises(ValueError):
+                    assets.selected_file(Path("unused"), "ext4", "/bin/linker64",
+                                         Path(directory) / "selected", 10, "0" * 64)
+                dump.assert_not_called()
+
+    def test_erofs_bounded_selection_and_wrong_hash(self):
+        for data, result, valid in ((b"fixture", 0, True), (b"too long", 0, False),
+                                    (b"fixture", 1, False), (b"invalid", 0, False)):
+            with tempfile.TemporaryDirectory() as directory:
+                target = Path(directory) / "selected"
+                from unittest.mock import Mock
+                process = Mock(stdout=io.BytesIO(data))
+                process.wait.return_value = result
+                process.poll.return_value = result
+                with patch.object(assets.subprocess, "Popen", return_value=process) as command:
+                    arguments = (Path("unused"), "erofs", "/system/lib64/libc++.so", target,
+                                 7, hashlib.sha256(b"fixture").hexdigest())
+                    if valid:
+                        assets.selected_file(*arguments)
+                    else:
+                        with self.assertRaises(ValueError):
+                            assets.selected_file(*arguments)
+                    self.assertEqual(command.call_args.args[0][:4],
+                        ["timeout", "30", "dump.erofs", "--path=/system/lib64/libc++.so"])
+
+    def test_apex_selected_regular_payload_and_pin(self):
+        # Tiny ZIP/ext header fixtures exercise selection, not genuine provider claims.
+        data = bytearray(1082)
+        data[1080:1082] = b"\x53\xef"
+        with tempfile.TemporaryDirectory() as directory:
+            apex, target = Path(directory) / "runtime.apex", Path(directory) / "payload"
+            with zipfile.ZipFile(apex, "w") as archive:
+                archive.writestr("apex_payload.img", data)
+                archive.writestr("../unused", b"must never be materialized")
+            with patch.object(assets, "RUNTIME_APEX_SIZE", apex.stat().st_size), \
+                    patch.object(assets, "RUNTIME_APEX_SHA", assets.digest(apex)), \
+                    patch.object(assets, "RUNTIME_PAYLOAD_SIZE", len(data)), \
+                    patch.object(assets, "RUNTIME_PAYLOAD_SHA", hashlib.sha256(data).hexdigest()):
+                assets.selected_apex_payload(apex, target)
+            self.assertEqual(target.read_bytes(), data)
+            self.assertEqual(set(Path(directory).iterdir()), {apex, target})
+
+    def test_apex_duplicate_unsafe_member_and_wrong_payload_hash(self):
+        for case in ("duplicate", "symlink", "wrong-size", "wrong-hash", "nested-only"):
+            with tempfile.TemporaryDirectory() as directory:
+                apex, target = Path(directory) / "runtime.apex", Path(directory) / "payload"
+                with zipfile.ZipFile(apex, "w") as archive:
+                    entry = zipfile.ZipInfo("nested/apex_payload.img" if case == "nested-only"
+                                            else "apex_payload.img")
+                    entry.external_attr = (stat.S_IFLNK | 0o777) << 16 if case == "symlink" else 0
+                    archive.writestr(entry, b"fixture")
+                    if case == "duplicate":
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", UserWarning)
+                            archive.writestr("apex_payload.img", b"fixture")
+                with patch.object(assets, "RUNTIME_APEX_SIZE", apex.stat().st_size), \
+                        patch.object(assets, "RUNTIME_APEX_SHA", assets.digest(apex)), \
+                        patch.object(assets, "RUNTIME_PAYLOAD_SIZE", 8 if case == "wrong-size" else 7), \
+                        patch.object(assets, "RUNTIME_PAYLOAD_SHA", "0" * 64):
+                    with self.assertRaises(ValueError):
+                        assets.selected_apex_payload(apex, target)
+
+    def test_system_pin_precedes_all_runtime_extraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            raw = work / "not-stock"
+            raw.write_bytes(b"not pinned system")
+            with patch.object(assets, "selected_file") as selected:
+                with self.assertRaises(ValueError):
+                    assets.extract_bionic_providers(raw, "erofs", work, work / "out")
+                selected.assert_not_called()
+
+    def test_provider_routing_and_manifest_without_cached_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            raw, out = work / "system.img", work / "artifact"
+            def selected(source, kind, name, target, size, expected):
+                # Routing fixture only; hashes are separately tested, never promoted here.
+                if name.startswith("/system/"):
+                    self.assertEqual((source, kind), (raw, "erofs"))
+                else:
+                    self.assertEqual((source, kind), (work / "runtime-apex-payload.img", "ext4"))
+                target.write_bytes(b"routing fixture")
+            with patch.object(assets, "require_pin") as pin, \
+                    patch.object(assets, "selected_file", side_effect=selected) as selection, \
+                    patch.object(assets, "selected_apex_payload") as payload:
+                report = assets.extract_bionic_providers(raw, "erofs", work, out)
+                pin.assert_called_once_with(raw, assets.SYSTEM_IMAGE_SIZE, assets.SYSTEM_IMAGE_SHA)
+                payload.assert_called_once_with(work / "runtime.apex", work / "runtime-apex-payload.img")
+                self.assertEqual(selection.call_count, 6)
+            self.assertEqual([r["path"] for r in report["providers"]],
+                             [r[1] for r in assets.BIONIC_PROVIDERS])
+            self.assertEqual([r["sha256"] for r in report["providers"]],
+                             [r[3] for r in assets.BIONIC_PROVIDERS])
 
 
 if __name__ == "__main__":
