@@ -33,8 +33,20 @@ The installed `lk_a` prefix matches the exact 3,304,336-byte image digest;
 Warm boot `0f370e51-eef2-4218-bb45-e4720900ea67` has no
 `nothing,modem-brom-report`; it therefore does not establish whether the BROM
 attempt ran. SCP stops at preflight with `-EBUSY`, so sensor transport does not
-start. No module reload or hardware reset was issued. A cold boot, first modem
-report and visual regression checks remain pending. The rootfs remains r179.
+start. No module reload or modem reset was issued. Read-only FIT inspection
+measured 50,056 original DTB bytes versus 53,248 bytes in the final Linux tree;
+bootm did not update `images->ft_len` after final fixups.
+
+The bounds/report fix is in U-Boot master `60cd9ade5b999732304f3b755c7dbe3d34307c13`.
+[CI 38039293102](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38039293102)
+passed native fault fixtures, ARM objects and full BROM/SCP image construction.
+It validates LMB/DRAM bounds before refreshing DT length and preserves the
+80-byte report ABI plus separate preflight/publication errors. The verified
+3,306,096-byte image, SHA256
+`8a8cde5d3fb4467090f3dd3793ed40d8b5cc3fef162b407c3feba1c33f7815f3`,
+was written to `lk_a`; U-Boot then fully powered off the phone. Cold power-on,
+installed readback, first modem report and visual regression checks remain
+pending. The rootfs remains r179 and runtime CCCI stays disabled.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
@@ -118,6 +130,10 @@ after compiling the kernel: the overlay staging script omitted the SensorProxy
 D-Bus `.service` source. Staging now includes it and an offline test compares
 every local package source with the staged copy before a full build. No install
 image was produced; the new video/reset sources remain isolated.
+The corrected full install-image build is
+[CI 38038376683](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038376683);
+it is still running. Additional source-only candidates do not enable hardware
+in that image.
 
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
@@ -132,7 +148,10 @@ image was produced; the new video/reset sources remain isolated.
   rather than just `md_hw`. Both overlays apply to the complete packaged vendor
   adaptation/owner stack; strict native fault fixtures and static checks passed
   [CI 38038500256](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038500256).
-  Actual complete-stack ARM64 compilation remains pending.
+  The [actual runtime-object helper](../patches/modem/drafts/runtime-object-ci/README.md)
+  stages all 27 shipping vendor adaptations before owner/port/prepare overlays
+  and compiles 64 real ECCCI/CCMNI/util translation units with production
+  Kbuild/includes. Actual complete-stack ARM64 compilation remains pending.
   They are not packaged, automatically called or enabled on the
   phone; physical start, callback/DMA drain and forced removal remain unresolved.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).

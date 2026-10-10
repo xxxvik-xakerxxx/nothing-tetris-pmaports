@@ -390,12 +390,13 @@ jobs:
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
-            openssl-dev perl python3 patch linux-headers
+            openssl-dev perl python3 patch linux-headers git
       - name: Compile isolated AArch64 candidate objects
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           if [ '${{ inputs.research_owner_smoke }}' = true ]; then
             python3 ci/kernel-object-smoke.py --research-owners
+            python3 patches/modem/drafts/runtime-object-ci/check_objects.py
           else
             python3 ci/kernel-object-smoke.py
           fi

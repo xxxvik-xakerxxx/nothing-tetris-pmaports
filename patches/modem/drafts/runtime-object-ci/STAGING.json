@@ -1,0 +1,52 @@
+{
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "base": "completed ci/kernel-object-smoke.py --research-owners",
+  "objects": {
+    "eccci": [
+      "ccci_core.o", "ccci_bm.o", "ccci_modem.o", "udc/udc.o",
+      "fsm/ccci_tetris_owner.o", "hif/ccci_tetris_hif_owned.o",
+      "fsm/ccci_fsm.o", "fsm/ccci_fsm_ioctl.o", "fsm/ccci_fsm_monitor.o",
+      "fsm/ccci_fsm_poller.o", "fsm/ccci_fsm_ee.o", "fsm/ccci_fsm_sys.o",
+      "fsm/mdee_dumper_v1.o", "fsm/mdee_dumper_v2.o", "fsm/mdee_dumper_v3.o",
+      "fsm/mdee_dumper_v5.o", "fsm/mdee_dumper_v6.o", "fsm/modem_sys1.o",
+      "fsm/md_sys1_platform.o", "fsm/ap_md_reg_dump.o", "fsm/ap_md_mem.o",
+      "port/port_cfg.o", "port/port_char.o", "port/port_ctlmsg.o", "port/port_udc.o",
+      "port/port_ipc.o", "port/port_net.o", "port/port_poller.o", "port/port_proxy.o",
+      "port/port_rpc.o", "port/port_smem.o", "port/port_sysmsg.o", "port/ccci_swtp.o",
+      "port/port_kernel_interface.o", "hif/ccci_hif.o", "hif/ccci_ringbuf.o",
+      "hif/ccci_hif_ccif.o", "hif/net_pool.o", "hif/md_spd_dvfs_fn.o",
+      "hif/md_spd_dvfs_method.o", "hif/net_speed.o", "hif/ccci_dpmaif_com.o",
+      "hif/ccci_dpmaif_bat.o", "hif/ccci_dpmaif_debug.o", "hif/ccci_dpmaif_resv_mem.o",
+      "hif/ccci_dpmaif_drv_com.o", "hif/ccci_dpmaif_drv_v1.o",
+      "hif/ccci_dpmaif_drv_v2.o", "hif/ccci_dpmaif_drv_v3.o"
+    ],
+    "ccmni": ["ccmni.o"],
+    "ccci_util": [
+      "ccci_util_lib_fo.o", "ccci_util_lib_load_img.o", "ccci_util_lib_sys.o",
+      "ccci_private_log.o", "ccci_util_lib_main.o", "ccci_util_ld_md_errno.o",
+      "ccci_util_broadcast.o", "ccci_util_pin_broadcast.o", "ccci_util_sib.o",
+      "ccci_util_lib_reserved_mem.o", "ccci_util_md_rat.o", "ccci_util_boot_args.o",
+      "ccci_util_img_parsing.o", "ccci_util_md_mem.o"
+    ]
+  },
+  "required_kernel": {
+    "ARM64": "y", "MODULES": "y", "PM": "y", "REGULATOR": "y",
+    "NET": "y", "MTK_MT6878_CCCI_FIRST_START": "m"
+  },
+  "external_kbuild": {
+    "CONFIG_ARM64": "y", "CONFIG_MTK_ECCCI_DRIVER": "m",
+    "CONFIG_MTK_ECCCI_TETRIS_OWNER": "y", "CONFIG_MTK_MT6878_CCCI_FIRST_START": "m",
+    "CONFIG_MTK_NET_CCMNI": "m", "CONFIG_PAGE_POOL": "n",
+    "CONFIG_MTK_SECURITY_SW_SUPPORT": "n", "CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE": "n",
+    "CONFIG_MTK_AEE_IPANIC": "n"
+  },
+  "required_defined_symbols": {
+    "eccci/fsm/modem_sys1.o": ["ccci_tetris_register_prepared", "ccci_tetris_registration_quarantine"],
+    "eccci/fsm/ccci_fsm.o": ["ccci_tetris_fsm_prepare", "ccci_tetris_fsm_commit"],
+    "eccci/port/port_proxy.o": ["ccci_tetris_ports_prepare", "ccci_tetris_ports_commit"],
+    "eccci/ccci_core.o": ["ccci_tetris_publish_char"],
+    "eccci/fsm/ccci_tetris_owner.o": ["ccci_tetris_owner_entry"],
+    "eccci/hif/ccci_tetris_hif_owned.o": ["ccci_hif_start_owned"]
+  },
+  "scope": "real translation units only; no module link, firmware start, install or physical OFF/unload proof"
+}
