@@ -76,6 +76,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Fetch exact bootloader planner
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git init out/uboot
           git -C out/uboot fetch --depth=1 https://github.com/MT6878-Mainline/u-boot.git 60cd9ade5b999732304f3b755c7dbe3d34307c13
           git fetch --no-tags --depth=1 origin 190ea155e1a8343dbdb4f0992f06b92848c9cdac

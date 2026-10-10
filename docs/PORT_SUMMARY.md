@@ -17,8 +17,8 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | Experimental `60cd9ade5b999732304f3b755c7dbe3d34307c13`, slot `lk_a` |
-| U-Boot image SHA256 | `8a8cde5d3fb4467090f3dd3793ed40d8b5cc3fef162b407c3feba1c33f7815f3` |
+| U-Boot | Experimental `c2e998bcbf5b53f7d1779522aa6462515f80721a`, slot `lk_a` |
+| U-Boot image SHA256 | `aea9a73c42b1d4c565c27301485e68190a1b9071779da39636facd78e0f610ca` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -40,25 +40,42 @@ own descriptor; correction `c2e998bcbf5b53f7d1779522aa6462515f80721a` is
 published in the user's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot)
 with a production-source regression fixture.
 [CI 38066945059](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38066945059)
-passed all native/ARM image gates; the correction is not yet installed or physically validated.
+passed all native/ARM image gates. It was installed only in `lk_a`, fully
+powered off and cold-started. Installed prefix hash and `u-boot,version` match;
+the first readback still reports `-EPROTO`/`-EINVAL`, board stage 15 and no
+loaded owner. USB, SCP and 24-entry/mask-31 sensor inventory recover.
+Standard read-only UFS sysfs identifies the next rejection: boot LUs use
+enable 1 with boot IDs 1/2, while the non-boot user LU legitimately uses
+enable 2 (HPB). The matching Nothing source confirms this state. Our UFS
+identity reader previously accepted only enable 1. Correction `7012ed17a2`
+and actual-producer regression fixtures are in the user's U-Boot master;
+[CI 38068197075](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38068197075)
+is running. The HPB correction is not yet installed or physically validated.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
 On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
 reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
 journal were preserved before further changes. The user confirmed normal
-display, touch, both rotations and automatic brightness for this loader. The rootfs remains
+display, touch, both rotations and automatic brightness for `60cd`; the
+corresponding visual check for `c2e998b` remains pending. The rootfs remains
 r179; r180 is downloaded but not installed, and runtime CCCI stays disabled.
 
 New candidates, not hardware support: [SMEM transaction](../patches/modem/drafts/runtime-smem/README.md)
 validates real NC/cache rows, builds CCCI/CCB tables and implements private WC
 mapping with reverse rollback and retained published lifetime. The complete
-source stack and independent review pass; CI now covers sanitizer faults and
-66 actual ARM64 modem objects. No production caller or physical mapping is enabled.
+source stack and independent review pass;
+[CI 38067857942](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38067857942)
+passed all 70 native cases at both 4 KiB and 64 KiB page geometry. Its independent
+ARM64 branch stopped on checkout ownership before compilation; CI plumbing is
+corrected, with 66-object compilation still pending. No production caller or physical mapping is enabled.
 [GNSS XML policy](../patches/gnss-navigation-audit/xml-policy-draft/XML_READ_PROFILE.md)
 models the actual vendor/data-file arbitration and provides a bounded SET-text
-serializer. The same native XML/ADC CI now checks both against pinned ARM64
-instruction oracles. It does not initialize the GPS engine or establish a fix.
+serializer. [CI 38067494972](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38067494972)
+passed native XML/ADC and SET sanitizer fixtures, 16 exact SET recipe/message
+comparisons and 18 actual selector/scanner cases. All 12 policy code/dependency
+hashes match published inputs. These are bounded ARM64 instruction oracles with
+mocked libc/output, not Bionic execution, GPS engine initialization or a fix.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.

@@ -91,6 +91,8 @@ class SourceTests(unittest.TestCase):
         driver = workflow.split('  driver-objects:', 1)[1]
         self.assertLess(driver.index('linux-headers git'),
                         driver.index('uses: actions/checkout@v6'))
+        self.assertIn('git config --global --add safe.directory "$GITHUB_WORKSPACE"', driver)
+        self.assertNotIn('safe.directory "*"', driver)
 
     def test_pure_arguments_no_mapping(self):
         text = (HERE / 'arguments.c').read_text()
