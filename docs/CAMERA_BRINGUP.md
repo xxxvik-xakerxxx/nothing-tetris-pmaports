@@ -10,7 +10,9 @@ Source candidates now connect calibrated C-PHY/MAC, RAW/PDAF VC and CAMMUX
 routes, CAMSV capture, TG/VF shutdown and a narrow reset lease inside the
 existing Linux SMI provider. No consumer remaps that provider's registers.
 The combined CI stages 38 camera source files and compiles 26 ARM64 objects
-overall, including the actual SMI provider; compilation remains pending.
+overall, including the actual SMI provider. Native fault cases and all objects
+passed [CI 38026834337](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026834337)
+after correcting the route caller's PHY argument order.
 The packaged PHY helper preserves configured state on failed shutdown, with
 every off-fault and refusal-to-replay covered by its CI fixture.
 

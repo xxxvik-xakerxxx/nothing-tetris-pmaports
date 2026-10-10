@@ -14,11 +14,24 @@ passed [CI 38025485686](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmapor
 Slot6 selectors0/1 now copy the source-derived NUL-string/control envelopes
 into the same host queue and send through the existing owned IPC channel.
 Native preparation binds this callback and selects its dispatcher before
-starting the sole worker. Native/Bionic CI for this addition is pending.
+starting the sole worker. Native fixtures, real callback/worker/socket delivery
+and the complete Bionic link passed
+[CI 38026751829](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026751829).
 Configuration/calibration, other assistance controls and actual receiver
 responses remain missing; no engine initialization or position-fix success
 is claimed. See [slot6 service](../patches/gnss-navigation-audit/SLOT6_STRING_SERVICE.md).
 See [native integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).
+
+The calibration reader now feeds exactly 16 bytes at offset160 of the same
+unit's `ML4A_000` into the first constructor for the source-proven legacy MT6878
+branch. It rejects changed/short/symlink records and preserves output on failure.
+On installed r179 cold boot `eb3d9a5e-43b2-4bc8-8447-286a5de4f441`, the legitimate
+NV partition was checked with `ro,noload,nodev,nosuid,noexec`: the expected file
+is regular and 248 bytes. No calibration values were read, copied or published;
+the temporary mount was removed. This establishes availability, not branch
+selection or calibrated navigation. Native/Bionic reader tests are pending CI;
+the alternate property branch and remaining configuration still need integration.
+See [NV constructor bridge](../patches/gnss-navigation-audit/NV_CALIBRATION_BRIDGE.md).
 
 ## Earlier Config Fixture Evidence
 

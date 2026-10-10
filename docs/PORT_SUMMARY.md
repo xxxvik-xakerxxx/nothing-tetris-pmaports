@@ -178,7 +178,9 @@ media-pipeline ownership, runtime-PM/clock references and controller-context
 stop. IRQ drain occurs outside the vb2 mutex. The source now includes native
 SMI common31 reset leases, calibration from nvmem/held CSI clock, restricted
 RAW/PDAF SENINF/CAMMUX routing and TG/VF shutdown. Combined native faults and
-26 actual ARM64 objects are the next CI gate, not hardware capture evidence.
+26 actual ARM64 objects passed
+[CI 38026834337](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38026834337),
+after fixing the route's PHY argument order; this is not hardware capture evidence.
 MAC/PHY IRQ, TSREC, allocation and prepared-format lifetime integration remain
 open; no video node is activated. The PHY shutdown helper now retains its
 configured state after failed shutdown and refuses replay. See
