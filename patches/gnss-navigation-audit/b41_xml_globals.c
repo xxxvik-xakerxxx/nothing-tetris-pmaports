@@ -7,6 +7,7 @@
 #include <math.h>
 #include <openssl/evp.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 _Static_assert(sizeof(double) == 8 && DBL_MANT_DIG == 53 &&
     sizeof(float) == 4 && FLT_MANT_DIG == 24, "IEEE binary64/binary32 required");
@@ -222,7 +223,7 @@ int b41_xml_global_owner_apply_stock(struct b41_xml_global_owner *o,
         "Time_Source", "PSO", "GNSSPower", "OSNMA", "SignalConfig"
     };
     struct b41_xml_stock_receipt result = {0};
-    struct b41_xml_feature feature;
+    struct b41_xml_feature *features;
     struct b41_xml_global_patch plan;
     struct b41_xml_set_inputs inputs = {0};
     uint8_t before[B41_XML_GLOBAL_SIZE], pending[B41_XML_GLOBAL_SIZE];
@@ -239,21 +240,24 @@ int b41_xml_global_owner_apply_stock(struct b41_xml_global_owner *o,
     inputs.chip_id = (uint32_t)le((const uint8_t *)target, 4);
     memcpy(before, o->global, sizeof(before));
     memcpy(pending, before, sizeof(pending));
+    features = malloc(B41_XML_STOCK_FEATURES * sizeof(*features));
+    if (!features) return fail(o, -ENOMEM);
+    int status = b41_xml_config_get_many(xml, size, names, B41_XML_STOCK_FEATURES, features);
+    if (status < 0) { free(features); return fail(o, status); }
     for (unsigned i = 0; i < B41_XML_STOCK_FEATURES; ++i) {
-        int status = b41_xml_config_get(xml, size, names[i], &feature);
-        if (status < 0) return fail(o, status);
-        if (!feature.bytes[0x1c]) {
+        if (!features[i].bytes[0x1c]) {
             result.disabled |= 1u << i;
             continue;
         }
-        status = b41_xml_global_plan(&feature, pending, &inputs, &plan);
-        if (status) return fail(o, status);
+        status = b41_xml_global_plan(features + i, pending, &inputs, &plan);
+        if (status) { free(features); return fail(o, status); }
         memcpy(pending, plan.bytes, sizeof(pending));
         for (unsigned byte = 0; byte < B41_XML_GLOBAL_SIZE; ++byte)
             result.written[byte] |= plan.written[byte];
         result.enabled |= 1u << i;
         ++result.committed_features;
     }
+    free(features);
     memcpy(&target, o->image + B41_XML_GLOBAL_GOT, 8);
     if (target != (uintptr_t)o->global || memcmp(before, o->global, sizeof(before)))
         return fail(o, -ESTALE);

@@ -66,7 +66,8 @@ if [ "$mode" != native ]; then
         -I"$deps/include" -I"$deps/include/libxml2" \
         "$here/b41_xml_config.c" "$here/b41_xml_globals.c" "$here/test_b41_xml_globals.c" \
         "$deps/lib/libxml2.so" "$deps/lib/libcrypto.so" -lm \
-        -Wl,--no-undefined -Wl,-rpath-link,"$deps/lib" -o "$out/bionic/test_xml_globals"
+        -Wl,--no-undefined -Wl,--wrap=xmlReadMemory -Wl,--wrap=EVP_Digest \
+        -Wl,-rpath-link,"$deps/lib" -o "$out/bionic/test_xml_globals"
     for binary in "$out/bionic/test_slot0_adc" "$out/bionic/test_xml_globals"; do
         "$readelf" -h "$binary" | grep -q 'Machine:.*AArch64'
         "$readelf" -d "$binary" > "$binary.DYNAMIC"

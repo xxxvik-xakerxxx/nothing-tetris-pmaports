@@ -23,7 +23,7 @@ timeout --signal=TERM --kill-after=2 120 "${CC:-cc}" -std=c11 -Wall -Wextra -Wer
     $(pkg-config --cflags libxml-2.0 libcrypto) \
     "$here/b41_xml_config.c" "$here/b41_xml_globals.c" \
     "$here/test_b41_xml_globals.c" $(pkg-config --libs libxml-2.0 libcrypto) -lm \
-    -o "$out/test_xml_globals"
+    -Wl,--wrap=xmlReadMemory -Wl,--wrap=EVP_Digest -o "$out/test_xml_globals"
 for feature in CoTMS SwitchTIA GLP GnssMode IFB GGTO L1Only DisableSignal MDTime \
     Time_Source Bluesky GNSSPower SignalConfig OSNMA; do
     timeout --signal=TERM --kill-after=2 20 "$out/test_xml_globals" "$1" "$2" "$feature" > "$out/$feature.bin"

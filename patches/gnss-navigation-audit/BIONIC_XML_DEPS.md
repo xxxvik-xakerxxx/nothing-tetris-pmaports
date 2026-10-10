@@ -46,4 +46,8 @@ Actual pre-engine XML reader/SET ordering, legitimate Android host services,
 exclusive RX, ADC producer/diagnostic endpoint and bounded engine shutdown
 remain necessary before runtime integration.
 
-Current gate: real dependency build and full fixture linkage pending CI.
+The initial dependency build and both complete fixture links passed
+[CI 38065279869](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065279869)
+at `7963a021db54c0f14c5e70196f0c25d2f06c0dd4`. Downloaded manifests confirm
+actual API28 ARM64 libraries, defined exports and Bionic-only dependency closure.
+Neither target fixture was executed. Later backend changes need their own run.

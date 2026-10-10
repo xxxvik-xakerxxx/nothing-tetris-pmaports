@@ -5,6 +5,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libxml/parser.h>
+#include <openssl/evp.h>
+static unsigned xml_reads, digest_calls;
+static uint8_t *mutate_xml;
+extern xmlDocPtr __real_xmlReadMemory(const char *, int, const char *, const char *, int);
+extern int __real_EVP_Digest(const void *, size_t, unsigned char *, unsigned int *,
+    const EVP_MD *, ENGINE *);
+xmlDocPtr __wrap_xmlReadMemory(const char *data, int size, const char *url,
+    const char *encoding, int options)
+{
+    ++xml_reads;
+    return __real_xmlReadMemory(data, size, url, encoding, options);
+}
+int __wrap_EVP_Digest(const void *data, size_t size, unsigned char *out,
+    unsigned int *written, const EVP_MD *md, ENGINE *engine)
+{
+    ++digest_calls;
+    int status = __real_EVP_Digest(data, size, out, written, md, engine);
+    if (mutate_xml) { *mutate_xml ^= 1; mutate_xml = NULL; }
+    return status;
+}
 static void *load(const char *path, size_t *length)
 {
     FILE *file = fopen(path, "rb"); assert(file);
@@ -100,7 +121,9 @@ int main(int argc, char **argv)
     memcpy((void *)chip_target, &chip, 4);
     assert(b41_xml_global_owner_apply_stock(&stock_fault, xml, xml_size, &receipt) == -ENODEV);
     assert(!b41_xml_global_owner_bind(&stock, elf, elf_size, image, extent));
+    xml_reads = digest_calls = 0;
     assert(!b41_xml_global_owner_apply_stock(&stock, xml, xml_size, &receipt));
+    assert(xml_reads == 1 && digest_calls == 1);
     const uint32_t disabled = (1u << 4) | (1u << 7) | (1u << 12) | (1u << 15);
     assert(receipt.disabled == disabled && receipt.enabled == ((1u << 19) - 1u - disabled));
     assert(receipt.committed_features == 15 && stock.applied_features == 15 && stock.stock_applied);
@@ -124,6 +147,30 @@ int main(int argc, char **argv)
     assert(b41_xml_global_owner_apply(&stock, xml, xml_size, "GLP") == -EALREADY);
     assert(!b41_xml_global_owner_expose(&stock));
     assert(b41_xml_global_owner_apply_stock(&stock, xml, xml_size, &receipt) == -EPERM);
+    struct b41_xml_feature decoded[2], decoded_before[2];
+    memset(decoded, 0x5a, sizeof(decoded)); memcpy(decoded_before, decoded, sizeof(decoded));
+    const char *const missing[] = {"IFB", "missing"};
+    assert(b41_xml_config_get_many(xml, xml_size, missing, 2, decoded) == -ENOENT);
+    assert(!memcmp(decoded, decoded_before, sizeof(decoded)));
+    const char *const null_name[] = {"IFB", NULL};
+    assert(b41_xml_config_get_many(xml, xml_size, null_name, 2, decoded) == -EINVAL);
+    assert(!memcmp(decoded, decoded_before, sizeof(decoded)));
+    assert(b41_xml_config_get_many(xml, xml_size, names, 0, decoded) == -EINVAL);
+    assert(b41_xml_config_get_many(xml, xml_size, names, 20, decoded) == -EINVAL);
+    assert(!memcmp(decoded, decoded_before, sizeof(decoded)));
+    xml_reads = digest_calls = 0;
+    ((uint8_t *)xml)[0] ^= 1;
+    assert(b41_xml_config_get_many(xml, xml_size, names, 2, decoded) == -EBADMSG);
+    assert(xml_reads == 0 && digest_calls == 1);
+    ((uint8_t *)xml)[0] ^= 1;
+    assert(!memcmp(decoded, decoded_before, sizeof(decoded)));
+    mutate_xml = xml;
+    assert(b41_xml_config_get_many(xml, xml_size, names, 2, decoded) == 1);
+    ((uint8_t *)xml)[0] ^= 1;
+    assert(b41_xml_config_get(xml, xml_size, names[0], &feature) == 1);
+    assert(!memcmp(decoded, &feature, sizeof(feature)));
+    assert(b41_xml_config_get(xml, xml_size, names[1], &feature) == 1);
+    assert(!memcmp(decoded + 1, &feature, sizeof(feature)));
     /* Keep original single-feature output protocol for the exact consumer oracle. */
     assert(fwrite(before, 1, sizeof(before), stdout) == sizeof(before));
     assert(fwrite(applied.written, 1, sizeof(applied.written), stdout) == sizeof(applied.written));

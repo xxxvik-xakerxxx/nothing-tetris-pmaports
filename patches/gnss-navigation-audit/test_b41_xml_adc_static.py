@@ -74,6 +74,20 @@ class StaticTests(unittest.TestCase):
         self.assertIn("memcmp(before, o->global", batch)
         self.assertNotIn("xml_policy_missing = 0", source)
 
+    def test_bulk_decode_before_commit_and_one_snapshot(self):
+        source = Path(__file__).with_name("b41_xml_globals.c").read_text()
+        batch = source[source.index("int b41_xml_global_owner_apply_stock"):]
+        self.assertEqual(batch.count("b41_xml_config_get_many("), 1)
+        self.assertNotIn("b41_xml_config_get(", batch)
+        self.assertLess(batch.index("b41_xml_config_get_many("), batch.index("b41_xml_global_plan("))
+        decoder = Path(__file__).with_name("b41_xml_config.c").read_text()
+        self.assertEqual(decoder.count("xmlReadMemory("), 1)
+        self.assertEqual(decoder.count("EVP_Digest("), 1)
+        self.assertIn("EVP_Digest(snapshot,", decoder)
+        self.assertIn("xmlReadMemory(snapshot,", decoder)
+        self.assertLess(decoder.index("feature_get(root, locale, features[i]"),
+                        decoder.index("memcpy(out, results,"))
+
     def test_adc_wire_contract_and_real_retained_owner(self):
         source = Path(__file__).with_name("b41_slot0_adc.c").read_text()
         self.assertIn("word(packet, 260)", source)

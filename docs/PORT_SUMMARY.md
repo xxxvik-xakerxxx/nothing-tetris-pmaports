@@ -242,8 +242,11 @@ changes require their own check; no physical subsystem is enabled by this run.
   The separate [real Bionic dependency build](../patches/gnss-navigation-audit/BIONIC_XML_DEPS.md)
   now builds pinned official XML/crypto sources with the same NDK/API28 ARM64
   compiler, checks their real exports/dependency closure and links both full
-  fixtures. Its first CI run is pending; it does not alter the sealed probe or
-  insert unreviewed libraries into the shipping provider chain.
+  fixtures. [CI 38065279869](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38065279869)
+  passed the real dependency builds and both full target links at `7963a02`.
+  Target execution remains untested. It does not alter the sealed probe or
+  insert unreviewed libraries into the shipping provider chain. The subsequent
+  one-snapshot batch XML optimization still requires native and target checks.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Source and CI boundary

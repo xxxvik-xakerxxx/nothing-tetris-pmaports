@@ -75,8 +75,9 @@ defined EVP_Digest/xmlReadMemory exports, then requires complete no-undefined
 fixture linkage. These checks do not independently authenticate headers or ABI.
 The new [real dependency workflow](BIONIC_XML_DEPS.md) builds pinned official
 libxml2/OpenSSL sources with that same NDK/API28 compiler and then links these
-fixtures. Its first run is pending; an arbitrary development prefix or host
-library is still not a substitute for successful target build evidence.
+fixtures. CI `38065279869` passed real dependency builds and both complete
+target links at `7963a02`; an arbitrary development prefix or host library is
+still not a substitute for that evidence. The target binaries were not executed.
 
 ```sh
 CI=true B41_BIONIC_CC="$NDK_CC" B41_BIONIC_DEPS="$TARGET_DEPS" \
@@ -111,6 +112,13 @@ ADC transport accepts an immutable snapshot but does not establish its firmware
 producer or the separate OEM diagnostic endpoint. Actual slot0 RTC/FM/control,
 restart/internal RX stop and engine-wide configuration/transport dependencies
 remain separate. This does not clear native init or navigation gates.
+
+The new batch decoder shares one owned XML snapshot, digest, DOM and locale
+across all19 GET results before SET preflight. It preserves atomic outputs and
+global commit; invalid batches cannot publish a prefix. Native wrappers now
+check one digest/DOM per stock application plus late-failure and input-mutation
+cases. This optimization's native and Bionic checks are pending; it is not a
+measured phone startup improvement.
 
 Native ASan/UBSan execution passed
 [CI 38052531292](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38052531292)

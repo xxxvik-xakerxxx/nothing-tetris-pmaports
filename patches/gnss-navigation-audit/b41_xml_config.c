@@ -40,38 +40,17 @@ static int named(xmlNodePtr node, const char *name)
     return node->type == XML_ELEMENT_NODE && !node->ns &&
            xmlStrEqual(node->name, BAD_CAST name);
 }
-int b41_xml_config_get(const void *xml, size_t length, const char *feature,
+static int feature_get(xmlNodePtr root, locale_t locale, const char *feature,
                        struct b41_xml_feature *out)
 {
-    static const uint8_t expected_sha[32] = {
-        0x70,0x18,0x75,0x1a,0x6e,0x20,0xa1,0x2f,0xb2,0x55,0xf9,0xdf,0xd5,0xf6,0xb5,0x5a,
-        0x0c,0x6c,0x79,0x66,0xa8,0x7f,0x04,0x7d,0x42,0x7b,0x88,0x5b,0x62,0xf9,0xee,0x31
-    };
-    uint8_t digest[EVP_MAX_MD_SIZE];
-    unsigned digest_length = 0;
     struct b41_xml_feature result = {{0}};
-    xmlDocPtr doc = NULL;
     xmlNodePtr match = NULL;
-    locale_t locale = (locale_t)0;
     unsigned rows = 0, total = 0, version_seen = 0, config_seen = 0;
     size_t name_length;
     int status = -EINVAL;
-    if (!xml || !feature || !out || !length || length > B41_XML_MAX_SIZE)
-        return -EINVAL;
+    if (!feature) return -EINVAL;
     name_length = strnlen(feature, 20);
     if (!name_length || name_length >= 20) return -EINVAL;
-    if (!EVP_Digest(xml, length, digest, &digest_length, EVP_sha256(), NULL))
-        return -EIO;
-    if (digest_length != 32 || memcmp(digest, expected_sha, 32)) return -EBADMSG;
-    doc = xmlReadMemory(xml, (int)length, NULL, NULL,
-                        XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
-    if (!doc || doc->intSubset || doc->extSubset) goto done;
-    xmlNodePtr root = xmlDocGetRootElement(doc);
-    if (!root || !named(root, "mnl_config")) goto done;
-    xmlChar *type = xmlGetProp(root, BAD_CAST "type");
-    int gps = type && xmlStrEqual(type, BAD_CAST "gps");
-    xmlFree(type);
-    if (!gps) goto done;
     for (xmlNodePtr n = root->children; n; n = n->next) {
         if (!named(n, "feature")) continue;
         /* Name is the feature's leading text only, not descendant contents. */
@@ -87,8 +66,6 @@ int b41_xml_config_get(const void *xml, size_t length, const char *feature,
         }
     }
     if (!match) { status = -ENOENT; goto done; }
-    locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
-    if (!locale) { status = -ENOMEM; goto done; }
     memcpy(result.bytes, feature, name_length);
     for (xmlNodePtr n = match->children; n; n = n->next) {
         if (n->type != XML_ELEMENT_NODE) continue;
@@ -132,7 +109,65 @@ int b41_xml_config_get(const void *xml, size_t length, const char *feature,
     *out = result;
     status = 1;
 done:
+    return status;
+}
+
+int b41_xml_config_get_many(const void *xml, size_t length,
+    const char *const *features, unsigned count, struct b41_xml_feature *out)
+{
+    static const uint8_t expected_sha[32] = {
+        0x70,0x18,0x75,0x1a,0x6e,0x20,0xa1,0x2f,0xb2,0x55,0xf9,0xdf,0xd5,0xf6,0xb5,0x5a,
+        0x0c,0x6c,0x79,0x66,0xa8,0x7f,0x04,0x7d,0x42,0x7b,0x88,0x5b,0x62,0xf9,0xee,0x31
+    };
+    uint8_t digest[EVP_MAX_MD_SIZE];
+    unsigned digest_length = 0;
+    xmlDocPtr doc = NULL;
+    locale_t locale = (locale_t)0;
+    struct b41_xml_feature *results = NULL;
+    void *snapshot;
+    int status = -EINVAL;
+    if (!xml || !features || !out || !length || length > B41_XML_MAX_SIZE ||
+        !count || count > B41_XML_MAX_FEATURES) return -EINVAL;
+    for (unsigned i = 0; i < count; ++i)
+        if (!features[i] || !features[i][0] || strnlen(features[i], 20) >= 20) return -EINVAL;
+    snapshot = malloc(length);
+    if (!snapshot) return -ENOMEM;
+    memcpy(snapshot, xml, length);
+    if (!EVP_Digest(snapshot, length, digest, &digest_length, EVP_sha256(), NULL)) {
+        status = -EIO; goto done;
+    }
+    if (digest_length != 32 || memcmp(digest, expected_sha, 32)) {
+        status = -EBADMSG; goto done;
+    }
+    doc = xmlReadMemory(snapshot, (int)length, NULL, NULL,
+                       XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
+    if (!doc || doc->intSubset || doc->extSubset) goto done;
+    xmlNodePtr root = xmlDocGetRootElement(doc);
+    if (!root || !named(root, "mnl_config")) goto done;
+    xmlChar *type = xmlGetProp(root, BAD_CAST "type");
+    int gps = type && xmlStrEqual(type, BAD_CAST "gps");
+    xmlFree(type);
+    if (!gps) goto done;
+    locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
+    if (!locale) { status = -ENOMEM; goto done; }
+    results = malloc(count * sizeof(*results));
+    if (!results) { status = -ENOMEM; goto done; }
+    for (unsigned i = 0; i < count; ++i) {
+        status = feature_get(root, locale, features[i], results + i);
+        if (status < 0) goto done;
+    }
+    memcpy(out, results, count * sizeof(*out));
+    status = 1;
+done:
+    free(results);
     if (locale) freelocale(locale);
     if (doc) xmlFreeDoc(doc);
+    free(snapshot);
     return status;
+}
+
+int b41_xml_config_get(const void *xml, size_t length, const char *feature,
+                       struct b41_xml_feature *out)
+{
+    return b41_xml_config_get_many(xml, length, &feature, 1, out);
 }
