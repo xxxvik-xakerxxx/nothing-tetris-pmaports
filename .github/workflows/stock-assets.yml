@@ -130,6 +130,14 @@ jobs:
       - name: Verify scoped modem startup and immutable handoff boundaries
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_startup_scope.py --native-ci --vendor upstream/device-modules
+      - name: Verify actual GPS numeric producers and chipset calibration branch
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_second_numeric_producer.py \
+            out/stock-port-assets/vendor/bin/mnld
+          python3 patches/gnss-navigation-audit/test_b41_capability_branch.py \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
+          sh patches/gnss-navigation-audit/run_second_numeric_ci.sh
       - name: Verify matching camera command encoding
         if: ${{ !cancelled() }}
         run: |

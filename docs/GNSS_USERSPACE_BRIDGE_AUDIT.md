@@ -23,15 +23,26 @@ is claimed. See [slot6 service](../patches/gnss-navigation-audit/SLOT6_STRING_SE
 See [native integration](../patches/gnss-navigation-audit/NATIVE_ARGUMENTS_INTEGRATION.md).
 
 The calibration reader now feeds exactly 16 bytes at offset160 of the same
-unit's `ML4A_000` into the first constructor for the source-proven legacy MT6878
+unit's `ML4A_000` into the first constructor for the source-proven legacy
 branch. It rejects changed/short/symlink records and preserves output on failure.
 On installed r179 cold boot `eb3d9a5e-43b2-4bc8-8447-286a5de4f441`, the legitimate
 NV partition was checked with `ro,noload,nodev,nosuid,noexec`: the expected file
 is regular and 248 bytes. No calibration values were read, copied or published;
 the temporary mount was removed. This establishes availability, not branch
-selection or calibrated navigation. Native/Bionic reader tests are pending CI;
-the alternate property branch and remaining configuration still need integration.
+selection or calibrated navigation. Native/Bionic reader tests passed
+[CI 38027256621](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38027256621).
 See [NV constructor bridge](../patches/gnss-navigation-audit/NV_CALIBRATION_BRIDGE.md).
+
+The actual retained B4.1 capability table selects the modern property branch
+for all three MT6878 Adie records, not this legacy file path. A new constructor
+reads that branch from the legitimate associated image and rejects unknown
+identity; it does not accept a caller-selected calibration flag. Missing modern
+calibration requires the source-derived modem MIPC message141 response
+(tags0x101/0x102/0x103), which remains unimplemented. The numeric constructor
+also supplies the exact requested-buffer clamps and private-C-locale float
+text for 38 configuration bytes without clearing other unresolved fields.
+Native/Bionic and stock-instruction CI for these constructors is pending.
+See [numeric and capability sources](../patches/gnss-navigation-audit/SECOND_NUMERIC_AND_CAPABILITY.md).
 
 ## Earlier Config Fixture Evidence
 
