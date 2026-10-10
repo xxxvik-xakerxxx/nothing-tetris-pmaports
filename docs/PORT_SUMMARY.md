@@ -17,8 +17,8 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | Experimental `c2e998bcbf5b53f7d1779522aa6462515f80721a`, slot `lk_a` |
-| U-Boot image SHA256 | `aea9a73c42b1d4c565c27301485e68190a1b9071779da39636facd78e0f610ca` |
+| U-Boot | Experimental `7012ed17a238be57b70037183d78d8854fcc835e`, slot `lk_a` |
+| U-Boot image SHA256 | `b960a5973befb0964df8afe9b853a684045e50879b911c21b6a3810eaf6139ec` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -50,7 +50,17 @@ enable 2 (HPB). The matching Nothing source confirms this state. Our UFS
 identity reader previously accepted only enable 1. Correction `7012ed17a2`
 and actual-producer regression fixtures are in the user's U-Boot master;
 [CI 38068197075](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38068197075)
-is running. The HPB correction is not yet installed or physically validated.
+passed all native/ARM image gates. The image was installed only in `lk_a`,
+fully powered off and cold-started; version and installed prefix hash match.
+The first report now passes storage/profile selection and reaches the loaded
+owner: result `-16` (`-EBUSY`), report-fetch 0, loaded stage 2 (cold-OFF), board
+stage 15 and publication error 0. The cold-OFF check refuses before firmware
+reservation/copy or SMEM writes; bootstrap/hardware fields remain unobserved.
+The current 80-byte record omits the loaded owner's sampled failing register.
+Reporting-only correction `cd96ef3cb114b345ee773c89f3f0d43c2ae11417` is in
+the user's U-Boot master and [CI 38069046288](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38069046288).
+It exports that existing sample, retaining the v1 ABI and every OFF guard;
+the new image is not yet installed. No Linux MMIO probe or modem retry is permitted.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
 On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
@@ -58,17 +68,19 @@ reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
 journal were preserved before further changes. The user confirmed normal
 display, touch, both rotations and automatic brightness for `60cd`; the
-corresponding visual check for `c2e998b` remains pending. The rootfs remains
+corresponding visual check for `7012ed17` remains pending. The rootfs remains
 r179; r180 is downloaded but not installed, and runtime CCCI stays disabled.
 
 New candidates, not hardware support: [SMEM transaction](../patches/modem/drafts/runtime-smem/README.md)
 validates real NC/cache rows, builds CCCI/CCB tables and implements private WC
 mapping with reverse rollback and retained published lifetime. The complete
 source stack and independent review pass;
-[CI 38067857942](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38067857942)
-passed all 70 native cases at both 4 KiB and 64 KiB page geometry. Its independent
-ARM64 branch stopped on checkout ownership before compilation; CI plumbing is
-corrected, with 66-object compilation still pending. No production caller or physical mapping is enabled.
+[CI 38068292750](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38068292750)
+passed all 70 native cases at both 4 KiB and 64 KiB page geometry and compiled
+66 real ARM64 objects, including the private SMEM transaction and argument
+importer. Their required defined symbols and source review digest match.
+This does not link a shipping driver or enable a production caller, physical
+mapping, modem READY or SIM support.
 [GNSS XML policy](../patches/gnss-navigation-audit/xml-policy-draft/XML_READ_PROFILE.md)
 models the actual vendor/data-file arbitration and provides a bounded SET-text
 serializer. [CI 38067494972](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38067494972)
