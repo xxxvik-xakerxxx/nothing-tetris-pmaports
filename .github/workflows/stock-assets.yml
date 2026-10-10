@@ -10,6 +10,9 @@ concurrency:
   group: stock-port-assets
   cancel-in-progress: false
 
+env:
+  TETRIS_EROFS_TOOLS_COMMIT: 51b5939b5f783221310d25146e6a2019ba8129b6
+
 jobs:
   extract-selected-vendor-data:
     runs-on: ubuntu-latest
@@ -22,7 +25,24 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             p7zip-full e2fsprogs erofs-utils android-sdk-libsparse-utils \
             python3 python3-pyelftools python3-unicorn python3-capstone python3-cryptography \
-            build-essential pkg-config libxml2-dev libssl-dev git
+            build-essential pkg-config libxml2-dev libssl-dev git \
+            autoconf automake libtool liblz4-dev liblzma-dev libzstd-dev zlib1g-dev
+      - name: Build pinned selective EROFS reader
+        run: |
+          git init /tmp/tetris-erofs-tools
+          git -C /tmp/tetris-erofs-tools remote add origin \
+            https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git
+          git -C /tmp/tetris-erofs-tools fetch --depth=1 origin "$TETRIS_EROFS_TOOLS_COMMIT"
+          git -C /tmp/tetris-erofs-tools checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/tetris-erofs-tools rev-parse HEAD)" = "$TETRIS_EROFS_TOOLS_COMMIT"
+          cd /tmp/tetris-erofs-tools
+          ./autogen.sh
+          ./configure --disable-fuse --without-uuid --without-selinux
+          make -j"$(nproc)"
+          sudo install -m755 dump/dump.erofs /usr/local/bin/dump.erofs
+          dump.erofs --help | grep -- '--cat'
+      - name: Verify bounded stock asset selection
+        run: python3 ci/test-extract-stock-port-assets.py
       - name: Extract pinned generic B4.1 vendor assets
         run: python3 ci/extract-stock-port-assets.py
       - name: Verify owned GPUEB SRAM and quarantined partial startup

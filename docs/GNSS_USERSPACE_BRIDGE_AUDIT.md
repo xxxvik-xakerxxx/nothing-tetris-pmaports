@@ -62,7 +62,11 @@ retains genuinely sealed dependency copies until actual terminal child reap.
 One absolute deadline includes the OEM's unbounded init0x305 handshake and the
 subsequent141 request. Traced STOP notifications cannot release resources;
 timeout remains latched through incomplete cleanup and eventual reap.
-Native ptrace/sealing fixtures and API28 object compilation are CI-pending.
+Native ptrace/sealing fixtures and API28 object compilation passed
+[CI 38038992764](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038992764).
+Actual vendor/system extraction now selects genuine `liblog` from the same
+pinned public archive, checks both implementation exports and records its
+digest; the first extraction is CI-pending. No replacement logging stub is used.
 There is still no executable sealed-fd loader handoff, legitimate property
 service or detached-RX join proof; the modem's CCCI port and responder are
 absent. No INIT or engine start is exposed by this code.

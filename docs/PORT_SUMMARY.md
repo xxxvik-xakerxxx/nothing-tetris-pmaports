@@ -130,8 +130,10 @@ image was produced; the new video/reset sources remain isolated.
   from explicit registration after a real device bind. Physical monitor ioctls
   remain denied even after registration. Failed publication retains bound devres
   rather than just `md_hw`. Both overlays apply to the complete packaged vendor
-  adaptation/owner stack and pass static review; native and ARM64 compilation
-  remain pending. They are not packaged, automatically called or enabled on the
+  adaptation/owner stack; strict native fault fixtures and static checks passed
+  [CI 38038500256](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038500256).
+  Actual complete-stack ARM64 compilation remains pending.
+  They are not packaged, automatically called or enabled on the
   phone; physical start, callback/DMA drain and forced removal remain unresolved.
   See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 - **GPU:** Panthor and GPUEB groundwork exists. Transform-only firmware inspection
