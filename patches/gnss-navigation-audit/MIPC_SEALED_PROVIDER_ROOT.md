@@ -26,17 +26,21 @@ Forked child reads supervisor's retained stage array in the same fixed order.
 under a fresh, empty root-owned directory controlled exclusively by the parent.
 The parent must own/protect this directory and its ancestors through handoff;
 it is not an attacker-controlled path or shared mutable staging tree. Fixed
-paths are read-only bind mounts from the actual sealed FDs, not copies or source
-path reopens. All directories and root are read-only for the eventual child.
+paths contain bounded copies read directly from the actual sealed FDs, never
+mutable source-path reopens. Aggregate size and tmpfs are limited to64MiB;
+copies use a64KiB buffer and exact source length. The entire snapshot is
+remounted read-only before privilege drop or execution. Original sealed
+descriptors remain parent-owned until terminal reap. All directories and root
+are read-only for the eventual child.
 `ld-android.so`'s provider is the actual pinned linker64 at its executable path.
 Partial failure requires child exit; there is no mount rollback/reinit on a live
 worker. Parent retains descriptors until EXITED/SIGNALED terminal reap using the
 existing corrected supervisor. No forced exit is described as an RX join.
 
-The existing load-only isolate cannot simply rebind this root nonrecursively:
-its MS_BIND root operation would hide the nested sealed-file mounts. Parent
-integration must call this builder in the child and consume its prepared root
-without that extra bind, then retain existing proc/chroot/drop/seccomp/bounds.
+CI38048441911 rejected the former anonymous-memfd MS_BIND implementation with
+EINVAL before bind-remount fault injection. That implementation was not usable.
+The adapter now consumes the private read-only snapshot directly and retains
+existing proc/chroot/drop/seccomp/bounds without an extra root bind.
 This bundle does NOT modify or run the frozen isolate. The separate adapter
 below supplies an independently pinned /probe and libmnl via sealed descriptors.
 INIT remains prohibited pending config, property and actual
@@ -66,7 +70,7 @@ Neither mode silently skips missing CI prerequisites.
 Cleanup faults are attached to the original producer exception using add_note;
 they never replace its errno. Offline vectors cover validation, staging and
 mode failure with failing cleanup. Native mount vectors impose actual kernel
-seccomp EACCES on bind and bind-remount after private tmpfs creation. They check
+seccomp EACCES on tmpfs creation and the final read-only remount. They check
 unchanged parent root, retained supervisor FDs before exit, original mount error
 through the report pipe, and FD release only after terminal child reap.
 
@@ -78,9 +82,9 @@ the existing CI37898372984 load-only probe (SHA256
 and libmnl (SHA256
 3b3501d46031fb22cf399f3495211a3d2202acd04df489fa827e383852ceff90).
 No caller-selected executable, hash, mutable reopen or replacement stub is
-accepted. `b41_mipc_loader_root_probe` mounts these at fixed paths. The distinct
+accepted. `b41_mipc_loader_root_probe` snapshots these at fixed paths. The distinct
 `b41_mipc_sealed_probe_spawn` reuses the frozen isolate's actual filter/control,
-cgroup check and resource limits without its submount-hiding root bind.
+cgroup check and resource limits without an extra root bind.
 Call only from a dedicated root launcher: network/PID namespace creation changes
 that launcher. Its prepared supervisor owns all twelve FDs and the absolute
 deadline, checked before namespace/fork; finish/reap remains mandatory after any

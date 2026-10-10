@@ -64,7 +64,7 @@ static void failed_mount(const int *providers, unsigned denied_flags)
         if (result != -EACCES)
             fprintf(stderr, "loader root fault flags=%u returned=%d expected=%d\n",
                     denied_flags, result, -EACCES);
-        assert(result == -EACCES); /* Real denial at bind/remount, not unshare failure. */
+        assert(result == -EACCES); /* Real tmpfs/remount denial, not unshare failure. */
         assert(write(report[1], &result, sizeof(result)) == (ssize_t)sizeof(result));
         char byte;
         assert(read(release[0], &byte, 1) == 1);
@@ -105,8 +105,18 @@ int main(void)
         assert(!fcntl(fd[i], F_ADD_SEALS, seals));
     }
     assert(b41_mipc_loader_root(root, fd, 0) == -EINVAL);
-    failed_mount(fd, MS_BIND);
-    failed_mount(fd, MS_REMOUNT | MS_BIND | MS_RDONLY | MS_NOSUID | MS_NODEV);
+    int oversized[B41_MIPC_PROVIDER_COUNT];
+    for (unsigned i = 0; i < B41_MIPC_PROVIDER_COUNT; ++i) oversized[i] = fd[i];
+    for (unsigned i = 0; i < 2; ++i) {
+        oversized[i] = memfd_create("oversized-fixture-not-ELF", MFD_ALLOW_SEALING | MFD_CLOEXEC);
+        assert(oversized[i] >= 0 && !ftruncate(oversized[i], 64 * 1024 * 1024));
+        assert(!fchmod(oversized[i], i ? 0444 : 0555));
+        assert(!fcntl(oversized[i], F_ADD_SEALS, seals));
+    }
+    assert(b41_mipc_loader_root(root, oversized, B41_MIPC_PROVIDER_COUNT) == -EFBIG);
+    for (unsigned i = 0; i < 2; ++i) assert(!close(oversized[i]));
+    failed_mount(fd, MS_NOSUID | MS_NODEV);
+    failed_mount(fd, MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV);
     pid_t child = fork();
     assert(child >= 0);
     if (!child) {
@@ -126,7 +136,9 @@ int main(void)
             assert(opened >= 0);
             struct stat from, mounted;
             assert(!fstat(fd[i], &from) && !fstat(opened, &mounted));
-            assert(from.st_ino == mounted.st_ino && from.st_dev == mounted.st_dev);
+            assert(from.st_size == mounted.st_size);
+            assert((from.st_mode & 0777) == (mounted.st_mode & 0777));
+            assert(from.st_ino != mounted.st_ino || from.st_dev != mounted.st_dev);
             unsigned value;
             assert(read(opened, &value, sizeof(value)) == (ssize_t)sizeof(value) && value == i);
             close(opened);

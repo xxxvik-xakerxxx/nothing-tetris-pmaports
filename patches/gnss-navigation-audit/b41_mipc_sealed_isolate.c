@@ -22,7 +22,7 @@ static void sealed_child(struct b41_mipc_supervision *owner, const char *root, c
     if (snprintf(proc, sizeof(proc), "%s/proc", root) >= (int)sizeof(proc)) {
         errno = ENAMETOOLONG; die("private proc path");
     }
-    /* No extra nonrecursive root bind: preserve sealed file submounts. */
+    /* Consume the private read-only snapshot without rebinding its root. */
     if (mount("proc", proc, "proc", MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL) ||
         chroot(root) || chdir("/")) die("private proc/chroot");
     for (int capability = 0; capability <= CAP_LAST_CAP; ++capability)

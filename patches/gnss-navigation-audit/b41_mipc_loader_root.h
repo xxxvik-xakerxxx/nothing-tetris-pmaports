@@ -6,7 +6,7 @@
  * empty absolute directory. Descriptors come from LoaderResources.move in its
  * fixed order and remain parent-owned until terminal reap. This validates seals
  * and layout, NOT caller-supplied ELF authentication or runtime service grants.
- * Creates private mount namespace/tmpfs and binds sealed providers read-only;
+ * Copies sealed bytes into a bounded private tmpfs and remounts it read-only;
  * never executes loader, dlopens, chroots or installs weaker device policy.
  * On ANY error child must exit: partial mounts are namespace-owned, not reset
  * or retried. The established isolation launcher must be explicitly reviewed

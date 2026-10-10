@@ -29,10 +29,39 @@ static const char *const directories[] = {
     "system", "system/lib64", "vendor", "vendor/lib64", "proc",
 };
 
+static int copy_provider(int source, const char *target, off_t size, mode_t mode)
+{
+    unsigned char buffer[65536];
+    off_t offset = 0;
+    int fd = open(target, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) return -errno;
+    int error = 0;
+    while (offset < size) {
+        size_t amount = size - offset < (off_t)sizeof(buffer) ?
+            (size_t)(size - offset) : sizeof(buffer);
+        ssize_t n = pread(source, buffer, amount, offset);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { error = n ? -errno : -EIO; break; }
+        size_t written = 0;
+        while (written < (size_t)n) {
+            ssize_t count = write(fd, buffer + written, (size_t)n - written);
+            if (count < 0 && errno == EINTR) continue;
+            if (count <= 0) { error = count ? -errno : -EIO; break; }
+            written += (size_t)count;
+        }
+        if (error) break;
+        offset += n;
+    }
+    if (!error && fchmod(fd, mode)) error = -errno;
+    if (close(fd) && !error) error = -errno;
+    return error;
+}
+
 static int build_root(const char *root, const int *providers, unsigned count)
 {
     struct stat info, identities[B41_MIPC_PROVIDER_COUNT + 2];
-    char canonical[PATH_MAX], target[PATH_MAX], source[64];
+    char canonical[PATH_MAX], target[PATH_MAX];
+    off_t total = 0;
     const int seals = F_SEAL_SEAL | F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK;
     if (!root || root[0] != '/' || !providers ||
         (count != B41_MIPC_PROVIDER_COUNT && count != B41_MIPC_PROVIDER_COUNT + 2))
@@ -55,6 +84,8 @@ static int build_root(const char *root, const int *providers, unsigned count)
         if (fstat(providers[i], &identities[i])) return -errno;
         if (!S_ISREG(identities[i].st_mode) || identities[i].st_size <= 0 ||
             identities[i].st_size > 64 * 1024 * 1024) return -EINVAL;
+        if (identities[i].st_size > 64 * 1024 * 1024 - total) return -EFBIG;
+        total += identities[i].st_size;
         int actual = fcntl(providers[i], F_GET_SEALS);
         if (actual < 0) return -errno;
         if ((actual & seals) != seals) return -EPERM;
@@ -65,10 +96,12 @@ static int build_root(const char *root, const int *providers, unsigned count)
                 identities[j].st_ino == identities[i].st_ino) return -EEXIST;
     }
     if (unshare(CLONE_NEWNS) || mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL)) return -errno;
-    /* New namespace-local tmpfs prevents external source-root writers from
-     * replacing provider target paths after binding immutable source bytes. */
+    /* Anonymous memfds have no namespace mount to bind. Copy only their
+     * sealed bytes into a bounded private tmpfs, then make the entire tree RO.
+     * Caller retains the original descriptors until terminal child reap.
+     */
     if (mount("b41-mipc-resources", root, "tmpfs", MS_NOSUID | MS_NODEV,
-              "size=1m,mode=0755")) return -errno;
+              "size=64m,mode=0755")) return -errno;
     for (unsigned i = 0; i < sizeof(directories) / sizeof(directories[0]); ++i) {
         if (snprintf(target, sizeof(target), "%s/%s", root, directories[i]) >= (int)sizeof(target))
             return -ENAMETOOLONG;
@@ -77,14 +110,9 @@ static int build_root(const char *root, const int *providers, unsigned count)
     for (unsigned i = 0; i < count; ++i) {
         if (snprintf(target, sizeof(target), "%s/%s", root, targets[i]) >= (int)sizeof(target))
             return -ENAMETOOLONG;
-        int fd = open(target, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0444);
-        if (fd < 0) return -errno;
-        if (close(fd)) return -errno;
-        if (snprintf(source, sizeof(source), "/proc/self/fd/%d", providers[i]) >= (int)sizeof(source))
-            return -ENAMETOOLONG;
-        if (mount(source, target, NULL, MS_BIND, NULL) ||
-            mount(NULL, target, NULL, MS_REMOUNT | MS_BIND | MS_RDONLY | MS_NOSUID | MS_NODEV, NULL))
-            return -errno;
+        int result = copy_provider(providers[i], target, identities[i].st_size,
+            (!i || i == B41_MIPC_PROVIDER_COUNT) ? 0555 : 0444);
+        if (result) return result;
     }
     if (mount(NULL, root, NULL, MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV, NULL)) return -errno;
     return 0;
