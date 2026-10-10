@@ -114,6 +114,13 @@ jobs:
           python3 patches/gnss-navigation-audit/test_b41_engine_config_copy.py \
             out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
           sh patches/gnss-navigation-audit/run_engine_arguments_ci.sh
+      - name: Verify native GPS stop source and mapped-image association
+        if: ${{ !cancelled() }}
+        run: |
+          python3 patches/gnss-navigation-audit/test_b41_native_join_producer.py \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
+          sh patches/gnss-navigation-audit/run_library_association_ci.sh \
+            out/stock-port-assets/vendor/lib64/mt6878/libmnl.so
       - name: Verify scoped modem startup and immutable handoff boundaries
         if: ${{ !cancelled() }}
         run: python3 patches/modem/check_startup_scope.py --native-ci --vendor upstream/device-modules

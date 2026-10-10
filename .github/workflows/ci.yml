@@ -222,6 +222,8 @@ jobs:
           sh patches/gnss-navigation-audit/run_control_notify_ci.sh
           sh patches/gnss-navigation-audit/run_second_config_ci.sh
           sh patches/gnss-navigation-audit/run_navigation_output_ci.sh
+          sh patches/gnss-navigation-audit/run_native_receiver_host_ci.sh
+          sh patches/gnss-navigation-audit/run_native_arguments_ci.sh
       - name: Validate GNSS LNA metadata ownership
         run: |
           export TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules"
@@ -305,6 +307,20 @@ jobs:
             patches/gnss-navigation-audit/b41_gpsdl_identity.c \
             patches/gnss-navigation-audit/test_b41_gpsdl_identity.c \
             -o out/b41-gpsdl-identity-test
+          for fixture in native_receiver_host native_arguments; do
+            "$ndk/aarch64-linux-android28-clang" -std=c11 -D_DEFAULT_SOURCE -O2 -Wall -Wextra -Werror -pthread \
+              patches/gnss-navigation-audit/b41_native_arguments.c \
+              patches/gnss-navigation-audit/b41_native_receiver_host.c \
+              patches/gnss-navigation-audit/b41_engine_arguments.c \
+              patches/gnss-navigation-audit/b41_library_association.c \
+              patches/gnss-navigation-audit/b41_gpsdl_identity.c \
+              patches/gnss-navigation-audit/b41_startup_adapter.c \
+              patches/gnss-navigation-audit/b41_agps_host.c \
+              patches/gnss-navigation-audit/b41_frame_worker.c \
+              patches/gnss-navigation-audit/b41_navigation_output.c \
+              "patches/gnss-navigation-audit/test_b41_${fixture}.c" \
+              -o "out/b41-${fixture}-test"
+          done
           for binary in out/b41-*-test; do
             "$ndk/llvm-readelf" -h "$binary" | grep 'Machine:.*AArch64'
             "$ndk/llvm-readelf" -d "$binary" > "$binary.DYNAMIC"
