@@ -151,7 +151,9 @@ def native_ci(vendor, uboot, pmaports, container):
                          'ccci_util_lib_main.h'):
             path = work / relative
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('/* Native boundary supplied by test_smem.c. */\n')
+            # glibc's errno.h imports linux/errno.h; retain real Linux constants.
+            path.write_text('#include <asm-generic/errno.h>\n' if relative == 'linux/errno.h'
+                            else '/* Native boundary supplied by test_smem.c. */\n')
         (work / 'ap_md_mem.h').write_text(native_types(vendor))
         metadata = source(pmaports, METADATA_PIN,
                           'patches/modem/drafts/runtime-metadata/metadata_resources.h')
@@ -161,7 +163,8 @@ def native_ci(vendor, uboot, pmaports, container):
         for page in (4096, 65536):
             executable = work / f'test-smem-{page}'
             subprocess.run([os.environ.get('CC', 'cc'), '-std=gnu11', '-Wall', '-Wextra', '-Werror',
-                            '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-g',
+                            '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined',
+                            '-fno-omit-frame-pointer', '-g',
                             f'-DTEST_PAGE_SIZE={page}', '-I', str(work), '-I', str(HERE),
                             str(HERE / 'test_smem.c'), '-o', str(executable)], check=True)
             for case in range(70):

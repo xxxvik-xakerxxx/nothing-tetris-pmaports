@@ -85,6 +85,12 @@ class SourceTests(unittest.TestCase):
         self.assertIn('for page in (4096, 65536)', runner)
         self.assertIn("'-Wall', '-Wextra', '-Werror'", runner)
         self.assertIn("'-fsanitize=address,undefined'", runner)
+        self.assertIn("'-fno-sanitize-recover=undefined'", runner)
+        self.assertIn('#include <asm-generic/errno.h>', runner)
+        workflow = (ROOT / '.github/workflows/modem-metadata.yml').read_text()
+        driver = workflow.split('  driver-objects:', 1)[1]
+        self.assertLess(driver.index('linux-headers git'),
+                        driver.index('uses: actions/checkout@v6'))
 
     def test_pure_arguments_no_mapping(self):
         text = (HERE / 'arguments.c').read_text()

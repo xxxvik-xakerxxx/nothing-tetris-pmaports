@@ -69,11 +69,11 @@ jobs:
     container:
       image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
     steps:
-      - uses: actions/checkout@v6
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
             openssl-dev perl python3 patch linux-headers git
+      - uses: actions/checkout@v6
       - name: Fetch exact bootloader planner
         run: |
           git init out/uboot
