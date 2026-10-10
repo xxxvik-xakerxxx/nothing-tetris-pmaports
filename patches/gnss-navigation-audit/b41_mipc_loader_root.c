@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static const char *const targets[B41_MIPC_PROVIDER_COUNT + 2] = {
+static const char *const targets[B41_MIPC_PROVIDER_COUNT + 3] = {
     "apex/com.android.runtime/bin/linker64",
     "apex/com.android.runtime/lib64/bionic/libc.so",
     "apex/com.android.runtime/lib64/bionic/libm.so",
@@ -21,7 +21,7 @@ static const char *const targets[B41_MIPC_PROVIDER_COUNT + 2] = {
     "system/lib64/libc++.so", "system/lib64/liblog.so",
     "vendor/lib64/libmipc.so", "vendor/lib64/libmtkrillog.so",
     "vendor/lib64/libtrm.so", "vendor/lib64/libmtkproperty.so",
-    "probe", "vendor/lib64/libmnl.so",
+    "probe", "vendor/lib64/libmnl.so", B41_MIPC_XML_TARGET,
 };
 static const char *const directories[] = {
     "apex", "apex/com.android.runtime", "apex/com.android.runtime/bin",
@@ -59,12 +59,13 @@ static int copy_provider(int source, const char *target, off_t size, mode_t mode
 
 static int build_root(const char *root, const int *providers, unsigned count)
 {
-    struct stat info, identities[B41_MIPC_PROVIDER_COUNT + 2];
+    struct stat info, identities[B41_MIPC_PROVIDER_COUNT + 3];
     char canonical[PATH_MAX], target[PATH_MAX];
     off_t total = 0;
     const int seals = F_SEAL_SEAL | F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK;
     if (!root || root[0] != '/' || !providers ||
-        (count != B41_MIPC_PROVIDER_COUNT && count != B41_MIPC_PROVIDER_COUNT + 2))
+        (count != B41_MIPC_PROVIDER_COUNT && count != B41_MIPC_PROVIDER_COUNT + 2 &&
+         count != B41_MIPC_PROVIDER_COUNT + 3))
         return -EINVAL;
     if (!realpath(root, canonical)) return -errno;
     if (strcmp(root, canonical)) return -EINVAL;
@@ -84,6 +85,8 @@ static int build_root(const char *root, const int *providers, unsigned count)
         if (fstat(providers[i], &identities[i])) return -errno;
         if (!S_ISREG(identities[i].st_mode) || identities[i].st_size <= 0 ||
             identities[i].st_size > 64 * 1024 * 1024) return -EINVAL;
+        if (i == B41_MIPC_PROVIDER_COUNT + 2 &&
+            identities[i].st_size != B41_MIPC_XML_SIZE) return -EBADMSG;
         if (identities[i].st_size > 64 * 1024 * 1024 - total) return -EFBIG;
         total += identities[i].st_size;
         int actual = fcntl(providers[i], F_GET_SEALS);
@@ -104,6 +107,11 @@ static int build_root(const char *root, const int *providers, unsigned count)
               "size=64m,mode=0755")) return -errno;
     for (unsigned i = 0; i < sizeof(directories) / sizeof(directories[0]); ++i) {
         if (snprintf(target, sizeof(target), "%s/%s", root, directories[i]) >= (int)sizeof(target))
+            return -ENAMETOOLONG;
+        if (mkdir(target, 0555) || chmod(target, 0555)) return -errno;
+    }
+    if (count == B41_MIPC_PROVIDER_COUNT + 3) {
+        if (snprintf(target, sizeof(target), "%s/vendor/etc", root) >= (int)sizeof(target))
             return -ENAMETOOLONG;
         if (mkdir(target, 0555) || chmod(target, 0555)) return -errno;
     }
@@ -133,4 +141,16 @@ int b41_mipc_loader_root_probe(const char *root, const int *providers,
     descriptors[count] = probe;
     descriptors[count + 1] = mnl;
     return build_root(root, descriptors, count + 2);
+}
+
+int b41_mipc_loader_root_probe_xml(const char *root, const int *providers,
+    unsigned count, int probe, int mnl, int xml)
+{
+    int descriptors[B41_MIPC_PROVIDER_COUNT + 3];
+    if (!providers || count != B41_MIPC_PROVIDER_COUNT) return -EINVAL;
+    memcpy(descriptors, providers, sizeof(int) * count);
+    descriptors[count] = probe;
+    descriptors[count + 1] = mnl;
+    descriptors[count + 2] = xml;
+    return build_root(root, descriptors, count + 3);
 }

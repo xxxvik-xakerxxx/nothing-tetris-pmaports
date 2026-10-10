@@ -102,3 +102,83 @@ frozen mnl-isolate.c include is an explicit source dependency. This adapter is
 Linux-only, not an Android API28 namespace library. Validate Python admission
 with `PYTHONDONTWRITEBYTECODE=1 python3 test_b41_mipc_probe_resources.py` using
 the same explicit stock/Bionic roots; actual sealing vectors require Linux.
+
+## Separate sealed OEM XML snapshot
+
+`ProbeXmlResources(stock_root, bionic_root, xml_artifact)` extends only the
+existing resource producer, appending the single fixed vendor XML as FD slot12
+after the unchanged ten providers, probe and libMNL. It reads exactly
+`xml_artifact/vendor/etc/MNL_Config.xml` through one O_NOFOLLOW/CLOEXEC source
+FD, uses existing seal_provider to copy and verify the fully sealed bytes
+against independent B4.1 SHA256
+`7018751a6e20a12fb255f9dfd5f6b55a0c6c7966a87f047d427b885b62f9ee31`,
+requires5087 bytes and mode0444, then closes the source FD. Source stats or
+paths do not authenticate the resulting bytes. No caller-supplied pin, XML
+payload, output path, property or hardware-permission flag is accepted. This
+is pinned mirror/archive evidence, not an OEM signature claim. The existing
+move/close lifetime handles all thirteen FDs and preserves the first failure
+if cleanup also fails. Move is single-use; caller owns the returned array
+until successful supervisor_prepare transfers it. Never close it after bind
+until terminal EXITED/SIGNALED reap; errors/STOP are not lease release.
+
+The distinct `b41_mipc_loader_root_probe_xml(root, providers, 10, probe, mnl,
+xml)` extends the existing private snapshot copier, not a duplicate root
+builder. It preflights seals, fixed mode/size, duplicate identity and the SAME
+64MiB aggregate bound before any namespace operation. It adds just
+`/vendor/etc` mode0555 and `/vendor/etc/MNL_Config.xml` mode0444, copying exact
+sealed FD bytes before the whole tmpfs becomes read-only. The C boundary
+checks shape/seals, NOT SHA authenticity: only ProbeXmlResources-admitted
+leases may reach it. No mutable source-path reopen, arbitrary asset slot,
+symlink, GPIO/device node or service stub is introduced.
+
+The actual path comes from the pinned mnld directory producer +0x406 and
+libMNL filename literal181e2, not from preinitializing globals. See the frozen
+[read-profile source contract](xml-policy-draft/XML_READ_PROFILE.md). This
+fresh private root has NO `/data`, establishing preferred-file absence by
+construction rather than by omission from an artifact. The source selector
+therefore chooses the pinned vendor file with policy7; the absent data-write
+destination cannot succeed, and the actual reader's fail-write branch clears
+only bit2, retaining READ/SET. These are source-backed expected branches,
+not a claim that the native reader has executed in this snapshot.
+Per-device NV/calibration is not copied, overwritten or generalized here.
+
+The original10-provider and12-FD root APIs retain the original target set and
+do not create `/vendor/etc`. The existing load-only CLI/parent/isolate remain
+UNCHANGED and reject13-FD admission. Do not hand the extended resources to
+that launcher. A future reviewed GNSS caller must transfer thirteen FDs into
+the existing supervisor and invoke the new snapshot API in its owned child;
+this extension provides no new spawn/exec, engine INIT, CCCI handshake or
+property permissions. It removes the source-to-private-root XML path gap,
+not the remaining native navigation readiness gates.
+
+### Focused CI validation
+
+```sh
+# Read-only Python admission/fault checks; two Linux sealing vectors required.
+CI=true TETRIS_B41_STOCK_ROOT="$SELECTED_STOCK" \
+  TETRIS_BIONIC_ROOT="$ORIGINAL_PINNED_BIONIC_PROBE" \
+  TETRIS_B41_XML_ROOT="$SELECTED_XML_ARTIFACT" \
+  sh run_mipc_loader_resources_ci.sh xml
+
+# Existing native ASAN/UBSAN fixture, now covers both12 and13-FD snapshots.
+CI=true sh run_mipc_loader_resources_ci.sh mounts
+```
+
+`xml` is a separate asset-required mode: old `providers` mode is unchanged.
+Requires Python+pyelftools and actual selected inputs (no download/fallback
+or emulator). Native mounts require CI root/CAP_SYS_ADMIN and the existing
+native sources/supervisor, as before. Include the updated loader-root object
+in the existing Bionic API28 cross-build; do not execute it locally.
+
+Python fixtures check the actual independent XML pin against read-profile
+constants, fixed path/mode, missing/size/hash/mode faults, single transfer and
+first-error retention. Native fixtures use labelled NON-OEM filesystem bytes
+only (not fake authentication or INIT), verify exact copying and EROFS, absence
+of data and unchanged legacy targets, reject bad size/seals/mode/alias, inject
+an actual XML pread EIO and final remount EACCES, and retain all13 descriptors
+until the terminal child reap while the parent's root remains unchanged.
+
+Next gate is native mount/sanitizer and Bionic compilation plus Linux actual
+sealed-pin vectors. Native reader/SET operation, complete config constructors,
+runtime libxml2/OpenSSL, legitimate CCCI/property readiness and RX shutdown
+remain separate unresolved gates. No navigation success or INIT claimed.

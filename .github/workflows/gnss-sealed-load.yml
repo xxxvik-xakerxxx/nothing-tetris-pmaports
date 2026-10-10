@@ -60,6 +60,27 @@ jobs:
             --setenv=TETRIS_MNL_LAYOUT=vendor/lib64/mt6878/libmnl.so \
             /usr/bin/python3 "$PWD/ci/gnss-delegated-load.py" \
             "$PWD/patches/gnss-navigation-audit/run_sealed_probe_parent_ci.sh"
+      - name: Verify separate sealed XML ownership and read-only root
+        env:
+          CI: 'true'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p out/xml-fixture-bionic/vendor/lib64 out/xml-fixture-evidence
+          cp -a out/selected-stock/apex out/xml-fixture-bionic/apex
+          cp -a out/selected-stock/system out/xml-fixture-bionic/system
+          install -m444 out/selected-stock/vendor/lib64/mt6878/libmnl.so \
+            out/xml-fixture-bionic/vendor/lib64/libmnl.so
+          install -m555 out/probe/probe out/xml-fixture-bionic/probe
+          TETRIS_B41_STOCK_ROOT="$PWD/out/selected-stock" \
+          TETRIS_BIONIC_ROOT="$PWD/out/xml-fixture-bionic" \
+          TETRIS_B41_XML_ROOT="$PWD/out/selected-stock" \
+            python3 patches/gnss-navigation-audit/test_b41_mipc_probe_resources.py \
+            2>&1 | tee out/xml-fixture-evidence/ownership.log
+          sh patches/gnss-navigation-audit/run_mipc_loader_resources_ci.sh mounts \
+            2>&1 | tee out/xml-fixture-evidence/mounts.log
+          printf 'commit=%s\nstock_run=38048111345\nprobe_run=37898372984\nmode=separate-xml-root-no-init\n' \
+            "$GITHUB_SHA" > out/xml-fixture-evidence/BUILD-MANIFEST
       - name: Retain actual results and containment diagnostics
         if: always()
         run: |
@@ -67,6 +88,9 @@ jobs:
           sudo find /run -maxdepth 1 -type d -name 'b41-sealed-cli-ci-*' \
             -exec cp -a '{}' out/sealed-load-evidence/ \;
           sudo chown -R "$(id -u):$(id -g)" out/sealed-load-evidence
+          if test -d out/xml-fixture-evidence; then
+            cp -a out/xml-fixture-evidence out/sealed-load-evidence/xml-fixture
+          fi
           systemctl status "tetris-sealed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --no-pager > out/sealed-load-evidence/unit-status.txt || true
           printf 'commit=%s\nstock_run=38048111345\nprobe_run=37898372984\nmode=load-only-no-init\n' \

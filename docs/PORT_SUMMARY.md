@@ -72,6 +72,15 @@ After `board:poweroff`, Preloader briefly appeared and pmOS returned; the
 first report was preserved, but this boot is not claimed as a confirmed cold
 start. A physical power-off with USB disconnected, ten-second wait and normal
 power-on is pending. No Linux MMIO probe, guard bypass or modem retry occurred.
+MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
+[CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
+21 actual-helper sanitizer cases and complete ARM64 image construction.
+The pinned Nothing `ee2be53` MD_OPS driver and matching audited LK poll ACK30
+only; generic-domain ACK31 must not be required for MD completion. Loaded-owner
+OFF and bootstrap ON/OFF now share that predicate. The observed ON/ACK30 value
+still refuses; this is not a fix for inherited ON state or proof of BROM boot.
+Image SHA256 `4943e596b022b471adf54cc54ba1678b773bde7d369d70dc0e440be4f21f5b84`
+is verified and downloaded, not installed.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
 On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
@@ -99,6 +108,13 @@ passed native XML/ADC and SET sanitizer fixtures, 16 exact SET recipe/message
 comparisons and 18 actual selector/scanner cases. All 12 policy code/dependency
 hashes match published inputs. These are bounded ARM64 instruction oracles with
 mocked libc/output, not Bionic execution, GPS engine initialization or a fix.
+A separate sealed XML snapshot now extends the existing private loader root:
+the fixed independently pinned 5,087-byte vendor XML is transferred as the thirteenth descriptor,
+copied to `/vendor/etc/MNL_Config.xml`, then covered by the read-only remount.
+Original 10-provider/12-FD executable admission remains unchanged. Actual Linux
+sealing and native mount/copy/failure/reap cases are wired into the existing
+`gnss-sealed-load.yml` CI after its unchanged Bionic load-only stage; execution
+is pending. This does not admit INIT or provide missing CCCI/property/RX services.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
