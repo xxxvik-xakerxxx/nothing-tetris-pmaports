@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pinned source ABI oracle; no execution, devices or network, no C build."""
 import hashlib
+import re
 import sys
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
@@ -29,12 +30,15 @@ def check(path):
     assert read(0x227b8, 15) == b"/dev/ttyCMIPC5\0"
     assert read(0x1a5a1, 5) == b"gnss\0"
     md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    def operands(text):
+        return re.sub(r"#(0x[0-9a-f]+|[0-9]+)",
+                      lambda match: "#" + str(int(match[1], 0)), text)
     def instruction(addr):
         i = next(md.disasm(read(addr, 4), addr))
         # Capstone 4 prints MOVZ, newer releases print its unshifted MOV alias.
         # Keep exact operands/addresses and the whole-file SHA requirement.
         mnemonic = "mov" if i.mnemonic == "movz" and "lsl" not in i.op_str else i.mnemonic
-        return mnemonic, i.op_str
+        return mnemonic, operands(i.op_str)
     expected = {
         0x7f4c8: ("mov", "w0, #0x2710"),
         0x7f4a8: ("add", "x0, x0, #0x7b8"),
@@ -65,7 +69,8 @@ def check(path):
         0x7f794: ("str", "w8, [x20]"),
     }
     for addr, value in expected.items():
-        assert instruction(addr) == value, (hex(addr), instruction(addr), value)
+        normalized = value[0], operands(value[1])
+        assert instruction(addr) == normalized, (hex(addr), instruction(addr), value)
     for addr, name in {
         0x7f4ac: "SETCOM", 0x7f4cc: "mipc_msg_set_timeout_once",
         0x7f4f0: "mipc_init", 0x7f550: "mipc_msg_init",
@@ -75,7 +80,7 @@ def check(path):
         0x7f6b0: "mipc_msg_deinit", 0x7f6b4: "mipc_deinit",
     }.items():
         mnemonic, operand = instruction(addr)
-        assert mnemonic == "bl" and entries[int(operand[1:], 16)] == name
+        assert mnemonic == "bl" and entries[int(operand[1:], 0)] == name
     print("B4.1 MIPC141 source ABI: endpoint/client, tags, words, cleanup verified")
 
 

@@ -48,7 +48,10 @@ int tetris_modem_bootstrap_once(struct blk_desc *dev,
 	return old_boot_boundary(dev, plan);
 }
 
-int tetris_modem_bootstrap_report(struct tetris_modem_bootstrap_report *report)
+/* The baseline macro also renames the same-spelled struct tag in its header;
+ * this is still the exact included production layout, not a new fixture ABI.
+ */
+int tetris_modem_bootstrap_report(struct old_report_boundary *report)
 {
 	int ret = old_report_boundary(report);
 	if (extra == 17)
