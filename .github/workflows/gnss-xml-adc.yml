@@ -1,0 +1,56 @@
+name: GNSS XML and ADC native backends
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gnss-xml-adc-native
+  cancel-in-progress: false
+
+jobs:
+  native-backends:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install actual native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang pkg-config libxml2-dev \
+            libssl-dev python3 python3-pyelftools
+      - name: Obtain pinned public stock inputs
+        uses: actions/download-artifact@v7
+        with:
+          name: tetris-b41-selected-stock-port-assets
+          run-id: 38048111345
+          github-token: ${{ github.token }}
+          path: out/selected-stock
+      - name: Check runner admission
+        run: python3 patches/gnss-navigation-audit/test_b41_xml_adc_runner.py
+      - name: Execute XML and ADC sanitizer fixtures
+        id: execute
+        env:
+          CC: clang
+        run: |
+          sh patches/gnss-navigation-audit/run_xml_adc_ci.sh native \
+            "$PWD/out/selected-stock/vendor/lib64/mt6878/libmnl.so" \
+            "$PWD/out/selected-stock/vendor/etc/MNL_Config.xml" \
+            "$PWD/out/selected-stock/vendor/bin/mnld" \
+            "$PWD/out/xml-adc-native"
+      - name: Record scope and actual step outcome
+        if: always()
+        run: |
+          mkdir -p out/xml-adc-native
+          printf '%s\n' \
+            '{"commit":"${{ github.sha }}","step_outcome":"${{ steps.execute.outcome }}","mode":"native-asan-ubsan","bionic_build":false,"vendor_init_called":false,"hardware_readiness":false}' \
+            > out/xml-adc-native/RESULT.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gnss-xml-adc-native-evidence
+          path: out/xml-adc-native/
+          if-no-files-found: error

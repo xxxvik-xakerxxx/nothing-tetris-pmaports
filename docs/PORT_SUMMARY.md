@@ -228,6 +228,14 @@ changes require their own check; no physical subsystem is enabled by this run.
   hardware-readiness claim.
   Actual engine init/run, host services, exclusive RX ownership and bounded
   shutdown remain incomplete. Library loading is not a fix.
+  The [XML/ADC backend candidate](../patches/gnss-navigation-audit/XML_ADC_CI.md)
+  preflights the complete stock XML global configuration before committing
+  writes and sends sealed ADC snapshots as bounded atomic diagnostic packets.
+  The isolated `gnss-xml-adc.yml` workflow executes only our native sanitizer
+  fixtures against pinned stock bytes. Native execution is pending; genuine
+  Bionic libxml2/OpenSSL dependency builds, XML reader/SET ordering and actual
+  ADC endpoint ownership remain required. It never calls vendor INIT or claims
+  satellite acquisition.
   See [GNSS research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Source and CI boundary
