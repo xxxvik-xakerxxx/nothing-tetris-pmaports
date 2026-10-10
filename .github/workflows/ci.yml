@@ -227,6 +227,7 @@ jobs:
           sh patches/gnss-navigation-audit/run_second_config_ci.sh
           sh patches/gnss-navigation-audit/run_navigation_output_ci.sh
           sh patches/gnss-navigation-audit/run_native_receiver_host_ci.sh
+          sh patches/gnss-navigation-audit/run_mipc_supervised_child_ci.sh
           sh patches/gnss-navigation-audit/run_native_arguments_ci.sh
           sh patches/gnss-navigation-audit/run_slot6_service_ci.sh
           sh patches/gnss-navigation-audit/run_nv_calibration_ci.sh
@@ -354,6 +355,10 @@ jobs:
             patches/gnss-navigation-audit/b41_frame_worker.c \
             patches/gnss-navigation-audit/test_b41_slot6_service.c \
             -o out/b41-slot6-service-test
+          "$ndk/aarch64-linux-android28-clang" -std=c11 -O2 -Wall -Wextra -Werror -pthread \
+            -c patches/gnss-navigation-audit/b41_mipc_supervised_child.c \
+            -o out/b41-mipc-supervised-child.o
+          "$ndk/llvm-readelf" -h out/b41-mipc-supervised-child.o | grep 'Machine:.*AArch64'
           for binary in out/b41-*-test; do
             "$ndk/llvm-readelf" -h "$binary" | grep 'Machine:.*AArch64'
             "$ndk/llvm-readelf" -d "$binary" > "$binary.DYNAMIC"
@@ -364,7 +369,7 @@ jobs:
           done
           printf 'commit=%s\nndk=r27d\nmode=callback-tests-no-vendor-engine\n' \
             "$GITHUB_SHA" > out/BUILD-MANIFEST
-          (cd out && sha256sum b41-*-test > SHA256SUMS)
+          (cd out && sha256sum b41-*-test b41-mipc-supervised-child.o > SHA256SUMS)
       - uses: actions/upload-artifact@v7
         with:
           name: gnss-bionic-adapter-tests

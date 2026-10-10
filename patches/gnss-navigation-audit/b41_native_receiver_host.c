@@ -137,32 +137,53 @@ static int compare_time(const struct timespec *a, const struct timespec *b)
     return a->tv_nsec < b->tv_nsec ? -1 : a->tv_nsec != b->tv_nsec;
 }
 
-int b41_native_child_wait(pid_t child, const struct timespec *deadline,
+int b41_native_child_wait_owned(struct b41_native_child_wait_owner *owner,
+    pid_t child, const struct timespec *deadline,
     const struct timespec *cleanup_deadline, int *wait_status)
 {
     struct timespec now;
-    int escalated = 0, status;
-    if (child <= 0 || !wait_status || !valid_time(deadline) ||
+    int status;
+    if (!owner || owner->reaped || (owner->child && owner->child != child) ||
+        child <= 0 || !wait_status || !valid_time(deadline) ||
         !valid_time(cleanup_deadline) || compare_time(cleanup_deadline, deadline) < 0)
         return -EINVAL;
+    owner->child = child;
     for (;;) {
         pid_t result = waitpid(child, &status, WNOHANG);
-        if (result == child) {
+        if (result == child && (WIFEXITED(status) || WIFSIGNALED(status))) {
             *wait_status = status;
-            if (escalated) return -ETIMEDOUT;
-            return WIFEXITED(status) && !WEXITSTATUS(status) ? 0 : -ECHILD;
+            owner->reaped = 1;
+            if (!owner->first_error) {
+                if (clock_gettime(CLOCK_MONOTONIC, &now))
+                    owner->first_error = -errno;
+                else if (compare_time(&now, deadline) >= 0)
+                    owner->first_error = -ETIMEDOUT;
+                else if (!WIFEXITED(status) || WEXITSTATUS(status))
+                    owner->first_error = -ECHILD;
+            }
+            return owner->first_error;
         }
-        if (result < 0) return -errno;
-        if (clock_gettime(CLOCK_MONOTONIC, &now)) return -errno;
-        if (compare_time(&now, escalated ? cleanup_deadline : deadline) >= 0) {
-            if (escalated) return -EINPROGRESS;
-            /* waitpid0 establishes it is our unreaped child; exclusive parent
+        if (result < 0) {
+            if (errno == EINTR) continue;
+            if (!owner->first_error) owner->first_error = -errno;
+            return owner->first_error;
+        }
+        /* A traced child may report STOP even without WUNTRACED. Consume the
+         * notification but retain ownership, resources and the same deadline. */
+        if (clock_gettime(CLOCK_MONOTONIC, &now)) {
+            if (!owner->first_error) owner->first_error = -errno;
+            return owner->first_error;
+        }
+        if (compare_time(&now, owner->escalated ? cleanup_deadline : deadline) >= 0) {
+            if (owner->escalated) return -EINPROGRESS;
+            if (!owner->first_error) owner->first_error = -ETIMEDOUT;
+            /* waitpid establishes it is our unreaped child; exclusive parent
              * ownership prevents PID reuse between this check and signal. */
-            if (kill(child, SIGKILL) && errno != ESRCH) return -errno;
-            escalated = 1;
+            if (kill(child, SIGKILL) && errno != ESRCH) return owner->first_error;
+            owner->escalated = 1;
             continue;
         }
-        const struct timespec *limit = escalated ? cleanup_deadline : deadline;
+        const struct timespec *limit = owner->escalated ? cleanup_deadline : deadline;
         int ms = 25;
         if (limit->tv_sec - now.tv_sec <= 1) {
             long long ns = (long long)(limit->tv_sec - now.tv_sec) * 1000000000 +
@@ -170,8 +191,18 @@ int b41_native_child_wait(pid_t child, const struct timespec *deadline,
             int remaining = (int)((ns + 999999) / 1000000);
             if (remaining < ms) ms = remaining;
         }
-        if (poll(NULL, 0, ms) < 0 && errno != EINTR) return -errno;
+        if (poll(NULL, 0, ms) < 0 && errno != EINTR) {
+            if (!owner->first_error) owner->first_error = -errno;
+            return owner->first_error;
+        }
     }
+}
+
+int b41_native_child_wait(pid_t child, const struct timespec *deadline,
+    const struct timespec *cleanup_deadline, int *wait_status)
+{
+    struct b41_native_child_wait_owner owner = {0};
+    return b41_native_child_wait_owned(&owner, child, deadline, cleanup_deadline, wait_status);
 }
 
 int b41_native_session_execute(const struct b41_library_association *image,

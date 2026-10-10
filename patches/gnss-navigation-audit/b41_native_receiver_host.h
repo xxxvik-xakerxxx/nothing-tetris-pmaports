@@ -98,6 +98,18 @@ int b41_native_stop_call(struct b41_native_stop_owner *owner, unsigned *joined);
 int b41_native_child_wait(pid_t child, const struct timespec *deadline,
     const struct timespec *cleanup_deadline, int *wait_status);
 
+/* Zeroed sole-parent state retained across bounded reap retries. first_error
+ * preserves the operation failure; -EINPROGRESS means cleanup is incomplete,
+ * not a replacement for the original timeout. STOP/CONTINUE are never reaps.
+ */
+struct b41_native_child_wait_owner {
+    pid_t child;
+    int escalated, first_error, reaped;
+};
+int b41_native_child_wait_owned(struct b41_native_child_wait_owner *owner,
+    pid_t child, const struct timespec *deadline,
+    const struct timespec *cleanup_deadline, int *wait_status);
+
 struct b41_native_session_result {
     int registration_entered, run_entered;
     uint32_t run_status;

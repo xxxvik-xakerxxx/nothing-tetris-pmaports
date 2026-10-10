@@ -51,12 +51,22 @@ getter's 72 bounded instruction vectors, exact ELF/ABI checks and native
 sanitizer fixtures subsequently passed Linux
 [CI 38030808388](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030808388).
 The same extraction located `libmtkrillog.so`, `libtrm.so` and
-`libmtkproperty.so` in `vendor/lib64`; transitive/runtime closure still requires
-audit. New native fault checks and Bionic compilation also passed
+`libmtkproperty.so` in `vendor/lib64`. A versioned dependency audit resolves
+294 bindings across these and the pinned Bionic providers, but genuine
+`liblog.so` is still missing: both required logging symbols request `LIBLOG`.
+An NDK import stub is not accepted as an implementation. New native fault checks
+and Bionic compilation also passed
 [CI 38030803840](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38030803840).
-ELF dependencies and detached-RX lifetime
-remain incomplete before live use; the modem's CCCI port and responder are
-still absent. See [MIPC closure](../patches/gnss-navigation-audit/MIPC_B41_CLOSURE_CONTRACT.md).
+The new [MIPC supervisor](../patches/gnss-navigation-audit/MIPC_SUPERVISED_CHILD.md)
+retains genuinely sealed dependency copies until actual terminal child reap.
+One absolute deadline includes the OEM's unbounded init0x305 handshake and the
+subsequent141 request. Traced STOP notifications cannot release resources;
+timeout remains latched through incomplete cleanup and eventual reap.
+Native ptrace/sealing fixtures and API28 object compilation are CI-pending.
+There is still no executable sealed-fd loader handoff, legitimate property
+service or detached-RX join proof; the modem's CCCI port and responder are
+absent. No INIT or engine start is exposed by this code.
+See [MIPC closure](../patches/gnss-navigation-audit/MIPC_B41_CLOSURE_CONTRACT.md).
 Earlier native/Bionic
 adapter checks passed
 [CI 38029177349](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38029177349);
