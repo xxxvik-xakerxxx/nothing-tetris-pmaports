@@ -17,25 +17,10 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | Experimental `d385921124b9e48a00d5e078d11b07dcdf311270`, slot `lk_a` |
-| U-Boot image SHA256 | `ab95c709d8579daf89fe3d8eeb8b04e1782e53605a509a18f97c12bb08382365` |
+| U-Boot | Experimental `60cd9ade5b999732304f3b755c7dbe3d34307c13`, slot `lk_a` |
+| U-Boot image SHA256 | `8a8cde5d3fb4467090f3dd3793ed40d8b5cc3fef162b407c3feba1c33f7815f3` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
-
-The table identifies the last readback-verified cold checkpoint. A subsequent
-opt-in BROM-only loader, `24e7c183c4e5fa279f2bc7c3d3ac60683f999157`, was
-written successfully to `lk_a` from
-[CI 38028430903](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38028430903).
-Image SHA256: `d288a4cafc79ddcbd4459d18a66ee849a60f953339d037e35414138ee7cbc396`.
-After unlocking the Mac and reconnecting USB, networking and SSH recovered.
-The installed `lk_a` prefix matches the exact 3,304,336-byte image digest;
-`u-boot,version` identifies `24e7c183c4e5`, and stock `lk_b` is unchanged.
-Warm boot `0f370e51-eef2-4218-bb45-e4720900ea67` has no
-`nothing,modem-brom-report`; it therefore does not establish whether the BROM
-attempt ran. SCP stops at preflight with `-EBUSY`, so sensor transport does not
-start. No module reload or modem reset was issued. Read-only FIT inspection
-measured 50,056 original DTB bytes versus 53,248 bytes in the final Linux tree;
-bootm did not update `images->ft_len` after final fixups.
 
 The bounds/report fix is in U-Boot master `60cd9ade5b999732304f3b755c7dbe3d34307c13`.
 [CI 38039293102](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38039293102)
@@ -44,9 +29,36 @@ It validates LMB/DRAM bounds before refreshing DT length and preserves the
 80-byte report ABI plus separate preflight/publication errors. The verified
 3,306,096-byte image, SHA256
 `8a8cde5d3fb4467090f3dd3793ed40d8b5cc3fef162b407c3feba1c33f7815f3`,
-was written to `lk_a`; U-Boot then fully powered off the phone. Cold power-on,
-installed readback, first modem report and visual regression checks remain
-pending. The rootfs remains r179 and runtime CCCI stays disabled.
+was written to `lk_a`; U-Boot then fully powered off the phone. After the
+user's cold power-on and USB reconnect, the first readback matches both
+`u-boot,version` and the installed image prefix hash. Board stage 15 reports
+failure `-71` (`-EPROTO`), report-fetch `-22` (`-EINVAL`), invocation marker 1
+and publication error 0. All loaded/hardware fields remain zero: the loaded
+owner was never entered. This does not establish a physical BROM attempt.
+The selector used `blk_get_by_device` on a BLK child instead of reading its
+own descriptor; correction `c2e998bcbf5b53f7d1779522aa6462515f80721a` is
+published in the user's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot)
+with a production-source regression fixture.
+[CI 38066945059](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38066945059)
+passed all native/ARM image gates; the correction is not yet installed or physically validated.
+The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
+
+On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
+reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
+services are active and no system units failed. First report and full kernel
+journal were preserved before further changes. The user confirmed normal
+display, touch, both rotations and automatic brightness for this loader. The rootfs remains
+r179; r180 is downloaded but not installed, and runtime CCCI stays disabled.
+
+New candidates, not hardware support: [SMEM transaction](../patches/modem/drafts/runtime-smem/README.md)
+validates real NC/cache rows, builds CCCI/CCB tables and implements private WC
+mapping with reverse rollback and retained published lifetime. The complete
+source stack and independent review pass; CI now covers sanitizer faults and
+66 actual ARM64 modem objects. No production caller or physical mapping is enabled.
+[GNSS XML policy](../patches/gnss-navigation-audit/xml-policy-draft/XML_READ_PROFILE.md)
+models the actual vendor/data-file arbitration and provides a bounded SET-text
+serializer. The same native XML/ADC CI now checks both against pinned ARM64
+instruction oracles. It does not initialize the GPS engine or establish a fix.
 
 Installation wrote `super`, `userdata` and the required loader to `lk_a`.
 Stock `lk_b`, factory/NV and calibration partitions were preserved.
@@ -54,7 +66,7 @@ See [installation guide and disclaimer](INSTALL.md) before flashing.
 
 The clean installation originally used validated loader `dcb20ce` (image
 `71b474fe0c4cfbdfa33fb9ddef51b835b1bf2c367afc84f5ee4a6d85061a6967`),
-which remains the recovery baseline. The current experimental loader comes
+which remains the recovery baseline. The earlier `d385921` checkpoint comes
 from [CI 37990994952](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/37990994952);
 download hashes and installed `lk_a` readback match. Stock `lk_b` digest remains
 `812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.

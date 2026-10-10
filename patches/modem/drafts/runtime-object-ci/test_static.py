@@ -9,7 +9,7 @@ import re
 import subprocess
 import tempfile
 import unittest
-from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, stage_metadata, check_generated
+from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, stage_metadata, stage_smem, check_generated
 
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
     'android_kernel_device_modules_6.1_nothing_mt6878'))
@@ -196,6 +196,32 @@ class ObjectTests(unittest.TestCase):
             '--vendor', str(VENDOR)], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('GitHub CI-only', result.stderr)
+
+    def test_smem_after_metadata_without_activation(self):
+        data, _, package = plan()
+        uboot = ROOT.parent / 'u-boot-mt6878'
+        with tempfile.TemporaryDirectory(prefix='smem-object-static-') as temp:
+            destination = Path(temp) / 'vendor'
+            with contextlib.redirect_stdout(io.StringIO()):
+                stage_vendor(VENDOR, destination, package, data)
+                stage_metadata(VENDOR, destination, uboot, data, Path(temp) / 'diagnostics')
+                stage_smem(VENDOR, destination, uboot, data, Path(temp) / 'diagnostics')
+            self.assertEqual(sum(map(len, data['objects'].values())), 66)
+            key = 'ccci_util/tetris_runtime_smem/smem.o'
+            self.assertIn('tetris_smem_map_private', data['required_defined_symbols'][key])
+            self.assertIn(PREFIX + 'ccci_util/tetris_runtime_smem/smem.c',
+                          data['compiled_source_sha256'])
+            self.assertFalse(list(destination.rglob('*.o')))
+            self.assertFalse(list(destination.rglob('*.ko')))
+
+    def test_smem_requires_metadata_and_ci(self):
+        env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')
+        for flags, error in ((['--smem', '--plan-only'], '--smem requires --metadata'),
+                             (['--smem', '--metadata'], 'GitHub CI-only')):
+            result = subprocess.run(['python3', '-B', str(HERE / 'check_objects.py'), *flags],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(error, result.stderr)
 
 
 if __name__ == '__main__':

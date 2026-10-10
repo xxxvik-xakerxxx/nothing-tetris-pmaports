@@ -235,19 +235,62 @@ def stage_metadata(vendor, destination, uboot, manifest, diagnostics):
     }
 
 
+def stage_smem(vendor, destination, uboot, manifest, diagnostics):
+    """Unattached research objects only; never call or enable the mapping path."""
+    directory = HERE.parent / 'runtime-smem'
+    candidate = load('runtime_smem_objects', directory / 'check_smem.py')
+    manifest['smem_review_sha256'] = review(directory)
+    candidate.verify(vendor, uboot, ROOT)
+    if 'runtime-metadata' not in manifest['overlays_sha256']:
+        raise ValueError('SMEM requires the actual staged metadata resource ABI')
+    generated = candidate.patch_text()
+    frozen = (directory / 'runtime-smem.patch.vendor').read_text()
+    check_generated('runtime-smem', generated, frozen, diagnostics, manifest)
+    run(['git', 'apply', '--check', '-'], cwd=destination, input=frozen, text=True)
+    run(['git', 'apply', '-'], cwd=destination, input=frozen, text=True)
+    for name in candidate.PRODUCTION:
+        if (destination / candidate.DESTINATION / name).read_bytes() != (directory / name).read_bytes():
+            raise ValueError('staged SMEM source drift: ' + name)
+    manifest['overlays_sha256']['runtime-smem'] = hashlib.sha256(frozen.encode()).hexdigest()
+    manifest['objects']['ccci_util'].extend([
+        'tetris_runtime_smem/smem.o', 'tetris_runtime_smem/arguments.o'])
+    manifest['required_defined_symbols'].update({
+        'ccci_util/tetris_runtime_smem/smem.o': [
+            'tetris_smem_create', 'tetris_smem_preview', 'tetris_smem_destroy',
+            'tetris_smem_map_private', 'tetris_smem_publish_private',
+            'tetris_smem_export_private', 'tetris_smem_slot_init'],
+        'ccci_util/tetris_runtime_smem/arguments.o': ['tetris_smem_from_arguments'],
+    })
+    for path in ('ccci_util', 'eccci/fsm', 'include'):
+        manifest['vendor_kcflags'] += ' -I' + str(destination / PREFIX / path)
+    manifest['compiled_source_sha256'] = {
+        str(path.relative_to(destination)): sha(path)
+        for path in sorted(destination.rglob('*'))
+        if path.is_file() and not path.is_symlink() and
+           (str(path.relative_to(destination)).startswith(PREFIX) or
+            str(path.relative_to(destination)).startswith('include/'))
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--plan-only', action='store_true')
     parser.add_argument('--work', type=Path, default=Path('/tmp/tetris-kernel-smoke'))
     parser.add_argument('--vendor', type=Path, help='git source containing the exact vendor commit')
     parser.add_argument('--metadata', action='store_true', help='compile the isolated metadata overlay too')
+    parser.add_argument('--smem', action='store_true', help='compile unattached SMEM objects after metadata')
     parser.add_argument('--uboot', type=Path, help='git source containing the metadata producer pin')
     parser.add_argument('--report', type=Path, default=ROOT / 'out/kernel-object-smoke/runtime-objects.json')
     args = parser.parse_args()
+    if args.smem and not args.metadata:
+        parser.error('--smem requires --metadata; no standalone mapping activation')
     manifest, smoke, package = plan()
     if args.metadata:
         manifest['metadata_review_sha256'] = review(HERE.parent / 'runtime-metadata')
         manifest['scope'] += '; metadata import only, no operational registration or SMEM grant'
+    if args.smem:
+        manifest['smem_review_sha256'] = review(HERE.parent / 'runtime-smem')
+        manifest['scope'] += '; unattached SMEM transaction, no physical map/publication executed'
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -291,6 +334,9 @@ def main():
         if args.metadata:
             stage_metadata(vendor, destination, args.uboot.resolve(), manifest,
                            args.report.parent / 'runtime-generation-diagnostics')
+        if args.smem:
+            stage_smem(vendor, destination, args.uboot.resolve(), manifest,
+                       args.report.parent / 'runtime-generation-diagnostics')
         compile_objects(kernel, output, destination, manifest, smoke)
         manifest['status'] = 'passed'
     except BaseException as failure:

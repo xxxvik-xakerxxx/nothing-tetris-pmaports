@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y clang pkg-config libxml2-dev \
-            libssl-dev python3 python3-pyelftools
+            libssl-dev python3 python3-pyelftools python3-unicorn
       - name: Obtain pinned public stock inputs
         uses: actions/download-artifact@v7
         with:
@@ -31,16 +31,49 @@ jobs:
           path: out/selected-stock
       - name: Check runner admission
         run: python3 patches/gnss-navigation-audit/test_b41_xml_adc_runner.py
-      - name: Execute XML and ADC sanitizer fixtures
+      - name: Execute XML, ADC and actual policy fixtures
         id: execute
         env:
           CC: clang
+          PYTHONDONTWRITEBYTECODE: '1'
         run: |
+          set -euo pipefail
           sh patches/gnss-navigation-audit/run_xml_adc_ci.sh native \
             "$PWD/out/selected-stock/vendor/lib64/mt6878/libmnl.so" \
             "$PWD/out/selected-stock/vendor/etc/MNL_Config.xml" \
             "$PWD/out/selected-stock/vendor/bin/mnld" \
             "$PWD/out/xml-adc-native"
+          audit=patches/gnss-navigation-audit
+          draft=$audit/xml-policy-draft
+          vendor=$PWD/out/selected-stock/vendor
+          mkdir out/xml-adc-native/policy
+          sha256sum "$draft"/*.py "$draft"/*.c "$draft"/*.h "$draft"/*.sh \
+            "$audit/b41_xml_config.h" "$audit/test_b41_startup.py" \
+            "$audit/test_b41_xml_producer.py" \
+            > out/xml-adc-native/policy/SOURCE-SHA256SUMS
+          python3 "$draft/test_xml_policy_evidence.py" \
+            "$vendor/lib64/mt6878/libmnl.so" "$vendor/etc/MNL_Config.xml" \
+            2>&1 | tee out/xml-adc-native/policy/evidence.log
+          python3 "$draft/test_b41_xml_read_profile.py" \
+            "$vendor/lib64/mt6878/libmnl.so" "$vendor/bin/mnld" \
+            "$vendor/etc/MNL_Config.xml" \
+            2>&1 | tee out/xml-adc-native/policy/profile-tests.log
+          python3 "$draft/b41_xml_read_profile.py" \
+            "$vendor/lib64/mt6878/libmnl.so" "$vendor/bin/mnld" \
+            "$vendor/etc/MNL_Config.xml" \
+            > out/xml-adc-native/policy/READ-PROFILE.json
+          sh "$draft/run_xml_set_tail_ci.sh" "$PWD/out/xml-adc-native/policy/native" \
+            2>&1 | tee out/xml-adc-native/policy/native.log
+          timeout --signal=TERM --kill-after=2 120 \
+            python3 "$draft/test_b41_xml_set_tail_oracle.py" \
+            "$vendor/lib64/mt6878/libmnl.so" "$vendor/etc/MNL_Config.xml" \
+            "$PWD/out/xml-adc-native/policy/native/test_xml_set_tail" \
+            2>&1 | tee out/xml-adc-native/policy/set-oracle.log
+          timeout --signal=TERM --kill-after=2 120 \
+            python3 "$draft/test_b41_xml_read_profile_oracle.py" \
+            "$vendor/lib64/mt6878/libmnl.so" "$vendor/bin/mnld" \
+            "$vendor/etc/MNL_Config.xml" \
+            2>&1 | tee out/xml-adc-native/policy/read-oracle.log
       - name: Record scope and actual step outcome
         if: always()
         run: |
