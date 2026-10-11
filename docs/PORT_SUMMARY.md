@@ -1,4 +1,4 @@
-# Port summary, 2026-10-10
+# Port summary, 2026-10-11
 
 Native postmarketOS port for Nothing CMF Phone 1 (nothing-tetris, MT6878).
 This is an experimental port, not a fully functional daily-driver phone.
@@ -17,8 +17,8 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| U-Boot | Experimental `cd96ef3cb114b345ee773c89f3f0d43c2ae11417`, slot `lk_a` |
-| U-Boot image SHA256 | `4e64ee87d9310e2120ad03852142356b8de49234ca212a0abc0e8c94764e9001` |
+| Running U-Boot / `lk_a` | Experimental `467ab09cabf8017d2d37a3663f0fcbf732d71598`, confirmed physical cold start |
+| Installed loader image SHA256 | `081db33b8f9e0fd589dda3735172dc29ae7782199e36536083294ab175444741` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -80,13 +80,36 @@ fix. No firmware reservation/copy, SMEM or bootstrap was reached. The next
 boundary is a source-backed initial power owner, not removal of the OFF check.
 No Linux MMIO probe, guard bypass or modem retry occurred.
 Separate initial-power diagnostic `467ab09cab` is now in the user's U-Boot
-master, building in [CI 38111053855](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111053855).
+master; [CI 38111053855](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111053855)
+passed all native/ARM image gates, including 13 actual-helper startup-OFF
+sanitizer cases and the existing 21 ACK30 cases (synthetic MMIO only).
 It follows pinned LK IFR9/IFR11/NEMI protection, ACK30 power-off, isolation and
 clock ordering before the existing strict-OFF/placed-RAM boundary. The option
 defaults off and requires BROM-only admission; mixed ON/ACK states reject,
 every wait is bounded and no reset/retry is added. Independent review found
-no P1/P2 issues. Native sanitizer/ARM image execution and handset NS access
-remain unverified; this is not modem/SIM support and is not yet installed.
+no P1/P2 issues. The downloaded manifest matches the commit and all image
+checksums pass. The 3,307,168-byte image was written only to `lk_a` from the
+existing Linux boot, with synchronous completion and verified prefix readback.
+Stock `lk_b` SHA256 still matches
+`812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.
+After USB-disconnected power-off, a ten-second wait and normal physical
+power-on, the first readback confirms `467ab09cabf8` and a new Linux boot ID.
+Initial password authentication failed; one fresh SSH connection with the
+same password and matching strict host key succeeded. No reset/retry occurred.
+The initial power owner and both strict-OFF checks passed. Authenticated
+firmware placement and service preparation now reach bootstrap stage3 (EMI),
+which returns `-5` (`-EIO`); loaded stage10, report-fetch0, board stage15 and
+publication error0. The last hardware sample `0x1027008c = 0xc1` is from the
+OFF checker, not the failed EMI query. EMI's row/query/reply are missing from
+the old v1 report, so the cause is not yet identified; no validation is bypassed.
+No BROM success or modem/SIM support is claimed. A separate observation-only
+EMI transaction record is published as `cbe37e8d2050bacb410c91b1f7602e549dd09098`
+in the user's U-Boot master, without new secure calls or hardware writes.
+[CI 38111720250](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111720250)
+is building the candidate; it is not installed. USB/SSH, firmware-ready, 24 sensor entries
+and mask31 recover automatically; no failed units or kernel faults were found.
+The user confirmed display, touch, both rotations and automatic brightness.
+Rootfs, NV/calibration and `lk_b` were not written.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
@@ -98,7 +121,7 @@ Image SHA256 `4943e596b022b471adf54cc54ba1678b773bde7d369d70dc0e440be4f21f5b84`
 is verified and downloaded, not installed.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
-On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
+On the preceding baseline, SCP reports `secure-handoff-prepared`, error zero; the hub
 reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
 journal were preserved before further changes. On the confirmed 2026-10-11
