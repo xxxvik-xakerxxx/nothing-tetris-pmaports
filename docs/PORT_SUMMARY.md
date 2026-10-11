@@ -59,8 +59,10 @@ detached their loops before export. The quick clean check at first boot is
 not a full fsck after the build-time mount: upstream
 [resize2fs 1.47.4](https://github.com/tytso/e2fsprogs/blob/v1.47.4/resize/main.c)
 rejects an offline filesystem whose last full check precedes its last mount.
-This matches the observed error; the exact original-image condition still
-needs the real-image gate below, not a mounted-root repair.
+Read-only decoding of the original hash/CRC-verified r181 sparse artifact
+confirms clean state1, last-check1791705001 and last-mount1791705002:
+the exact refusal condition is present in the shipped image. No inspection
+copy was flashed and no mounted-root repair was performed.
 
 Our CI now checks detached regular images with forced offline `e2fsck -p`,
 accepting only statuses 0/1, then requires a read-only full check and an
@@ -69,8 +71,17 @@ A separate native fixture must reproduce the refusal, seal ext2/ext4 images,
 round-trip Android sparse format and grow to a larger simulated partition
 without a force flag. Diagnostic DTBs are retained before full pmbootstrap
 shutdown; no driver, bootloader, partition table or handset calibration is
-changed by this candidate. CI and clean-install expansion remain unverified
-until new artifacts are tested. The installed phone is still the original r181.
+changed by this candidate.
+
+[CI 38149660135](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38149660135)
+at `4dcbab6e60b56c60f83ea6f8ae958f2014b56446` passed all preliminary validation,
+the sealed GNSS loader and Bionic adapter. All ten image-gate tests ran, including
+real ext2/ext4 refusal, sparse round-trip and growth from 16,384 to 32,768 4KiB
+blocks without force; the Ubuntu fixture used e2fsprogs1.47.0. Actual ARM64
+object compilation and full-image sealing/build are still in progress.
+Clean-install expansion remains unverified until the new artifacts are tested.
+The installed phone is still the original r181; SIM/calls, navigation, GPU
+acceleration and camera capture are not newly demonstrated by these CI tests.
 
 ### Prior validated cold observation: r179
 
