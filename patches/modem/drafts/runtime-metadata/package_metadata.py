@@ -12,6 +12,24 @@ sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
 PREFIX = 'drivers/misc/mediatek/ccci_util/'
 MODE = 'CONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY'
+SMEM = HERE.parent / 'runtime-smem'
+
+
+def plan_sources(producer):
+    """Reuse reviewed bodies, but compile no physical mapping/publication code."""
+    sources = {name: (SMEM / name).read_text() for name in
+               ('smem.c', 'smem.h', 'private.h', 'arguments.c', 'source_model.h')}
+    smem = sources['smem.c']
+    start = smem.index('static void unmap_private(')
+    end = smem.index('static bool output_overlap(', start)
+    smem = smem[:start] + smem[end:]
+    start = smem.index('int tetris_smem_export_private(')
+    end = smem.index('int tetris_smem_destroy(', start)
+    smem = smem[:start] + smem[end:]
+    smem = producer.replace(smem, '\tunmap_private(owner);\n', '')
+    sources['smem.c'] = smem
+    return {PREFIX + 'tetris_runtime_smem/' + name: source
+            for name, source in sources.items()}
 
 
 def candidate():
@@ -38,6 +56,28 @@ def build(vendor):
                  for path in (root / PREFIX).iterdir() if path.is_file()}
     for name in after:
         after[name] = after[name].replace('CONFIG_MTK_ECCCI_TETRIS_OWNER', MODE)
+    owned = PREFIX + 'owned_tags.h'
+    after[owned] = producer.replace(after[owned], 'static unsigned char *tetris_owned_tags;',
+        'static struct tetris_metadata_banks tetris_owned_banks;\n'
+        'static unsigned char *tetris_owned_tags;')
+    after[owned] = producer.replace(after[owned], '\ttetris_owned_tags = snapshot;',
+        '\ttetris_owned_banks = *banks;\n\ttetris_owned_tags = snapshot;')
+    after[owned] += ('\n/* Copy only during serialized util init, not an NS access grant. */\n'
+        'int mtk_ccci_owned_banks_copy(struct tetris_metadata_banks *out)\n{\n'
+        '\tif (!out)\n\t\treturn -EINVAL;\n'
+        '\tif (!s_init_done || !tetris_owned_tags)\n\t\treturn -ENODATA;\n'
+        '\t*out = tetris_owned_banks;\n\treturn 0;\n}\n')
+    after.update(plan_sources(producer))
+    after[PREFIX + 'owned_smem_plan.c'] = (HERE / 'owned_smem_plan.c').read_text()
+    makefile = PREFIX + 'Makefile'
+    before[makefile] = producer.stock(vendor, 'Makefile')
+    after[makefile] = producer.replace(before[makefile], '\t\t\tccci_util_md_mem.o',
+        '\t\t\tccci_util_md_mem.o \\\n'
+        '\t\t\towned_smem_plan.o \\\n'
+        '\t\t\ttetris_runtime_smem/arguments.o \\\n'
+        '\t\t\ttetris_runtime_smem/smem.o')
+    after[makefile] += ('\nccflags-y += -I$(src)\n'
+        'ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/eccci/fsm\n')
     main = PREFIX + 'ccci_util_lib_main.c'
     after[main] = producer.replace(after[main],
         '#if IS_ENABLED(' + MODE + ')\n\tint ret;\n#endif\n'
@@ -49,12 +89,15 @@ def build(vendor):
         '\tint ret = mtk_ccci_args_key_val_init();\n\n'
         '\tif (ret)\n\t\tgoto metadata_fail;\n'
         '\tret = ccci_util_fo_init();\n\tif (ret)\n\t\tgoto metadata_fail;\n'
+        '\tret = mtk_ccci_owned_smem_init();\n\tif (ret)\n\t\tgoto metadata_fail;\n'
         '\tpr_info("Tetris CCCI: owned metadata imported; runtime transport disabled\\n");\n'
-        '\treturn 0;\nmetadata_fail:\n\tmtk_ccci_owned_args_cleanup();\n\treturn ret;\n#endif\n'
+        '\treturn 0;\nmetadata_fail:\n\tmtk_ccci_owned_smem_cleanup();\n'
+        '\tmtk_ccci_owned_args_cleanup();\n\treturn ret;\n#endif\n'
         '\tccci_log_init();\n\tmtk_ccci_args_key_val_init();\n\tccci_util_fo_init();')
     after[main] = producer.replace(after[main], 'subsys_initcall(ccci_util_init);',
         '#if IS_ENABLED(' + MODE + ')\n'
         'static void __exit ccci_util_metadata_exit(void)\n{\n'
+        '\tmtk_ccci_owned_smem_cleanup();\n'
         '\tmtk_ccci_owned_args_cleanup();\n}\n'
         'module_exit(ccci_util_metadata_exit);\n#endif\n\n'
         'subsys_initcall(ccci_util_init);')
@@ -63,6 +106,7 @@ def build(vendor):
         '#if IS_ENABLED(' + MODE + ')\n'
         'void mtk_ccci_owned_args_cleanup(void)\n{\n\tunsigned int i;\n\n'
         '\ts_init_done = 0;\n'
+        '\tmemset(&tetris_owned_banks, 0, sizeof(tetris_owned_banks));\n'
         '\tmemset(s_args_tbl, 0, sizeof(s_args_tbl));\n'
         '\ts_args_num = 0;\n\ts_curr_ptr = NULL;\n'
         '\ts_curr_buf_idx = 0;\n\ts_curr_buf_free = 0;\n'
@@ -80,6 +124,10 @@ def build(vendor):
     header = PREFIX + 'ccci_util_lib_main.h'
     after[header] = producer.replace(after[header], '#define MAX_MD_NUM_AT_LK\t(4)',
         '#if IS_ENABLED(' + MODE + ')\n'
+        'struct tetris_metadata_banks;\n'
+        'int mtk_ccci_owned_banks_copy(struct tetris_metadata_banks *out);\n'
+        'int mtk_ccci_owned_smem_init(void);\n'
+        'void mtk_ccci_owned_smem_cleanup(void);\n'
         'void mtk_ccci_owned_args_cleanup(void);\n#endif\n\n'
         '#define MAX_MD_NUM_AT_LK\t(4)')
     result = []

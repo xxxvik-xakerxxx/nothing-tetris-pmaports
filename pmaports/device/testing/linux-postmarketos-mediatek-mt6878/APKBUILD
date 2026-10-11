@@ -655,6 +655,11 @@ _build_ccci_metadata_only() {
 		die "Owned metadata importer was compiled out"
 	llvm-nm --defined-only "$module" | grep -Eq '[[:space:]]mtk_ccci_validate_owned_handoff$' ||
 		die "Owned handoff validator was compiled out"
+	llvm-nm --defined-only "$module" | grep -Eq '[[:space:]]mtk_ccci_owned_smem_init$' ||
+		die "Owned SMEM plan was compiled out"
+	if llvm-nm --defined-only "$module" | grep -Eq '[[:space:]]tetris_smem_(map|publish|export)_private$'; then
+		die "Metadata-only module contains a physical SMEM transaction"
+	fi
 	# Build evidence only: package() does not install or autoload this module.
 }
 
@@ -1119,7 +1124,7 @@ fe0a04fbeb7cd6172c4897f0836345218d6642afcae30e95309d02f6e7599a2ace1127d7eb8f94dc
 5e276b98717cfc2d938d6e8b25a0d3266397d0fabb83a4d60b7e26f205a30129550762b597e98fa6edc07c221b1a21b59a3ccb470c02470fcd06efe8157ff21c  0113-pmdomain-mediatek-mt6878-modem-power.patch
 0eb90a16f88a9d3d85233ddb7a0eac758c4db021a27be1ed44acb8990a7930720be2ab5d6dfeb7874fef27f025646e1f41e4d457e34b2f0e2cc059ba7f898c67  0112-media-i2c-imx882-v4l2-controls.patch
 6bc374697a03337674951fc8a007f2b0fa692bb88a5e32035f6e21bc1a86f7f120a201ac8553a928ca79c5c7895b12b7a58a8407a05685fb115f561ea1d89452  0173-vendor-ccci-smem-map-span.patch.vendor
-4e3fc106dc50099c6b220f32dae7611e3c69fd4cdcd3507794bd389ff1d24de4df7a34e3054e8598373892a3ac48c09ff16e31894ccde00967b41a392ace7e2d  ccci-owned-metadata.overlay
+aad13493709d1c791880e220606003441d86c8f46ec5d9b196d947f432bc25fb826553c7b70d3149c7ff8a2ffd048190e14455701f669dc802407b3e4dbfe8b8  ccci-owned-metadata.overlay
 0ff1cd7da57e4cead9a15f76d715f97540f4318e89c6e1fc9948ccf2653c13b456b8cc4ffebb5f398bdc1cef8810df766a82b608a1cc18c97ccd9fba26fecea2  0174-arm64-dts-mediatek-tetris-disabled-ccci-handoff.patch
 4fe03ca717a5d781350d17a5aaa5dd0f4f6815a635b9d46791a9a7bed6e2b7c2a42f3f80d9dbde43958df52a657683779ee98fdcd5b10e94dd28e0956c70453a  0109-vendor-eccci-cldma-timer-api.patch.vendor
 05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch

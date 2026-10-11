@@ -224,7 +224,16 @@ and physical BROM completion are connected in the opt-in U-Boot profile.
 native cases at both 4 KiB and 64 KiB geometry and actual ARM64 compilation in
 [CI 38068292750](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38068292750).
 Neither result proves protected-memory access or runtime registration.
-Immutable bank ownership, runtime SMEM admission, CCIF/DPMAIF/FSM lifecycle,
+The isolated AP-only util candidate now retains a private copy of the validated
+bank reservations and feeds the existing pinned SMEM argument adapter during
+serialized module initialization. It retains consumer-ready NC/cache tables
+with NULL virtual addresses, then destroys the transient planner owner. Module
+failure/exit clears the tables before freeing the argument storage. Physical
+SMEM mapping/publication functions are omitted from this candidate's source;
+it remains build evidence only, not installed or autoloaded. Native end-to-end
+producer/import/plan and actual ARM64 integration checks are pending CI. The
+installed r181 still has the earlier AP-tag-only module.
+Runtime SMEM admission, CCIF/DPMAIF/FSM lifecycle,
 SIM/registration and the userspace radio/audio path remain.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 

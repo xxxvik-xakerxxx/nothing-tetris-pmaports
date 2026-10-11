@@ -1,3 +1,4 @@
 *.patch -whitespace
 *.patch.vendor -whitespace
 *.patch.kernel -whitespace
+ccci-owned-metadata.overlay -whitespace

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from package_metadata import build, MODE, PREFIX
+from check_packaged_smem import fixture_sources
 
 ROOT = Path(__file__).resolve().parents[4]
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
@@ -37,8 +38,10 @@ class PackageMetadataTests(unittest.TestCase):
                      'ccci_util_broadcast_init(', 'ccci_sib_init(',
                      'ccci_util_pin_broadcast_init(', 'mtk_ccci_dump_args_info('):
             self.assertNotIn(call, branch)
-        self.assertEqual(branch.count('if (ret)\n\t\tgoto metadata_fail;'), 2)
-        self.assertIn('metadata_fail:\n\tmtk_ccci_owned_args_cleanup();\n\treturn ret;', branch)
+        self.assertEqual(branch.count('if (ret)\n\t\tgoto metadata_fail;'), 3)
+        self.assertIn('ret = mtk_ccci_owned_smem_init()', branch)
+        self.assertLess(branch.index('ccci_util_fo_init()'), branch.index('mtk_ccci_owned_smem_init()'))
+        self.assertIn('metadata_fail:\n\tmtk_ccci_owned_smem_cleanup();\n\tmtk_ccci_owned_args_cleanup();\n\treturn ret;', branch)
 
     def test_argument_storage_and_node_are_released(self):
         args = self.sources[PREFIX + 'ccci_util_boot_args.c']
@@ -51,7 +54,48 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertEqual(init.count('of_node_put(node)'), 1)
         main = self.sources[PREFIX + 'ccci_util_lib_main.c']
         self.assertIn('module_exit(ccci_util_metadata_exit);', main)
-        self.assertIn('static void __exit ccci_util_metadata_exit(void)\n{\n\tmtk_ccci_owned_args_cleanup();', main)
+        self.assertIn('static void __exit ccci_util_metadata_exit(void)\n{\n\tmtk_ccci_owned_smem_cleanup();\n\tmtk_ccci_owned_args_cleanup();', main)
+        self.assertIn('memset(&tetris_owned_banks, 0, sizeof(tetris_owned_banks));', cleanup)
+
+    def test_bank_snapshot_is_private_and_published_only_after_validation(self):
+        owned = self.sources[PREFIX + 'owned_tags.h']
+        self.assertLess(owned.index('tetris_metadata_semantics('), owned.index('tetris_owned_banks = *banks;'))
+        self.assertLess(owned.index('tetris_owned_banks = *banks;'), owned.index('tetris_owned_tags = snapshot;'))
+        self.assertIn('if (!s_init_done || !tetris_owned_tags)\n\t\treturn -ENODATA;', owned)
+        self.assertIn('*out = tetris_owned_banks;', owned)
+        self.assertNotIn('EXPORT_SYMBOL(mtk_ccci_owned_banks_copy)', self.patch)
+
+    def test_plan_build_omits_mapping_and_publication_bodies(self):
+        smem = self.sources[PREFIX + 'tetris_runtime_smem/smem.c']
+        for forbidden in ('ioremap', 'iounmap', 'tetris_smem_map_private(',
+                          'tetris_smem_publish_private(', 'tetris_smem_export_private('):
+            self.assertNotIn(forbidden, smem)
+        for name in ('tetris_smem_create', 'tetris_smem_preview', 'tetris_smem_destroy'):
+            self.assertIn('int ' + name + '(', smem)
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        for call in ('mtk_ccci_owned_banks_copy', 'tetris_smem_from_arguments',
+                     'tetris_smem_preview', 'tetris_smem_destroy'):
+            self.assertIn(call + '(', owner)
+        self.assertIn('tetris_runtime_smem/smem.o', self.sources[PREFIX + 'Makefile'])
+        self.assertNotIn('EXPORT_SYMBOL', owner)
+
+    def test_native_fixture_uses_generated_import_and_actual_cleanup(self):
+        fixture, boot, sources = fixture_sources(VENDOR)
+        self.assertIn(sources[PREFIX + 'owned_tags.h'], fixture)
+        self.assertIn('packaged_probe(&banks, ret);', fixture)
+        self.assertIn('void mtk_ccci_owned_args_cleanup(void)', fixture)
+        self.assertIn('#include "test_packaged_smem.c"', fixture)
+        self.assertIn('kernel_import_probe(buffer,', boot)
+
+    def test_native_compilation_rejected_outside_ci(self):
+        env = dict(os.environ)
+        env.pop('CI', None)
+        env.pop('GITHUB_ACTIONS', None)
+        result = subprocess.run(['python3', '-B', str(Path(__file__).parent / 'check_packaged_smem.py'),
+            '--vendor', str(VENDOR), '--uboot', '/nonexistent',
+            '--stock-container', '/nonexistent'], env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('GitHub CI-only', result.stderr)
 
     def test_only_ap_buffer_is_mapped_and_unmapped(self):
         handoff = self.sources[PREFIX + 'handoff.h']
