@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: modem-metadata-candidate
@@ -81,7 +82,7 @@ jobs:
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
-            openssl-dev perl python3 patch linux-headers git dtc
+            openssl-dev perl python3 patch linux-headers git dtc curl kmod
       - uses: actions/checkout@v6
       - name: Fetch exact bootloader planner
         run: |
@@ -89,13 +90,16 @@ jobs:
           git init out/uboot
           git -C out/uboot fetch --depth=1 https://github.com/MT6878-Mainline/u-boot.git 60cd9ade5b999732304f3b755c7dbe3d34307c13
           git fetch --no-tags --depth=1 origin 190ea155e1a8343dbdb4f0992f06b92848c9cdac
+          git fetch --no-tags --depth=1 origin e0c67c561ff7c1a0472da851edfafd5a0abb6cec
       - name: Compile actual isolated ARM64 driver stack
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 ci/kernel-object-smoke.py --research-owners
           python3 patches/modem/drafts/runtime-object-ci/check_objects.py \
             --metadata --smem --uboot out/uboot
-          python3 ci/packaged-smem-objects.py
+          python3 ci/packaged-smem-objects.py --link-r181
       - uses: actions/upload-artifact@v7
         if: always()
         with:
