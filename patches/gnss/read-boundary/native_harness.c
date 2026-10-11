@@ -225,6 +225,7 @@ int main(void)
     struct gps_each_device dev;
     struct file file = { .private_data = &dev, .f_flags = O_NONBLOCK };
     unsigned char out[GPS_DATA_PATH_BUF_MAX + 16];
+    char *user_out = (char *)out;
     const size_t counts[] = { sizeof(dev.i_buf), sizeof(dev.i_buf) + 1,
         UINT32_MAX, (size_t)UINT32_MAX + 1, SIZE_MAX };
     memset(&dev, 0, sizeof(dev));
@@ -237,7 +238,7 @@ int main(void)
     }
     file.f_flags = O_NONBLOCK;
     reset_case();
-    assert(gps_each_device_read(&file, out, sizeof(out), NULL) == -EAGAIN);
+    assert(gps_each_device_read(&file, user_out, sizeof(out), NULL) == -EAGAIN);
     assert(!irq_waits && !poll_first && !poll_second && !copies);
     assert(dma_locks == 1 && !link_state.rx_dma_buf.reader_working);
 
@@ -246,7 +247,7 @@ int main(void)
         queue_data(0, sizeof(dev.i_buf));
         memset(out, 0xa5, sizeof(out));
         memset(dev.o_buf, 0x5a, sizeof(dev.o_buf));
-        assert(gps_each_device_read(&file, out, counts[n], NULL) == (int)sizeof(dev.i_buf));
+        assert(gps_each_device_read(&file, user_out, counts[n], NULL) == (int)sizeof(dev.i_buf));
         assert(last_enter == sizeof(dev.i_buf) && last_copy == sizeof(dev.i_buf));
         check_payload(out, 0, sizeof(dev.i_buf));
         for (unsigned int i = sizeof(dev.i_buf); i < sizeof(out); i++)
@@ -261,7 +262,7 @@ int main(void)
         unsigned int start = wrap ? sizeof(ring) - 7 : 20;
         queue_data(start, 16);
         link_state.rx_dma_buf.has_pending_rx = true;
-        assert(gps_each_device_read(&file, out, 512, NULL) == 16);
+        assert(gps_each_device_read(&file, user_out, 512, NULL) == 16);
         check_payload(out, start, 16);
         assert(events == 1 && !link_state.rx_dma_buf.has_pending_rx);
         assert(!link_state.rx_dma_buf.reader_working && !lock_depth);
@@ -269,23 +270,23 @@ int main(void)
 
     reset_case();
     queue_data(0, 1);
-    assert(gps_each_device_read(&file, out, 1, NULL) == 1);
+    assert(gps_each_device_read(&file, user_out, 1, NULL) == 1);
     reset_case();
     invalid_link = true;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EINVAL);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EINVAL);
     assert(!copies && !irq_waits && !poll_first);
     reset_case();
     link_state.rx_dma_buf.reader_working = true;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EFAULT);
     assert(!copies && !irq_waits && !poll_first);
     reset_case();
     link_state.rx_dma_buf.write_index = 1; /* Data with no entry. */
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EFAULT);
     assert(!copies && !link_state.rx_dma_buf.reader_working);
     reset_case();
     queue_data(0, 16);
     copy_residual = 1;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EFAULT);
     assert(copies == 1 && link_state.rx_dma_buf.read_index == 16);
 
     /* Failed short reads release ownership and preserve the queued entry. */
@@ -299,13 +300,13 @@ int main(void)
             link_state.rx_dma_buf.has_pending_rx = true;
             memcpy(&before, &link_state.rx_dma_buf, sizeof(before));
             memset(out, 0xa5, sizeof(out));
-            assert(gps_each_device_read(&file, out, 1, NULL) == -EFAULT);
+            assert(gps_each_device_read(&file, user_out, 1, NULL) == -EFAULT);
             assert(!link_state.rx_dma_buf.reader_working && !copies && !lock_depth);
             assert(dma_locks == 2 && !events && !irq_waits && !poll_first && !poll_second);
             assert(memcmp(&before, &link_state.rx_dma_buf, sizeof(before)) == 0);
             for (unsigned int i = 0; i < sizeof(out); i++)
                 assert(out[i] == 0xa5);
-            assert(gps_each_device_read(&file, out, 512, NULL) == 16);
+            assert(gps_each_device_read(&file, user_out, 512, NULL) == 16);
             check_payload(out, start, 16);
             assert(!link_state.rx_dma_buf.reader_working && events == 1);
             assert(link_state.rx_dma_buf.read_index == (start + 16) % sizeof(ring));
@@ -354,13 +355,13 @@ int main(void)
     struct gps_dl_dma_buf oversized_before;
     memcpy(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before));
     memset(dev.o_buf, 0x5a, sizeof(dev.o_buf));
-    assert(gps_each_device_read(&file, out, SIZE_MAX, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, SIZE_MAX, NULL) == -EFAULT);
     assert(!link_state.rx_dma_buf.reader_working && dma_locks == 2 && !copies);
     assert(memcmp(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before)) == 0);
     for (unsigned int i = 0; i < sizeof(dev.o_buf); i++)
         assert(dev.o_buf[i] == 0x5a);
     /* Device reads remain clamped; a larger direct DMA buffer can recover. */
-    assert(gps_each_device_read(&file, out, SIZE_MAX, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, SIZE_MAX, NULL) == -EFAULT);
     assert(!link_state.rx_dma_buf.reader_working && dma_locks == 4);
     assert(memcmp(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before)) == 0);
     memset(out, 0xa5, sizeof(out));
@@ -375,15 +376,15 @@ int main(void)
     reset_case();
     file.f_flags = 0;
     no_data_retries = 2;
-    assert(gps_each_device_read(&file, out, 512, NULL) == 16);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == 16);
 #if GPS_DL_NO_USE_IRQ == 0
     assert(irq_waits == 3 && !poll_first && !poll_second);
     reset_case();
     wait_result = GDL_FAIL_SIGNALED;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -ERESTARTSYS);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -ERESTARTSYS);
     reset_case();
     wait_result = GDL_FAIL_NOT_SUPPORT;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EFAULT);
     reset_case();
     assert(gps_each_link_read_with_timeout(GPS_DATA_LINK_ID0, out, 512, 1, NULL) == 16);
     assert(irq_waits == 1); /* No finite IRQ deadline is implemented. */
@@ -391,11 +392,11 @@ int main(void)
     assert(!irq_waits && poll_first == 3 && poll_second == 3);
     reset_case();
     first_result = GDL_FAIL_TIMEOUT;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EAGAIN);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EAGAIN);
     assert(poll_first == 1 && !poll_second);
     reset_case();
     second_result = GDL_FAIL_TIMEOUT;
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EAGAIN);
+    assert(gps_each_device_read(&file, user_out, 512, NULL) == -EAGAIN);
     assert(poll_first == 1 && poll_second == 1);
 #endif
     assert(!lock_depth);
