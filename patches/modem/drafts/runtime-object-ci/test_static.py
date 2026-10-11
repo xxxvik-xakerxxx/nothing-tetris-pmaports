@@ -226,8 +226,28 @@ class ObjectTests(unittest.TestCase):
         block = workflow.split('      - name: Validate staged modem lifecycle callbacks\n')[1].split('      - name:')[0]
         self.assertIn('https://github.com/xxxvik-xakerxxx/u-boot.git', block)
         self.assertIn('60cd9ade5b999732304f3b755c7dbe3d34307c13', block)
+        self.assertIn('git fetch --no-tags --depth=1 origin', block)
+        self.assertIn('190ea155e1a8343dbdb4f0992f06b92848c9cdac', block)
         self.assertLess(block.index('export TETRIS_UBOOT_TREE='),
                         block.index('python3 patches/modem/drafts/runtime-object-ci/test_static.py'))
+
+    def test_shallow_checkout_requires_exact_metadata_source(self):
+        pin = '190ea155e1a8343dbdb4f0992f06b92848c9cdac'
+        name = 'patches/modem/drafts/runtime-metadata/semantic.h'
+        with tempfile.TemporaryDirectory(prefix='runtime-shallow-input-') as temp:
+            root = Path(temp)
+            commands = (['git', 'init', str(root)],
+                        ['git', '-C', str(root), 'fetch', '--no-tags', '--depth=1', ROOT.as_uri(), 'HEAD'])
+            for command in commands:
+                subprocess.run(command, check=True, capture_output=True)
+            absent = subprocess.run(['git', '-C', str(root), 'show', f'{pin}:{name}'],
+                                    capture_output=True)
+            self.assertNotEqual(absent.returncode, 0)
+            subprocess.run(['git', '-C', str(root), 'fetch', '--no-tags', '--depth=1',
+                            ROOT.as_uri(), pin], check=True, capture_output=True)
+            admitted = subprocess.check_output(['git', '-C', str(root), 'show', f'{pin}:{name}'])
+            expected = subprocess.check_output(['git', '-C', str(ROOT), 'show', f'{pin}:{name}'])
+            self.assertEqual(admitted, expected)
 
     def test_smem_requires_metadata_and_ci(self):
         env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')

@@ -125,6 +125,10 @@ jobs:
       - name: Validate staged modem lifecycle callbacks
         run: |
           export TETRIS_VENDOR_TREE="$PWD/upstream/device-modules"
+          git fetch --no-tags --depth=1 origin \
+            190ea155e1a8343dbdb4f0992f06b92848c9cdac
+          test "$(git rev-parse FETCH_HEAD)" = \
+            190ea155e1a8343dbdb4f0992f06b92848c9cdac
           git init upstream/modem-uboot
           git -C upstream/modem-uboot fetch --filter=blob:none --depth=1 \
             https://github.com/xxxvik-xakerxxx/u-boot.git \
