@@ -17,8 +17,9 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `467ab09cabf8017d2d37a3663f0fcbf732d71598`, confirmed physical cold start |
-| Installed loader image SHA256 | `081db33b8f9e0fd589dda3735172dc29ae7782199e36536083294ab175444741` |
+| Running U-Boot | Experimental `467ab09cabf8017d2d37a3663f0fcbf732d71598`, confirmed physical cold start |
+| Next-boot `lk_a` | Experimental `cbe37e8d2050bacb410c91b1f7602e549dd09098`, not yet booted |
+| Next-boot image SHA256 | `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -105,8 +106,17 @@ the old v1 report, so the cause is not yet identified; no validation is bypassed
 No BROM success or modem/SIM support is claimed. A separate observation-only
 EMI transaction record is published as `cbe37e8d2050bacb410c91b1f7602e549dd09098`
 in the user's U-Boot master, without new secure calls or hardware writes.
-[CI 38111720250](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111720250)
-is building the candidate; it is not installed. USB/SSH, firmware-ready, 24 sensor entries
+[Ordinary CI 38111717370](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111717370)
+passed. The first diagnostic dispatch passed native fixtures but rejected an
+omitted required SCP TCM input during configuration; no image was produced.
+[CI 38111943244](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111943244)
+passed all native/ARM image gates with the complete previously validated SCP
+inputs. Its manifest and downloaded checksums match. The 3,307,616-byte image
+was written only to `lk_a`; synchronous completion and prefix readback match
+SHA256 `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d`.
+Stock `lk_b` hash and Linux boot ID remain unchanged: the candidate has not
+executed. Physical USB-disconnected cold startup/readback is pending.
+USB/SSH, firmware-ready, 24 sensor entries
 and mask31 recover automatically; no failed units or kernel faults were found.
 The user confirmed display, touch, both rotations and automatic brightness.
 Rootfs, NV/calibration and `lk_b` were not written.
