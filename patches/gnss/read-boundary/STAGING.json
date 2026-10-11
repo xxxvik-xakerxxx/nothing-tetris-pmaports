@@ -1,5 +1,5 @@
 {
-  "status": "packaged r181 candidate; actual-source native CI passed; full image pending; hardware untested",
+  "status": "r181 full CI passed and image installed; actual-source native CI passed; read behavior/navigation hardware untested",
   "repository_head_at_staging": "2e983241000633a6e572f0e1558bc36ebfdce2b8",
   "connectivity_repository": "NothingOSS/android_kernel_modules_nothing_mt6878",
   "connectivity_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",

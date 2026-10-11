@@ -78,8 +78,12 @@ compatible/AP6878/MD6299 identity. All four real packaged DTBs compiled and
 passed the strict consumer check in
 [CI 38117468070](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117468070)
 at `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`; downloaded DTB hashes match its
-manifest. Subsequent cold import remains pending; no modem resource or
-operational driver is enabled by that node.
+manifest. Clean r181 is now installed: warm boot
+`2e9cfc97-4d08-4641-bb6c-b16b65713b79` at uptime134.32s received a fresh v2
+descriptor with 3,972 used bytes and 21 tags; its exact 64KiB aligned no-map
+reservation matches. BROM errors and descriptor error/flag/MD error are zero.
+Cold repetition and AP-only import remain pending; no operational driver is
+enabled by that node. Warm SCP preparation retains its known EBUSY limitation.
 
 The r181 package adds a separate AP-tag-only linked-module build. The generated
 `ccci-owned-metadata.overlay` is applied only to a source-only util copy, not the
@@ -89,9 +93,10 @@ logging, sysfs, broadcast and SIB initialization. Its sole physical mapping is
 the admitted AP tag buffer; firmware/NC/cache banks are not mapped. Full image
 CI must link against the actual configured kernel exports and preserve the
 module plus `Module.symvers` as evidence. Neither module installation nor
-autoload is added. Full module linkage and physical import remain pending for
-r181; [full image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
-is running at the same validated source.
+autoload is added. Full module linkage passed in
+[image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
+at the same validated source. Its exact-ABI AP-only module and kernel exports
+were downloaded and all manifest hashes verified. Physical import remains pending.
 
 The tags contain `md_mem_layout` (24-byte rows) and NC/cache layouts (40-byte rows).
 `semantic.h` now checks complete byte-field consistency with the source-derived

@@ -87,24 +87,26 @@ The check needs `sha256sum` and `file` on the host. Also verify the separate
 U-Boot artifact against its own manifest and checksums. A matching checksum
 does not establish hardware/firmware compatibility.
 
-The latest installed image is r179 from
-[CI 37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510),
-source `0b904d61731624418b70201e4d615c945eacbb4d`.
-Its archive, image hashes and complete sparse structure were verified before
-a clean installation. First boot, USB/SSH, root expansion and installed FIT
-verification passed. Subsequent cold starts with the matching experimental
-SCP-enabled loader restored sensors automatically after opt-in. The user
-confirmed normal display, touch, desktop rotation and automatic brightness,
-including the latest cold start with U-Boot `cdd806438d73`.
-Warm reboot still has a known SCP inherited-state failure; full lifecycle
-and other-unit testing remain pending;
-see the current [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r179).
+The latest installed image is r181 from
+[CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546),
+source `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`.
+Its archive, image hashes and all 7,691 sparse chunks were verified before
+clean installation. First warm boot, USB/SSH and installed FIT verification
+passed. Visual/cold checks and AP-only modem metadata import remain pending.
+The first rootfs resize asks for forced fsck and leaves about 2.4 GiB usable;
+this is an unresolved first-boot issue, not a full-capacity validated release.
+Do not run `e2fsck` on the mounted root filesystem.
+The retained r179 recovery checkpoint previously passed full root expansion,
+display/touch, rotation and auto-brightness on physical cold startup after
+sensor opt-in with U-Boot `cdd806438d73`.
+Warm reboot still has a known SCP inherited-state failure; full lifecycle and
+other-unit testing remain pending. See the current
+[checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r181).
 Sensors are opt-in on a fresh image and require the matching SCP-enabled
 loader; the ordinary U-Boot artifact does not enable that profile.
-The r181 combined candidate passed preliminary CI, including all four corrected
-DTBs; its [full image build](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
-is still pending. It is not an installed or hardware-validated release.
-Its modem metadata changes do not establish SIM,
+The r181 combined image passed full CI, including all four corrected DTBs and
+actual module linkage. Its disabled modem anchor now receives the loader's
+21-tag descriptor, but this does not establish SIM,
 calls, GPS, GPU acceleration or camera support.
 
 ## U-Boot prerequisite

@@ -10,8 +10,10 @@ requirements. Actual-source native fixtures passed
 at `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`, with both IRQ/polling branches,
 ASan/UBSan and six detected negative controls per branch. No native compilation
 ran locally. Physical behavior remains untested. The corrected r181 candidate
-is in [full image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
-at the same validated source; its real v051 module build remains pending.
+passed [full image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
+at the same validated source, including real v051 compilation/packaging. Clean
+r181 is installed and module identity/ABI match; it has not been started and
+actual hardware read behavior or navigation remains untested.
 
 ## Source Trace
 

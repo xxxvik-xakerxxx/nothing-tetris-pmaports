@@ -6,21 +6,23 @@ Current development is in [pmOS main](https://github.com/xxxvik-xakerxxx/nothing
 and the maintainer's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot).
 The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
-## Latest installed checkpoint: r179
+## Latest installed checkpoint: r181
 
-Clean installation used [CI 37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510),
-source `0b904d61731624418b70201e4d615c945eacbb4d`.
-Archive SHA256: `de5dd350fe8519ebcf986757446ea3dae69b809ff19e8c10b69e02ae44cd9c2c`.
-All image hashes and 7,665 sparse chunks were verified before installation.
+Clean installation used [CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546),
+source `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`.
+Archive SHA256: `5989d07b77971280b7c2d1f5a88ea5244ed883557f8a54341520ccbbb2ce63bd`.
+All image hashes and 7,691 sparse chunks were verified before installation.
+`super` and all 17 userdata transfers completed successfully. The installed
+FIT matches CI SHA256 `91d7f77a7d8b177fe6320d7bdce267dc88ec26ed146feff9227b5564513d55c1`.
 
 | Installed component | Identity |
 | --- | --- |
-| Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
+| Kernel | `7.2.1-r181`, Linux `6.18.0 #182` |
 | Device package | `8-r17` |
 | Running U-Boot / `lk_a` | Experimental `cdd806438d73e2e163fcc9aded557b029816011e` |
 | Loader image SHA256 | `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d` |
-| Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
-| Root filesystem | 104.5 GiB, expanded and writable |
+| Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, included in the image |
+| Root filesystem | Writable; first boot remains about 2.4 GiB, expansion unresolved |
 
 The latest loader passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169).
 Its image was synchronously written only to `lk_a` and prefix-readback verified.
@@ -28,7 +30,29 @@ Stock `lk_b`, NV and calibration remain unchanged. The ordinary minimum loader
 `dcb20ce` in the pmOS manifest is a recovery baseline, not this diagnostic profile.
 See [installation and risk disclaimer](INSTALL.md) before flashing.
 
-### Latest cold observation
+### First r181 observation: warm boot
+
+Boot `2e9cfc97-4d08-4641-bb6c-b16b65713b79`, structured report at uptime134.32s:
+
+- USB/NCM and SSH work. The installed GPS v051 module reports the expected ABI;
+  it has not been started or tested for navigation.
+- BROM completed with all errors zero, all four secure flags and verified EMI
+  slot43/step20. The sole `/modem` remains disabled with AP6878/MD6299 identity.
+- Linux received a fresh v2 descriptor: 3,972 used bytes, 21 tags, error/flag/MD
+  error0; the separate 64 KiB reservation matches, is aligned and no-map, with
+  no compatible/reusable owner. This is the first physical descriptor handoff,
+  not yet the AP-only module import or runtime modem READY.
+- SCP preparation returns `-EBUSY` on inherited TCM, with no secure-state fields.
+  The sensor service fails rather than retrying. Boot-time sensor opt-in is now
+  enabled for the requested physical cold start; r181 visual/cold checks remain.
+- Initramfs's `resize2fs` asks for forced `e2fsck` despite the preceding quick
+  clean check. Root is still about 2.4 GiB on the full userdata partition. No
+  repair was attempted on the mounted root; cold behavior and image sealing need
+  verification. r179 recovery images are retained.
+- Post-install loader hashes match the pre-install values; neither LK slot,
+  stock NV nor calibration was modified.
+
+### Prior validated cold observation: r179
 
 User-confirmed physical power-off, ten-second wait and power-on produced boot
 `82a5ef34-9a64-498b-820a-2770b02a004e`; the first structured report was saved at
@@ -47,9 +71,9 @@ User-confirmed physical power-off, ten-second wait and power-on produced boot
   resource diagnostics, filesystem mount warning and Wi-Fi/SCP notification
   timeouts remain unresolved.
 
-Installed r179 has no `mediatek,mddriver` consumer. The strict final metadata
-publisher refuses this DT: there is no CCCI descriptor or AP tag reservation.
-BROM completion is **not** runtime modem READY, SIM detection or a working call.
+That r179 DT lacked a `mediatek,mddriver` consumer, so no descriptor was published.
+r181 supplies the disabled anchor and now receives it. BROM/descriptor completion
+is **not** runtime modem READY, SIM detection or a working call.
 
 Warm reboot still fails SCP preparation on inherited TCM with `-EBUSY`.
 Cold startup success does not resolve warm reboot or suspend/resume.
@@ -61,7 +85,8 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 
 | Subsystem | Status | Demonstrated / remaining |
 | --- | --- | --- |
-| Boot, UFS/root expansion | Works for tested setup | Clean r179 boots with writable expanded root; other firmware/SKUs unverified. |
+| Boot / UFS | Works for basic boot | Clean r181 boots and reads/writes root; firmware/SKU portability unverified. |
+| Root expansion | Partial | r179 reached full capacity; r181 first-boot offline resize asks for forced fsck and remains image-sized. |
 | Native display | Partial | Route and frame-end updates are in main; no visible stripes/flicker. Fixed 60 Hz and software rendering; 120 Hz and power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
 | Sensors | Partial | Five physical classes emit data; rotation, auto-brightness and local-call proximity tested. Automatic cold startup observed; calibration, warm reboot, suspend and smooth brightness remain. |
@@ -77,7 +102,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | microSD | Partial | Controller probes; card insertion and real I/O untested. |
 | NFC | Not present | No NFC hardware on this model. |
 
-## Next Combined Image
+## Integrated r181 Changes
 
 Kernel package r181 passed all preliminary jobs in
 [CI 38117468070](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117468070)
@@ -88,10 +113,11 @@ Bionic adapter. The downloaded four DTBs match the CI manifest hashes.
 The root-property ordering error, stale CI-integration template and GPS fixture
 buffer type are corrected; compiler warnings and contract checks remain strict.
 
-The full kernel/package/image build is running at the **same source** in
+The full kernel/package/image build passed at the **same source** in
 [CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546).
-No successful r181 image has been installed; physical metadata import and new
-GPS behavior remain untested.
+Its isolated AP-only util module linked against real kernel exports, and all
+kernel-evidence hashes matched after download. The image is now installed;
+physical metadata import and new GPS read behavior remain untested.
 
 The candidate includes:
 
@@ -110,8 +136,8 @@ The candidate includes:
   Actual-source fixtures passed both IRQ and polling branches under ASan/UBSan;
   removing each fix was detected. Real hardware behavior remains untested.
 
-Next physical boundary: verify the retained descriptor and 21-tag handoff on a
-clean cold boot, then test only the exact-ABI AP-only importer. Do not load the
+Next physical boundary: repeat the observed descriptor/21-tag handoff on a clean
+cold boot, then test only the exact-ABI AP-only importer. Do not load the
 legacy util module against the new descriptor. Runtime transport remains off.
 This candidate is not a promise of functioning SIM, camera, GPU or navigation.
 
