@@ -81,7 +81,7 @@ jobs:
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
-            openssl-dev perl python3 patch linux-headers git
+            openssl-dev perl python3 patch linux-headers git dtc
       - uses: actions/checkout@v6
       - name: Fetch exact bootloader planner
         run: |

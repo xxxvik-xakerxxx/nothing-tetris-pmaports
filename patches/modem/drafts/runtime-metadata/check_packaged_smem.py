@@ -74,8 +74,9 @@ def native_ci(vendor, uboot, stock):
                          'linux/types.h', 'asm/page.h'):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('#include <asm-generic/errno.h>\n' if relative == 'linux/errno.h'
-                            else '/* Native boundary only. */\n')
+            headers = {'linux/errno.h': '#include <asm-generic/errno.h>\n',
+                       'linux/string.h': '#include <string.h>\n'}
+            path.write_text(headers.get(relative, '/* Native boundary only. */\n'))
         (root / 'boundary.h').write_text(BOUNDARY)
         (root / 'ap_md_mem.h').write_text(smem.native_types(vendor))
         (root / 'ccci_util_lib_main.h').write_text(

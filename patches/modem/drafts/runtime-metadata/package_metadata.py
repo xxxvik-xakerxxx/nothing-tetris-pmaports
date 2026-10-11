@@ -17,6 +17,8 @@ SMEM = HERE.parent / 'runtime-smem'
 
 def plan_sources(producer):
     """Reuse reviewed bodies, but compile no physical mapping/publication code."""
+    reviews = producer.load('packaged_plan_reviews', HERE.parent / 'runtime-object-ci/check_objects.py')
+    reviews.review(SMEM)
     sources = {name: (SMEM / name).read_text() for name in
                ('smem.c', 'smem.h', 'private.h', 'arguments.c', 'source_model.h')}
     smem = sources['smem.c']

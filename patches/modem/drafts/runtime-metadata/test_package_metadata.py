@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from package_metadata import build, MODE, PREFIX
+from package_metadata import build, candidate, MODE, PREFIX, SMEM
 from check_packaged_smem import fixture_sources
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -78,6 +78,14 @@ class PackageMetadataTests(unittest.TestCase):
             self.assertIn(call + '(', owner)
         self.assertIn('tetris_runtime_smem/smem.o', self.sources[PREFIX + 'Makefile'])
         self.assertNotIn('EXPORT_SYMBOL', owner)
+        extractor = candidate().load('packaged_pure_bodies',
+            SMEM.parent / 'runtime-lifecycle/check_lifecycle.py')
+        original = (SMEM / 'smem.c').read_text()
+        for name in ('validate_rows', 'build_spans', 'populate_tables',
+                     'tetris_smem_create', 'copy_layout', 'tetris_smem_preview'):
+            self.assertIn(extractor.function(original, name)[0], smem)
+        self.assertEqual(self.sources[PREFIX + 'tetris_runtime_smem/arguments.c'],
+                         (SMEM / 'arguments.c').read_text())
 
     def test_native_fixture_uses_generated_import_and_actual_cleanup(self):
         fixture, boot, sources = fixture_sources(VENDOR)

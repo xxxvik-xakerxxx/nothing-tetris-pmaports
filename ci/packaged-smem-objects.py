@@ -54,7 +54,8 @@ def main():
     target = ROOT / 'out/kernel-object-smoke/packaged-smem.json'
     try:
         staging.run(['make', '-j2', '-C', kernel, 'O=' + str(output), 'M=' + str(util),
-            'ARCH=arm64', 'LLVM=1', 'DEVICE_MODULES_PATH=' + str(original_vendor),
+            'ARCH=arm64', 'LLVM=1', 'KERNEL_SRC=' + str(kernel), 'KERNEL_OUT=' + str(output),
+            'DEVICE_MODULES_PATH=' + str(original_vendor),
             'CONFIG_MTK_ECCCI_DRIVER=m', 'CONFIG_MTK_SECURITY_SW_SUPPORT=n',
             'CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n', 'CONFIG_MTK_AEE_IPANIC=n',
             'KCFLAGS=' + manifest['vendor_kcflags'] +
