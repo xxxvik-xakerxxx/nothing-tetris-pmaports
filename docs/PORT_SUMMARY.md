@@ -93,9 +93,9 @@ The shared MT6878-Mainline repository is not updated. No modem reset/retry was i
 On the same boot, SCP reports `secure-handoff-prepared`, error zero; the hub
 reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
-journal were preserved before further changes. The user confirmed normal
-display, touch, both rotations and automatic brightness for `60cd`; the
-corresponding visual check for the latest loader remains pending. The rootfs remains
+journal were preserved before further changes. On the confirmed 2026-10-11
+cold start with `cd96ef3cb114`, the user also verified normal display, touch,
+both rotations and automatic brightness. The rootfs remains
 r179; r180 is downloaded but not installed, and runtime CCCI stays disabled.
 
 New candidates, not hardware support: [SMEM transaction](../patches/modem/drafts/runtime-smem/README.md)
