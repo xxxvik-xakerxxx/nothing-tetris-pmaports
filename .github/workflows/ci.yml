@@ -63,6 +63,8 @@ jobs:
         run: python3 ci/test-drm-sequence.py
       - name: Test kernel export evidence collector
         run: python3 scripts/tests/test-kernel-build-evidence.py
+      - name: Test disabled CCCI metadata DT contract
+        run: python3 ci/test-ccci-metadata-dt.py
       - name: Test integrated modem link gate
         run: python3 scripts/tests/test-modem-link.py
       - name: Test greeter rootfs gate
@@ -914,6 +916,7 @@ jobs:
             "$rootfs/usr/share/alsa/ucm2/MediaTek/mt6878-mt6369/HiFi.conf"
           native_dtb="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
           test -e "$native_dtb"
+          python3 /work/ci/check-ccci-metadata-dt.py "$native_dtb"
           if fdtget -l "$native_dtb" /chosen | grep -Fxq simplefb@fe0d0000; then
             echo "native display DTB still contains simplefb"
             exit 1

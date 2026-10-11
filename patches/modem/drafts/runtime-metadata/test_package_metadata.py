@@ -113,6 +113,16 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertIn('--modem --diagnostics --metadata', workflow)
         self.assertIn('test_package_metadata.py', workflow)
 
+    def test_disabled_dt_identity_matches_pinned_b41(self):
+        source = subprocess.check_output(['git', '-C', str(VENDOR), 'show',
+            'ee2be53cb75670b548948636a0db1d1ff112bf12:arch/arm64/boot/dts/mediatek/mt6878.dts'], text=True)
+        anchor = (PACKAGE / '0174-arm64-dts-mediatek-tetris-disabled-ccci-handoff.patch').read_text()
+        for property in ('compatible = "mediatek,mddriver";',
+                         'mediatek,ap-plat-info = <6878>;', 'mediatek,md-generation = <6299>;'):
+            self.assertIn(property, source)
+            self.assertIn(property, anchor)
+        self.assertIn('+\t\tstatus = "disabled";', anchor)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -17,8 +17,8 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `fdb0ee2994c62b6220e35dd1f75bbeee6e7d6f3a`, BROM verified on warm restart and one subsequent cold startup |
-| Installed loader image SHA256 | `3b716e6665ed7752865058d61b5c5c8e3a365278ac88b40799d26fd30cf6f189` |
+| Running U-Boot / `lk_a` | Experimental `cdd806438d73e2e163fcc9aded557b029816011e`, BROM and automatic sensors observed together on one cold startup; runtime CCCI metadata still absent on r179 |
+| Installed loader image SHA256 | `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d` |
 | Current sensor state | Automatically active after cold startup: SCP error0, firmware-ready, 24 entries/mask31; warm inherited-TCM `-EBUSY` remains unresolved |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
@@ -191,11 +191,24 @@ CCCI util module against real kernel exports, without installing/autoloading
 it or mapping modem firmware/SMEM. U-Boot metadata profile `cdd806438d73` has
 passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169)
 and its image SHA256 is `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d`.
-The artifact is verified but not installed. It publishes fresh owned AP tags
-after successful BROM while retaining disabled Linux mddriver status.
+The artifact is prefix-readback verified in `lk_a`; stock `lk_b` is unchanged.
+Cold boot `82a5ef34-9a64-498b-820a-2770b02a004e` at uptime90.14 seconds
+completes BROM without loader/report/hardware/cleanup/publication errors,
+reaches EMI slot43 VERIFIED/step20/error0, and restores SCP secure state3/error0,
+24 sensors/mask31 and all three services automatically. USB/SSH remain healthy.
+First report and complete kernel journal are retained; no new Oops/BUG/SError,
+kernel panic or WARNING was found. Visual confirmation for this boot is pending.
+Installed r179 has no mddriver consumer; the strict final publisher therefore
+refuses and no CCCI descriptor or owned tag reservation is present. r181 now
+adds a sole disabled metadata anchor with matching B4.1 compatible/AP6878/MD6299,
+no physical resources and no inherited descriptor. Compiled DTB validation and
+the next cold descriptor/import readback remain pending.
 The main image CI now fetches the exact U-Boot planner needed by lifecycle
 fixtures; missing checkout caused the preceding `38111142018` validation
-failure before any kernel build. New native gates exercise camera worker
+failure before any kernel build. It also fetches the exact earlier metadata
+source needed by SMEM; its absence caused `38114853043` to fail in the shallow
+checkout. Both dependencies and all validation gates passed in `38115111951`,
+including new native gates exercising camera worker
 closure/retirement and the actual U-Boot GPUEB segment parser. Full r181
 compilation and physical metadata import remain pending. This is not SIM,
 camera capture or GPU acceleration support.

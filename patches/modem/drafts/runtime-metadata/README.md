@@ -66,7 +66,16 @@ mddriver disabled, and reserves/zeros/cache-cleans an owned 64KiB AP buffer
 aligned to 64KiB. Native allocation/publication fault fixtures and the full
 ARM64 image passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169).
 Image SHA256 is `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d`;
-it is downloaded and verified, not yet installed or read back on hardware.
+It is now prefix-readback verified in `lk_a`; stock `lk_b` is unchanged.
+User-reported USB-disconnected cold boot `82a5ef34-9a64-498b-820a-2770b02a004e`
+at uptime90.14s runs `cdd806438d73`, completes BROM with all errors zero and
+restores SCP/sensors automatically (24 entries, mask31, three services active).
+The first report and kernel journal are retained. Installed r179 has no
+mddriver consumer, so the strict final publisher refuses: no descriptor/tag
+reservation is present and no physical import is claimed. The r181 companion
+DT patch adds only the single disabled metadata consumer with the pinned B4.1
+compatible/AP6878/MD6299 identity. Its compiled DTB and subsequent cold import
+remain pending; no modem resource or operational driver is enabled by that node.
 
 The r181 package adds a separate AP-tag-only linked-module build. The generated
 `ccci-owned-metadata.overlay` is applied only to a source-only util copy, not the

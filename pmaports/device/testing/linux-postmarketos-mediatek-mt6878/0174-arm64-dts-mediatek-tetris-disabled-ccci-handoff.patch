@@ -1,0 +1,32 @@
+From: Tetris port maintainers
+Subject: [PATCH] arm64: dts: provide a disabled Tetris CCCI metadata consumer
+
+The metadata-only U-Boot profile publishes owned AP tags only to an existing,
+sole disabled mediatek,mddriver consumer. The Tetris base DT currently lacks
+one, so the real final publisher refuses without publishing a descriptor.
+
+Retain the compatible, AP platform and MD generation from Nothing B4.1
+device modules ee2be53cb75670b548948636a0db1d1ff112bf12, mt6878.dts.
+This is only a disabled metadata anchor: it has no registers, interrupts,
+power/clock consumers or inherited CCCI descriptor. Do not enable it as an
+operational modem; those physical resources still need their own integration.
+Native display and diagnostic variants inherit the same single anchor.
+
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -10,6 +10,14 @@
+ / {
+ 	model = "Nothing CMF Phone 1";
+ 	chassis-type = "handset";
+ 	compatible = "nothing,tetris", "mediatek,mt6878";
++
++	mddriver: modem {
++		compatible = "mediatek,mddriver";
++		mediatek,ap-plat-info = <6878>;
++		mediatek,md-generation = <6299>;
++		status = "disabled";
++	};
++
+ 
+ 	#address-cells = <2>;
