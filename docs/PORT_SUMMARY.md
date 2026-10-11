@@ -17,9 +17,9 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `fdb0ee2994c62b6220e35dd1f75bbeee6e7d6f3a`, first successful BROM check on user-requested warm restart |
+| Running U-Boot / `lk_a` | Experimental `fdb0ee2994c62b6220e35dd1f75bbeee6e7d6f3a`, BROM verified on warm restart and one subsequent cold startup |
 | Installed loader image SHA256 | `3b716e6665ed7752865058d61b5c5c8e3a365278ac88b40799d26fd30cf6f189` |
-| Current sensor state | Failed after warm restart: SCP inherited TCM `-EBUSY`; prior cold-start functionality is not warm-boot support |
+| Current sensor state | Automatically active after cold startup: SCP error0, firmware-ready, 24 entries/mask31; warm inherited-TCM `-EBUSY` remains unresolved |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -155,10 +155,26 @@ pre/post policy checks passed. Authentication/placement, SMEM, EMI/remaps,
 power/bus release and BROM verification are now physically observed on this
 unit. No validation bypass, modem retry or Linux CCCI descriptor was added.
 USB/SSH recovered and the first report/journal are retained without kernel
-Oops/BUG/SError/panic/WARNING. Sensors remain failed because SCP still rejects
-inherited warm TCM. A USB-disconnected physical cold start is requested for
-sensor recovery and joint validation. SIM/calls/SMS/data remain unavailable;
-Linux CCCI runtime and its clean-install handoff are the next boundary.
+Oops/BUG/SError/panic/WARNING. Sensors failed on that warm boot because SCP
+rejects inherited TCM; this limitation remains unresolved.
+
+The subsequent user-reported USB-disconnected cold startup has a new boot ID
+`afa7b585-30cb-40c3-83a9-7fbdc5a0569f`, uptime220.97 seconds and the same
+`fdb0ee2994c6` loader. BROM again completes with loader/report-fetch error0,
+loaded stage11/hardware stage15 COMPLETE, board stage16/status1, all four
+secure flags1 and EMI slot43 VERIFIED/step20/error0. SCP preparation/error0
+and secure state3/error0 coexist with firmware-ready, 24 sensor entries and
+mask31. Sensor, SensorProxy and SSH services are active automatically, no
+system units are failed, and `usb0` is UP. Visual behavior on this particular
+boot is still pending confirmation. First report and complete kernel journal
+are saved; no kernel Oops/BUG/SError/panic/WARNING was found. Existing null
+SCP-resource diagnostics, unchecked-filesystem mount warning and Wi-Fi/SCP
+notification timeouts are not resolved by this change. No runtime hardware
+writes, partition writes or modem retries were performed during readback.
+This is one joint cold observation, not completed lifecycle/variant support.
+SIM/calls/SMS/data remain unavailable; Linux CCCI runtime and its clean-install
+handoff are the next boundary. No render node, video/media capture or GNSS
+device is present, so GPU, cameras and GPS are not promoted to working.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
@@ -270,7 +286,7 @@ lifecycle or SKU. Earlier subsystem evidence is identified explicitly.
 | Haptics / torch | Partial | Earlier bounded physical effects tested; lifecycle and camera strobe remain. |
 | Battery, charging, thermal | Partial | Telemetry and charging observations exist; classification, sustained safety and idle power remain. |
 | GNSS | Partial, transport only | No verified position fix or operational GeoClue navigation stack. |
-| SIM, calls, SMS, mobile data | Broken | Modem BROM now verified on one warm boot; runtime CCCI, SIM/registration and real calls are still unavailable. Proximity testing used a local dummy call, not GSM. |
+| SIM, calls, SMS, mobile data | Broken | Modem BROM verified on one warm and one subsequent cold boot, together with automatic cold sensor startup; runtime CCCI, SIM/registration and real calls are still unavailable. Proximity testing used a local dummy call, not GSM. |
 | GPU acceleration | Broken | No render node or accelerated compositor. |
 | Cameras | Broken | No working preview/capture or video/media node. |
 | microSD | Partial | Controller probes; card insertion and real I/O remain untested. |
