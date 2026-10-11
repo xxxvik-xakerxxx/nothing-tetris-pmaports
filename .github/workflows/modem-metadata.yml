@@ -81,8 +81,12 @@ jobs:
     steps:
       - name: Install package-matching kernel compiler
         run: |
-          apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
+          apk add --no-cache bash build-base bc bison flex \
             openssl-dev perl python3 patch linux-headers git dtc curl kmod
+          apk add --no-cache \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
+            clang21=21.1.8-r3 llvm21=21.1.8-r1 lld21=21.1.8-r1
       - uses: actions/checkout@v6
       - name: Fetch exact bootloader planner
         run: |

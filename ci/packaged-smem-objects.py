@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compile the packaged AP-only SMEM integration using existing CI kernel staging."""
 import argparse
+import difflib
 import hashlib
 import importlib.util
 import json
@@ -74,6 +75,11 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
     make = ['make', '-j2', '-C', kernel, 'O=' + str(output), 'ARCH=arm64', 'LLVM=1']
     staging.run([*make, 'olddefconfig', 'modules_prepare'])
     if (output / '.config').read_bytes() != config:
+        difference = ''.join(difflib.unified_diff(config.decode().splitlines(True),
+            (output / '.config').read_text().splitlines(True), fromfile='r181.full-build.config',
+            tofile='prepared.config'))
+        (ROOT / 'out/kernel-object-smoke/r181-config.diff').write_text(difference)
+        print(difference, flush=True)
         raise ValueError('prepared config differs from the installed full-build config')
     if (output / 'include/config/kernel.release').read_text().strip() != identity['kernel_release']:
         raise ValueError('prepared kernel release differs from full-build evidence')
