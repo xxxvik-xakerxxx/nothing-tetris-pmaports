@@ -1,0 +1,55 @@
+Subject: [PATCH] gps: bound data-link reads and honor O_NONBLOCK
+
+Base: NothingOSS/android_kernel_modules_nothing_mt6878
+Commit: e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+
+Bound size_t count to the actual device input array before passing it to
+the unsigned-int DMA reader. Return zero without touching the link for
+an empty read. Use zero timeout for O_NONBLOCK, and return -EAGAIN on
+GDL_FAIL_NODATA before either IRQ or polling waits.
+
+Keep the blocking wrapper and existing error/data paths. This does not
+implement finite IRQ timeouts or serialize concurrent device readers.
+
+diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
+--- a/connectivity/gps/data_link/linux/gps_each_device.c
++++ b/connectivity/gps/data_link/linux/gps_each_device.c
+@@ -30,7 +30,12 @@
+ 	enum gps_dl_link_id_enum link_id;
+ 	bool print_log = false;
+ 
++	if (!count)
++		return 0;
++
+ 	dev = (struct gps_each_device *)filp->private_data;
++	if (count > sizeof(dev->i_buf))
++		count = sizeof(dev->i_buf);
+ 	pid = current->pid;
+ 	link_id = (enum gps_dl_link_id_enum)dev->index;
+ 
+@@ -43,7 +48,11 @@
+ 	}
+ 	gps_each_link_rec_read(link_id, pid, count, DRW_ENTER);
+ 
+-	retlen = gps_each_link_read(link_id, &dev->i_buf[0], count);
++	if (filp->f_flags & O_NONBLOCK)
++		retlen = gps_each_link_read_with_timeout(link_id,
++			&dev->i_buf[0], count, 0, NULL);
++	else
++		retlen = gps_each_link_read(link_id, &dev->i_buf[0], count);
+ 	if (retlen > 0) {
+ 		retval = copy_to_user(buf, &dev->i_buf[0], retlen);
+ 		if (retval != 0) {
+diff --git a/connectivity/gps/data_link/gps_each_link.c b/connectivity/gps/data_link/gps_each_link.c
+--- a/connectivity/gps/data_link/gps_each_link.c
++++ b/connectivity/gps/data_link/gps_each_link.c
+@@ -693,6 +693,9 @@
+ 
+ 			return data_len;
+ 		} else if (gdl_ret == GDL_FAIL_NODATA) {
++			if (timeout_usec == 0)
++				return -EAGAIN;
++
+ 			GDL_LOGXD_DRW(link_id, "gdl_dma_buf_get no data and wait");
+ #if (GPS_DL_NO_USE_IRQ == 1)
+ 			gdl_ret = gps_dl_hal_wait_and_handle_until_usrt_has_data(

@@ -1,6 +1,6 @@
 # Installation and FAQ
 
-Updated: 2026-10-09. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
+Updated: 2026-10-11. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
 This is an experimental Linux port, not an Android ROM or a daily-driver release.
 
 > **Use at your own risk.** This project is provided as-is, without warranty.
@@ -87,18 +87,23 @@ The check needs `sha256sum` and `file` on the host. Also verify the separate
 U-Boot artifact against its own manifest and checksums. A matching checksum
 does not establish hardware/firmware compatibility.
 
-The latest installed image is r173 from
-[CI 37797116235](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37797116235),
-source `37dc3d03734c2919b8d18c75ac1cf37b94b18694`.
+The latest installed image is r179 from
+[CI 37949322510](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/37949322510),
+source `0b904d61731624418b70201e4d615c945eacbb4d`.
 Its archive, image hashes and complete sparse structure were verified before
 a clean installation. First boot, USB/SSH, root expansion and installed FIT
-verification passed. One subsequent automatic sensor cold start after opt-in
-passed with real light updates and another USB transfer. The user confirmed
-normal display, touch, desktop rotation and automatic brightness after that
-cold boot. Lifecycle and other-unit testing remain pending;
+verification passed. Subsequent cold starts with the matching experimental
+SCP-enabled loader restored sensors automatically after opt-in. The user
+confirmed normal display, touch, desktop rotation and automatic brightness,
+including the latest cold start with U-Boot `cdd806438d73`.
+Warm reboot still has a known SCP inherited-state failure; full lifecycle
+and other-unit testing remain pending;
 see the current [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r179).
 Sensors are opt-in on a fresh image and require the matching SCP-enabled
 loader; the ordinary U-Boot artifact does not enable that profile.
+The r181 combined candidate is awaiting corrected DT validation and is not an installed or
+hardware-validated release. Its modem metadata changes do not establish SIM,
+calls, GPS, GPU acceleration or camera support.
 
 ## U-Boot prerequisite
 

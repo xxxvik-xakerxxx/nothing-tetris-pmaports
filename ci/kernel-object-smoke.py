@@ -33,6 +33,10 @@ OBJECTS = (
     "drivers/pmdomain/mediatek/mt6878-gpueb-power.o",
     "drivers/misc/gpueb-flat-analysis.o",
 )
+DTBS = tuple("mediatek/" + name + ".dtb" for name in (
+    "mt6878-nothing-tetris-native", "mt6878-nothing-tetris-vgpu-observe",
+    "mt6878-nothing-tetris-modem-preflight-off", "mt6878-nothing-tetris-modem-preflight",
+))
 STRICT_PATCHES = frozenset((
     "0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch",
     "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
@@ -190,7 +194,23 @@ def plan(package):
             "archive_sha512": hashes[archive], "patches": patches,
             "source_sha512": {name: hashes[name] for name in [CONFIG, *patches]},
             "application": "package default for historical stack; fuzz=0 for new backends",
-            "objects": OBJECTS, "module_options": MODULES}
+            "objects": OBJECTS, "module_options": MODULES, "dtbs": DTBS}
+
+
+def compile_dtbs(make, output, report):
+    # Compile the real packaged trees before the expensive kernel image build.
+    run([*make, *DTBS])
+    identities = {}
+    destination = report / "dtbs"
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in DTBS:
+        dtb = output / "arch/arm64/boot/dts" / name
+        if not dtb.is_file() or not dtb.stat().st_size:
+            raise ValueError(f"missing compiled DTB: {name}")
+        run(["python3", "ci/check-ccci-metadata-dt.py", dtb])
+        identities[name] = hashlib.sha256(dtb.read_bytes()).hexdigest()
+        shutil.copyfile(dtb, destination / Path(name).name)
+    return identities
 
 
 def run(command):
@@ -361,6 +381,8 @@ def main():
         camera_dir = Path(next(iter(CAMERA_SOURCES.values()))).parent
         make.append(f"KCFLAGS=-I{kernel / camera_dir}")
     run([*make, "olddefconfig"])
+    manifest["dtb_sha256"] = compile_dtbs(make, output, report)
+    manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copyfile(output / ".config", report / "isolated.config")
     config = (output / ".config").read_text().splitlines()
     for symbol in MODULES:

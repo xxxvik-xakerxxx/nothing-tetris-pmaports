@@ -71,6 +71,29 @@ class SmokeInputs(unittest.TestCase):
         plan = smoke.plan(Path(__file__).resolve().parents[1] / smoke.PACKAGE)
         self.assertGreater(len(plan["patches"]), 100)
         self.assertEqual(len(plan["objects"]), 6)
+        self.assertEqual(plan["dtbs"], smoke.DTBS)
+
+    def test_real_dtbs_compiled_validated_and_retained(self):
+        output = self.package / "objects"
+        report = self.package / "evidence"
+        for name in smoke.DTBS:
+            dtb = output / "arch/arm64/boot/dts" / name
+            dtb.parent.mkdir(parents=True, exist_ok=True)
+            dtb.write_bytes(name.encode())
+        make = ["make", "ARCH=arm64", "LLVM=1"]
+        with patch.object(smoke, "run") as run:
+            hashes = smoke.compile_dtbs(make, output, report)
+        self.assertEqual(run.call_args_list[0].args[0], [*make, *smoke.DTBS])
+        self.assertEqual(run.call_count, 1 + len(smoke.DTBS))
+        self.assertEqual(set(hashes), set(smoke.DTBS))
+        for name in smoke.DTBS:
+            self.assertEqual(hashes[name], hashlib.sha256(name.encode()).hexdigest())
+            self.assertEqual((report / "dtbs" / Path(name).name).read_bytes(), name.encode())
+
+    def test_missing_dtb_stops_smoke(self):
+        with patch.object(smoke, "run"):
+            with self.assertRaisesRegex(ValueError, "missing compiled DTB"):
+                smoke.compile_dtbs(["make"], self.package, self.package / "evidence")
 
     def test_research_requests_every_cam_main_dependency(self):
         command = smoke.config_options(Path("kernel"), Path("objects"), True)

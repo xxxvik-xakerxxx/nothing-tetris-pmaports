@@ -175,6 +175,7 @@ source="
 	1005-vendor-gnss-propagate-clock-read-error.patch.vendor
 	1006-vendor-gnss-readonly-lna-metadata.patch.vendor
 	1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor
+	1008-vendor-gnss-bound-data-link-read.patch.vendor
 	1101-vendor-audio-optional-calibration.patch.vendor
 	1102-vendor-audio-linux-6.18-api.patch.vendor
 	1103-vendor-audio-mt6685-clock.patch.vendor
@@ -283,6 +284,8 @@ prepare() {
 		< "$srcdir"/1006-vendor-gnss-readonly-lna-metadata.patch.vendor
 	patch --fuzz=0 -p1 -d "$_connmods_dir" \
 		< "$srcdir"/1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor
+	patch --fuzz=0 -p1 -d "$_connmods_dir" \
+		< "$srcdir"/1008-vendor-gnss-bound-data-link-read.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
 		< "$srcdir"/1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	patch -p1 -d "$_devmods_dir" \
@@ -1103,6 +1106,7 @@ package() {
 }
 
 sha512sums="
+49072a5337a8bff2112d73f5da966a7ce07abee2af26c2cd2acb5c581d50c5d1c6ebb758f28d99006f51042fdd294d6985f4235aab8e81349abe543493007842  1008-vendor-gnss-bound-data-link-read.patch.vendor
 13c58ac33cdfb23d2fc4c07c5ae3b28814ec0ddb31c48927c7756e8e4c1d22bbae64ba8233a62299f8563b2c48bb1c8d88d40953d9b544fe08c3fad383f419c5  0120-misc-tetris-gpueb-authenticated-ram-analysis.patch
 57fb64f85444f1b07dafb4c2c25fe36aa1c20753ba2c09678c036fee2ea48bea4cec082e325f180ecdcb60d6fe597598219a29ee5e1c022a83e44f450816c28f  1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor
 ba09a21ec84dcda21457e2ec6dc4466c3823fa7f61d7c6e589fe882770f646db0c4d92259b649ecad6727de0e2778e2ac115eb73ccdce08ea5848d69aedfd714  0117-soc-mediatek-mt6878-ccci-first-start-backend.patch
@@ -1116,7 +1120,7 @@ fe0a04fbeb7cd6172c4897f0836345218d6642afcae30e95309d02f6e7599a2ace1127d7eb8f94dc
 0eb90a16f88a9d3d85233ddb7a0eac758c4db021a27be1ed44acb8990a7930720be2ab5d6dfeb7874fef27f025646e1f41e4d457e34b2f0e2cc059ba7f898c67  0112-media-i2c-imx882-v4l2-controls.patch
 6bc374697a03337674951fc8a007f2b0fa692bb88a5e32035f6e21bc1a86f7f120a201ac8553a928ca79c5c7895b12b7a58a8407a05685fb115f561ea1d89452  0173-vendor-ccci-smem-map-span.patch.vendor
 4e3fc106dc50099c6b220f32dae7611e3c69fd4cdcd3507794bd389ff1d24de4df7a34e3054e8598373892a3ac48c09ff16e31894ccde00967b41a392ace7e2d  ccci-owned-metadata.overlay
-2e99b6d677bf6d81cfc9cec6563c720806d80c13e1dec08f0c72795cb57d2dba09677178a941aec662855ae9b38beb05c586611b831fdd2d658ef3fc0444aee4  0174-arm64-dts-mediatek-tetris-disabled-ccci-handoff.patch
+0ff1cd7da57e4cead9a15f76d715f97540f4318e89c6e1fc9948ccf2653c13b456b8cc4ffebb5f398bdc1cef8810df766a82b608a1cc18c97ccd9fba26fecea2  0174-arm64-dts-mediatek-tetris-disabled-ccci-handoff.patch
 4fe03ca717a5d781350d17a5aaa5dd0f4f6815a635b9d46791a9a7bed6e2b7c2a42f3f80d9dbde43958df52a657683779ee98fdcd5b10e94dd28e0956c70453a  0109-vendor-eccci-cldma-timer-api.patch.vendor
 05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch
 a28dd67edc4d73ed7cd486d2bad0ef5c595779510b2417935a0d33a207818ce77b7058e02c0c666bc87a7be97bb74d4c1d2740ccf7d6e2fe1da9fd8434974849  0109-regulator-mt6315-stop-mode-change-on-read-error.patch

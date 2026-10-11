@@ -298,6 +298,10 @@ jobs:
           sh patches/gnss-navigation-audit/run_lna_query_plan_ci.sh
       - name: Validate GNSS navigation boundary
         run: sh scripts/check-gnss-navigation-boundary.sh
+      - name: Validate real GPS data-link read semantics
+        run: |
+          TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \
+            python3 -B patches/gnss/read-boundary/run.py --ci-native
       - name: Validate GNSS host callback and borrowed-output contracts
         run: python3 scripts/check-gnss-host-boundary.py
       - name: Validate typed GNSS startup adapter
@@ -476,7 +480,7 @@ jobs:
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
-            openssl-dev perl python3 patch linux-headers git
+            openssl-dev perl python3 patch linux-headers git dtc
       - name: Compile isolated AArch64 candidate objects
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
