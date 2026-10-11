@@ -1,10 +1,10 @@
 {
-  "status": "wired into r181 candidate; native CI and hardware untested",
+  "status": "updated 1008 rollback candidate; parent APKBUILD checksum update and new native CI pending; hardware untested",
   "repository_head_at_staging": "2e983241000633a6e572f0e1558bc36ebfdce2b8",
   "connectivity_repository": "NothingOSS/android_kernel_modules_nothing_mt6878",
   "connectivity_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "patch": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/1008-vendor-gnss-bound-data-link-read.patch.vendor",
-  "patch_sha512": "49072a5337a8bff2112d73f5da966a7ce07abee2af26c2cd2acb5c581d50c5d1c6ebb758f28d99006f51042fdd294d6985f4235aab8e81349abe543493007842",
+  "patch_sha512": "a6e06d8bc7401ca0a442048c9714950dc4792b4f71f88fb43741ff97b7354067d9fe42f83be8552b5f1e348e36fc1432065bc833840e1f3f49f66bf6f0fde8ae",
   "write_scope": ["new patches/gnss/read-boundary/ files", "new package 1008 patch"],
   "ci_vendor_tree": "TETRIS_MODULES_TREE, typically upstream/connectivity-modules; --vendor PATH overrides",
   "native_validation": "not run locally; --ci-native requires CI=true and GITHUB_ACTIONS=true",
@@ -12,7 +12,8 @@
     "zero-length device read returns 0 before private_data access or logging",
     "count is clamped to sizeof(dev->i_buf) before size_t-to-unsigned-int conversion",
     "O_NONBLOCK selects gps_each_link_read_with_timeout with timeout_usec=0 and NULL nodata output",
-    "GDL_FAIL_NODATA with timeout_usec=0 returns -EAGAIN before either wait branch"
+    "GDL_FAIL_NODATA with timeout_usec=0 returns -EAGAIN before either wait branch",
+    "failed entry-to-buffer copy calls the existing locked gdl_dma_buf_set_data_entry(p_dma, NULL) to release reader ownership without consuming the entry, then returns the first gdl_ret"
   ],
   "preserved_contracts": [
     "blocking read uses gps_each_link_read and GPS_DL_RW_NO_TIMEOUT (-1)",
@@ -23,7 +24,8 @@
   "residual_findings": [
     "shared i_buf is not serialized through copy_to_user; duplicated descriptors/threads can race after DMA reader_working clears",
     "GDL_FAIL_BUSY still maps to -EFAULT, including on nonblocking reads",
-    "DMA entries exceeding requested length return NOSPACE, mapped to -EFAULT, and leave reader_working true in pinned code",
+    "DMA entries exceeding requested length still return NOSPACE, mapped to -EFAULT, but rollback now permits a retry with a sufficiently large buffer; device reads remain bounded to 2048",
+    "NULL rollback uses the existing boolean reader ownership without a session token; concurrent reset/new-owner races remain part of the existing lifecycle contract",
     "copy_to_user failure consumes the DMA entry before returning -EFAULT",
     "O_NONBLOCK now avoids no-data waits, but existing logging, locks and successful pending-RX handling are not a wall-clock deadline"
   ],
@@ -32,7 +34,7 @@
     "CI passes --vendor or TETRIS_MODULES_TREE pointing to pinned upstream/connectivity-modules",
     "CI runs static checks including mandatory GNU patch --fuzz=0 on raw and 1001-1007-stacked blobs",
     "CI compiles/runs extracted real functions with ASan/UBSan for NO_USE_IRQ=0 and NO_USE_IRQ=1, including negative controls",
-    "APKBUILD lists 1008 and applies it after 1007 to _connmods_dir with fuzz=0; checksum is pinned",
+    "APKBUILD lists 1008 and applies it after 1007 to _connmods_dir with fuzz=0; parent must update its checksum to this revised same-number patch digest",
     "after DT/native gates pass, main schedules the full image at the same SHA; gps_drv_dl_v051 uses the package kernel config/compiler",
     "hardware gate requires authorized clean CI artifact testing with USB/SSH baseline, no module reloads, lifecycle and SKU evidence"
   ]

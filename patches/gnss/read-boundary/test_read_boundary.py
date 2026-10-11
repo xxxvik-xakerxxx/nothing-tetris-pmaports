@@ -27,7 +27,7 @@ def run(argv, cwd):
 
 
 def populate(directory, stack=False):
-    paths = {g.DEVICE, g.LINK}
+    paths = set(g.SOURCES)
     added = set()
     if stack:
         for patch in STACK:
@@ -55,7 +55,7 @@ def populate(directory, stack=False):
 class ReadBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.old = {p: g.source(p, MODULES) for p in (g.DEVICE, g.LINK)}
+        cls.old = {p: g.source(p, MODULES) for p in g.SOURCES}
         cls.fixed = {p: g.transform(p, text) for p, text in cls.old.items()}
 
     def test_01_generated_patch_is_current(self):
@@ -106,9 +106,8 @@ class ReadBoundaryTests(unittest.TestCase):
                      "gps_dl_hal_wait_and_handle_until_usrt_has_nodata_or_rx_dma_done"):
             self.assertLess(guard, read.index(wait, branch))
 
-    def test_06_only_two_function_bodies_change(self):
-        for path, name in ((g.DEVICE, "gps_each_device_read"),
-                           (g.LINK, "gps_each_link_read_with_timeout")):
+    def test_06_only_three_function_bodies_change(self):
+        for path, name in g.FUNCTIONS.items():
             old, new = self.old[path], self.fixed[path]
             before, after = g.function_span(old, name), g.function_span(new, name)
             self.assertEqual(old[:before.start], new[:after.start])
@@ -121,9 +120,9 @@ class ReadBoundaryTests(unittest.TestCase):
 
     def test_07_hunk_counts_paths_and_context(self):
         text = g.PATCH.read_text()
-        self.assertEqual(re.findall(r"^--- a/(.+)$", text, re.M), [g.DEVICE, g.LINK])
+        self.assertEqual(re.findall(r"^--- a/(.+)$", text, re.M), list(g.SOURCES))
         hunks = re.findall(r"^@@ -(\d+),(\d+) \+(\d+),(\d+) @@[^\n]*\n(.*?)(?=^@@|^diff --git|\Z)", text, re.M | re.S)
-        self.assertEqual(len(hunks), 3)
+        self.assertEqual(len(hunks), 4)
         for _, old_count, _, new_count, body in hunks:
             lines = body.splitlines()
             self.assertTrue(all(line and line[0] in " +-" for line in lines))
@@ -140,7 +139,7 @@ class ReadBoundaryTests(unittest.TestCase):
             for path, before in original.items():
                 applied = (Path(directory) / path).read_bytes()
                 self.assertEqual(applied, g.transform(path, before.decode()).encode())
-                name = "gps_each_device_read" if path == g.DEVICE else "gps_each_link_read_with_timeout"
+                name = g.FUNCTIONS[path]
                 # Prior package patches must not make the compiled fixture a
                 # different implementation from the staged production body.
                 self.assertEqual(g.function_span(applied.decode(), name).text(applied.decode()),
@@ -236,6 +235,37 @@ class ReadBoundaryTests(unittest.TestCase):
         kbuild = g.source(g.BASE + "plat/v051/Kbuild", MODULES)
         for obj in ("linux/gps_each_device.o", "gps_each_link.o", "lib/gps_dl_dma_buf.o", "link/gps_dl_link_sync.o"):
             self.assertIn(obj, kbuild)
+
+    def test_17_copy_failure_uses_locked_nonconsuming_rollback(self):
+        text = self.fixed[g.DMA]
+        get = g.function_span(text, "gdl_dma_buf_get").text(text)
+        copy = get.index("gdl_ret = gdl_dma_buf_entry_to_buf(")
+        rollback = get.index("gdl_dma_buf_set_data_entry(p_dma, NULL);", copy)
+        self.assertEqual(get.count("gdl_dma_buf_set_data_entry(p_dma, NULL)"), 1)
+        self.assertLess(get.index("gdl_dma_buf_get_data_entry("), copy)
+        self.assertIn("\t\tgdl_dma_buf_set_data_entry(p_dma, NULL);\n\t\treturn gdl_ret;\n\t}", get)
+        self.assertNotIn("gdl_ret =", get[rollback:get.index("return gdl_ret;", rollback)])
+        helper = g.function_span(text, "gdl_dma_buf_set_data_entry").text(text)
+        self.assertIn("gps_dl_dma_buf_lock_take(p_dma, GPS_DL_SPINLOCK_FOR_DMA_BUF);", helper)
+        self.assertIn("ret = gdl_dma_buf_set_data_entry_inner(p_dma, p_entry);", helper)
+        self.assertIn("gps_dl_dma_buf_lock_give(p_dma, GPS_DL_SPINLOCK_FOR_DMA_BUF);", helper)
+        inner = g.function_span(text, "gdl_dma_buf_set_data_entry_inner").text(text)
+        branch = inner.index("if (NULL == p_entry) {")
+        end = g.balanced_end(g.mask_c(inner), inner.index("{", branch))
+        self.assertEqual(inner[branch:end], "if (NULL == p_entry) {\n"
+                         "\t\tp_dma->reader_working = false;\n\t\treturn GDL_OKAY;\n\t}")
+
+    def test_18_rollback_mutation_covers_real_dma_get(self):
+        fixture = g.fixture(MODULES)
+        without = fixture.replace("\t\tgdl_dma_buf_set_data_entry(p_dma, NULL);\n", "", 1)
+        self.assertNotEqual(fixture, without)
+        before = g.function_span(fixture, "gdl_dma_buf_get").text(fixture)
+        after = g.function_span(without, "gdl_dma_buf_get").text(without)
+        self.assertEqual(after, before.replace("\t\tgdl_dma_buf_set_data_entry(p_dma, NULL);\n", "", 1))
+        for name in ("gdl_dma_buf_get_data_entry", "gdl_dma_buf_set_data_entry",
+                     "gdl_dma_buf_entry_to_buf"):
+            self.assertEqual(g.function_span(fixture, name).text(fixture),
+                             g.function_span(without, name).text(without))
 
 
 if __name__ == "__main__":

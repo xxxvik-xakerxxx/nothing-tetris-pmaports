@@ -88,6 +88,9 @@ four real packaged DTBs before the full image build.
 Source/patch validation, isolated ARM64 objects, the sealed GNSS loader and
 the Bionic adapter passed the failed run; the corrected DTBs and full
 kernel/package/image remain pending new CI.
+The first short retry stopped on an obsolete CI-integration template after the
+`dtc` dependency was added; that template is corrected without relaxing its
+forward/reverse or duplicate-helper checks.
 
 The candidate includes:
 
@@ -101,6 +104,8 @@ The candidate includes:
 - SensorProxy r2 with standard systemd/D-Bus activation.
 - The real GPS data-link reader now bounds requests to its buffer, returns zero
   without channel access for an empty request and honors nonblocking empty reads.
+  Failed DMA copies release reader ownership without consuming the queued entry,
+  so a correctly sized later read can recover instead of returning permanent BUSY.
   Native fixtures cover both IRQ and polling branches; CI execution remains pending.
 
 Next physical boundary: verify the retained descriptor and 21-tag handoff on a

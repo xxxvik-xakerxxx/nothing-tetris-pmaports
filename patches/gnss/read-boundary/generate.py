@@ -23,6 +23,9 @@ DMA = BASE + "lib/gps_dl_dma_buf.c"
 DEVICE_H = BASE + "linux/inc/gps_each_device.h"
 DMA_H = BASE + "lib/inc/gps_dl_dma_buf.h"
 STATUS_H = BASE + "lib/inc/gps_dl_base.h"
+SOURCES = (DEVICE, LINK, DMA)
+FUNCTIONS = {DEVICE: "gps_each_device_read", LINK: "gps_each_link_read_with_timeout",
+             DMA: "gdl_dma_buf_get"}
 
 
 @dataclass(frozen=True)
@@ -162,6 +165,29 @@ def transform(path, text):
             '\t\t\tGDL_LOGXD_DRW(link_id, "gdl_dma_buf_get no data and wait");', nodata)
         return edit_spans(text, [(Span(log.start, log.start),
             "\t\t\tif (timeout_usec == 0)\n\t\t\t\treturn -EAGAIN;\n\n")])
+    if path == DMA:
+        read = function_span(text, "gdl_dma_buf_get")
+        if "gdl_dma_buf_set_data_entry(p_dma, NULL)" in read.text(text):
+            raise ValueError("DMA get already patched or drifted")
+        copy = unique_span(text,
+            "\tgdl_ret = gdl_dma_buf_entry_to_buf(p_entry, p_buf, buf_len, p_data_len);", read)
+        branch = unique_span(text, "\tif (GDL_OKAY != gdl_ret) {",
+                             Span(copy.end, read.end))
+        body = text.index("{", branch.start)
+        failure = Span(branch.start, balanced_end(mask_c(text), body))
+        expected = ("\tif (GDL_OKAY != gdl_ret) {\n"
+            "\t\t/* TODO: 210819: handling gdl_ret case to avoid FAIL_BUSY next time\n"
+            "\t\t * the cause is th buf_len < data_len\n\t\t *\n"
+            "\t\t * directly set p_entry->read_index = p_entry->write_index may be not a good solution,\n"
+            "\t\t * due to it drops the data\n\t\t *\n\t\t */\n"
+            "\t\treturn gdl_ret;\n\t}")
+        if failure.text(text) != expected:
+            raise ValueError("DMA copy failure branch drifted")
+        return edit_spans(text, [(failure,
+            "\tif (GDL_OKAY != gdl_ret) {\n"
+            "\t\t/* Release the reader without consuming the failed entry. */\n"
+            "\t\tgdl_dma_buf_set_data_entry(p_dma, NULL);\n"
+            "\t\treturn gdl_ret;\n\t}")])
     raise ValueError(f"out-of-scope production source: {path}")
 
 
@@ -175,7 +201,11 @@ the unsigned-int DMA reader. Return zero without touching the link for
 an empty read. Use zero timeout for O_NONBLOCK, and return -EAGAIN on
 GDL_FAIL_NODATA before either IRQ or polling waits.
 
-Keep the blocking wrapper and existing error/data paths. This does not
+Release acquired DMA reader ownership if entry-to-buffer copy fails, using
+the existing locked NULL completion API without consuming queued data.
+Return the first copy error even if cleanup encounters changed ownership.
+
+Keep the blocking wrapper and existing error mappings. This does not
 implement finite IRQ timeouts or serialize concurrent device readers.
 
 """
@@ -183,7 +213,7 @@ implement finite IRQ timeouts or serialize concurrent device readers.
 
 def generate(modules=MODULES):
     chunks = [HEADER]
-    for path in (DEVICE, LINK):
+    for path in SOURCES:
         original = source(path, modules)
         fixed = transform(path, original)
         chunks.append(f"diff --git a/{path} b/{path}\n")
@@ -203,7 +233,7 @@ def fixture(modules=MODULES, originals=False):
         (LINK, ("gps_each_link_read_with_timeout", "gps_each_link_read")),
         (DEVICE, ("gps_each_device_read",))):
         text = source(path, modules)
-        if path in (DEVICE, LINK) and not originals:
+        if path in SOURCES and not originals:
             text = transform(path, text)
         for name in names:
             span = function_span(text, name)

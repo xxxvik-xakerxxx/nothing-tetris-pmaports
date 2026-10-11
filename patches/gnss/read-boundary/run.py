@@ -45,6 +45,8 @@ def main():
         "without-nonblock": fixed.replace("filp->f_flags & O_NONBLOCK", "0", 1),
         "without-zero-timeout": fixed.replace(
             "\t\t\tif (timeout_usec == 0)\n\t\t\t\treturn -EAGAIN;\n\n", "", 1),
+        "without-rollback": fixed.replace(
+            "\t\tgdl_dma_buf_set_data_entry(p_dma, NULL);\n", "", 1),
     }
     if any(text == fixed for text in mutations.values()):
         raise SystemExit("native mutation did not change the production fixture")

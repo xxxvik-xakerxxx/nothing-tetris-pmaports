@@ -53,6 +53,7 @@ static unsigned int gets, records, copies, irq_waits, poll_first, poll_second;
 static unsigned int lock_depth, dma_locks, events, no_data_retries;
 static unsigned int copy_residual;
 static bool invalid_link;
+static bool invalidate_reader_on_second_lock;
 static enum GDL_RET_STATUS wait_result, first_result, second_result;
 static unsigned int last_copy, last_enter;
 
@@ -85,6 +86,7 @@ static void reset_case(void)
     lock_depth = dma_locks = events = no_data_retries = 0;
     copy_residual = last_copy = last_enter = 0;
     invalid_link = false;
+    invalidate_reader_on_second_lock = false;
     wait_result = first_result = second_result = GDL_OKAY;
 }
 
@@ -97,9 +99,13 @@ static struct gps_each_link *gps_dl_link_get(enum gps_dl_link_id_enum id)
 
 static void gps_dl_dma_buf_lock_take(struct gps_dl_dma_buf *dma, int type)
 {
-    (void)dma; (void)type;
+    (void)type;
     assert(lock_depth++ == 0);
     dma_locks++;
+    /* Simulate ownership invalidation before locked rollback, without
+     * replacing the real completion API or its returned STATE_MISMATCH. */
+    if (invalidate_reader_on_second_lock && dma_locks == 2)
+        dma->reader_working = false;
 }
 
 static void gps_dl_dma_buf_lock_give(struct gps_dl_dma_buf *dma, int type)
@@ -282,20 +288,88 @@ int main(void)
     assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
     assert(copies == 1 && link_state.rx_dma_buf.read_index == 16);
 
-    /* Characterize the pre-existing short-buffer failure without hiding it. */
+    /* Failed short reads release ownership and preserve the queued entry. */
+    for (unsigned int flags = 0; flags < 2; flags++) {
+        for (unsigned int wrap = 0; wrap < 2; wrap++) {
+            struct gps_dl_dma_buf before;
+            unsigned int start = wrap ? sizeof(ring) - 7 : 20;
+            reset_case();
+            file.f_flags = flags ? O_NONBLOCK : 0;
+            queue_data(start, 16);
+            link_state.rx_dma_buf.has_pending_rx = true;
+            memcpy(&before, &link_state.rx_dma_buf, sizeof(before));
+            memset(out, 0xa5, sizeof(out));
+            assert(gps_each_device_read(&file, out, 1, NULL) == -EFAULT);
+            assert(!link_state.rx_dma_buf.reader_working && !copies && !lock_depth);
+            assert(dma_locks == 2 && !events && !irq_waits && !poll_first && !poll_second);
+            assert(memcmp(&before, &link_state.rx_dma_buf, sizeof(before)) == 0);
+            for (unsigned int i = 0; i < sizeof(out); i++)
+                assert(out[i] == 0xa5);
+            assert(gps_each_device_read(&file, out, 512, NULL) == 16);
+            check_payload(out, start, 16);
+            assert(!link_state.rx_dma_buf.reader_working && events == 1);
+            assert(link_state.rx_dma_buf.read_index == (start + 16) % sizeof(ring));
+        }
+    }
+    file.f_flags = O_NONBLOCK;
+
+    /* Preserve the copy error even when locked cleanup reports a mismatch. */
+    for (unsigned int invalidated = 0; invalidated < 2; invalidated++) {
+        struct gps_dl_dma_buf before;
+        unsigned int length = 99;
+        bool nodata = false;
+        reset_case();
+        queue_data(0, 16);
+        memcpy(&before, &link_state.rx_dma_buf, sizeof(before));
+        invalidate_reader_on_second_lock = invalidated;
+        assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, 1, &length, &nodata) == GDL_FAIL_NOSPACE);
+        assert(length == 0 && !nodata && dma_locks == 2 && !lock_depth);
+        assert(memcmp(&before, &link_state.rx_dma_buf, sizeof(before)) == 0);
+        invalidate_reader_on_second_lock = false;
+        assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, 512, &length, &nodata) == GDL_OKAY);
+        assert(length == 16 && nodata && !link_state.rx_dma_buf.reader_working);
+        check_payload(out, 0, 16);
+    }
+
+    /* Acquisition failures must not release a different reader's ownership. */
     reset_case();
-    queue_data(0, 16);
-    assert(gps_each_device_read(&file, out, 1, NULL) == -EFAULT);
-    assert(link_state.rx_dma_buf.reader_working && !copies && !lock_depth);
-    assert(gps_each_device_read(&file, out, 512, NULL) == -EFAULT);
+    link_state.rx_dma_buf.reader_working = true;
+    unsigned int length = 99;
+    assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, 512, &length, NULL) == GDL_FAIL_BUSY);
+    assert(link_state.rx_dma_buf.reader_working && dma_locks == 1 && length == 99);
+    reset_case();
+    assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, 512, &length, NULL) == GDL_FAIL_NODATA);
+    assert(!link_state.rx_dma_buf.reader_working && dma_locks == 1 && length == 99);
+    reset_case();
+    link_state.rx_dma_buf.write_index = 1;
+    assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, 512, &length, NULL) == GDL_FAIL_NOENTRY);
+    assert(!link_state.rx_dma_buf.reader_working && dma_locks == 1 && length == 99);
+    reset_case();
+    assert(gdl_dma_buf_get(&link_state.rx_dma_buf, NULL, 512, &length, NULL) == GDL_FAIL_ASSERT);
+    assert(!dma_locks && !link_state.rx_dma_buf.reader_working);
 
     /* Clamp must not permit oversized DMA entries to overwrite o_buf. */
     reset_case();
     queue_data(0, sizeof(dev.i_buf) + 1);
+    struct gps_dl_dma_buf oversized_before;
+    memcpy(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before));
     memset(dev.o_buf, 0x5a, sizeof(dev.o_buf));
     assert(gps_each_device_read(&file, out, SIZE_MAX, NULL) == -EFAULT);
+    assert(!link_state.rx_dma_buf.reader_working && dma_locks == 2 && !copies);
+    assert(memcmp(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before)) == 0);
     for (unsigned int i = 0; i < sizeof(dev.o_buf); i++)
         assert(dev.o_buf[i] == 0x5a);
+    /* Device reads remain clamped; a larger direct DMA buffer can recover. */
+    assert(gps_each_device_read(&file, out, SIZE_MAX, NULL) == -EFAULT);
+    assert(!link_state.rx_dma_buf.reader_working && dma_locks == 4);
+    assert(memcmp(&oversized_before, &link_state.rx_dma_buf, sizeof(oversized_before)) == 0);
+    memset(out, 0xa5, sizeof(out));
+    assert(gdl_dma_buf_get(&link_state.rx_dma_buf, out, sizeof(out), &length, NULL) == GDL_OKAY);
+    assert(length == sizeof(dev.i_buf) + 1 && !link_state.rx_dma_buf.reader_working);
+    assert(link_state.rx_dma_buf.read_index == length);
+    check_payload(out, 0, length);
+    for (unsigned int i = length; i < sizeof(out); i++)
+        assert(out[i] == 0xa5);
 
     /* Blocking retries and finite-timeout behavior retain the vendor contract. */
     reset_case();

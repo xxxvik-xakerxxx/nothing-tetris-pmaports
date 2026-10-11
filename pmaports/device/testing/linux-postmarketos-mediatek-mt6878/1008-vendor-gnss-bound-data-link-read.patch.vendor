@@ -8,7 +8,11 @@ the unsigned-int DMA reader. Return zero without touching the link for
 an empty read. Use zero timeout for O_NONBLOCK, and return -EAGAIN on
 GDL_FAIL_NODATA before either IRQ or polling waits.
 
-Keep the blocking wrapper and existing error/data paths. This does not
+Release acquired DMA reader ownership if entry-to-buffer copy fails, using
+the existing locked NULL completion API without consuming queued data.
+Return the first copy error even if cleanup encounters changed ownership.
+
+Keep the blocking wrapper and existing error mappings. This does not
 implement finite IRQ timeouts or serialize concurrent device readers.
 
 diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
@@ -53,3 +57,22 @@ diff --git a/connectivity/gps/data_link/gps_each_link.c b/connectivity/gps/data_
  			GDL_LOGXD_DRW(link_id, "gdl_dma_buf_get no data and wait");
  #if (GPS_DL_NO_USE_IRQ == 1)
  			gdl_ret = gps_dl_hal_wait_and_handle_until_usrt_has_data(
+diff --git a/connectivity/gps/data_link/lib/gps_dl_dma_buf.c b/connectivity/gps/data_link/lib/gps_dl_dma_buf.c
+--- a/connectivity/gps/data_link/lib/gps_dl_dma_buf.c
++++ b/connectivity/gps/data_link/lib/gps_dl_dma_buf.c
+@@ -285,13 +285,8 @@
+ 	gdl_ret = gdl_dma_buf_entry_to_buf(p_entry, p_buf, buf_len, p_data_len);
+ 
+ 	if (GDL_OKAY != gdl_ret) {
+-		/* TODO: 210819: handling gdl_ret case to avoid FAIL_BUSY next time
+-		 * the cause is th buf_len < data_len
+-		 *
+-		 * directly set p_entry->read_index = p_entry->write_index may be not a good solution,
+-		 * due to it drops the data
+-		 *
+-		 */
++		/* Release the reader without consuming the failed entry. */
++		gdl_dma_buf_set_data_entry(p_dma, NULL);
+ 		return gdl_ret;
+ 	}
+ 

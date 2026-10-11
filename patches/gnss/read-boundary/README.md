@@ -1,8 +1,9 @@
 # GPS data-link read boundary
 
 Production patch: `1008-vendor-gnss-bound-data-link-read.patch.vendor` in the
-kernel package. It changes two real functions, with 13 insertions and one
-deletion. APKBUILD applies it after 1007 with fuzz=0; required main CI validates it.
+kernel package. It changes three real functions: device read, link read and
+DMA get. APKBUILD applies 1008 after 1007 with fuzz=0; parent must update its
+checksum to the revised same-number patch before required CI validates it.
 `STAGING.json` records the pinned input, digest, limitations and integration
 requirements. Native compilation and physical behavior remain pending CI and
 hardware testing. It is included in the corrected r181 candidate.
@@ -24,8 +25,8 @@ Paths are relative to `connectivity/gps/data_link/`.
 | `link/gps_dl_link_sync.c:38` | IRQ path uses `wait_event_interruptible`, without a timeout argument. Signal maps to -ERESTARTSYS; unsupported wait maps to -EFAULT. Positive timeout values still do not establish an IRQ deadline. |
 | `lib/gps_dl_dma_buf.c:237` | Real DMA get acquires a data entry, copies it, consumes it and releases `reader_working` before the outer `copy_to_user`. |
 | `lib/gps_dl_dma_buf.c:313` and `:356` | Entry acquisition tests `reader_working` and emptiness under the DMA spinlock. Empty acquisition clears reader_working before NODATA. Busy maps to -EFAULT at the link layer. |
-| `lib/gps_dl_dma_buf.c:372` and `:405` | Entry completion updates ring ownership and clears reader_working under the DMA lock. This does not lock the shared device buffer until userspace copy finishes. |
-| `lib/gps_dl_dma_buf.c:593` | Copy helper rejects data_len > buf_len, handles contiguous/wrapped entries and returns bounded data_len on success. A failed copy exits `gdl_dma_buf_get` without rolling back reader_working. |
+| `lib/gps_dl_dma_buf.c:372` and `:405` | Entry completion updates ring ownership under the DMA lock. Its NULL branch at :380 only clears reader_working and returns, without ring/entry consumption. Failed DMA copies now call this API before returning their first error. This does not lock the shared device buffer until userspace copy finishes. |
+| `lib/gps_dl_dma_buf.c:593` | Copy helper rejects data_len > buf_len, handles contiguous/wrapped entries and returns bounded data_len on success. The new get failure branch releases acquired ownership with NULL rollback. |
 | `linux/gps_data_link_devices.c:221` | Normal Linux RX transfer limit is `GPS_LIBMNL_READ_MAX` (512), but this is not a proof that arbitrary small userspace reads work or every malformed/reset state is safe. |
 | `plat/v051/inc/gps_dl_config.h:48` | Production v051 uses IRQ (`GPS_DL_NO_USE_IRQ=0`). The fixture also covers the existing polling branch (`=1`). |
 | package `APKBUILD:31`, `:170`, `:271` | Pins this vendor commit, lists 1000-1007 and applies connectivity 1001-1007 to `_connmods_dir`; generator/application tests use that input and order. |
@@ -45,12 +46,31 @@ reader can overwrite shared i_buf after entry completion but before the first
 copy_to_user finishes. This patch preserves that behavior and adds no mutex.
 The disabled `gps_each_device_data_submit` block does not prove an active lock.
 
-Small requests below an entry's length retain -EFAULT and the existing stuck-busy
-failure. Oversized entries above 2048 now fail safely at the bound, with the same
-vendor error-state limitation. Failed userspace copies retain -EFAULT and may
-lose data already consumed. These are recorded residual issues, not claimed
-fixes. The native fixture characterizes them explicitly. No finite IRQ timeout,
-poll ABI, startup support or working GNSS navigation is claimed.
+Small requests below an entry's length still return -EFAULT, but now release the
+acquired reader and preserve all queued entry/ring data for a larger retry.
+Oversized entries above 2048 fail safely and release ownership too. Device reads
+remain clamped; such an entry needs a sufficiently large direct DMA API buffer
+to succeed. This fixes the actual stuck-busy failure without changing error
+mappings or inventing partial-entry reads. `gdl_dma_buf_get` retains its original
+copy error even if cleanup reports an ownership mismatch. Acquisition failures
+(BUSY, NODATA, NOENTRY, assertions) do not invoke rollback: BUSY must not release
+another reader's ownership. Failed userspace copies still retain -EFAULT and may
+lose data already consumed. No finite IRQ timeout, poll ABI, startup support or
+working GNSS navigation is claimed.
+
+Between successful acquisition and rollback, reader_working normally prevents
+another reader from acquiring the same DMA entry. The existing completion API
+takes the actual DMA spinlock, clears that flag for NULL, and returns before
+touching read_index, entry_r or entry contents. Thus a retry may acquire the same
+queued data after the lock is released. This adds no ring write, MMIO or wait.
+However, `gps_dma_buf_reset` at `lib/gps_dl_dma_buf.c:21` also clears reader_working
+under that lock; close/reset paths call it from `link/gps_dl_link_event_proc.c`.
+The boolean carries no ownership/session token across an unlocked copy. If a
+reset invalidates ownership and a new reader acquires before old completion,
+NULL rollback cannot distinguish that newer owner. Existing non-NULL completion
+has the same missing-generation boundary. This patch does not establish reset
+quiescence or resolve that lifecycle race. The fixture simulates invalidation
+without a new owner to check preservation of the first error, not race safety.
 
 ## Validation
 
@@ -69,7 +89,7 @@ from `git show PIN:path`. The pin must exist in its object database.
 CI entry point for main's `kernel_smoke_only` gate, from repository root:
 
 ```sh
-CI=true TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \
+CI=true GITHUB_ACTIONS=true TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \
   python3 -B patches/gnss/read-boundary/run.py --ci-native
 ```
 
@@ -102,9 +122,11 @@ array declaration. There is no hand-written implementation of the read logic.
 The patched extraction is checked against the staged patch by static generation
 and application tests before compilation. Both IRQ and polling variants test
 zero/one/bound/oversized/SIZE_MAX reads, empty/data/wrapped/pending-RX paths,
-invalid link, busy/no-entry, copy fault, short-buffer residual errors, blocking
+invalid link, busy/no-entry, copy fault, short-buffer and oversized-entry
+rollback/retry, first-error preservation despite cleanup mismatch, blocking
 retries, signals/unsupported IRQ waits and polling timeout errors. Negative
-controls use original source and separately remove each fix; each must fail.
+controls use original source and separately remove each fix, including rollback;
+each must fail in both IRQ and polling configurations.
 The mocks do not validate real kernel locking, hardware races or elapsed time.
 
 ## Next Integration Requirements
@@ -112,7 +134,8 @@ The mocks do not validate real kernel locking, hardware races or elapsed time.
 1. Main CI now runs the fixture with the pinned connectivity checkout before
    image construction. The early object job also compiles the four real DTBs.
 2. Require the real-source fixtures to pass both configurations and all negative
-   controls before the full image. Package application and checksum are wired;
+   controls before the full image. Package application is wired; parent must
+   update the checksum from STAGING.json for the revised 1008 before CI;
    no automatic GNSS activation is supplied by this fix.
 4. Once DT and native fixtures pass, main dispatches the full image at the same
    SHA. Compile the touched v051 driver with the package's kernel config/compiler,
