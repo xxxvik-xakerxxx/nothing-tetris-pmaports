@@ -69,6 +69,10 @@ jobs:
         run: python3 scripts/tests/test-modem-link.py
       - name: Test greeter rootfs gate
         run: python3 ci/test-greetd-rootfs.py
+      - name: Test offline image sealing and first-boot growth
+        run: |
+          sudo apt-get install --no-install-recommends -y e2fsprogs android-sdk-libsparse-utils util-linux
+          python3 ci/test-seal-install-images.py --native-fixtures
       - name: Fetch native display source
         run: |
           mkdir -p upstream/linux
@@ -644,10 +648,6 @@ jobs:
             install --password 147147 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
           mkdir -p /work/out
-          img2simg \
-            /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-root.img \
-            /work/out/nothing-tetris-root.sparse.img
-          cp -v /pmwork/work/chroot_native/home/pmos/rootfs/nothing-tetris-boot.img /work/out/
           cp -v /pmwork/work/chroot_native/mnt/rootfs_nothing-tetris/boot/boot_image.itb /work/out/
           rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
           check_exec() {
@@ -997,8 +997,6 @@ jobs:
             'printf '\''%s\n'\'' "$controller" > "$udc_file"' "$usb_sleep_hook"
           rm -f /tmp/nothing-tetris-Image /tmp/nothing-tetris-initramfs.cpio \
             /tmp/conninfra.relocations
-          test -s /work/out/nothing-tetris-root.sparse.img
-          test -s /work/out/nothing-tetris-boot.img
           test -s /work/out/boot_image.itb
           cat > /work/out/nothing-tetris-radio-live.MANIFEST <<EOF
           github_sha=$GITHUB_SHA
@@ -1033,6 +1031,22 @@ jobs:
           test -s /work/out/nothing-tetris-radio-live.tar.zst
           sha256sum /work/out/nothing-tetris-radio-live.tar.zst >> \
             /work/out/nothing-tetris-radio-live.MANIFEST
+          mkdir -p /work/checked-dtbs
+          cp -v "$native_dtb" /work/checked-dtbs/
+          cp -v "$rootfs/usr/share/nothing-tetris/diagnostic-dtbs/"*.dtb /work/checked-dtbs/
+          ./pmbootstrap.py --as-root --work /pmwork/work \
+            -c /work/ci/pmbootstrap-aarch64.cfg shutdown
+          images=/pmwork/work/chroot_native/home/pmos/rootfs
+          mkdir -p /work/out/logs
+          python3 /work/ci/seal-install-images.py \
+            "$images/nothing-tetris-root.img" "$images/nothing-tetris-boot.img" \
+            > /work/out/logs/install-image-seal.log 2>&1 ||
+            { cat /work/out/logs/install-image-seal.log; exit 1; }
+          cat /work/out/logs/install-image-seal.log
+          img2simg "$images/nothing-tetris-root.img" /work/out/nothing-tetris-root.sparse.img
+          cp -v "$images/nothing-tetris-boot.img" /work/out/
+          test -s /work/out/nothing-tetris-root.sparse.img
+          test -s /work/out/nothing-tetris-boot.img
           file /work/out/nothing-tetris-root.sparse.img
           (cd /work/out && sha256sum \
             boot_image.itb \
@@ -1043,6 +1057,7 @@ jobs:
           pmbootstrap_commit=$PMBOOTSTRAP_COMMIT
           pmaports_commit=$PMAPORTS_COMMIT
           kernel_release=$release
+          image_sealing=offline-forced-fsck-and-unforced-resize-check-v1
           required_uboot_commit=$TETRIS_UBOOT_COMMIT
           required_uboot_sha256=$TETRIS_UBOOT_SHA256
           EOF
@@ -1050,9 +1065,8 @@ jobs:
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
       - name: Build isolated read-only diagnostic boot artifacts
         run: |
-          rootfs=/pmwork/work/chroot_native/mnt/rootfs_nothing-tetris
-          native="$rootfs/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"
-          diagnostics="$rootfs/usr/share/nothing-tetris/diagnostic-dtbs"
+          native=/work/checked-dtbs/mt6878-nothing-tetris-native.dtb
+          diagnostics=/work/checked-dtbs
           builder=/work/patches/gpu/build_diagnostic_boot.py
           its=/work/pmaports/device/testing/device-nothing-tetris/boot_image.its
           python3 "$builder" --mode vgpu-observe \

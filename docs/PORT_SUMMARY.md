@@ -52,6 +52,26 @@ Boot `2e9cfc97-4d08-4641-bb6c-b16b65713b79`, structured report at uptime134.32s:
 - Post-install loader hashes match the pre-install values; neither LK slot,
   stock NV nor calibration was modified.
 
+### Image expansion fix: CI candidate
+
+The r181 build log confirms pmbootstrap unmounted both install images and
+detached their loops before export. The quick clean check at first boot is
+not a full fsck after the build-time mount: upstream
+[resize2fs 1.47.4](https://github.com/tytso/e2fsprogs/blob/v1.47.4/resize/main.c)
+rejects an offline filesystem whose last full check precedes its last mount.
+This matches the observed error; the exact original-image condition still
+needs the real-image gate below, not a mounted-root repair.
+
+Our CI now checks detached regular images with forced offline `e2fsck -p`,
+accepting only statuses 0/1, then requires a read-only full check and an
+unforced `resize2fs` check before sparse conversion and final hashes.
+A separate native fixture must reproduce the refusal, seal ext2/ext4 images,
+round-trip Android sparse format and grow to a larger simulated partition
+without a force flag. Diagnostic DTBs are retained before full pmbootstrap
+shutdown; no driver, bootloader, partition table or handset calibration is
+changed by this candidate. CI and clean-install expansion remain unverified
+until new artifacts are tested. The installed phone is still the original r181.
+
 ### Prior validated cold observation: r179
 
 User-confirmed physical power-off, ten-second wait and power-on produced boot
