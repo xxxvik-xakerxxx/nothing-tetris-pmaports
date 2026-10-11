@@ -230,9 +230,18 @@ serialized module initialization. It retains consumer-ready NC/cache tables
 with NULL virtual addresses, then destroys the transient planner owner. Module
 failure/exit clears the tables before freeing the argument storage. Physical
 SMEM mapping/publication functions are omitted from this candidate's source;
-it remains build evidence only, not installed or autoloaded. Native end-to-end
-producer/import/plan and actual ARM64 integration checks are pending CI. The
-installed r181 still has the earlier AP-tag-only module.
+it is not installed or autoloaded. [CI38179025105](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38179025105)
+passed 59 native end-to-end producer/import/plan scenarios at both 4 KiB and
+64 KiB geometry, actual ARM64 compilation and strict module linking against
+the original r181 full-build exports. Kernel archive/patches, util adaptations,
+LLVM21.1.8, the prepared configuration and kernel release match r181; no fake
+symbol table or relaxed modpost was used. The resulting GPL module has no
+external module dependencies, vermagic `6.18.0 SMP preempt mod_unload aarch64`,
+and SHA256 `ab2e570c5a7fdaa6e16e1f0742efb9bf1b5ea0e5f019703a6d7a67646e740426`.
+Independent review found no relevant correctness/safety bugs. Physical testing
+is pending: after the commanded normal reboot, the Mac sees postmarketOS USB
+but has no USB network interface. No new module has been loaded and no partition
+was flashed. This is not evidence of SIM, modem READY or protected-memory access.
 Runtime SMEM admission, CCIF/DPMAIF/FSM lifecycle,
 SIM/registration and the userspace radio/audio path remain.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).

@@ -191,6 +191,7 @@ def main():
         report.update(status='passed', object_sha256={name: staging.sha(util / name) for name in objects})
         if args.link_r181:
             link_r181(staging, smoke, manifest, work, package, util, report)
+            report['scope'] = 'actual packaged ARM64 objects and module linked against real r181 exports; no installation or hardware test'
     except BaseException as error:
         report.update(status='failed', error=str(error))
         raise
