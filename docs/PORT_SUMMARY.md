@@ -79,6 +79,14 @@ loader's strict-OFF prerequisite; another identical power cycle is not the next
 fix. No firmware reservation/copy, SMEM or bootstrap was reached. The next
 boundary is a source-backed initial power owner, not removal of the OFF check.
 No Linux MMIO probe, guard bypass or modem retry occurred.
+Separate initial-power diagnostic `467ab09cab` is now in the user's U-Boot
+master, building in [CI 38111053855](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38111053855).
+It follows pinned LK IFR9/IFR11/NEMI protection, ACK30 power-off, isolation and
+clock ordering before the existing strict-OFF/placed-RAM boundary. The option
+defaults off and requires BROM-only admission; mixed ON/ACK states reject,
+every wait is bounded and no reset/retry is added. Independent review found
+no P1/P2 issues. Native sanitizer/ARM image execution and handset NS access
+remain unverified; this is not modem/SIM support and is not yet installed.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
