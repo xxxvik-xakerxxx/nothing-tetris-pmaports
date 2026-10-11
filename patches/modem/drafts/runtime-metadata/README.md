@@ -82,8 +82,13 @@ manifest. Clean r181 is now installed: warm boot
 `2e9cfc97-4d08-4641-bb6c-b16b65713b79` at uptime134.32s received a fresh v2
 descriptor with 3,972 used bytes and 21 tags; its exact 64KiB aligned no-map
 reservation matches. BROM errors and descriptor error/flag/MD error are zero.
-Cold repetition and AP-only import remain pending; no operational driver is
-enabled by that node. Warm SCP preparation retains its known EBUSY limitation.
+On the next user-reported restart, boot
+`8d332faa-c0ef-4968-bc21-58571eb2dfaf` at uptime51.65s again received the same
+valid descriptor shape with zero errors. SCP was prepared, state3/error0;
+sensor/SensorProxy/SSH services were active. This response alone does not prove
+the physical cold-power procedure or a complete repeated lifecycle.
+No operational driver is enabled by that node. Warm inherited SCP state still
+has the known EBUSY limitation.
 
 The r181 package adds a separate AP-tag-only linked-module build. The generated
 `ccci-owned-metadata.overlay` is applied only to a source-only util copy, not the
@@ -96,7 +101,20 @@ module plus `Module.symvers` as evidence. Neither module installation nor
 autoload is added. Full module linkage passed in
 [image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
 at the same validated source. Its exact-ABI AP-only module and kernel exports
-were downloaded and all manifest hashes verified. Physical import remains pending.
+were downloaded and all manifest hashes verified.
+
+The exact AP-only module was copied with SHA256
+`90106d01591ce111a020ad8526ac5344c4b25cbaff7cbe1d1704b9b52a05836f`,
+and target name/dependencies/vermagic were checked before one controlled load
+at uptime231.28s of the restart above. `insmod` returned0 within the deadline;
+the kernel emitted `Tetris CCCI: owned metadata imported; runtime transport disabled`.
+This is the first physical AP-tag-only import. The same boot, USB/NCM and all
+three services remained active, no system units failed and no new kernel
+Oops/BUG/SError/panic/WARNING was found. A 32MiB USB/SSH transfer matched its
+expected hash. No runtime radio node appeared; no legacy module, MD/SMEM
+mapping, SMC or firmware START was attempted. The module remains a manual
+isolated test, not packaged/autoloaded support; it was left loaded without
+removal/retries. Registration, SIM/calls, lifecycle and portability remain open.
 
 The tags contain `md_mem_layout` (24-byte rows) and NC/cache layouts (40-byte rows).
 `semantic.h` now checks complete byte-field consistency with the source-derived

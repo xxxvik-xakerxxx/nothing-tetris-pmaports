@@ -22,7 +22,7 @@ FIT matches CI SHA256 `91d7f77a7d8b177fe6320d7bdce267dc88ec26ed146feff9227b55645
 | Running U-Boot / `lk_a` | Experimental `cdd806438d73e2e163fcc9aded557b029816011e` |
 | Loader image SHA256 | `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, included in the image |
-| Root filesystem | Writable; first boot remains about 2.4 GiB, expansion unresolved |
+| Root filesystem | Writable; expanded to 104.5 GiB on the next boot; first-install issue recorded below |
 
 The latest loader passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169).
 Its image was synchronously written only to `lk_a` and prefix-readback verified.
@@ -74,14 +74,48 @@ shutdown; no driver, bootloader, partition table or handset calibration is
 changed by this candidate.
 
 [CI 38149660135](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38149660135)
-at `4dcbab6e60b56c60f83ea6f8ae958f2014b56446` passed all preliminary validation,
-the sealed GNSS loader and Bionic adapter. All ten image-gate tests ran, including
+at `4dcbab6e60b56c60f83ea6f8ae958f2014b56446` passed every job, including actual
+ARM64 objects, the sealed GNSS loader, Bionic adapter and full install images.
+All ten image-gate tests ran, including
 real ext2/ext4 refusal, sparse round-trip and growth from 16,384 to 32,768 4KiB
-blocks without force; the Ubuntu fixture used e2fsprogs1.47.0. Actual ARM64
-object compilation and full-image sealing/build are still in progress.
+blocks without force; the Ubuntu fixture used e2fsprogs1.47.0. The full build
+used e2fsprogs1.47.3: detached root/boot images passed forced fsck, both read-only
+checks and unforced resize checks, retaining exact extents 2,783,969,280 and
+536,870,912 bytes. Both fsck statuses were 0. The sealing log is retained in
+the CI build-log artifact. New image archive SHA256:
+`2ecd345b25ab89f0723ff8fd1dd8d3308453b41d5e9652ee9f2190de1f2db842`.
 Clean-install expansion remains unverified until the new artifacts are tested.
 The installed phone is still the original r181; SIM/calls, navigation, GPU
 acceleration and camera capture are not newly demonstrated by these CI tests.
+
+### r181 restart and first AP-only import
+
+After the user's restart, boot `8d332faa-c0ef-4968-bc21-58571eb2dfaf`
+at uptime51.65s again received the valid 21-tag descriptor and zero-error BROM
+report. SCP preparation was `secure-handoff-prepared`, state3/error0; the
+sensor, SensorProxy and SSH services started automatically. The journal lists
+all 24 sensor inventory entries. Physical cold-power procedure and current
+visual behavior are not inferred from the word "restarted".
+
+Initramfs recovered the journal and orphaned inodes before mounting root, then
+expanded ext4 to 28,299,256 4KiB blocks. Root now reports 104.5 GiB, with
+96.9 GiB available at the baseline. This subsequent-boot result does not
+remove the original first-install defect or prove a clean shutdown.
+
+At uptime231.28s the exact-ABI AP-only module from original CI38117727546
+was loaded once with a 20-second deadline. Module SHA256:
+`90106d01591ce111a020ad8526ac5344c4b25cbaff7cbe1d1704b9b52a05836f`.
+`insmod` returned0, and the kernel emitted:
+`Tetris CCCI: owned metadata imported; runtime transport disabled`.
+Only this isolated util module was loaded; no legacy CCCI/DPMAIF or SMEM
+mapping, firmware START, registration or radio device activation was attempted.
+
+The same boot, USB/NCM and all three services remained active, with no failed
+units or new Oops/BUG/SError/panic/WARNING. A fresh 32MiB SSH transfer matched
+SHA256 `83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
+No radio/GPS/video/media device or DRM render node appeared. The test module
+is not installed/autoloaded and was left loaded, not repeatedly removed/retried.
+This is physical metadata import, not modem READY, SIM detection or a call.
 
 ### Prior validated cold observation: r179
 
@@ -106,8 +140,9 @@ That r179 DT lacked a `mediatek,mddriver` consumer, so no descriptor was publish
 r181 supplies the disabled anchor and now receives it. BROM/descriptor completion
 is **not** runtime modem READY, SIM detection or a working call.
 
-Warm reboot still fails SCP preparation on inherited TCM with `-EBUSY`.
-Cold startup success does not resolve warm reboot or suspend/resume.
+Earlier warm reboots failed SCP preparation on inherited TCM with `-EBUSY`.
+The successful r181 restart above does not by itself resolve every warm-start
+path or suspend/resume.
 
 ## Hardware summary
 
@@ -117,7 +152,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | Subsystem | Status | Demonstrated / remaining |
 | --- | --- | --- |
 | Boot / UFS | Works for basic boot | Clean r181 boots and reads/writes root; firmware/SKU portability unverified. |
-| Root expansion | Partial | r179 reached full capacity; r181 first-boot offline resize asks for forced fsck and remains image-sized. |
+| Root expansion | Partial | r181 reaches 104.5 GiB on its next boot; fixed image sealing passed CI, but its first clean installation remains untested. |
 | Native display | Partial | Route and frame-end updates are in main; no visible stripes/flicker. Fixed 60 Hz and software rendering; 120 Hz and power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
 | Sensors | Partial | Five physical classes emit data; rotation, auto-brightness and local-call proximity tested. Automatic cold startup observed; calibration, warm reboot, suspend and smooth brightness remain. |
@@ -127,7 +162,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | Haptics / torch | Partial | Earlier bounded physical effects tested; lifecycle and camera strobe remain. |
 | Battery, charging, thermal | Partial | Telemetry and charging observations exist; sustained safety and idle power remain. |
 | GNSS | Partial, transport only | No position fix or operational GeoClue navigation stack. |
-| SIM, calls, SMS, mobile data | Broken | BROM completes; runtime CCCI, SIM/registration and calls are unavailable. Proximity testing used a local dummy call, not GSM. |
+| SIM, calls, SMS, mobile data | Broken | BROM and physical AP-only metadata import pass; runtime CCCI, SIM/registration and calls are unavailable. Proximity testing used a local dummy call, not GSM. |
 | GPU acceleration | Broken | No render node or accelerated compositor. |
 | Cameras | Broken | No preview/capture or operational video/media node. |
 | microSD | Partial | Controller probes; card insertion and real I/O untested. |
@@ -147,8 +182,9 @@ buffer type are corrected; compiler warnings and contract checks remain strict.
 The full kernel/package/image build passed at the **same source** in
 [CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546).
 Its isolated AP-only util module linked against real kernel exports, and all
-kernel-evidence hashes matched after download. The image is now installed;
-physical metadata import and new GPS read behavior remain untested.
+kernel-evidence hashes matched after download. The image is installed and the
+single physical AP-only import passed as recorded above. New GPS read behavior
+remains untested on hardware.
 
 The candidate includes:
 
@@ -167,9 +203,10 @@ The candidate includes:
   Actual-source fixtures passed both IRQ and polling branches under ASan/UBSan;
   removing each fix was detected. Real hardware behavior remains untested.
 
-Next physical boundary: repeat the observed descriptor/21-tag handoff on a clean
-cold boot, then test only the exact-ABI AP-only importer. Do not load the
-legacy util module against the new descriptor. Runtime transport remains off.
+Next operational boundary: immutable bank ownership, source-backed range/security
+admission and transactional SMEM integration before CCCI transport/registration.
+Do not load the legacy util module against the new descriptor or treat successful
+tag import as permission to access firmware/SMEM. Runtime transport remains off.
 This candidate is not a promise of functioning SIM, camera, GPU or navigation.
 
 r180 from [CI 38038376683](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38038376683)

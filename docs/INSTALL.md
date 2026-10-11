@@ -92,9 +92,16 @@ The latest installed image is r181 from
 source `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`.
 Its archive, image hashes and all 7,691 sparse chunks were verified before
 clean installation. First warm boot, USB/SSH and installed FIT verification
-passed. Visual/cold checks and AP-only modem metadata import remain pending.
+passed. On the next user-reported restart, sensors started automatically and
+the exact-ABI AP-only modem metadata import passed once; runtime radio remains off.
+Visual and full cold/lifecycle checks remain pending.
 The first rootfs resize asks for forced fsck and leaves about 2.4 GiB usable;
-this is an unresolved first-boot issue, not a full-capacity validated release.
+the next boot recovered the journal before mounting and expanded to 104.5 GiB.
+This is still a first-install issue, not a validated full-capacity fresh release.
+The image-sealing fix passed all jobs in
+[CI 38149660135](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38149660135)
+at `4dcbab6e60b56c60f83ea6f8ae958f2014b56446`; those repacked artifacts have
+not been installed. Do not mix them with the original r181 images.
 Do not run `e2fsck` on the mounted root filesystem.
 The retained r179 recovery checkpoint previously passed full root expansion,
 display/touch, rotation and auto-brightness on physical cold startup after
@@ -106,7 +113,7 @@ Sensors are opt-in on a fresh image and require the matching SCP-enabled
 loader; the ordinary U-Boot artifact does not enable that profile.
 The r181 combined image passed full CI, including all four corrected DTBs and
 actual module linkage. Its disabled modem anchor now receives the loader's
-21-tag descriptor, but this does not establish SIM,
+21-tag descriptor and the separate AP-only import test passed, but this does not establish SIM,
 calls, GPS, GPU acceleration or camera support.
 
 ## U-Boot prerequisite
