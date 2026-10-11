@@ -17,9 +17,10 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| Running U-Boot | Experimental `467ab09cabf8017d2d37a3663f0fcbf732d71598`, confirmed physical cold start |
-| Next-boot `lk_a` | Experimental `cbe37e8d2050bacb410c91b1f7602e549dd09098`, not yet booted |
-| Next-boot image SHA256 | `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d` |
+| Running U-Boot / `lk_a` | Experimental `cbe37e8d2050bacb410c91b1f7602e549dd09098`, confirmed user-requested warm restart |
+| Installed loader image SHA256 | `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d` |
+| Current sensor state | Failed after warm restart: SCP inherited TCM `-EBUSY`; prior cold-start functionality is not warm-boot support |
+| Next candidate | `fdb0ee2994`, CI pending, not installed |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -114,12 +115,32 @@ passed all native/ARM image gates with the complete previously validated SCP
 inputs. Its manifest and downloaded checksums match. The 3,307,616-byte image
 was written only to `lk_a`; synchronous completion and prefix readback match
 SHA256 `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d`.
-Stock `lk_b` hash and Linux boot ID remain unchanged: the candidate has not
-executed. Physical USB-disconnected cold startup/readback is pending.
+Stock `lk_b` hash and Linux boot ID remained unchanged during installation.
 USB/SSH, firmware-ready, 24 sensor entries
 and mask31 recover automatically; no failed units or kernel faults were found.
 The user confirmed display, touch, both rotations and automatic brightness.
 Rootfs, NV/calibration and `lk_b` were not written.
+
+The user then requested automatic restart. One ordinary Linux reboot reached
+`cbe37e8d2050` at 25.61-second uptime with a new boot ID. This is a warm boot,
+not cold validation. The EMI record now identifies slot32, range FAILED/step11
+(end-address readback), retained reply `0x51410000`, first error `-EIO`.
+Pre-write enable/policy, command0 and start readback passed; post-write enable
+and policy have not executed. No BROM/CCCI/SIM readiness is established.
+SCP preparation reports inherited-state `-16`; the sensor service is failed,
+SensorProxy inactive and USB/SSH working. `systemd-coredumpd.service` also
+reports failed; its cause is not established. First report and journal were
+saved, without module reload, live MMIO or a modem retry.
+
+Correction `fdb0ee2994` in the user's U-Boot master excludes only the ATF raw
+end-register marker at returned bit43 from endpoint comparison. The audited
+writer has23 relative-page bits and a separate enable bitmap; post-write
+enable==1 and all eight pre/post policy groups remain mandatory. Every other
+reply bit/status remains exact; raw replies are preserved. Tests cover both
+marker forms, all12 slots, wide addresses, invalid enable/policy and every
+other reply-bit mismatch. This is a candidate, not proven modem boot.
+[CI 38112558422](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38112558422)
+is building the complete SCP/BROM profile; no new image is installed yet.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
