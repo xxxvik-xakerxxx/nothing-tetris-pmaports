@@ -70,8 +70,15 @@ valid loaded observation is address `0x1c001e00`, value `0x4200000d`.
 does not establish authenticated firmware load or modem startup.
 After `board:poweroff`, Preloader briefly appeared and pmOS returned; the
 first report was preserved, but this boot is not claimed as a confirmed cold
-start. A physical power-off with USB disconnected, ten-second wait and normal
-power-on is pending. No Linux MMIO probe, guard bypass or modem retry occurred.
+start. On 2026-10-11 the user completed physical power-off with USB disconnected,
+a ten-second wait and normal power-on. The first readback has a new boot ID,
+34-second uptime and the same `cd96ef3cb114` loader. It still records loaded
+stage 2 / `-EBUSY`, report-fetch 0, publication error 0 and
+`0x1c001e00 = 0x4200000d`. Therefore true cold startup does not establish the
+loader's strict-OFF prerequisite; another identical power cycle is not the next
+fix. No firmware reservation/copy, SMEM or bootstrap was reached. The next
+boundary is a source-backed initial power owner, not removal of the OFF check.
+No Linux MMIO probe, guard bypass or modem retry occurred.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
