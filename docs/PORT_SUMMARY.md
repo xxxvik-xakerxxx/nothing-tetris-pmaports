@@ -79,18 +79,19 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 
 ## Next Combined Image
 
-Kernel package r181 is being corrected after
-[CI 38115566997](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38115566997)
-from `2e983241000633a6e572f0e1558bc36ebfdce2b8` failed during DTB compilation:
-the new metadata subnode preceded root properties. Its corrected placement
-follows those properties. The early object gate now compiles and validates all
-four real packaged DTBs before the full image build.
-Source/patch validation, isolated ARM64 objects, the sealed GNSS loader and
-the Bionic adapter passed the failed run; the corrected DTBs and full
-kernel/package/image remain pending new CI.
-The first short retry stopped on an obsolete CI-integration template after the
-`dtc` dependency was added; that template is corrected without relaxing its
-forward/reverse or duplicate-helper checks.
+Kernel package r181 passed all preliminary jobs in
+[CI 38117468070](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117468070)
+at `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`: complete patch application,
+actual ARM64 candidate objects, all four compiled/validated packaged DTBs,
+GPS read/DMA fixtures, camera worker, GPUEB parser, sealed GNSS loader and
+Bionic adapter. The downloaded four DTBs match the CI manifest hashes.
+The root-property ordering error, stale CI-integration template and GPS fixture
+buffer type are corrected; compiler warnings and contract checks remain strict.
+
+The full kernel/package/image build is running at the **same source** in
+[CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546).
+No successful r181 image has been installed; physical metadata import and new
+GPS behavior remain untested.
 
 The candidate includes:
 
@@ -106,7 +107,8 @@ The candidate includes:
   without channel access for an empty request and honors nonblocking empty reads.
   Failed DMA copies release reader ownership without consuming the queued entry,
   so a correctly sized later read can recover instead of returning permanent BUSY.
-  Native fixtures cover both IRQ and polling branches; CI execution remains pending.
+  Actual-source fixtures passed both IRQ and polling branches under ASan/UBSan;
+  removing each fix was detected. Real hardware behavior remains untested.
 
 Next physical boundary: verify the retained descriptor and 21-tag handoff on a
 clean cold boot, then test only the exact-ABI AP-only importer. Do not load the

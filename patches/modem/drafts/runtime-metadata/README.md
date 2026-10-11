@@ -74,8 +74,12 @@ The first report and kernel journal are retained. Installed r179 has no
 mddriver consumer, so the strict final publisher refuses: no descriptor/tag
 reservation is present and no physical import is claimed. The r181 companion
 DT patch adds only the single disabled metadata consumer with the pinned B4.1
-compatible/AP6878/MD6299 identity. Its compiled DTB and subsequent cold import
-remain pending; no modem resource or operational driver is enabled by that node.
+compatible/AP6878/MD6299 identity. All four real packaged DTBs compiled and
+passed the strict consumer check in
+[CI 38117468070](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117468070)
+at `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`; downloaded DTB hashes match its
+manifest. Subsequent cold import remains pending; no modem resource or
+operational driver is enabled by that node.
 
 The r181 package adds a separate AP-tag-only linked-module build. The generated
 `ccci-owned-metadata.overlay` is applied only to a source-only util copy, not the
@@ -85,7 +89,9 @@ logging, sysfs, broadcast and SIB initialization. Its sole physical mapping is
 the admitted AP tag buffer; firmware/NC/cache banks are not mapped. Full image
 CI must link against the actual configured kernel exports and preserve the
 module plus `Module.symvers` as evidence. Neither module installation nor
-autoload is added. Compilation and physical import remain pending for r181.
+autoload is added. Full module linkage and physical import remain pending for
+r181; [full image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
+is running at the same validated source.
 
 The tags contain `md_mem_layout` (24-byte rows) and NC/cache layouts (40-byte rows).
 `semantic.h` now checks complete byte-field consistency with the source-derived

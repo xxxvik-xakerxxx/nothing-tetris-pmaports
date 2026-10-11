@@ -2,11 +2,16 @@
 
 Production patch: `1008-vendor-gnss-bound-data-link-read.patch.vendor` in the
 kernel package. It changes three real functions: device read, link read and
-DMA get. APKBUILD applies 1008 after 1007 with fuzz=0; parent must update its
-checksum to the revised same-number patch before required CI validates it.
+DMA get. APKBUILD applies 1008 after 1007 with fuzz=0 and records its revised
+checksum.
 `STAGING.json` records the pinned input, digest, limitations and integration
-requirements. Native compilation and physical behavior remain pending CI and
-hardware testing. It is included in the corrected r181 candidate.
+requirements. Actual-source native fixtures passed
+[CI 38117468070](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117468070)
+at `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`, with both IRQ/polling branches,
+ASan/UBSan and six detected negative controls per branch. No native compilation
+ran locally. Physical behavior remains untested. The corrected r181 candidate
+is in [full image CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
+at the same validated source; its real v051 module build remains pending.
 
 ## Source Trace
 
@@ -133,14 +138,13 @@ The mocks do not validate real kernel locking, hardware races or elapsed time.
 
 1. Main CI now runs the fixture with the pinned connectivity checkout before
    image construction. The early object job also compiles the four real DTBs.
-2. Require the real-source fixtures to pass both configurations and all negative
-   controls before the full image. Package application is wired; parent must
-   update the checksum from STAGING.json for the revised 1008 before CI;
+2. The real-source fixtures passed both configurations and all negative controls
+   before the full image. Package application and checksum match STAGING.json;
    no automatic GNSS activation is supplied by this fix.
-4. Once DT and native fixtures pass, main dispatches the full image at the same
-   SHA. Compile the touched v051 driver with the package's kernel config/compiler,
+3. DT/native fixtures passed; main dispatched the full image at the same SHA.
+   Compile the touched v051 driver with the package's kernel config/compiler,
    check modpost and module ABI, and include it in traceable CI artifacts.
-5. Hardware validation remains untested: authorized clean artifact boots must
+4. Hardware validation remains untested: authorized clean artifact boots must
    retain USB/SSH, exercise empty/data/blocking/error behavior without module
    reloads, then pass the skill's cold-repeat, lifecycle and variant gates.
 

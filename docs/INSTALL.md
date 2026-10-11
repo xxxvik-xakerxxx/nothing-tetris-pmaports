@@ -101,8 +101,10 @@ and other-unit testing remain pending;
 see the current [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r179).
 Sensors are opt-in on a fresh image and require the matching SCP-enabled
 loader; the ordinary U-Boot artifact does not enable that profile.
-The r181 combined candidate is awaiting corrected DT validation and is not an installed or
-hardware-validated release. Its modem metadata changes do not establish SIM,
+The r181 combined candidate passed preliminary CI, including all four corrected
+DTBs; its [full image build](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546)
+is still pending. It is not an installed or hardware-validated release.
+Its modem metadata changes do not establish SIM,
 calls, GPS, GPU acceleration or camera support.
 
 ## U-Boot prerequisite
