@@ -17,10 +17,9 @@ all image digests and 7,665 sparse chunks were verified before installation.
 | --- | --- |
 | Kernel | `7.2.1-r179`, Linux `6.18.0 #180` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `cbe37e8d2050bacb410c91b1f7602e549dd09098`, confirmed user-requested warm restart |
-| Installed loader image SHA256 | `238b118b0c757e73ea2e5e8239811f586b104edb540af12165f9419f552e638d` |
+| Running U-Boot / `lk_a` | Experimental `fdb0ee2994c62b6220e35dd1f75bbeee6e7d6f3a`, first successful BROM check on user-requested warm restart |
+| Installed loader image SHA256 | `3b716e6665ed7752865058d61b5c5c8e3a365278ac88b40799d26fd30cf6f189` |
 | Current sensor state | Failed after warm restart: SCP inherited TCM `-EBUSY`; prior cold-start functionality is not warm-boot support |
-| Next candidate | `fdb0ee2994`, CI pending, not installed |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, installed afterward from CI |
 | Root filesystem | 104.5 GiB, expanded and writable |
 
@@ -129,7 +128,8 @@ Pre-write enable/policy, command0 and start readback passed; post-write enable
 and policy have not executed. No BROM/CCCI/SIM readiness is established.
 SCP preparation reports inherited-state `-16`; the sensor service is failed,
 SensorProxy inactive and USB/SSH working. `systemd-coredumpd.service` also
-reports failed; its cause is not established. First report and journal were
+reports `start-limit-hit` after repeated skipped ExecCondition starts, not a
+confirmed kernel/driver crash. First report and journal were
 saved, without module reload, live MMIO or a modem retry.
 
 Correction `fdb0ee2994` in the user's U-Boot master excludes only the ATF raw
@@ -138,9 +138,27 @@ writer has23 relative-page bits and a separate enable bitmap; post-write
 enable==1 and all eight pre/post policy groups remain mandatory. Every other
 reply bit/status remains exact; raw replies are preserved. Tests cover both
 marker forms, all12 slots, wide addresses, invalid enable/policy and every
-other reply-bit mismatch. This is a candidate, not proven modem boot.
+other reply-bit mismatch. Independent review found no P1/P2 issues.
 [CI 38112558422](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38112558422)
-is building the complete SCP/BROM profile; no new image is installed yet.
+passed native range transactions and the complete ARM64 SCP/BROM profile.
+The manifest and checksums match; the 3,307,664-byte image was written only
+to `lk_a`, with synchronous completion and matching prefix readback.
+Stock `lk_b` is unchanged. One automatic reboot then reached `fdb0ee2994c6`
+with a new boot ID and 27.43-second uptime. This is warm, not cold validation.
+
+**First physical modem BROM success:** loader/report-fetch errors0, loaded
+stage11 COMPLETE/error0, hardware stage15 COMPLETE/error0, board stage16/status1,
+publication error0 and no cleanup. Final secure BROM response x0=0,
+x2=x3=`0x100000001` satisfies all four source-defined flags. EMI records final
+slot43, range VERIFIED/step20 and error0: all range, independent enable and
+pre/post policy checks passed. Authentication/placement, SMEM, EMI/remaps,
+power/bus release and BROM verification are now physically observed on this
+unit. No validation bypass, modem retry or Linux CCCI descriptor was added.
+USB/SSH recovered and the first report/journal are retained without kernel
+Oops/BUG/SError/panic/WARNING. Sensors remain failed because SCP still rejects
+inherited warm TCM. A USB-disconnected physical cold start is requested for
+sensor recovery and joint validation. SIM/calls/SMS/data remain unavailable;
+Linux CCCI runtime and its clean-install handoff are the next boundary.
 MD-specific ACK correction `5824646fa8cd4e138acb35da23da5c2da0c1ea14` passed
 [CI 38073407645](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38073407645):
 21 actual-helper sanitizer cases and complete ARM64 image construction.
@@ -252,7 +270,7 @@ lifecycle or SKU. Earlier subsystem evidence is identified explicitly.
 | Haptics / torch | Partial | Earlier bounded physical effects tested; lifecycle and camera strobe remain. |
 | Battery, charging, thermal | Partial | Telemetry and charging observations exist; classification, sustained safety and idle power remain. |
 | GNSS | Partial, transport only | No verified position fix or operational GeoClue navigation stack. |
-| SIM, calls, SMS, mobile data | Broken | No operational modem; proximity testing used a local dummy call, not GSM. |
+| SIM, calls, SMS, mobile data | Broken | Modem BROM now verified on one warm boot; runtime CCCI, SIM/registration and real calls are still unavailable. Proximity testing used a local dummy call, not GSM. |
 | GPU acceleration | Broken | No render node or accelerated compositor. |
 | Cameras | Broken | No working preview/capture or video/media node. |
 | microSD | Partial | Controller probes; card insertion and real I/O remain untested. |
@@ -313,8 +331,9 @@ changes require their own check; no physical subsystem is enabled by this run.
 - **Modem:** authenticated firmware/layout and CCIF/DPMAIF groundwork exist.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
   the bounded boot-stage EMI/remap/power/BROM caller are now connected in the
-  opt-in U-Boot profile. Physical BROM completion and runtime CCCI handoff
-  remain unverified before SIM detection, network registration,
+  opt-in U-Boot profile. Physical BROM completion is verified once on this
+  handset's warm boot; joint cold startup and runtime CCCI handoff remain
+  unverified before SIM detection, network registration,
   calls, SMS or data can work. File signatures are not RAM attestation or READY.
   Isolated [runtime preparation](../patches/modem/drafts/runtime-prepare/README.md)
   now checks FSM/all-port preparation and separates private resource-only probe
@@ -481,7 +500,8 @@ passed 41 integrated-bootstrap and 17 allocation-lifetime sanitizer cases,
 alongside the signed-input, 37 earlier bootstrap and 20 EMI cases. Integration
 into the actual loader is now present in `24e7c183c4`, including the opt-in
 one-attempt board caller. Runtime CCCI publication stays disabled in that
-diagnostic profile; physical completion and SIM/calls remain unverified. See
+diagnostic profile; its later `fdb0ee29` warm readback verified BROM completion,
+but SIM/calls remain unavailable. See
 [boot transaction](../patches/modem/drafts/boot-stage/README.md).
 
 The camera platform consumer adds four source-derived IRQ handlers, native
