@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Source/patch tests of the real packaged util path, never C compilation."""
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+from package_metadata import build, MODE, PREFIX
+
+ROOT = Path(__file__).resolve().parents[4]
+VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
+    'android_kernel_device_modules_6.1_nothing_mt6878'))
+PACKAGE = ROOT / 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878'
+
+
+class PackageMetadataTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.patch, cls.sources = build(VENDOR)
+
+    def test_only_util_sources_and_separate_mode(self):
+        self.assertTrue(self.sources)
+        self.assertTrue(all(name.startswith(PREFIX) for name in self.sources))
+        self.assertNotIn('ccci_tetris_register_prepared', self.patch)
+        self.assertNotIn('CONFIG_MTK_ECCCI_TETRIS_OWNER', self.patch)
+        self.assertIn(MODE, self.patch)
+
+    def test_owned_module_init_returns_before_legacy_side_effects(self):
+        main = self.sources[PREFIX + 'ccci_util_lib_main.c']
+        begin = main.index('#if IS_ENABLED(' + MODE + ')')
+        branch = main[begin:main.index('#endif', begin)]
+        self.assertIn('int ret = mtk_ccci_args_key_val_init()', branch)
+        self.assertIn('ret = ccci_util_fo_init()', branch)
+        self.assertIn('return 0;', branch)
+        for call in ('ccci_log_init(', 'ccci_common_sysfs_init(',
+                     'ccci_util_broadcast_init(', 'ccci_sib_init(',
+                     'ccci_util_pin_broadcast_init(', 'mtk_ccci_dump_args_info('):
+            self.assertNotIn(call, branch)
+        self.assertEqual(branch.count('if (ret)\n\t\tgoto metadata_fail;'), 2)
+        self.assertIn('metadata_fail:\n\tmtk_ccci_owned_args_cleanup();\n\treturn ret;', branch)
+
+    def test_argument_storage_and_node_are_released(self):
+        args = self.sources[PREFIX + 'ccci_util_boot_args.c']
+        cleanup = args[args.index('void mtk_ccci_owned_args_cleanup(void)'):args.index('int mtk_ccci_add_new_args(')]
+        self.assertIn('i < ARRAY_SIZE(s_buf)', cleanup)
+        self.assertIn('kfree(s_buf[i]);\n\t\ts_buf[i] = NULL;', cleanup)
+        self.assertIn('kfree(tetris_owned_tags);\n\ttetris_owned_tags = NULL;', cleanup)
+        self.assertIn('memset(s_args_tbl, 0, sizeof(s_args_tbl));', cleanup)
+        init = args[args.index('int mtk_ccci_args_key_val_init(void)'):args.index('void mtk_ccci_dump_args_info(void)')]
+        self.assertEqual(init.count('of_node_put(node)'), 1)
+        main = self.sources[PREFIX + 'ccci_util_lib_main.c']
+        self.assertIn('module_exit(ccci_util_metadata_exit);', main)
+        self.assertIn('static void __exit ccci_util_metadata_exit(void)\n{\n\tmtk_ccci_owned_args_cleanup();', main)
+
+    def test_only_ap_buffer_is_mapped_and_unmapped(self):
+        handoff = self.sources[PREFIX + 'handoff.h']
+        collect = handoff[handoff.index('static int tetris_collect_owned_metadata('):]
+        self.assertEqual(collect.count('ioremap_wc('), 1)
+        self.assertIn('ioremap_wc((phys_addr_t)base, 65536)', collect)
+        self.assertIn('banks.tags.base != base', collect)
+        self.assertIn('iounmap(mapped)', collect)
+        fo = self.sources[PREFIX + 'ccci_util_lib_fo.c']
+        collect = fo[fo.index('static int __init collect_lk_boot_arguments('):]
+        owned = collect.index('tetris_collect_owned_metadata(node)')
+        self.assertLess(owned, collect.index('"ccci,modem_info_v2"'))
+        self.assertIn('of_node_put(node);\n\treturn ret;', collect[owned:])
+
+    def test_patch_applies_after_shipping_util_adaptations(self):
+        with tempfile.TemporaryDirectory(prefix='metadata-util-stack-') as temp:
+            root = Path(temp)
+            archive = subprocess.Popen(['git', '-C', str(VENDOR), 'archive',
+                'ee2be53cb75670b548948636a0db1d1ff112bf12', PREFIX], stdout=subprocess.PIPE)
+            unpack = subprocess.run(['tar', '-xf', '-', '-C', str(root)], stdin=archive.stdout,
+                                    capture_output=True)
+            archive.stdout.close()
+            self.assertEqual(archive.wait(), 0)
+            self.assertEqual(unpack.returncode, 0, unpack.stderr)
+            for name in ('0039-vendor-ccci-util-linux-6.18-api.patch.vendor',
+                         '0173-vendor-ccci-smem-map-span.patch.vendor'):
+                applied = subprocess.run(['patch', '--batch', '-p1', '-i', str(PACKAGE / name)],
+                                         cwd=root, capture_output=True, text=True)
+                self.assertEqual(applied.returncode, 0, applied.stderr + applied.stdout)
+            applied = subprocess.run(['git', 'apply', '--check', '-'], input=self.patch,
+                                     text=True, cwd=root, capture_output=True)
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+
+    def test_build_is_isolated_and_uses_real_kernel_exports(self):
+        apkbuild = (PACKAGE / 'APKBUILD').read_text()
+        start = apkbuild.index('_build_ccci_metadata_only() {')
+        helper = apkbuild[start:apkbuild.index('\n}\n', start)]
+        self.assertIn('root="$srcdir/tetris-modem-metadata"', helper)
+        self.assertLess(helper.index('rm -rf -- "$root"'), helper.index('cp "$source"'))
+        self.assertIn('cp "$source"/*.c "$source"/*.h "$source/Makefile" "$util/"', helper)
+        self.assertIn('git -C "$root" apply --check', helper)
+        self.assertIn('make -j', helper)
+        self.assertIn('-C "$builddir" M="$util"', helper)
+        self.assertIn('KBUILD_MODPOST_WARN=', helper)
+        self.assertIn('-D' + MODE + '=1', helper)
+        self.assertIn('modinfo -F vermagic', helper)
+        self.assertIn('mtk_ccci_import_owned_tags$', helper)
+        self.assertIn('mtk_ccci_validate_owned_handoff$', helper)
+        self.assertNotIn('KBUILD_MODPOST_WARN=1', helper)
+
+    def test_candidate_never_enters_shared_prepare_or_package(self):
+        apkbuild = (PACKAGE / 'APKBUILD').read_text()
+        prepare = apkbuild[apkbuild.index('prepare() {'):apkbuild.index('_build_', apkbuild.index('prepare() {'))]
+        self.assertNotIn('ccci-owned-metadata.overlay', prepare)
+        package = apkbuild[apkbuild.index('package() {'):apkbuild.index('\nsha512sums=')]
+        self.assertNotIn('tetris-modem-metadata', package)
+        self.assertNotIn('_build_ccci_metadata_only', package)
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('--modem --diagnostics --metadata', workflow)
+        self.assertIn('test_package_metadata.py', workflow)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -9,10 +9,15 @@ import re
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from check_objects import HERE, ROOT, PREFIX, load, plan, review, stage_vendor, stage_metadata, stage_smem, check_generated
 
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
     'android_kernel_device_modules_6.1_nothing_mt6878'))
+
+
+def uboot_tree():
+    return Path(os.environ.get('TETRIS_UBOOT_TREE', ROOT.parent / 'u-boot-mt6878'))
 
 
 def parent_patch_state(workflow):
@@ -162,7 +167,7 @@ class ObjectTests(unittest.TestCase):
 
     def test_metadata_after_full_stack_without_activation(self):
         data, _, package = plan()
-        uboot = Path(os.environ.get('TETRIS_UBOOT_TREE', ROOT.parent / 'u-boot-mt6878'))
+        uboot = uboot_tree()
         with tempfile.TemporaryDirectory(prefix='metadata-stack-static-') as temp:
             destination = Path(temp) / 'vendor'
             with contextlib.redirect_stdout(io.StringIO()):
@@ -199,7 +204,7 @@ class ObjectTests(unittest.TestCase):
 
     def test_smem_after_metadata_without_activation(self):
         data, _, package = plan()
-        uboot = ROOT.parent / 'u-boot-mt6878'
+        uboot = uboot_tree()
         with tempfile.TemporaryDirectory(prefix='smem-object-static-') as temp:
             destination = Path(temp) / 'vendor'
             with contextlib.redirect_stdout(io.StringIO()):
@@ -213,6 +218,16 @@ class ObjectTests(unittest.TestCase):
                           data['compiled_source_sha256'])
             self.assertFalse(list(destination.rglob('*.o')))
             self.assertFalse(list(destination.rglob('*.ko')))
+
+    def test_both_metadata_stacks_honor_explicit_uboot_tree(self):
+        with patch.dict(os.environ, TETRIS_UBOOT_TREE='/explicit/producer'):
+            self.assertEqual(uboot_tree(), Path('/explicit/producer'))
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        block = workflow.split('      - name: Validate staged modem lifecycle callbacks\n')[1].split('      - name:')[0]
+        self.assertIn('https://github.com/xxxvik-xakerxxx/u-boot.git', block)
+        self.assertIn('60cd9ade5b999732304f3b755c7dbe3d34307c13', block)
+        self.assertLess(block.index('export TETRIS_UBOOT_TREE='),
+                        block.index('python3 patches/modem/drafts/runtime-object-ci/test_static.py'))
 
     def test_smem_requires_metadata_and_ci(self):
         env = dict(os.environ, CI='false', GITHUB_ACTIONS='false')

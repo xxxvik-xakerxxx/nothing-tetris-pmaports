@@ -2,7 +2,7 @@
 maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=linux-postmarketos-mediatek-mt6878
 pkgver=7.2.1
-pkgrel=180
+pkgrel=181
 pkgdesc="Mainline Linux kernel for MediaTek MT6878 devices"
 arch="aarch64"
 _carch="arm64"
@@ -17,6 +17,7 @@ makedepends="
 	clang21
 	devicepkg-dev
 	flex
+	git
 	kmod
 	lld21
 	llvm21
@@ -95,6 +96,7 @@ source="
 	0103-vendor-scp-share-infracfg-syscon.patch.vendor
 	0039-vendor-ccci-util-linux-6.18-api.patch.vendor
 	0173-vendor-ccci-smem-map-span.patch.vendor
+	ccci-owned-metadata.overlay
 	0048-vendor-eccci-core-linux-6.18-api.patch.vendor
 	0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor
 	0089-vendor-eccci-modem-common-compile-only.patch.vendor
@@ -614,6 +616,44 @@ _build_ccci_util_compile_only() {
 	modinfo "$_module"
 }
 
+_build_ccci_metadata_only() {
+	local root="$srcdir/tetris-modem-metadata"
+	local util="$root/drivers/misc/mediatek/ccci_util"
+	local source="$_devmods_dir/drivers/misc/mediatek/ccci_util"
+	local module="$util/ccci_util_lib.ko" release
+
+	# Isolate the AP-tag-only module from the legacy linked modem composites.
+	# Copy sources, not stale object files; never patch the shared vendor tree.
+	test -n "$srcdir" || die "Missing metadata source directory"
+	rm -rf -- "$root"
+	mkdir -p "$util"
+	cp "$source"/*.c "$source"/*.h "$source/Makefile" "$util/"
+	git -C "$root" apply --check "$srcdir/ccci-owned-metadata.overlay"
+	git -C "$root" apply "$srcdir/ccci-owned-metadata.overlay"
+	make -j"${JOBS:-$(nproc)}" -C "$builddir" M="$util" \
+		ARCH="$_carch" LLVM=1 KERNEL_SRC="$builddir" KERNEL_OUT="$builddir" \
+		DEVICE_MODULES_PATH="$_devmods_dir" CONFIG_ARM64=y \
+		CONFIG_MTK_ECCCI_DRIVER=m CONFIG_MTK_SECURITY_SW_SUPPORT=n \
+		CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n CONFIG_MTK_AEE_IPANIC=n \
+		KBUILD_MODPOST_WARN= \
+		KCFLAGS="-Werror=implicit-function-declaration \
+			-Werror=incompatible-pointer-types -Werror=int-conversion \
+			-I$_devmods_dir/include $(_vendor_kcflags) \
+			-DCONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY=1" ccci_util_lib.ko
+	test "$(modinfo -F name "$module")" = ccci_util_lib || die "Wrong metadata module"
+	test "$(modinfo -F license "$module")" = GPL || die "Wrong metadata license"
+	release="$(cat "$builddir/include/config/kernel.release")"
+	case "$(modinfo -F vermagic "$module")" in
+		"$release "*) ;;
+		*) die "Metadata module ABI mismatch" ;;
+	esac
+	llvm-nm --defined-only "$module" | grep -Eq '[[:space:]]mtk_ccci_import_owned_tags$' ||
+		die "Owned metadata importer was compiled out"
+	llvm-nm --defined-only "$module" | grep -Eq '[[:space:]]mtk_ccci_validate_owned_handoff$' ||
+		die "Owned handoff validator was compiled out"
+	# Build evidence only: package() does not install or autoload this module.
+}
+
 _build_ccci_core_compile_only() {
 	_moddir="$_devmods_dir"/drivers/misc/mediatek/eccci
 	_jobs="${JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)}"
@@ -978,6 +1018,7 @@ build() {
 	_build_audio_modules
 	_build_sensor_modules
 	_build_modem_link
+	_build_ccci_metadata_only
 }
 
 package() {
@@ -1073,6 +1114,7 @@ fe0a04fbeb7cd6172c4897f0836345218d6642afcae30e95309d02f6e7599a2ace1127d7eb8f94dc
 5e276b98717cfc2d938d6e8b25a0d3266397d0fabb83a4d60b7e26f205a30129550762b597e98fa6edc07c221b1a21b59a3ccb470c02470fcd06efe8157ff21c  0113-pmdomain-mediatek-mt6878-modem-power.patch
 0eb90a16f88a9d3d85233ddb7a0eac758c4db021a27be1ed44acb8990a7930720be2ab5d6dfeb7874fef27f025646e1f41e4d457e34b2f0e2cc059ba7f898c67  0112-media-i2c-imx882-v4l2-controls.patch
 6bc374697a03337674951fc8a007f2b0fa692bb88a5e32035f6e21bc1a86f7f120a201ac8553a928ca79c5c7895b12b7a58a8407a05685fb115f561ea1d89452  0173-vendor-ccci-smem-map-span.patch.vendor
+4e3fc106dc50099c6b220f32dae7611e3c69fd4cdcd3507794bd389ff1d24de4df7a34e3054e8598373892a3ac48c09ff16e31894ccde00967b41a392ace7e2d  ccci-owned-metadata.overlay
 4fe03ca717a5d781350d17a5aaa5dd0f4f6815a635b9d46791a9a7bed6e2b7c2a42f3f80d9dbde43958df52a657683779ee98fdcd5b10e94dd28e0956c70453a  0109-vendor-eccci-cldma-timer-api.patch.vendor
 05a2c004453ae30c98c9201358cca18e42b3987026bb32b2d8e9e2b77a88baca93dd80863e06ff958c089b255b9c12b067e4f15337395033bb96558df1d733e7  0108-regulator-mt6315-board-mode-mask.patch
 a28dd67edc4d73ed7cd486d2bad0ef5c595779510b2417935a0d33a207818ce77b7058e02c0c666bc87a7be97bb74d4c1d2740ccf7d6e2fe1da9fd8434974849  0109-regulator-mt6315-stop-mode-change-on-read-error.patch

@@ -186,6 +186,20 @@ Image SHA256 `4943e596b022b471adf54cc54ba1678b773bde7d369d70dc0e440be4f21f5b84`
 is verified and downloaded, not installed.
 The shared MT6878-Mainline repository is not updated. No modem reset/retry was issued.
 
+Next combined candidate: kernel package r181 builds an isolated AP-tag-only
+CCCI util module against real kernel exports, without installing/autoloading
+it or mapping modem firmware/SMEM. U-Boot metadata profile `cdd806438d73` has
+passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169)
+and its image SHA256 is `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d`.
+The artifact is verified but not installed. It publishes fresh owned AP tags
+after successful BROM while retaining disabled Linux mddriver status.
+The main image CI now fetches the exact U-Boot planner needed by lifecycle
+fixtures; missing checkout caused the preceding `38111142018` validation
+failure before any kernel build. New native gates exercise camera worker
+closure/retirement and the actual U-Boot GPUEB segment parser. Full r181
+compilation and physical metadata import remain pending. This is not SIM,
+camera capture or GPU acceleration support.
+
 On the preceding baseline, SCP reports `secure-handoff-prepared`, error zero; the hub
 reports firmware ready, 24 entries and physical mask 31. All three sensor/SSH
 services are active and no system units failed. First report and full kernel
@@ -348,8 +362,8 @@ changes require their own check; no physical subsystem is enabled by this run.
   Actual boot-LUN/GFH identity, private authenticated snapshot metadata and
   the bounded boot-stage EMI/remap/power/BROM caller are now connected in the
   opt-in U-Boot profile. Physical BROM completion is verified once on this
-  handset's warm boot; joint cold startup and runtime CCCI handoff remain
-  unverified before SIM detection, network registration,
+  handset's warm boot and one subsequent cold startup with automatic sensors.
+  Runtime CCCI handoff remains unverified before SIM detection, network registration,
   calls, SMS or data can work. File signatures are not RAM attestation or READY.
   Isolated [runtime preparation](../patches/modem/drafts/runtime-prepare/README.md)
   now checks FSM/all-port preparation and separates private resource-only probe

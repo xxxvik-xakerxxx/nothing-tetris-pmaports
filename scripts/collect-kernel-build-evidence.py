@@ -23,9 +23,10 @@ MODEM_FILES = (
     "eccci/hif/ccci_cldma.ko", "eccci/fsm/ccci_fsm_scp.ko",
     "ccmni/ccmni.ko", "rps/rps_perf.ko",
 )
+METADATA_FILES = ("Module.symvers", "ccci_util_lib.ko")
 
 
-def collect(root, output, commit, modem=False, diagnostics=False):
+def collect(root, output, commit, modem=False, diagnostics=False, metadata=False):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected exact source commit")
     # pmbootstrap keeps abuild output here. Never recurse through mounted
@@ -65,6 +66,20 @@ def collect(root, output, commit, modem=False, diagnostics=False):
                     int.from_bytes(data[18:20], "little") != 183):
                 raise ValueError(f"not an ELF64 little-endian AArch64 module: {name}")
             payloads["modem-link/" + name] = data
+    if metadata:
+        module_root = kernel.parent / "tetris-modem-metadata/drivers/misc/mediatek/ccci_util"
+        for name in METADATA_FILES:
+            path = (module_root / name).resolve(strict=True)
+            if not path.is_relative_to(kernel.parent) or not path.is_file():
+                raise ValueError(f"invalid metadata build output: {name}")
+            data = path.read_bytes()
+            if not data:
+                raise ValueError(f"empty metadata build output: {name}")
+            if name.endswith(".ko") and (len(data) < 20 or
+                    data[:6] != b"\x7fELF\x02\x01" or
+                    int.from_bytes(data[18:20], "little") != 183):
+                raise ValueError(f"not an ELF64 little-endian AArch64 metadata module: {name}")
+            payloads["modem-metadata/" + name] = data
     output.mkdir(parents=True, exist_ok=False)
     for name in payloads:
         target = output / name
@@ -79,6 +94,8 @@ def collect(root, output, commit, modem=False, diagnostics=False):
         "sha256": {name: hashlib.sha256(data).hexdigest()
                    for name, data in payloads.items()},
     }
+    if metadata:
+        manifest["metadata_scope"] = "AP-tag-only util module; not installed, started or runtime validated"
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
@@ -92,6 +109,8 @@ if __name__ == "__main__":
                         help="Require all nine linked ARM64 modem modules")
     parser.add_argument("--diagnostics", action="store_true",
                         help="Require compiled isolated diagnostic DTBs")
+    parser.add_argument("--metadata", action="store_true",
+                        help="Require isolated AP-tag-only CCCI module and its real exports")
     args = parser.parse_args()
     print(json.dumps(collect(args.root, args.output, args.commit, args.modem,
-                             args.diagnostics), indent=2))
+                             args.diagnostics, args.metadata), indent=2))

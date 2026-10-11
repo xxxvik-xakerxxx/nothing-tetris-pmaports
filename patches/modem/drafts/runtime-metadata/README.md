@@ -51,12 +51,32 @@ alone is not an independent signature verification.
 
 ## Exact remaining operational producer dependencies
 
-Installed BROM-only `tetris_modem_brom_board.c` deliberately does NOT call
+Installed BROM-only `fdb0ee2994c6` deliberately does NOT call
 `tetris_modem_publish_final()`, and refuses an inherited CCCI descriptor. Even
 four-one BROM success therefore cannot be converted to an operational descriptor
 by Linux. The real final producer must encode from the still-owned authenticated
 loader capsule after successful BROM, reserve/clean the full tag buffer, and
 atomically publish its descriptor. Cold report must be reviewed first.
+
+That producer is now connected in the separate, default-off
+`CONFIG_TETRIS_MODEM_METADATA_HANDOFF` U-Boot profile at
+`cdd806438d73e2e163fcc9aded557b029816011e`. It calls the real final publisher
+only after BROM and first-report publication succeed, keeps the sole Linux
+mddriver disabled, and reserves/zeros/cache-cleans an owned 64KiB AP buffer
+aligned to 64KiB. Native allocation/publication fault fixtures and the full
+ARM64 image passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169).
+Image SHA256 is `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d`;
+it is downloaded and verified, not yet installed or read back on hardware.
+
+The r181 package adds a separate AP-tag-only linked-module build. The generated
+`ccci-owned-metadata.overlay` is applied only to a source-only util copy, not the
+shared vendor tree. `CONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY` returns from real
+module init immediately after checked argument/owned-tag import, before legacy
+logging, sysfs, broadcast and SIB initialization. Its sole physical mapping is
+the admitted AP tag buffer; firmware/NC/cache banks are not mapped. Full image
+CI must link against the actual configured kernel exports and preserve the
+module plus `Module.symvers` as evidence. Neither module installation nor
+autoload is added. Compilation and physical import remain pending for r181.
 
 The tags contain `md_mem_layout` (24-byte rows) and NC/cache layouts (40-byte rows).
 `semantic.h` now checks complete byte-field consistency with the source-derived

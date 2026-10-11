@@ -107,6 +107,45 @@ class EvidenceTests(unittest.TestCase):
         original.symlink_to("../vendor-eccci", target_is_directory=True)
         collector.collect(self.root, self.out, "a" * 40, modem=True)
 
+    def prepare_metadata(self):
+        directory = self.sources / "tetris-modem-metadata/drivers/misc/mediatek/ccci_util"
+        directory.mkdir(parents=True)
+        data = bytearray(64)
+        data[:6] = b"\x7fELF\x02\x01"
+        data[18:20] = (183).to_bytes(2, "little")
+        (directory / "ccci_util_lib.ko").write_bytes(data)
+        (directory / "Module.symvers").write_text("fixture\n")
+        return directory
+
+    def test_metadata_required_and_collected(self):
+        self.prepare_metadata()
+        result = collector.collect(self.root, self.out, "a" * 40, metadata=True)
+        self.assertEqual(len(result["sha256"]), len(collector.FILES) + 2)
+        self.assertIn("modem-metadata/ccci_util_lib.ko", result["sha256"])
+        self.assertIn("AP-tag-only", result["metadata_scope"])
+
+    def test_metadata_missing_not_ignored(self):
+        with self.assertRaises(FileNotFoundError):
+            collector.collect(self.root, self.out, "a" * 40, metadata=True)
+        self.assertFalse(self.out.exists())
+
+    def test_metadata_wrong_architecture(self):
+        directory = self.prepare_metadata()
+        (directory / "ccci_util_lib.ko").write_bytes(b"not ARM64")
+        with self.assertRaisesRegex(ValueError, "AArch64 metadata"):
+            collector.collect(self.root, self.out, "a" * 40, metadata=True)
+        self.assertFalse(self.out.exists())
+
+    def test_metadata_escape_rejected(self):
+        directory = self.prepare_metadata()
+        module = directory / "ccci_util_lib.ko"
+        outside = self.root / "metadata-outside.ko"
+        module.replace(outside)
+        module.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "invalid metadata"):
+            collector.collect(self.root, self.out, "a" * 40, metadata=True)
+        self.assertFalse(self.out.exists())
+
     def test_ambiguous(self):
         other = self.sources / "other"
         (other / "include/config").mkdir(parents=True)
