@@ -2,8 +2,8 @@
 
 Status: disabled native resource-owner draft, statically checked and ARM64
 object-compiled in CI38287440390 at e73b771. This is not native C execution,
-composite module linkage or hardware activation. No local
-native build, firmware execution, SSH, hardware operation, commit or push.
+composite module linkage or hardware activation. No local native build,
+firmware execution or GPU hardware operation was performed.
 This revises reset-owner-draft and its bound-parent caller under patches/gpu;
 shipping patches, DT, packages and shared integration remain unchanged.
 
@@ -94,11 +94,12 @@ its reserved-memory callback, and rejects a missing base/size. No boot-time
 fixup producer or post-LK reservation is proven by this inspection.
 
 The base node also lacks power-domains and #reset-cells required by the
-existing native draft. It cannot be enabled as-is. Main's next integration
-must stage the revised reset C/H and bound-parent C together, describe all
-eight resources on one disabled fixed parent, and run actual CI object/link
-and acquisition-fault tests. The shared validator export must resolve to the
-same reset owner; no stub or second claimant is acceptable.
+existing native draft. It cannot be enabled as-is. Main now stages the revised
+reset C/H and bound-parent C together; actual ARM64 objects compiled in
+CI38287440390. Next describe all eight resources on one disabled fixed parent
+and complete real module linkage and acquisition-fault execution. The shared
+validator export must resolve to the same reset owner; no stub or second
+claimant is acceptable.
 
 Before any start, establish the actual GPUEB DRAM handoff and protected owners
 from matching LK/ATF and post-LK DT evidence, then implement the unified
@@ -124,4 +125,5 @@ execute the C validator or fault paths. Without --dtb the actual-DTB test is
 explicitly skipped. CI must compile/link the real objects and exercise busy
 claims at each of the four positions, map/IRQ failures, malformed resources
 and retained ownership after faults. Existing object runners include the
-revised reset C/H without a shared workflow edit. None was run locally.
+revised reset C/H without a shared workflow edit. Those runners passed in CI,
+not locally; acquisition-fault execution remains unperformed.

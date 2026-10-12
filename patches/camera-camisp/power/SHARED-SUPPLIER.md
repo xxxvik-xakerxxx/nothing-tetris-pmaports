@@ -3,14 +3,13 @@
 `mt6878-vmm-supplier.c` supplies executable native genpd callbacks, guarded
 subdomain attachment and an exclusive regulator owner. It is an uncalled
 integration library, with no initcall, OF provider, DT change or shipping link.
-The prior leaf object passed ARM64 CI38245658821. Both real source objects now
-also passed ARM64 compilation with KUnit enabled and disabled in CI38255895881
-at 5379657. This is object-only: the composite/vmlinux link and hardware remain
-untested. The KUnit-disabled supplier object SHA256 is
-`54e9271c4630bb63db1a4a36a70b0d8f69469cb7588eb6af8778ee17df57f157`.
-That result predates the checked CAM control adapter and explicit supply
-selection below; the modified supplier source has source checks only and has
-not been compiled or linked.
+Both current source objects, including the checked CAM control adapter and
+explicit supply selection, passed ARM64 compilation with KUnit enabled and
+disabled in CI38287440390 at e73b771. This is object-only: the composite/vmlinux
+link and hardware remain untested. Current supplier source SHA256 is
+`aa47b7800ede4fb8ffd71e629ef9966bcd1dd2bb73f8fbeaf73e6a08aa3942c5`;
+its KUnit-disabled object SHA256 is
+`d1e45539cb23f2addf06b57bc9cc9ec4d2627cc836e68d59f4b05a592a0d575d`.
 
 ## Ownership and graph
 
