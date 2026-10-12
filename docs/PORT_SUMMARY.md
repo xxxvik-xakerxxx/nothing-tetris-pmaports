@@ -626,6 +626,12 @@ propagates this origin through runtime/bundle consumers; production functions
 were not changed. Seven static groups and 1,108 window-byte mutation checks pass.
 A dedicated native CI fixture now exercises the complete dataflow while retaining
 other INIT gates and distinguishing OEM EFAULT from the port's ENODATA profile.
+It passed [CI38282916412](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38282916412)
+at `090c61b`, with pinned source/binary checks and ASAN/UBSAN native consumers.
+The initial run stopped before compilation because the old stock cache expired
+after one day. Cache selection now resolves an available artifact rather than
+a fixed run ID; retention is 14 days. One public-input refresh passed
+[CI38281862668](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38281862668).
 Real startup caller integration remains missing.
 The common first constructor now keeps these three bytes unresolved until the
 explicit producers run; runtime/bundle fixtures preserve that gate. These are

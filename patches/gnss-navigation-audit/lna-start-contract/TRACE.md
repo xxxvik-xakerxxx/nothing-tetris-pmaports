@@ -1,6 +1,10 @@
 # LNA startup contract: existing wrapper propagation
 
-Status: static producer/consumer proof; native integration fixture awaiting CI.
+Status: static producer/consumer proof and native integration fixture passed
+CI38282916412 at 090c61b. Source checks and actual ASAN/UBSAN consumers passed;
+the private engine was never loaded or called. The initial CI failed before
+compilation because the old stock artifact expired. The shared public-input
+cache was refreshed once and its selection/retention corrected.
 No native INIT, RF interpretation, navigation fix, or runtime admission is claimed.
 
 ## Pinned private inputs
