@@ -350,6 +350,14 @@ at uptime229.86s, retaining both claims/mappings and module reference1 without
 new kernel faults or USB/sensor failures. No memory reads/writes, legacy global
 publication or transport START is enabled; this profile is not automatically
 installed or loaded. Actual CCCI consumer integration and lifecycle remain.
+The next [private CCCI consumer](../patches/modem/drafts/runtime-smem-consumer/README.md)
+binds to a real GPL provider export, copies the mapped tables into the fresh
+native modem structure and balances its separate module reference on abort.
+It bypasses legacy void SMEM initialization and leaves ROM unmapped. Fifteen
+source checks and independent review pass; actual native fault fixtures,
+64 consistent consumer objects and strict r181 provider/copy-module linkage
+are now wired into targeted CI, pending for this revision. This does not enable
+post-bind publication, HIF, START or radio operation.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.

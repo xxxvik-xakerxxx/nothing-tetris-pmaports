@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Included at the end of the isolated owned_smem_plan.c translation unit. */
+#if defined(CONFIG_TETRIS_CCCI_SMEM_PROVIDER) && CONFIG_TETRIS_CCCI_SMEM_PROVIDER
+#if !defined(CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY) || !CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
+#error "Tetris SMEM provider requires the checked MAP_ONLY profile"
+#endif
+#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY)
+#error "Tetris SMEM provider requires isolated AP-only util"
+#endif
+#ifndef MODULE
+#error "Tetris SMEM provider requires a loadable module lifetime"
+#endif
+#include "mt-plat/tetris_ccci_smem.h"
+
+static bool tetris_copy_alias(const void *a, size_t bytes, const void *b, size_t size)
+{
+	unsigned long first = (unsigned long)a, second = (unsigned long)b;
+
+	if (first > ~0UL - bytes || second > ~0UL - size)
+		return true;
+	return first < second + size && second < first + bytes;
+}
+
+int mtk_ccci_owned_mapped_copy(struct tetris_ccci_smem_copy *out)
+{
+	struct tetris_smem_owner *owner = tetris_owned_smem_plan.owner;
+	int ret;
+
+	if (!out || tetris_copy_alias(out, sizeof(*out), &tetris_owned_smem_plan,
+			sizeof(tetris_owned_smem_plan)))
+		return -EINVAL;
+	if (!owner)
+		return -ENODATA;
+	if (tetris_copy_alias(out, sizeof(*out), owner, sizeof(*owner)))
+		return -EINVAL;
+	if (out->provider)
+		return -EALREADY;
+	/* Standard provider reference, not an authorization callback. The mapper
+	 * already validated inherited EL1 boot policy and retained real claims.
+	 */
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
+	ret = tetris_smem_export_mapped_private(owner, &out->layout, out->nc,
+		ARRAY_SIZE(out->nc), out->cache, ARRAY_SIZE(out->cache));
+	if (ret) {
+		module_put(THIS_MODULE);
+		return ret;
+	}
+	/* No fallible operation after the existing atomic copy-layout export. */
+	out->provider = THIS_MODULE;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mtk_ccci_owned_mapped_copy);
+#endif

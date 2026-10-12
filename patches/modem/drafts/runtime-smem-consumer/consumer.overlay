@@ -1,0 +1,176 @@
+diff --git a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+--- a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
++++ b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+@@ -1217,6 +1217,12 @@
+ 
+ void ccci_md_config(struct ccci_modem *md)
+ {
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++	/* Checked private preparation already owns memory. Legacy void
++	 * config cannot replace it or consume unpublished util globals. */
++	(void)md;
++	return;
++#endif
+ 	/* setup config */
+ 	md->per_md_data.config.load_type = get_md_img_type();
+ 	if (get_modem_is_enabled())
+@@ -1342,6 +1348,7 @@
+ 
+ #if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ #include "ccci_tetris_prepare.h"
++#include "tetris_smem_consumer.h"
+ #include "register_prepare.h"
+ #endif
+ 
+diff --git a/drivers/misc/mediatek/eccci/fsm/register_prepare.h b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+--- a/drivers/misc/mediatek/eccci/fsm/register_prepare.h
++++ b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+@@ -132,6 +132,11 @@
+ 		ret = -ENOMEM;
+ 		goto free_trm;
+ 	}
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++	ret = tetris_ccci_mem_prepare(md);
++	if (ret)
++		goto free_peer;
++#endif
+ 	ret = ccci_tetris_fsm_prepare();
+ 	if (ret)
+ 		goto free_peer;
+@@ -156,6 +161,9 @@
+ abort_fsm:
+ 	ccci_tetris_fsm_abort();
+ free_peer:
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++	tetris_ccci_mem_abort(md);
++#endif
+ 	wakeup_source_unregister(info->peer_wake_lock);
+ free_trm:
+ 	wakeup_source_unregister(md->trm_wake_lock);
+@@ -183,6 +191,10 @@
+ 	struct ccci_modem *md;
+ 	int ret;
+ 
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++	/* Memory preparation alone does not own operational dependencies. */
++	return -EOPNOTSUPP;
++#endif
+ 	if (!pdev)
+ 		return -EINVAL;
+ 	/* Same order as driver core probe: device lock, then private transaction lock.
+diff --git a/drivers/misc/mediatek/eccci/fsm/tetris_smem_consumer.h b/drivers/misc/mediatek/eccci/fsm/tetris_smem_consumer.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/fsm/tetris_smem_consumer.h
+@@ -0,0 +1,86 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included in modem_sys1.c before the real register_prepare.h caller. */
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#error "Tetris SMEM consumer requires the unpublished OWNER prepare transaction"
++#endif
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++#include "mt-plat/tetris_ccci_smem.h"
++
++static bool tetris_ccci_region_empty(const struct ccci_mem_region *region)
++{
++	return !region->base_md_view_phy && !region->base_ap_view_phy &&
++		!region->base_ap_view_vir && !region->size;
++}
++
++static void tetris_ccci_mem_abort(struct ccci_modem *md)
++{
++	struct tetris_ccci_smem_copy *copy = md->tetris_smem;
++
++	if (!copy)
++		return;
++	/* Consumer arrays must no longer be reachable before dropping its ref.
++	 * Provider's original boot pin, owner, mappings and claims remain intact.
++	 */
++	memset(&md->mem_layout, 0, sizeof(md->mem_layout));
++	md->tetris_smem = NULL;
++	module_put(copy->provider);
++	kfree(copy);
++}
++
++static int tetris_ccci_mem_prepare(struct ccci_modem *md)
++{
++	struct tetris_ccci_smem_copy *copy;
++	unsigned int i;
++	int ret;
++
++	if (!md)
++		return -EINVAL;
++	if (md->tetris_smem)
++		return -EALREADY;
++	if (!tetris_ccci_region_empty(&md->mem_layout.md_bank0) ||
++	    !tetris_ccci_region_empty(&md->mem_layout.md_bank4_noncacheable_total) ||
++	    !tetris_ccci_region_empty(&md->mem_layout.md_bank4_cacheable_total) ||
++	    md->mem_layout.md_bank4_noncacheable || md->mem_layout.md_bank4_cacheable)
++		return -EEXIST;
++	copy = kzalloc(sizeof(*copy), GFP_KERNEL);
++	if (!copy)
++		return -ENOMEM;
++	ret = mtk_ccci_owned_mapped_copy(copy);
++	if (ret)
++		goto free_copy;
++	/* Defensive native shape checks, not a new security/READY certificate. */
++	if (!copy->provider || copy->layout.md_bank0.base_ap_view_vir ||
++	    !copy->layout.md_bank0.size || !copy->layout.md_bank0.base_ap_view_phy ||
++	    !copy->layout.md_bank4_noncacheable_total.base_ap_view_vir ||
++	    copy->layout.md_bank4_cacheable_total.base_ap_view_vir ||
++	    copy->layout.md_bank4_noncacheable != copy->nc ||
++	    copy->layout.md_bank4_cacheable != copy->cache ||
++	    copy->nc[ARRAY_SIZE(copy->nc) - 1].id != SMEM_USER_MAX ||
++	    copy->cache[ARRAY_SIZE(copy->cache) - 1].id != SMEM_USER_MAX) {
++		ret = -EPROTO;
++		goto put_provider;
++	}
++	for (i = 0; i < ARRAY_SIZE(copy->cache); i++) {
++		if (copy->cache[i].id == SMEM_USER_RAW_MD_CONSYS &&
++		    (copy->cache[i].base_ap_view_vir || !(copy->cache[i].flag & SMF_NO_REMAP))) {
++			ret = -EPROTO;
++			goto put_provider;
++		}
++	}
++	/* Only this fresh unpublished md owns these arrays. Protected bank0 stays
++	 * physical metadata, never mapped; no legacy getters or duplicate CCB split.
++	 */
++	md->mem_layout = copy->layout;
++	md->tetris_smem = copy;
++	return 0;
++put_provider:
++	if (copy->provider)
++		module_put(copy->provider);
++free_copy:
++	kfree(copy);
++	return ret;
++}
++#endif
+diff --git a/drivers/misc/mediatek/eccci/modem_sys.h b/drivers/misc/mediatek/eccci/modem_sys.h
+--- a/drivers/misc/mediatek/eccci/modem_sys.h
++++ b/drivers/misc/mediatek/eccci/modem_sys.h
+@@ -111,6 +111,8 @@
+ 		void __iomem *md_pll;
+ };
+ 
++struct tetris_ccci_smem_copy;
++
+ struct ccci_modem {
+ 	unsigned char *private_data;
+ 
+@@ -151,6 +153,12 @@
+ 
+ 	struct ccci_per_md per_md_data;
+ 	void *ioremap_buff_src;
++#if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#error "Tetris SMEM consumer requires OWNER layout lifetime"
++#endif
++	struct tetris_ccci_smem_copy *tetris_smem;
++#endif
+ };
+ 
+ struct md_wdt_record {

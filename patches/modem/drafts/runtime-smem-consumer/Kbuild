@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-2.0-only
+obj-m += private-binding-smoke.o
+
+# Absolute canonical source root, staged with common+consumer overlays.
+ifeq ($(strip $(TETRIS_VENDOR_ROOT)),)
+$(error TETRIS_VENDOR_ROOT must name the real complete staged vendor tree)
+endif
+ccflags-y += -DCONFIG_MTK_ECCCI_TETRIS_OWNER=1
+ccflags-y += -DCONFIG_TETRIS_CCCI_SMEM_CONSUMER=1
+ccflags-y += -DCCCI_KMODULE_ENABLE
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/include
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/eccci
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/eccci/inc
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/eccci/fsm
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/eccci/hif
+ccflags-y += -I$(TETRIS_VENDOR_ROOT)/drivers/misc/mediatek/eccci/port

@@ -24,7 +24,87 @@ EVIDENCE_ID = 11695564086
 EVIDENCE_SHA256 = 'ff350521ca395343c62387e716c2b828e8a68b2606fc1840b7e1e6085d412442'
 
 
-def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analysis=False):
+def link_private_consumer(staging, smoke, manifest, work, parent, kernel, output,
+                          isolated, command, flags, saved, release, report):
+    directory = ROOT / 'patches/modem/drafts/runtime-smem-consumer'
+    review = staging.review(directory)
+    candidate = staging.load('private_smem_consumer', directory / 'check_consumer.py')
+    bundles = candidate.build(work / 'vendor-git-source')
+    for name, (text, before, _) in bundles.items():
+        if text != (directory / name).read_text():
+            raise ValueError('private consumer frozen overlay drift: ' + name)
+        candidate.apply_check(text, before)
+    # Preserve the original 64-object staging and all default profile artifacts.
+    vendor = parent / 'consumer-vendor'
+    shutil.copytree(work / 'runtime-vendor', vendor,
+                    ignore=shutil.ignore_patterns('*.o', '*.ko', '*.cmd', '*.mod',
+                                                 '*.mod.c', 'Module.symvers', 'modules.order'))
+    for name in ('common.overlay', 'consumer.overlay'):
+        staging.run(['git', 'apply', '--check', '-'], cwd=vendor, input=bundles[name][0], text=True)
+        staging.run(['git', 'apply', '-'], cwd=vendor, input=bundles[name][0], text=True)
+    consumer_manifest = dict(manifest, vendor_kcflags=manifest['vendor_kcflags'] +
+                             ' -DCONFIG_TETRIS_CCCI_SMEM_CONSUMER=1')
+    staging.compile_objects(work / ('linux-' + manifest['kernel']['kernel_commit']),
+                            work / 'objects', vendor, consumer_manifest, smoke)
+    report['private_consumer_objects'] = consumer_manifest['object_identities']
+    for name, original in bundles['provider.overlay'][1].items():
+        relative = name.removeprefix(PREFIX)
+        if (isolated / relative).read_text() != original:
+            raise ValueError('provider input differs from mapped profile: ' + relative)
+    for name, source in bundles['provider.overlay'][2].items():
+        (isolated / name.removeprefix(PREFIX)).write_text(source)
+    common = vendor / candidate.COMMON
+    provider_flags = flags + ' -I' + str(vendor / 'drivers/misc/mediatek/include') + \
+        ' -DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1' \
+        ' -DCONFIG_TETRIS_CCCI_SMEM_MAP_ONLY=1 -DCONFIG_TETRIS_CCCI_SMEM_PROVIDER=1'
+    staging.run([*command, 'KCFLAGS=' + provider_flags, 'ccci_util_lib.ko'])
+    provider = isolated / 'ccci_util_lib.ko'
+    exports = isolated / 'Module.symvers'
+    symbols = subprocess.check_output(['llvm-nm', '--defined-only', str(provider)], text=True)
+    if not re.search(r'\bmtk_ccci_owned_mapped_copy$', symbols, re.M) or \
+            not re.search(r'\bmtk_ccci_owned_mapped_copy\b.*\bEXPORT_SYMBOL_GPL\b', exports.read_text()):
+        raise ValueError('checked provider missing genuine GPL export')
+    if subprocess.check_output(['modinfo', '-F', 'vermagic', str(provider)], text=True).strip() != release or \
+            subprocess.check_output(['modinfo', '-F', 'depends', str(provider)], text=True).strip() or \
+            subprocess.check_output(['modinfo', '-F', 'license', str(provider)], text=True).strip() != 'GPL':
+        raise ValueError('private provider ABI/dependency/license differs from r181')
+    binding = parent / 'private-binding'
+    binding.mkdir(exist_ok=False)
+    for name in ('Kbuild', 'consumer.h', 'private-binding-smoke.c'):
+        shutil.copyfile(directory / name, binding / name)
+    staging.run([*command[:command.index('M=' + str(isolated))], 'M=' + str(binding),
+                 'TETRIS_VENDOR_ROOT=' + str(vendor), 'KBUILD_EXTRA_SYMBOLS=' + str(exports),
+                 'KBUILD_MODPOST_WARN=', 'KCFLAGS=' + manifest['vendor_kcflags'] +
+                 ' -Werror=implicit-function-declaration -Werror=incompatible-pointer-types'
+                 ' -Werror=int-conversion', 'modules'])
+    module = binding / 'private-binding-smoke.ko'
+    imports = subprocess.check_output(['llvm-nm', '--undefined-only', str(module)], text=True)
+    if not re.search(r'\bmtk_ccci_owned_mapped_copy$', imports, re.M):
+        raise ValueError('private binding does not use the real provider')
+    for forbidden in ('modem_sys', 'ccci_md_alloc', 'ccci_init', 'ccci_md_config',
+                      'ioremap_prot', 'iounmap', 'memcpy_fromio', 'memcpy_toio',
+                      'arm_smccc_smc', 'arm_smccc_hvc'):
+        if re.search(r'\b' + forbidden + r'$', imports, re.M):
+            raise ValueError('private copy binding has forbidden dependency: ' + forbidden)
+    if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
+            subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() != 'ccci_util_lib' or \
+            subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
+        raise ValueError('private binding ABI/provider dependency/license differs')
+    for path in (provider, module):
+        if smoke.object_identity(path)['machine'] != 'AArch64':
+            raise ValueError('private binding module architecture differs')
+    shutil.copyfile(provider, saved / 'ccci-util-smem-provider.ko')
+    shutil.copyfile(exports, saved / 'smem-provider.Module.symvers')
+    shutil.copyfile(module, saved / module.name)
+    report['private_smem_binding'] = dict(provider_sha256=staging.sha(provider),
+        consumer_sha256=staging.sha(module), provider_symvers_sha256=staging.sha(exports),
+        common_header_sha256=staging.sha(common), review_sha256=review,
+        vermagic=release, baseline_commit=BASELINE,
+        scope='real r181 module binding and private copies only; no full CCCI link, HIF, SMEM access or START')
+
+
+def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analysis=False,
+              smem_consumer=False):
     """Use actual full-build exports, never the research config or mocked symvers."""
     old_apk = subprocess.check_output(['git', 'show', BASELINE + ':' +
         str((package / 'APKBUILD').relative_to(ROOT))], cwd=ROOT, text=True)
@@ -211,6 +291,9 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
     report['map_only_module'] = dict(report['linked_module'], sha256=staging.sha(module),
         scope='exact r181 exports; opt-in private WC mappings and copied tables; EL1/trustedboot evidence; no SMEM access, publication, runtime grant or START')
     report['r181_kernel_sources'] = baseline['source_sha512']
+    if smem_consumer:
+        link_private_consumer(staging, smoke, manifest, work, parent, kernel, output,
+                              isolated, command, flags, saved, release, report)
     if gpueb_analysis:
         source = ROOT / 'patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c'
         analysis = parent / 'gpueb-analysis'
@@ -237,9 +320,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--link-r181', action='store_true')
     parser.add_argument('--gpueb-analysis', action='store_true')
+    parser.add_argument('--smem-consumer', action='store_true')
     args = parser.parse_args()
     if args.gpueb_analysis and not args.link_r181:
         parser.error('--gpueb-analysis requires exact --link-r181 exports')
+    if args.smem_consumer and not args.link_r181:
+        parser.error('--smem-consumer requires exact --link-r181 exports')
     spec = importlib.util.spec_from_file_location('packaged_objects',
         ROOT / 'patches/modem/drafts/runtime-object-ci/check_objects.py')
     staging = importlib.util.module_from_spec(spec)
@@ -307,7 +393,8 @@ def main():
             raise ValueError('plan object unexpectedly contains physical mapping')
         report.update(status='passed', object_sha256={name: staging.sha(util / name) for name in objects})
         if args.link_r181:
-            link_r181(staging, smoke, manifest, work, package, util, report, args.gpueb_analysis)
+            link_r181(staging, smoke, manifest, work, package, util, report,
+                       args.gpueb_analysis, args.smem_consumer)
             report['scope'] = 'actual packaged ARM64 objects and module linked against real r181 exports; no installation or hardware test'
     except BaseException as error:
         report.update(status='failed', error=str(error))
