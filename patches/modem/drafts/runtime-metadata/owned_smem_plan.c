@@ -9,7 +9,18 @@
 #include "smem_boot_evidence/boot_evidence.h"
 #include "smem_reservation.h"
 
-/* Sole serialized util init/exit lifetime; no runtime consumer or mappings. */
+#if defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) && CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+#if !defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) || !CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+#error "Tetris initial read requires the isolated resource-only profile"
+#endif
+#include <linux/io.h>
+#include <linux/ioport.h>
+#include <asm/page.h>
+#include <asm/ptrace.h>
+#include <asm/sysreg.h>
+#endif
+
+/* Sole serialized util init/exit lifetime; no runtime consumer. */
 static struct {
 	struct ccci_mem_layout layout;
 	struct ccci_smem_region nc[26], cache[11];
@@ -72,6 +83,80 @@ put:
 	return 0;
 }
 
+#if defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) && CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+static int initial_nc_read(const struct tetris_metadata_banks *banks)
+{
+	const struct tetris_smem_extent_plan *plan = &tetris_owned_smem_plan.extents;
+	const struct tetris_smem_reservation *claims = &tetris_owned_smem_plan.reservation;
+	const struct tetris_smem_boot_evidence *evidence = &tetris_owned_smem_plan.boot_evidence;
+	const struct tetris_smem_boot_record *record = &evidence->record[0];
+	const struct tetris_smem_extent *nc = &plan->span[0];
+	struct tetris_smem_extent_plan exact;
+	void __iomem *mapped;
+	u32 word;
+	unsigned int i;
+	int ret;
+
+	if (!tetris_owned_smem_plan.owner || !tetris_owned_smem_plan.has_boot_evidence)
+		return -ENODATA;
+	ret = tetris_smem_extent_preview(tetris_owned_smem_plan.owner, &exact);
+	if (ret)
+		return ret;
+	if (!plan->count || plan->count > TETRIS_SMEM_SPANS_MAX ||
+	    plan->count != exact.count || claims->count != plan->count)
+		return -ERANGE;
+	/* Revalidate the copied capsule and actual claims before any SMEM access. */
+	for (i = 0; i < plan->count; i++) {
+		const struct tetris_smem_extent *span = &plan->span[i];
+		const struct resource *held = claims->held[i];
+
+		if (span->bank != exact.span[i].bank || span->base != exact.span[i].base ||
+		    span->bytes != exact.span[i].bytes || !span->bytes ||
+		    span->base > ~0ULL - span->bytes || !held ||
+		    held->start != span->base || held->end != span->base + span->bytes - 1)
+			return -ERANGE;
+	}
+	if (nc->bank != 0 || nc->bytes < PAGE_SIZE || !banks->nc.base ||
+	    banks->nc.base > ~0ULL - banks->nc.capacity ||
+	    ((nc->base | nc->bytes) & (PAGE_SIZE - 1)) ||
+	    nc->base < banks->nc.base || nc->base - banks->nc.base >= banks->nc.capacity ||
+	    nc->bytes > banks->nc.capacity - (nc->base - banks->nc.base))
+		return -ERANGE;
+	if (evidence->version != 1 || evidence->bytes != TETRIS_SMEM_BOOT_BYTES ||
+	    evidence->scope != 1 || evidence->count != 2 ||
+	    record->bank != 0 || record->slot != 42 ||
+	    record->reservation_base != banks->nc.base ||
+	    record->reservation_capacity != banks->nc.capacity)
+		return -EBADMSG;
+	if (record->range_start != banks->nc.base || !record->range_size ||
+	    record->range_size > banks->nc.capacity ||
+	    record->range_start > ~0ULL - record->range_size ||
+	    ((record->range_start | record->range_size) & 4095) ||
+	    nc->base < record->range_start ||
+	    nc->base - record->range_start >= record->range_size ||
+	    nc->bytes > record->range_size - (nc->base - record->range_start))
+		return -ERANGE;
+	if (record->actual_enable != 1 || record->actual_start != record->range_start ||
+	    (record->actual_end & ~TETRIS_SMEM_BOOT_END_MARKER) !=
+			record->range_start + record->range_size ||
+	    ((record->policy[7] >> 34) & 3ULL) != 3ULL)
+		return -EACCES;
+	/* Nonshipping initial-read hypothesis: scope-1 history is not immutable
+	 * permission or protection against an independent secure writer. Slot
+	 * overlap arbitration remains unknown. No new certificate is asserted.
+	 */
+	if (read_sysreg(CurrentEL) != CurrentEL_EL1)
+		return -EACCES;
+	mapped = ioremap_wc((phys_addr_t)nc->base, PAGE_SIZE);
+	if (!mapped)
+		return -ENOMEM;
+	word = readl(mapped);
+	iounmap(mapped);
+	pr_info("Tetris CCCI: initial NC read completed; %s\n", word ? "nonzero" : "zero");
+	return 0;
+}
+#endif
+
 void mtk_ccci_owned_smem_cleanup(void)
 {
 #if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
@@ -129,6 +214,10 @@ int mtk_ccci_owned_smem_init(void)
 				&tetris_owned_smem_plan.boot_evidence,
 				&tetris_owned_smem_plan.reservation) : -ENODATA;
 #endif
+#if defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) && CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+	if (!ret)
+		ret = initial_nc_read(&banks);
+#endif
 	if (ret) {
 		mtk_ccci_owned_smem_cleanup();
 		return ret;
@@ -137,13 +226,17 @@ int mtk_ccci_owned_smem_init(void)
 #if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
 	/* No runtime consumer can release these boot-lifetime resources. */
 	__module_get(THIS_MODULE);
+#if !defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) || !CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
 	pr_info("Tetris CCCI: kernel SMEM extents reserved; count=%u; physical access disabled\n",
 		tetris_owned_smem_plan.reservation.count);
 #endif
+#endif
+#if !defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) || !CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
 	if (tetris_owned_smem_plan.has_boot_evidence)
 		pr_info("Tetris CCCI: SMEM boot evidence retained; Linux NS admission not established\n");
 	pr_info("Tetris CCCI: owned SMEM plan ready; NC=%u cache=%u; memory access disabled\n",
 		tetris_owned_smem_plan.layout.md_bank4_noncacheable_total.size,
 		tetris_owned_smem_plan.layout.md_bank4_cacheable_total.size);
+#endif
 	return 0;
 }

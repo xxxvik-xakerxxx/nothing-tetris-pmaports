@@ -5,6 +5,9 @@
 static struct resource held_test[TETRIS_SMEM_SPANS_MAX];
 static bool busy_test[TETRIS_SMEM_SPANS_MAX];
 static unsigned int claim_calls, claim_fail, claim_releases;
+#if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+static void initial_read_claim_fault(void);
+#endif
 
 struct resource *request_mem_region(resource_size_t base, resource_size_t bytes, const char *name)
 {
@@ -20,6 +23,9 @@ struct resource *request_mem_region(resource_size_t base, resource_size_t bytes,
 		if (!busy_test[i]) {
 			busy_test[i] = true;
 			held_test[i] = (struct resource) { .start = base, .end = base + bytes - 1 };
+#if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+			initial_read_claim_fault();
+#endif
 			return &held_test[i];
 		}
 	}

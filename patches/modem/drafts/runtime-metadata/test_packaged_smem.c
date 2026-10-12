@@ -10,10 +10,20 @@ static bool node_exists = true, compatible = true, property_exists;
 static int property_length = 336, property_read_error;
 static unsigned int acquired, released;
 static unsigned int module_pins;
+#if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+static unsigned int el_calls, map_calls, read_calls, unmap_calls;
+static bool read_mapped;
+static void initial_read_log(const char *, ...);
+#undef pr_info
+#define pr_info initial_read_log
+#endif
 
 void __module_get(void *module)
 {
 	assert(module == THIS_MODULE);
+#if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+	assert(!read_mapped && read_calls == unmap_calls);
+#endif
 	module_pins++;
 }
 
@@ -161,6 +171,7 @@ static void test_evidence_collection(const struct tetris_metadata_banks *banks)
 }
 
 #include "test_smem_reservation.c"
+#include "test_initial_read.c"
 
 static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 {
@@ -224,6 +235,12 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 		test_smem_reservation(&copied);
 #if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
 		test_resource_init_failures(&copied);
+#endif
+#if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
+		test_initial_read(&copied);
+#else
+		/* Undefined/zero opt-in leaves every physical boundary unreachable. */
+		assert(!initial_read_boundary_calls);
 #endif
 	}
 	mtk_ccci_owned_smem_cleanup();

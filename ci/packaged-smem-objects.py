@@ -158,6 +158,18 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
     shutil.copyfile(module, saved / 'ccci-util-smem-reservation.ko')
     report['reservation_module'] = dict(report['linked_module'], sha256=staging.sha(module),
         scope='exact r181 exports; kernel iomem claims only; no mappings, memory access, NS grant or START')
+    staging.run([*command, 'KCFLAGS=' + flags +
+        ' -DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1 -DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ=1',
+        'ccci_util_lib.ko'])
+    if b'Tetris CCCI: initial NC read completed' not in module.read_bytes():
+        raise ValueError('initial-read consumer missing from linked module')
+    if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
+            subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() or \
+            subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
+        raise ValueError('initial-read module ABI/dependency/license changed')
+    shutil.copyfile(module, saved / 'ccci-util-nc-initial-read.ko')
+    report['initial_read_module'] = dict(report['linked_module'], sha256=staging.sha(module),
+        scope='exact r181 exports; opt-in single NC word read; EL1 and historical boot evidence; no runtime grant or START')
     report['r181_kernel_sources'] = baseline['source_sha512']
     if gpueb_analysis:
         source = ROOT / 'patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c'

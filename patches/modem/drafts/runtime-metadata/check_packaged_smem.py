@@ -27,6 +27,13 @@ BOUNDARY = r'''#ifndef PACKAGED_NATIVE_BOUNDARY_H
 void __module_get(void *);
 typedef unsigned long long phys_addr_t;
 typedef unsigned long long resource_size_t;
+typedef uint32_t u32;
+#define CurrentEL_EL1 (1UL << 2)
+#define read_sysreg(reg) test_read_sysreg_##reg()
+unsigned long test_read_sysreg_CurrentEL(void);
+void *ioremap_wc(phys_addr_t, size_t);
+unsigned int readl(const void *);
+void iounmap(void *);
 struct resource { resource_size_t start, end; };
 #define resource_size(r) ((r)->end - (r)->start + 1)
 struct resource *request_mem_region(resource_size_t, resource_size_t, const char *);
@@ -79,7 +86,8 @@ def native_ci(vendor, uboot, stock):
             path.write_text(source)
         for relative in ('linux/errno.h', 'linux/io.h', 'linux/kernel.h', 'linux/slab.h',
                          'linux/string.h', 'linux/unaligned.h', 'linux/mutex.h',
-                         'linux/types.h', 'linux/of.h', 'linux/ioport.h', 'linux/module.h', 'asm/page.h'):
+                         'linux/types.h', 'linux/of.h', 'linux/ioport.h', 'linux/module.h',
+                         'asm/page.h', 'asm/ptrace.h', 'asm/sysreg.h'):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             headers = {'linux/errno.h': '#include <asm-generic/errno.h>\n',
@@ -97,6 +105,7 @@ def native_ci(vendor, uboot, stock):
         (root / 'producer_test.c').write_text(boot)
         (root / 'test_packaged_smem.c').write_bytes((HERE / 'test_packaged_smem.c').read_bytes())
         (root / 'test_smem_reservation.c').write_bytes((HERE / 'test_smem_reservation.c').read_bytes())
+        (root / 'test_initial_read.c').write_bytes((HERE / 'test_initial_read.c').read_bytes())
         names = ('tetris_modem_layout.c', 'tetris_modem_layout.h', 'tetris_modem_bundle.h',
                  'tetris_modem_emi.c', 'tetris_modem_emi.h', 'tetris_modem_remap.h',
                  'tetris_modem_emi_rows.c', 'tetris_modem_emi_rows.h',
@@ -108,7 +117,13 @@ def native_ci(vendor, uboot, stock):
                 'show', f'{producer.UBOOT_PIN}:board/mediatek/mt6878/{name}']))
         env = dict(os.environ, ASAN_OPTIONS='detect_leaks=1:abort_on_error=1',
                    UBSAN_OPTIONS='halt_on_error=1')
-        for page, resource_only in ((4096, 0), (65536, 0), (4096, 1), (65536, 1)):
+        profiles = ((4096, 0, 0), (65536, 0, 0), (4096, 1, 0), (65536, 1, 0),
+                    (4096, 1, 1), (65536, 1, 1),
+                    (4096, 0, None), (65536, 0, None),
+                    (4096, 1, None), (65536, 1, None))
+        for page, resource_only, initial_read in profiles:
+            initial_flags = ([] if initial_read is None else
+                [f'-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ={initial_read}'])
             objects = []
             for name in ('tetris_modem_layout.c', 'tetris_modem_emi.c',
                          'tetris_modem_emi_rows.c', 'tetris_modem_ccci_tags.c',
@@ -124,15 +139,17 @@ def native_ci(vendor, uboot, stock):
                     '-Werror', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined',
                     '-fno-omit-frame-pointer', '-g', f'-DTEST_PAGE_SIZE={page}',
                     f'-DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY={resource_only}',
+                    *initial_flags,
                     '-DTETRIS_MODEM_LAYOUT_HOST_TEST', '-I', str(root), *flags,
                     '-c', str(root / name), '-o', str(obj)], check=True)
                 objects.append(str(obj))
-            binary = root / f'packaged-smem-{page}-{resource_only}'
+            binary = root / f'packaged-smem-{page}-{resource_only}-{initial_read}'
             subprocess.run([os.environ.get('CC', 'clang'), '-fsanitize=address,undefined',
                             *objects, '-o', str(binary)], check=True)
             for case in range(59):
                 subprocess.run([str(binary), str(stock), str(case)], env=env, check=True)
-    print('actual packaged import -> SMEM plan: 59 cases x 4KiB/64KiB x metadata/resource profiles PASS; no SMEM I/O')
+    print('actual packaged import -> SMEM plan: 59 cases x 4KiB/64KiB x '
+          'metadata/resource/initial-read profiles PASS; initial-read I/O is mocked')
 
 
 def main():

@@ -304,7 +304,14 @@ The first handset resource attempt on boot `ae496989-7fc8-4759-af93-a5e61e3125c1
 failed with EBUSY, with no retained module/claims or USB/sensor regression.
 The live iomem tree showed a busy `reserved` child covering both NC/cache banks.
 U-Boot `8d2ccc12e7` removes only their duplicate FDT header reservations while
-keeping LMB ownership and plain NOMAP nodes; its CI/hardware validation is pending.
+keeping LMB ownership and plain NOMAP nodes.
+That fix passed [U-Boot CI 38235543158](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38235543158)
+and the same resource module then passed on boot `6902543e-e25b-48ce-9dae-84f4dbd07b57`
+at uptime200.56s: init returned0, two exact iomem children appeared, and the
+module reference count was1. CONSYS and bank tails remained unclaimed.
+USB/sensors/SSH stayed active; the user confirmed display, touch, rotation and
+auto-brightness. This is one resource-ownership test, not physical SMEM access,
+modem READY or a completed cold/warm/suspend lifecycle.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -325,8 +332,22 @@ See [GPU research](GPU_BRINGUP.md) and [exact LK copy boundary](../patches/gpu/u
 The ordinary-DRAM analysis consumer now validates the exact plain no-map node,
 gap-free NOMAP resources and every retained PFN, then claims the entire allocation
 exclusively before the signed-digest snapshot. Success retains claim/snapshot
-until reboot; failures unwind. The r182 package carries that fix. Its CI and
-physical retained-firmware analysis are pending, with no SRAM upload or GPU start.
+until reboot; failures unwind. The r182 package carries that fix.
+[CI 38236228444](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38236228444)
+linked its GPL module against the exact original r181 source/config/exports:
+SHA256 `b32aa610d34464f87bab19afe005d127af8cd690f8cfa26297edf80cf83d4095`.
+That module is staged on the handset; the original is retained for rollback.
+The unchanged initramfs contains no GPUEB reader. Physical retained-firmware
+analysis remains pending; no SRAM upload or GPU start is implied.
+The first physical capture on boot `39116740-88af-499a-993b-7e02682918ab`
+succeeded using the separate retention profile from
+[U-Boot CI 38234399917](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38234399917).
+The exact-r181 consumer claimed the full ordinary-RAM allocation, retained
+module reference1 and produced a 156064-byte root-only snapshot whose SHA256
+matches the signed plaintext `9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7`.
+USB/sensors/SSH stayed active. The private snapshot is not committed or uploaded.
+Offline inspection identifies a RISC-V entry and a BSS-clear loop wholly inside
+the signed span; it does not yet authorize LK's excess copy or a GPU start.
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
 buffers, power/reset and repeated-frame ownership candidates exist. Actual
@@ -350,8 +371,9 @@ linked-driver test, DT activation, installation or frame capture occurred.
 Forced supplier withdrawal and lifecycle remain unproven.
 The new isolated [resource candidate](../patches/camera-camisp/resources/README.md)
 adds native MRAW/CAM_VCORE gates and the disabled logical/physical CAMISP topology.
-Pinned generation and 31 source tests pass. Its ARM64 object builds are pending;
-native power/VMM ownership and frame capture remain unproven. No shipping DT
+Pinned generation and 31 source tests pass. Actual ARM64 objects passed with
+KUnit enabled and disabled in [CI 38236217805](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38236217805).
+Native power/VMM ownership and frame capture remain unproven. No shipping DT
 include or activation is added.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
@@ -373,7 +395,9 @@ at `9e68c3bd5d12d09c1629564fc468da6d8887aaea`. This closes an error-propagation
 defect, not configuration/AGPS admission or a physical position fix.
 The B4.1 AGPS endpoint producer now opens the actual filesystem/abstract Unix
 datagram route, validates connected ownership and unwinds once on failure.
-Five pinned-ELF source tests pass; native sanitizer CI remains pending.
+Five pinned-ELF source tests pass. Native sanitizer fixtures passed CI38236217805,
+and the actual ARM64 Bionic closure including this producer passed
+[CI 38237141944](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38237141944).
 The legitimate receiver and complete startup configuration are still missing;
 endpoint connection does not establish engine INIT or a position fix.
 See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_AUDIT.md).

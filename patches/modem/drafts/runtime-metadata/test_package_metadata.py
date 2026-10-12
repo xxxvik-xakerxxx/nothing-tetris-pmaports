@@ -13,6 +13,28 @@ ROOT = Path(__file__).resolve().parents[4]
 VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
     'android_kernel_device_modules_6.1_nothing_mt6878'))
 PACKAGE = ROOT / 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878'
+INITIAL_READ_IF = ('#if defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) && '
+                   'CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ')
+
+
+def without_initial_read(source):
+    """Remove only opt-in blocks for source-only default-absence checks."""
+    result = []
+    depth = 0
+    for line in source.splitlines(True):
+        if not depth and line.rstrip() == INITIAL_READ_IF:
+            depth = 1
+            continue
+        if depth:
+            if line.startswith('#if'):
+                depth += 1
+            elif line.startswith('#endif'):
+                depth -= 1
+            continue
+        result.append(line)
+    if depth:
+        raise AssertionError('unterminated initial-read opt-in block')
+    return ''.join(result)
 
 
 class PackageMetadataTests(unittest.TestCase):
@@ -108,7 +130,7 @@ class PackageMetadataTests(unittest.TestCase):
                          (SMEM.parent / 'smem-boot-evidence/boot_evidence.c').read_text())
         self.assertIn('smem_boot_evidence/boot_evidence.o', self.sources[PREFIX + 'Makefile'])
         for forbidden in ('ioremap(', 'ioremap_wc(', 'arm_smccc_smc(', 'EXPORT_SYMBOL'):
-            self.assertNotIn(forbidden, owner)
+            self.assertNotIn(forbidden, without_initial_read(owner))
         fixture = (Path(__file__).parent / 'test_packaged_smem.c').read_text()
         for required in ('test_evidence_collection(&copied)', 'property_length = 0',
                          'property_read_error = -EIO', 'node_exists = false',
@@ -144,7 +166,7 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertIn('owner->state != TETRIS_SMEM_VALIDATED', preview)
         self.assertIn('span->virtual', preview)
         self.assertLess(preview.index('plan.span[i] ='), preview.index('memcpy(output,'))
-        for source in (owner, claim, preview):
+        for source in (without_initial_read(owner), claim, preview):
             for forbidden in ('ioremap(', 'ioremap_wc(', 'memcpy_fromio(',
                               'arm_smccc_smc(', 'EXPORT_SYMBOL'):
                 self.assertNotIn(forbidden, source)
@@ -159,7 +181,101 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertIn('claim_fail = i', fixture)
         self.assertIn('&competing) == -EBUSY', fixture)
         runner = (Path(__file__).parent / 'check_packaged_smem.py').read_text()
-        self.assertIn('(4096, 0), (65536, 0), (4096, 1), (65536, 1)', runner)
+        self.assertIn('(4096, 0, 0), (65536, 0, 0), (4096, 1, 0), (65536, 1, 0)', runner)
+
+    def test_initial_read_is_explicit_resource_only_and_absent_by_default(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        self.assertIn(INITIAL_READ_IF + '\n#if !defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) || '
+                      '!CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY\n#error ', owner)
+        self.assertIn(INITIAL_READ_IF + '\nstatic int initial_nc_read(', owner)
+        self.assertIn(INITIAL_READ_IF + '\n\tif (!ret)\n\t\tret = initial_nc_read(&banks);\n#endif', owner)
+        default = without_initial_read(owner)
+        for token in ('initial_nc_read(', 'read_sysreg(', 'ioremap_wc(', 'readl(', 'iounmap('):
+            self.assertNotIn(token, default)
+        for name, source in self.sources.items():
+            if name != PREFIX + 'owned_smem_plan.c':
+                self.assertNotIn('#define CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ', source)
+                self.assertNotIn('-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ', source)
+        apkbuild = (PACKAGE / 'APKBUILD').read_text()
+        self.assertNotIn('CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ', apkbuild)
+
+    def test_initial_read_validates_before_one_page_one_word_and_unmaps(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        begin = owner.index('static int initial_nc_read(')
+        read = owner[begin:owner.index('\n#endif', begin)]
+        for required in ('tetris_smem_extent_preview(tetris_owned_smem_plan.owner, &exact)',
+                         'plan->count != exact.count', 'claims->count != plan->count',
+                         'span->bank != exact.span[i].bank', 'span->base != exact.span[i].base',
+                         'span->bytes != exact.span[i].bytes', 'held->start != span->base',
+                         'held->end != span->base + span->bytes - 1', 'nc->bank != 0',
+                         'nc->bytes < PAGE_SIZE', 'evidence->scope != 1',
+                         'record->slot != 42', 'record->actual_enable != 1',
+                         'record->actual_start != record->range_start',
+                         'record->actual_end & ~TETRIS_SMEM_BOOT_END_MARKER',
+                         'nc->bytes > record->range_size - (nc->base - record->range_start)',
+                         '((record->policy[7] >> 34) & 3ULL) != 3ULL',
+                         'read_sysreg(CurrentEL) != CurrentEL_EL1'):
+            self.assertIn(required, read)
+            self.assertLess(read.index(required), read.index('ioremap_wc('))
+        self.assertEqual(read.count('ioremap_wc('), 1)
+        self.assertEqual(read.count('readl('), 1)
+        self.assertIn('u32 word;', read)
+        self.assertEqual(read.count('iounmap('), 1)
+        self.assertIn('mapped = ioremap_wc((phys_addr_t)nc->base, PAGE_SIZE);', read)
+        self.assertIn('if (!mapped)\n\t\treturn -ENOMEM;', read)
+        self.assertIn('word = readl(mapped);\n\tiounmap(mapped);\n'
+                      '\tpr_info("Tetris CCCI: initial NC read completed; %s\\n", '
+                      'word ? "nonzero" : "zero");', read)
+        self.assertEqual(read.count('pr_info('), 1)
+        for forbidden in ('writel(', 'memcpy_fromio(', 'memcpy_toio(', 'arm_smccc',
+                          'EXPORT_SYMBOL', 'tetris_smem_map_private(', 'tetris_smem_publish_private(',
+                          'tetris_smem_export_private(', 'dma_', 'register_', 'READY', '%x', '%p', '%u'):
+            self.assertNotIn(forbidden, read)
+        self.assertIn('independent secure writer', read)
+        self.assertIn('overlap arbitration remains unknown', read)
+
+    def test_initial_read_failure_preserves_first_error_and_cleans_before_pin(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        init = owner[owner.index('int mtk_ccci_owned_smem_init(void)'):]
+        self.assertLess(init.index('tetris_smem_reserve_extents('), init.index('initial_nc_read(&banks)'))
+        self.assertLess(init.index('initial_nc_read(&banks)'),
+                        init.index('if (ret) {\n\t\tmtk_ccci_owned_smem_cleanup();\n\t\treturn ret;'))
+        self.assertLess(init.index('mtk_ccci_owned_smem_cleanup();'),
+                        init.index('tetris_owned_smem_plan.ready = true'))
+        self.assertLess(init.index('tetris_owned_smem_plan.ready = true'), init.index('__module_get('))
+        cleanup = owner[owner.index('void mtk_ccci_owned_smem_cleanup(void)'):
+                        owner.index('int mtk_ccci_owned_smem_init(void)')]
+        self.assertLess(cleanup.index('tetris_smem_destroy('), cleanup.index('tetris_smem_release_extents('))
+        self.assertLess(cleanup.index('tetris_smem_release_extents('),
+                        cleanup.index('memset(&tetris_owned_smem_plan'))
+
+    def test_initial_read_ci_fixture_uses_actual_init_and_all_boundaries(self):
+        here = Path(__file__).parent
+        fixture = (here / 'test_initial_read.c').read_text()
+        packaged = (here / 'test_packaged_smem.c').read_text()
+        reservation = (here / 'test_smem_reservation.c').read_text()
+        runner = (here / 'check_packaged_smem.py').read_text()
+        self.assertIn('#include "test_initial_read.c"', packaged)
+        self.assertIn('test_initial_read(&copied);', packaged)
+        self.assertIn('initial_read_claim_fault();', reservation)
+        for boundary in ('test_read_sysreg_CurrentEL', 'ioremap_wc', 'readl', 'iounmap'):
+            self.assertIn(boundary + '(', fixture)
+        for required in ('mtk_ccci_owned_smem_init() == fault_error[i]',
+                         'mtk_ccci_owned_smem_init() == -EACCES',
+                         'mtk_ccci_owned_smem_init() == -ENOMEM',
+                         'assert(!map_calls && !read_calls && !unmap_calls)',
+                         'assert(!el_calls && !map_calls && !read_calls && !unmap_calls)',
+                         'assert_initial_read_cleanup(pins)', 'module_pins == ++pins',
+                         'read_calls == 1 && unmap_calls == 1',
+                         'log_calls == 1 && logged_nonzero == !!i',
+                         'unexpected SMEM map in default profile'):
+            self.assertIn(required, fixture)
+        self.assertIn('void *ioremap_wc(phys_addr_t, size_t);', runner)
+        self.assertIn('(4096, 1, 1), (65536, 1, 1)', runner)
+        self.assertIn('(4096, 0, None), (65536, 0, None)', runner)
+        self.assertIn('(4096, 1, None), (65536, 1, None)', runner)
+        self.assertIn('[] if initial_read is None else', runner)
+        self.assertIn("f'-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ={initial_read}'", runner)
 
     def test_exact_r181_snapshot_is_independent_of_new_shipping_kernel(self):
         script = (ROOT / 'ci/packaged-smem-objects.py').read_text()
