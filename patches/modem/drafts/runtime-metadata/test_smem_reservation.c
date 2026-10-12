@@ -109,3 +109,48 @@ static void test_smem_reservation(const struct tetris_metadata_banks *banks)
 	for (i = 0; i < ARRAY_SIZE(held_test); i++)
 		assert(!busy_test[i] && !reservation.held[i]);
 }
+
+#if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+static void test_resource_init_failures(const struct tetris_metadata_banks *banks)
+{
+	struct tetris_smem_owner *seed = NULL;
+	struct tetris_smem_extent_plan plan;
+	struct tetris_smem_boot_evidence evidence;
+	struct tetris_smem_reservation external = { 0 };
+	unsigned int i, j, pins = module_pins;
+
+	assert(!tetris_smem_from_arguments(banks, &seed));
+	assert(!tetris_smem_extent_preview(seed, &plan));
+	evidence_fixture(banks, seed->nc_size, seed->cache_size);
+	assert(!tetris_smem_boot_decode(evidence_wire, sizeof(evidence_wire), banks, sizeof(*banks),
+			&evidence, sizeof(evidence)));
+	assert(!tetris_smem_destroy(seed));
+	node_exists = compatible = property_exists = true;
+	property_length = sizeof(evidence_wire);
+	property_read_error = 0;
+	for (i = 1; i <= plan.count; i++) {
+		claim_calls = claim_releases = 0;
+		claim_fail = i;
+		assert(mtk_ccci_owned_smem_init() == -EBUSY);
+		assert(claim_calls == i && claim_releases == i - 1);
+		assert(!tetris_owned_smem_plan.owner && !tetris_owned_smem_plan.ready);
+		assert(!tetris_owned_smem_plan.reservation.count && module_pins == pins);
+		for (j = 0; j < ARRAY_SIZE(held_test); j++)
+			assert(!busy_test[j] && !tetris_owned_smem_plan.reservation.held[j]);
+	}
+	claim_fail = 0;
+	claim_calls = claim_releases = 0;
+	assert(!tetris_smem_reserve_extents(&plan, &evidence, &external));
+	assert(mtk_ccci_owned_smem_init() == -EBUSY);
+	assert(!tetris_owned_smem_plan.owner && !tetris_owned_smem_plan.ready);
+	assert(!claim_releases && module_pins == pins && external.count == plan.count);
+	tetris_smem_release_extents(&external);
+	assert(!mtk_ccci_owned_smem_init());
+	assert(tetris_owned_smem_plan.owner && tetris_owned_smem_plan.ready);
+	assert(module_pins == pins + 1);
+	/* Fixture-only boot-end cleanup; not an ordinary successful module unload. */
+	mtk_ccci_owned_smem_cleanup();
+	for (j = 0; j < ARRAY_SIZE(held_test); j++)
+		assert(!busy_test[j]);
+}
+#endif

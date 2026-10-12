@@ -222,6 +222,9 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 		test_evidence_collection(&copied);
 		mtk_ccci_owned_smem_cleanup();
 		test_smem_reservation(&copied);
+#if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+		test_resource_init_failures(&copied);
+#endif
 	}
 	mtk_ccci_owned_smem_cleanup();
 	mtk_ccci_owned_args_cleanup();
