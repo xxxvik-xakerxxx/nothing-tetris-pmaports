@@ -73,12 +73,16 @@ def build(vendor):
     for name in ('boot_evidence.c', 'boot_evidence.h'):
         after[PREFIX + 'smem_boot_evidence/' + name] = (
             HERE.parent / 'smem-boot-evidence' / name).read_text()
-    after[PREFIX + 'owned_smem_plan.c'] = (HERE / 'owned_smem_plan.c').read_text()
+    for name in ('owned_smem_plan.c', 'smem_reservation.h', 'smem_reservation.c',
+                 'smem_extent_preview.c'):
+        after[PREFIX + name] = (HERE / name).read_text()
     makefile = PREFIX + 'Makefile'
     before[makefile] = producer.stock(vendor, 'Makefile')
     after[makefile] = producer.replace(before[makefile], '\t\t\tccci_util_md_mem.o',
         '\t\t\tccci_util_md_mem.o \\\n'
         '\t\t\towned_smem_plan.o \\\n'
+        '\t\t\tsmem_reservation.o \\\n'
+        '\t\t\tsmem_extent_preview.o \\\n'
         '\t\t\ttetris_runtime_smem/arguments.o \\\n'
         '\t\t\ttetris_runtime_smem/smem.o \\\n'
         '\t\t\tsmem_boot_evidence/boot_evidence.o')

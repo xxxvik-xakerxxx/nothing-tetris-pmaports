@@ -126,6 +126,41 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('GitHub CI-only', result.stderr)
 
+    def test_resource_only_retains_owner_and_never_touches_smem(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        claim = self.sources[PREFIX + 'smem_reservation.c']
+        preview = self.sources[PREFIX + 'smem_extent_preview.c']
+        self.assertIn('CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY', owner)
+        self.assertIn('tetris_owned_smem_plan.owner = owner;', owner)
+        self.assertIn('__module_get(THIS_MODULE);', owner)
+        self.assertIn('tetris_owned_smem_plan.has_boot_evidence ?', owner)
+        self.assertLess(owner.index('ret = collect_boot_evidence(&banks)'),
+                        owner.index('tetris_smem_reserve_extents('))
+        self.assertIn('while (reservation->count)', claim)
+        self.assertIn('release_mem_region(held->start, resource_size(held))', claim)
+        self.assertLess(claim.index('span->bytes > record->range_size'),
+                        claim.index('request_mem_region('))
+        self.assertIn('tetris_smem_release_extents(reservation);', claim)
+        self.assertIn('owner->state != TETRIS_SMEM_VALIDATED', preview)
+        self.assertIn('span->virtual', preview)
+        self.assertLess(preview.index('plan.span[i] ='), preview.index('memcpy(output,'))
+        for source in (owner, claim, preview):
+            for forbidden in ('ioremap(', 'ioremap_wc(', 'memcpy_fromio(',
+                              'arm_smccc_smc(', 'EXPORT_SYMBOL'):
+                self.assertNotIn(forbidden, source)
+
+    def test_resource_profile_uses_same_r181_exports_and_native_faults(self):
+        script = (ROOT / 'ci/packaged-smem-objects.py').read_text()
+        self.assertIn('-DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1', script)
+        self.assertIn("saved / 'ccci-util-smem-reservation.ko'", script)
+        self.assertIn("report['reservation_module'] = dict(report['linked_module']", script)
+        fixture = (Path(__file__).parent / 'test_smem_reservation.c').read_text()
+        self.assertIn('changed.span[1] = changed.span[0]', fixture)
+        self.assertIn('claim_fail = i', fixture)
+        self.assertIn('&competing) == -EBUSY', fixture)
+        runner = (Path(__file__).parent / 'check_packaged_smem.py').read_text()
+        self.assertIn('(4096, 0), (65536, 0), (4096, 1), (65536, 1)', runner)
+
     def test_only_ap_buffer_is_mapped_and_unmapped(self):
         handoff = self.sources[PREFIX + 'handoff.h']
         collect = handoff[handoff.index('static int tetris_collect_owned_metadata('):]

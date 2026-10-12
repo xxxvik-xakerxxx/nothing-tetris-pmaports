@@ -1,13 +1,15 @@
 diff --git a/drivers/misc/mediatek/ccci_util/Makefile b/drivers/misc/mediatek/ccci_util/Makefile
 --- a/drivers/misc/mediatek/ccci_util/Makefile
 +++ b/drivers/misc/mediatek/ccci_util/Makefile
-@@ -53,8 +53,15 @@
+@@ -53,8 +53,17 @@
  			ccci_util_md_rat.o \
  			ccci_util_boot_args.o \
  			ccci_util_img_parsing.o \
 -			ccci_util_md_mem.o
 +			ccci_util_md_mem.o \
 +			owned_smem_plan.o \
++			smem_reservation.o \
++			smem_extent_preview.o \
 +			tetris_runtime_smem/arguments.o \
 +			tetris_runtime_smem/smem.o \
 +			smem_boot_evidence/boot_evidence.o
@@ -874,15 +876,17 @@ diff --git a/drivers/misc/mediatek/ccci_util/owned_smem_plan.c b/drivers/misc/me
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/ccci_util/owned_smem_plan.c
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,149 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#include <linux/errno.h>
 +#include <linux/kernel.h>
++#include <linux/module.h>
 +#include <linux/of.h>
 +#include <linux/string.h>
 +#include "ccci_util_lib_main.h"
 +#include "tetris_runtime_smem/smem.h"
 +#include "smem_boot_evidence/boot_evidence.h"
++#include "smem_reservation.h"
 +
 +/* Sole serialized util init/exit lifetime; no runtime consumer or mappings. */
 +static struct {
@@ -891,6 +895,11 @@ new file mode 100644
 +	struct tetris_smem_boot_evidence boot_evidence;
 +	bool has_boot_evidence;
 +	bool ready;
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
++	struct tetris_smem_extent_plan extents;
++	struct tetris_smem_reservation reservation;
++	struct tetris_smem_owner *owner;
++#endif
 +} tetris_owned_smem_plan;
 +
 +static int collect_boot_evidence(const struct tetris_metadata_banks *banks)
@@ -944,6 +953,18 @@ new file mode 100644
 +
 +void mtk_ccci_owned_smem_cleanup(void)
 +{
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
++	/* Mapping/publication bodies are absent from this build, so the retained
++	 * capsule cannot become published. Successful resource init is boot-pinned.
++	 */
++	if (tetris_owned_smem_plan.owner) {
++		int ret = tetris_smem_destroy(tetris_owned_smem_plan.owner);
++
++		if (WARN_ON(ret))
++			return;
++	}
++	tetris_smem_release_extents(&tetris_owned_smem_plan.reservation);
++#endif
 +	memset(&tetris_owned_smem_plan, 0, sizeof(tetris_owned_smem_plan));
 +}
 +
@@ -951,7 +972,7 @@ new file mode 100644
 +{
 +	struct tetris_metadata_banks banks;
 +	struct tetris_smem_owner *owner = NULL;
-+	int ret, release;
++	int ret;
 +
 +	if (tetris_owned_smem_plan.ready)
 +		return -EALREADY;
@@ -964,16 +985,40 @@ new file mode 100644
 +	ret = tetris_smem_preview(owner, &tetris_owned_smem_plan.layout,
 +			tetris_owned_smem_plan.nc, ARRAY_SIZE(tetris_owned_smem_plan.nc),
 +			tetris_owned_smem_plan.cache, ARRAY_SIZE(tetris_owned_smem_plan.cache));
-+	release = tetris_smem_destroy(owner);
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
 +	if (!ret)
-+		ret = release;
++		ret = tetris_smem_extent_preview(owner, &tetris_owned_smem_plan.extents);
++#endif
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
++	tetris_owned_smem_plan.owner = owner;
++#else
++	{
++		int release = tetris_smem_destroy(owner);
++
++		if (!ret)
++			ret = release;
++	}
++#endif
 +	if (!ret)
 +		ret = collect_boot_evidence(&banks);
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
++	if (!ret)
++		ret = tetris_owned_smem_plan.has_boot_evidence ?
++			tetris_smem_reserve_extents(&tetris_owned_smem_plan.extents,
++				&tetris_owned_smem_plan.boot_evidence,
++				&tetris_owned_smem_plan.reservation) : -ENODATA;
++#endif
 +	if (ret) {
 +		mtk_ccci_owned_smem_cleanup();
 +		return ret;
 +	}
 +	tetris_owned_smem_plan.ready = true;
++#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
++	/* No runtime consumer can release these boot-lifetime resources. */
++	__module_get(THIS_MODULE);
++	pr_info("Tetris CCCI: kernel SMEM extents reserved; count=%u; physical access disabled\n",
++		tetris_owned_smem_plan.reservation.count);
++#endif
 +	if (tetris_owned_smem_plan.has_boot_evidence)
 +		pr_info("Tetris CCCI: SMEM boot evidence retained; Linux NS admission not established\n");
 +	pr_info("Tetris CCCI: owned SMEM plan ready; NC=%u cache=%u; memory access disabled\n",
@@ -1527,6 +1572,169 @@ new file mode 100644
 +int tetris_smem_boot_decode(const void *wire, size_t wire_bytes,
 +		const struct tetris_metadata_banks *banks, size_t banks_bytes,
 +		struct tetris_smem_boot_evidence *output, size_t output_bytes);
++#endif
+diff --git a/drivers/misc/mediatek/ccci_util/smem_extent_preview.c b/drivers/misc/mediatek/ccci_util/smem_extent_preview.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/smem_extent_preview.c
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/errno.h>
++#include <linux/string.h>
++#include "tetris_runtime_smem/private.h"
++#include "smem_reservation.h"
++
++int tetris_smem_extent_preview(struct tetris_smem_owner *owner,
++		struct tetris_smem_extent_plan *output)
++{
++	struct tetris_smem_extent_plan plan = { 0 };
++	unsigned long out = (unsigned long)output, source = (unsigned long)owner;
++	unsigned int i;
++	int ret = 0;
++
++	if (!owner || !output || out > ~0UL - sizeof(*output) ||
++	    source > ~0UL - sizeof(*owner) ||
++	    (out < source + sizeof(*owner) && source < out + sizeof(*output)))
++		return -EINVAL;
++	mutex_lock(&owner->lock);
++	if (owner->state != TETRIS_SMEM_VALIDATED) {
++		ret = owner->first_error ? owner->first_error : -EALREADY;
++		goto out;
++	}
++	if (!owner->span_count || owner->span_count > TETRIS_SMEM_SPANS_MAX) {
++		ret = -ERANGE;
++		goto out;
++	}
++	plan.count = owner->span_count;
++	for (i = 0; i < plan.count; i++) {
++		const struct tetris_smem_span *span = &owner->spans[i];
++		const struct tetris_metadata_window *bank = span->bank ? &owner->banks.cache : &owner->banks.nc;
++
++		if (span->bank > 1 || !span->size || span->virtual ||
++		    span->offset >= bank->capacity || span->size > bank->capacity - span->offset ||
++		    bank->base > ~0ULL - bank->capacity) {
++			ret = -ERANGE;
++			goto out;
++		}
++		plan.span[i] = (struct tetris_smem_extent) {
++			.base = bank->base + span->offset, .bytes = span->size, .bank = span->bank,
++		};
++	}
++	memcpy(output, &plan, sizeof(plan));
++out:
++	mutex_unlock(&owner->lock);
++	return ret;
++}
+diff --git a/drivers/misc/mediatek/ccci_util/smem_reservation.c b/drivers/misc/mediatek/ccci_util/smem_reservation.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/smem_reservation.c
+@@ -0,0 +1,69 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/errno.h>
++#include <linux/ioport.h>
++#include <asm/page.h>
++#include "smem_reservation.h"
++
++void tetris_smem_release_extents(struct tetris_smem_reservation *reservation)
++{
++	while (reservation->count) {
++		struct resource *held = reservation->held[--reservation->count];
++
++		release_mem_region(held->start, resource_size(held));
++		reservation->held[reservation->count] = NULL;
++	}
++}
++
++int tetris_smem_reserve_extents(const struct tetris_smem_extent_plan *plan,
++		const struct tetris_smem_boot_evidence *evidence,
++		struct tetris_smem_reservation *reservation)
++{
++	unsigned int i, j;
++
++	if (!plan || !evidence || !reservation || !plan->count ||
++	    plan->count > TETRIS_SMEM_SPANS_MAX)
++		return -EINVAL;
++	if (reservation->count)
++		return -EALREADY;
++	/* Evidence was decoded by the sole caller. Never interpret claims as a
++	 * fresh secure monitor response or permit any physical access here.
++	 */
++	if (evidence->version != 1 || evidence->scope != 1 || evidence->count != 2)
++		return -EBADMSG;
++	for (i = 0; i < TETRIS_SMEM_SPANS_MAX; i++)
++		if (reservation->held[i])
++			return -EINVAL;
++	/* Validate the entire plan before claiming any range. */
++	for (i = 0; i < plan->count; i++) {
++		const struct tetris_smem_extent *span = &plan->span[i];
++		const struct tetris_smem_boot_record *record;
++
++		if (span->bank > 1 || !span->bytes || !span->base ||
++		    ((span->base | span->bytes) & (PAGE_SIZE - 1)) ||
++		    span->base > ~0ULL - span->bytes)
++			return -ERANGE;
++		record = &evidence->record[span->bank];
++		if (record->bank != span->bank || record->slot != 42 + span->bank ||
++		    span->base < record->range_start ||
++		    span->base - record->range_start >= record->range_size ||
++		    span->bytes > record->range_size - (span->base - record->range_start))
++			return -ERANGE;
++		for (j = 0; j < i; j++) {
++			const struct tetris_smem_extent *previous = &plan->span[j];
++
++			if (span->base < previous->base + previous->bytes &&
++			    previous->base < span->base + span->bytes)
++				return -EADDRINUSE;
++		}
++	}
++	for (i = 0; i < plan->count; i++) {
++		reservation->held[i] = request_mem_region(plan->span[i].base,
++				plan->span[i].bytes, "tetris-ccci-smem");
++		if (!reservation->held[i]) {
++			tetris_smem_release_extents(reservation);
++			return -EBUSY;
++		}
++		reservation->count++;
++	}
++	return 0;
++}
+diff --git a/drivers/misc/mediatek/ccci_util/smem_reservation.h b/drivers/misc/mediatek/ccci_util/smem_reservation.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/smem_reservation.h
+@@ -0,0 +1,32 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef TETRIS_SMEM_RESERVATION_H
++#define TETRIS_SMEM_RESERVATION_H
++#include "tetris_runtime_smem/smem.h"
++#include "smem_boot_evidence/boot_evidence.h"
++
++#define TETRIS_SMEM_SPANS_MAX 23U
++struct tetris_smem_extent {
++	unsigned long long base;
++	unsigned int bytes, bank;
++};
++struct tetris_smem_extent_plan {
++	unsigned int count;
++	struct tetris_smem_extent span[TETRIS_SMEM_SPANS_MAX];
++};
++struct resource;
++struct tetris_smem_reservation {
++	struct resource *held[TETRIS_SMEM_SPANS_MAX];
++	unsigned int count;
++};
++
++/* Pure copied mapping geometry; no virtual pointers, grant or I/O. */
++int tetris_smem_extent_preview(struct tetris_smem_owner *owner,
++		struct tetris_smem_extent_plan *output);
++/* Serialized init/exit only. Exact planned spans, never CONSYS/full bank tails.
++ * iomem exclusivity is not NS permission, authentication or firmware START.
++ */
++int tetris_smem_reserve_extents(const struct tetris_smem_extent_plan *plan,
++		const struct tetris_smem_boot_evidence *evidence,
++		struct tetris_smem_reservation *reservation);
++void tetris_smem_release_extents(struct tetris_smem_reservation *reservation);
 +#endif
 diff --git a/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/arguments.c b/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/arguments.c
 new file mode 100644

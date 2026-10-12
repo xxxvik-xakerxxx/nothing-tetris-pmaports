@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include <linux/errno.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/of.h>
 #include <linux/string.h>
 #include "ccci_util_lib_main.h"
 #include "tetris_runtime_smem/smem.h"
 #include "smem_boot_evidence/boot_evidence.h"
+#include "smem_reservation.h"
 
 /* Sole serialized util init/exit lifetime; no runtime consumer or mappings. */
 static struct {
@@ -14,6 +16,11 @@ static struct {
 	struct tetris_smem_boot_evidence boot_evidence;
 	bool has_boot_evidence;
 	bool ready;
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	struct tetris_smem_extent_plan extents;
+	struct tetris_smem_reservation reservation;
+	struct tetris_smem_owner *owner;
+#endif
 } tetris_owned_smem_plan;
 
 static int collect_boot_evidence(const struct tetris_metadata_banks *banks)
@@ -67,6 +74,18 @@ put:
 
 void mtk_ccci_owned_smem_cleanup(void)
 {
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	/* Mapping/publication bodies are absent from this build, so the retained
+	 * capsule cannot become published. Successful resource init is boot-pinned.
+	 */
+	if (tetris_owned_smem_plan.owner) {
+		int ret = tetris_smem_destroy(tetris_owned_smem_plan.owner);
+
+		if (WARN_ON(ret))
+			return;
+	}
+	tetris_smem_release_extents(&tetris_owned_smem_plan.reservation);
+#endif
 	memset(&tetris_owned_smem_plan, 0, sizeof(tetris_owned_smem_plan));
 }
 
@@ -74,7 +93,7 @@ int mtk_ccci_owned_smem_init(void)
 {
 	struct tetris_metadata_banks banks;
 	struct tetris_smem_owner *owner = NULL;
-	int ret, release;
+	int ret;
 
 	if (tetris_owned_smem_plan.ready)
 		return -EALREADY;
@@ -87,16 +106,40 @@ int mtk_ccci_owned_smem_init(void)
 	ret = tetris_smem_preview(owner, &tetris_owned_smem_plan.layout,
 			tetris_owned_smem_plan.nc, ARRAY_SIZE(tetris_owned_smem_plan.nc),
 			tetris_owned_smem_plan.cache, ARRAY_SIZE(tetris_owned_smem_plan.cache));
-	release = tetris_smem_destroy(owner);
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
 	if (!ret)
-		ret = release;
+		ret = tetris_smem_extent_preview(owner, &tetris_owned_smem_plan.extents);
+#endif
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	tetris_owned_smem_plan.owner = owner;
+#else
+	{
+		int release = tetris_smem_destroy(owner);
+
+		if (!ret)
+			ret = release;
+	}
+#endif
 	if (!ret)
 		ret = collect_boot_evidence(&banks);
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	if (!ret)
+		ret = tetris_owned_smem_plan.has_boot_evidence ?
+			tetris_smem_reserve_extents(&tetris_owned_smem_plan.extents,
+				&tetris_owned_smem_plan.boot_evidence,
+				&tetris_owned_smem_plan.reservation) : -ENODATA;
+#endif
 	if (ret) {
 		mtk_ccci_owned_smem_cleanup();
 		return ret;
 	}
 	tetris_owned_smem_plan.ready = true;
+#if defined(CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY) && CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	/* No runtime consumer can release these boot-lifetime resources. */
+	__module_get(THIS_MODULE);
+	pr_info("Tetris CCCI: kernel SMEM extents reserved; count=%u; physical access disabled\n",
+		tetris_owned_smem_plan.reservation.count);
+#endif
 	if (tetris_owned_smem_plan.has_boot_evidence)
 		pr_info("Tetris CCCI: SMEM boot evidence retained; Linux NS admission not established\n");
 	pr_info("Tetris CCCI: owned SMEM plan ready; NC=%u cache=%u; memory access disabled\n",

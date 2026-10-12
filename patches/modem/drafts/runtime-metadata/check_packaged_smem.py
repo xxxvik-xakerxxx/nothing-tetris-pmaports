@@ -22,7 +22,15 @@ BOUNDARY = r'''#ifndef PACKAGED_NATIVE_BOUNDARY_H
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define PAGE_SIZE TEST_PAGE_SIZE
 #define pr_info(...) ((void)0)
+#define WARN_ON(condition) ({ bool failed = !!(condition); assert(!failed); failed; })
+#define THIS_MODULE ((void *)1)
+void __module_get(void *);
 typedef unsigned long long phys_addr_t;
+typedef unsigned long long resource_size_t;
+struct resource { resource_size_t start, end; };
+#define resource_size(r) ((r)->end - (r)->start + 1)
+struct resource *request_mem_region(resource_size_t, resource_size_t, const char *);
+void release_mem_region(resource_size_t, resource_size_t);
 struct mutex { bool locked; };
 static inline void mutex_init(struct mutex *m) { m->locked = false; }
 static inline void mutex_lock(struct mutex *m) { assert(!m->locked); m->locked = true; }
@@ -71,7 +79,7 @@ def native_ci(vendor, uboot, stock):
             path.write_text(source)
         for relative in ('linux/errno.h', 'linux/io.h', 'linux/kernel.h', 'linux/slab.h',
                          'linux/string.h', 'linux/unaligned.h', 'linux/mutex.h',
-                         'linux/types.h', 'linux/of.h', 'asm/page.h'):
+                         'linux/types.h', 'linux/of.h', 'linux/ioport.h', 'linux/module.h', 'asm/page.h'):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             headers = {'linux/errno.h': '#include <asm-generic/errno.h>\n',
@@ -88,6 +96,7 @@ def native_ci(vendor, uboot, stock):
         (root / 'import.c').write_text(fixture)
         (root / 'producer_test.c').write_text(boot)
         (root / 'test_packaged_smem.c').write_bytes((HERE / 'test_packaged_smem.c').read_bytes())
+        (root / 'test_smem_reservation.c').write_bytes((HERE / 'test_smem_reservation.c').read_bytes())
         names = ('tetris_modem_layout.c', 'tetris_modem_layout.h', 'tetris_modem_bundle.h',
                  'tetris_modem_emi.c', 'tetris_modem_emi.h', 'tetris_modem_remap.h',
                  'tetris_modem_emi_rows.c', 'tetris_modem_emi_rows.h',
@@ -99,28 +108,31 @@ def native_ci(vendor, uboot, stock):
                 'show', f'{producer.UBOOT_PIN}:board/mediatek/mt6878/{name}']))
         env = dict(os.environ, ASAN_OPTIONS='detect_leaks=1:abort_on_error=1',
                    UBSAN_OPTIONS='halt_on_error=1')
-        for page in (4096, 65536):
+        for page, resource_only in ((4096, 0), (65536, 0), (4096, 1), (65536, 1)):
             objects = []
             for name in ('tetris_modem_layout.c', 'tetris_modem_emi.c',
                          'tetris_modem_emi_rows.c', 'tetris_modem_ccci_tags.c',
                          'producer_test.c', 'import.c', 'tetris_runtime_smem/smem.c',
-                         'tetris_runtime_smem/arguments.c', 'smem_boot_evidence/boot_evidence.c'):
+                         'tetris_runtime_smem/arguments.c', 'smem_boot_evidence/boot_evidence.c',
+                         'smem_extent_preview.c', 'smem_reservation.c'):
                 obj = root / (name.replace('/', '-') + '.o')
                 flags = ['-include', str(root / 'boundary.h')] if name in (
                     'import.c', 'tetris_runtime_smem/smem.c', 'tetris_runtime_smem/arguments.c',
-                    'smem_boot_evidence/boot_evidence.c') else []
+                    'smem_boot_evidence/boot_evidence.c', 'smem_extent_preview.c',
+                    'smem_reservation.c') else []
                 subprocess.run([os.environ.get('CC', 'clang'), '-std=gnu11', '-Wall', '-Wextra',
                     '-Werror', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined',
                     '-fno-omit-frame-pointer', '-g', f'-DTEST_PAGE_SIZE={page}',
+                    f'-DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY={resource_only}',
                     '-DTETRIS_MODEM_LAYOUT_HOST_TEST', '-I', str(root), *flags,
                     '-c', str(root / name), '-o', str(obj)], check=True)
                 objects.append(str(obj))
-            binary = root / f'packaged-smem-{page}'
+            binary = root / f'packaged-smem-{page}-{resource_only}'
             subprocess.run([os.environ.get('CC', 'clang'), '-fsanitize=address,undefined',
                             *objects, '-o', str(binary)], check=True)
             for case in range(59):
                 subprocess.run([str(binary), str(stock), str(case)], env=env, check=True)
-    print('actual packaged import -> SMEM plan: 59 cases x 4KiB/64KiB PASS; no SMEM I/O')
+    print('actual packaged import -> SMEM plan: 59 cases x 4KiB/64KiB x metadata/resource profiles PASS; no SMEM I/O')
 
 
 def main():

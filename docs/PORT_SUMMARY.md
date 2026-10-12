@@ -292,6 +292,12 @@ cold start and does not fix warm reboot or poweroff behavior. This single pure
 SMEM-plan test is not evidence of SIM, modem READY or protected-memory access.
 Runtime SMEM admission, CCIF/DPMAIF/FSM lifecycle,
 SIM/registration and the userspace radio/audio path remain.
+The new opt-in resource-only profile retains the real unpublished planner,
+evidence and extents together and claims only the planned page-rounded Linux
+iomem ranges. It excludes CONSYS and unused bank tails, unwinds conflicts and
+pins successful ownership until reboot. It performs no physical access,
+secure-monitor call, mapping, publication or modem START. CI and physical
+validation of this new profile are pending; it is not installed or autoloaded.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.

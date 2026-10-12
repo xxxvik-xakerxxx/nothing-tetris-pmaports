@@ -9,6 +9,13 @@ static unsigned char evidence_wire[336];
 static bool node_exists = true, compatible = true, property_exists;
 static int property_length = 336, property_read_error;
 static unsigned int acquired, released;
+static unsigned int module_pins;
+
+void __module_get(void *module)
+{
+	assert(module == THIS_MODULE);
+	module_pins++;
+}
 
 static struct device_node *of_find_node_by_path(const char *path)
 {
@@ -81,7 +88,7 @@ static void evidence_fixture(const struct tetris_metadata_banks *banks,
 	for (i = 0; i < 2; i++) {
 		const struct tetris_metadata_window *w = i ? &banks->cache : &banks->nc;
 		unsigned char *p = evidence_wire + 80 + i * 128;
-		unsigned long long size = ((unsigned long long)(i ? cache_size : nc_size) + 4095) & ~4095ULL;
+		unsigned long long size = ((unsigned long long)(i ? cache_size : nc_size) + 65535) & ~65535ULL;
 
 		put32(p, i);
 		put32(p + 4, 42 + i);
@@ -143,10 +150,17 @@ static void test_evidence_collection(const struct tetris_metadata_banks *banks)
 	property_exists = false;
 	property_read_error = 0;
 	mtk_ccci_owned_smem_cleanup();
+#if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+	assert(mtk_ccci_owned_smem_init() == -ENODATA);
+	assert(!tetris_owned_smem_plan.ready && !tetris_owned_smem_plan.owner);
+#else
 	assert(!mtk_ccci_owned_smem_init());
 	assert(tetris_owned_smem_plan.ready && !tetris_owned_smem_plan.has_boot_evidence);
+#endif
 	assert(acquired == released);
 }
+
+#include "test_smem_reservation.c"
 
 static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 {
@@ -175,8 +189,25 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 			assert(!tetris_owned_smem_plan.ready);
 		}
 		plan_fail = 0;
+#if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+		{
+			struct tetris_smem_owner *seed = NULL;
+
+			assert(!tetris_smem_from_arguments(&copied, &seed));
+			evidence_fixture(&copied, seed->nc_size, seed->cache_size);
+			assert(!tetris_smem_destroy(seed));
+			property_exists = true;
+		}
+#endif
 		assert(!mtk_ccci_owned_smem_init());
 		assert(tetris_owned_smem_plan.ready);
+#if CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY
+		assert(module_pins == 1);
+		assert(tetris_owned_smem_plan.owner);
+		assert(tetris_owned_smem_plan.reservation.count == 2);
+#else
+		assert(!module_pins);
+#endif
 		assert(mtk_ccci_owned_smem_init() == -EALREADY);
 		assert(tetris_owned_smem_plan.layout.md_bank0.base_ap_view_phy == copied.firmware.base);
 		assert(!tetris_owned_smem_plan.layout.md_bank0.base_ap_view_vir);
@@ -189,6 +220,8 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 		for (i = 0; i < ARRAY_SIZE(tetris_owned_smem_plan.cache); i++)
 			assert(!tetris_owned_smem_plan.cache[i].base_ap_view_vir);
 		test_evidence_collection(&copied);
+		mtk_ccci_owned_smem_cleanup();
+		test_smem_reservation(&copied);
 	}
 	mtk_ccci_owned_smem_cleanup();
 	mtk_ccci_owned_args_cleanup();

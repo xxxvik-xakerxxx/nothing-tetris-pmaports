@@ -92,14 +92,16 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
     vendor = work / 'runtime-vendor'
-    staging.run([*make, 'M=' + str(isolated), 'KERNEL_SRC=' + str(kernel),
+    flags = manifest['vendor_kcflags'] + ' -I' + str(vendor / 'include') + \
+        ' -DCONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY=1' \
+        ' -Werror=implicit-function-declaration -Werror=incompatible-pointer-types' \
+        ' -Werror=int-conversion'
+    command = [*make, 'M=' + str(isolated), 'KERNEL_SRC=' + str(kernel),
         'KERNEL_OUT=' + str(output), 'DEVICE_MODULES_PATH=' + str(vendor),
         'CONFIG_MTK_ECCCI_DRIVER=m', 'CONFIG_MTK_SECURITY_SW_SUPPORT=n',
         'CONFIG_MTK_SEC_MODEM_NVRAM_ANTI_CLONE=n', 'CONFIG_MTK_AEE_IPANIC=n',
-        'KBUILD_MODPOST_WARN=', 'KCFLAGS=' + manifest['vendor_kcflags'] +
-        ' -I' + str(vendor / 'include') + ' -DCONFIG_MTK_ECCCI_TETRIS_METADATA_ONLY=1'
-        ' -Werror=implicit-function-declaration -Werror=incompatible-pointer-types'
-        ' -Werror=int-conversion', 'ccci_util_lib.ko'])
+        'KBUILD_MODPOST_WARN=']
+    staging.run([*command, 'KCFLAGS=' + flags, 'ccci_util_lib.ko'])
     module = isolated / 'ccci_util_lib.ko'
     symbols = subprocess.check_output(['llvm-nm', '--defined-only', str(module)], text=True)
     for forbidden in ('map', 'publish', 'export'):
@@ -125,6 +127,25 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
         baseline_commit=BASELINE, evidence_archive_sha256=EVIDENCE_SHA256,
         config_sha256=identity['sha256']['.config'], symvers_sha256=identity['sha256']['Module.symvers'],
         scope='linked against real r181 full-build exports; not loaded or hardware validated')
+    # Kbuild command tracking recompiles the same isolated sources for the
+    # opt-in resource-only consumer. No shipping configuration is modified.
+    staging.run([*command, 'KCFLAGS=' + flags + ' -DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1',
+                 'ccci_util_lib.ko'])
+    reservation_symbols = subprocess.check_output(['llvm-nm', '--defined-only', str(module)], text=True)
+    for required in ('tetris_smem_extent_preview', 'tetris_smem_reserve_extents',
+                     'tetris_smem_release_extents'):
+        if not re.search(r'\b' + required + r'$', reservation_symbols, re.M):
+            raise ValueError('reservation consumer missing from linked module: ' + required)
+    for forbidden in ('map', 'publish', 'export'):
+        if re.search(r'\btetris_smem_' + forbidden + r'_private$', reservation_symbols, re.M):
+            raise ValueError('reservation-only consumer contains physical SMEM transaction')
+    if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
+            subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() or \
+            subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
+        raise ValueError('reservation module ABI/dependency/license changed')
+    shutil.copyfile(module, saved / 'ccci-util-smem-reservation.ko')
+    report['reservation_module'] = dict(report['linked_module'], sha256=staging.sha(module),
+        scope='exact r181 exports; kernel iomem claims only; no mappings, memory access, NS grant or START')
 
 
 def main():
@@ -169,7 +190,7 @@ def main():
     original_vendor = work / 'runtime-vendor'
     objects = ('ccci_util_boot_args.o', 'ccci_util_lib_fo.o', 'ccci_util_lib_main.o',
                'owned_smem_plan.o', 'tetris_runtime_smem/smem.o', 'tetris_runtime_smem/arguments.o',
-               'smem_boot_evidence/boot_evidence.o')
+               'smem_boot_evidence/boot_evidence.o', 'smem_reservation.o', 'smem_extent_preview.o')
     report = dict(commit=os.environ.get('GITHUB_SHA'), scope='actual packaged translation units only; no modpost, install or hardware',
                   overlay_sha256=hashlib.sha256(patch.encode()).hexdigest(), status='started')
     report['boot_evidence_source_sha256'] = {name: staging.sha(evidence / name)
@@ -190,7 +211,8 @@ def main():
             *(str(util / name) for name in objects)], text=True)
         for name in ('mtk_ccci_owned_banks_copy', 'mtk_ccci_owned_smem_init',
                      'tetris_smem_create', 'tetris_smem_from_arguments', 'tetris_smem_preview',
-                     'tetris_smem_boot_decode'):
+                     'tetris_smem_boot_decode', 'tetris_smem_extent_preview',
+                     'tetris_smem_reserve_extents', 'tetris_smem_release_extents'):
             if not any(line.split()[-1:] == [name] for line in symbols.splitlines()):
                 raise ValueError('missing actual integration symbol: ' + name)
         undefined = subprocess.check_output(['llvm-nm', '--undefined-only',

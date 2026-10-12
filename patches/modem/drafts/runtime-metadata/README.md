@@ -154,6 +154,24 @@ not a new boolean gate or a guess about physical reset.
 
 ## Source anchors
 
+### Opt-in kernel resource consumer
+
+`CONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1` retains the unpublished planner,
+copied boot evidence and exact page-rounded extents in one private capsule.
+It requires valid boot evidence and claims each planned extent with Linux
+`request_mem_region()`. CONSYS and unused bank capacity are not claimed.
+Every range is validated before the first claim; conflicts release only this
+transaction's claims in reverse order. Successful initialization pins the
+module until reboot; there is no supported unload/reload operation.
+
+This profile does not map, read, clear or publish modem memory and does not
+invoke the secure monitor, START or registration. Kernel resource exclusion
+does not establish current secure-world permission or exclude secure/DMA
+writers. The default metadata profile is unchanged. Neither profile is
+installed or autoloaded. CI exercises both actual init branches at 4/64 KiB
+geometry and links each against the original r181 exports; hardware testing
+of the resource consumer remains pending.
+
 - U-Boot `board/mediatek/mt6878/tetris_modem_brom_board.c`: `publish()`, scalar
   record, disabled consumers and BROM-only loader invocation.
 - U-Boot `tetris_modem_final.c`: 64KiB LMB allocation, `no_map_reservation()`,
