@@ -342,9 +342,14 @@ The next [private mapped profile](../patches/modem/drafts/runtime-metadata/MAP_O
 reuses the existing WC transaction and mapped-unpublished table export. It
 revalidates both banks and held claims, excludes CONSYS, copies into private
 consumer storage, then retains mappings/ownership until reboot. Native fault
-tests and exact-r181 ARM64 linkage are integrated into CI but have not run for
-this revision. No memory reads/writes, legacy global publication or transport
-START is enabled; this profile is not automatically installed or loaded.
+tests and exact-r181 ARM64 linkage passed
+[CI38245658821](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38245658821).
+Module SHA256: `cdb2841bfd0bfb0baf0933ae6e0c189ad8d75abcd393f77f9334b43392711eb2`.
+One physical init on fresh boot `7d4b87cb-bd4e-412e-a7ea-b54eb9729c34` passed
+at uptime229.86s, retaining both claims/mappings and module reference1 without
+new kernel faults or USB/sensor failures. No memory reads/writes, legacy global
+publication or transport START is enabled; this profile is not automatically
+installed or loaded. Actual CCCI consumer integration and lifecycle remain.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -417,7 +422,7 @@ The [native power candidate](../patches/camera-camisp/power/README.md) adds actu
 Linux CAM_MAIN/CAM_VCORE descriptors, checked sequential ACK transactions and
 MT6878 VMM isolation operations. Thirteen static negative-test groups and pinned
 source/patch checks pass; its object is now included in both ARM64 config
-variants, with compilation pending. Shared VMM ownership/voltage policy and
+variants, with actual ARM64 compilation passed in CI38245658821. Shared VMM ownership/voltage policy and
 complete callback wiring remain missing; no provider or board node is enabled.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
@@ -447,9 +452,16 @@ endpoint connection does not establish engine INIT or a position fix.
 The [receiver-policy producer](../patches/gnss-navigation-audit/RECEIVER_POLICY_OWNER.md)
 now acquires the two exact build properties and reuses the existing constructor
 for five proven second-config bytes. Its actual native sanitizer fixture and
-ARM64 Bionic link are included in CI, pending for this revision. The property
+ARM64 Bionic link passed CI38245663571. The property
 service is an Android/Bionic boundary, not a new mandatory pmOS daemon; complete
 native policy inputs and startup configuration still need integration.
+The next pure [native quiet-policy builder](../patches/gnss-navigation-audit/b41_receiver_inputs.md)
+selects the proven host/NMEA path without an Android property service. It
+preserves all remaining receiver/stop/MPE/AGPS gates; native compilation is
+pending for this new revision. On r181 boot7d4b87cb the explicit GPS transport
+probe returned0 at uptime427.85s and created gpsdl0/1 beside the retained SMEM
+owner; USB/sensors/SSH remained active. Neither link was opened and no navigation
+or position fix was attempted.
 See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Development Boundaries

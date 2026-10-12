@@ -3,7 +3,7 @@ maintainer="BotchedRPR <igor.belwon@mentallysanemainliners.org>"
 pkgname=device-nothing-tetris
 pkgdesc="Nothing CMF Phone 1"
 pkgver=8
-pkgrel=17
+pkgrel=18
 url="https://postmarketos.org"
 license="MIT AND GPL-2.0-only"
 arch="aarch64"
@@ -17,6 +17,7 @@ depends="
 	greetd
 	iproute2
 	kmod
+	linux-firmware-arm
 	linux-postmarketos-mediatek-mt6878
 	postmarketos-base
 	python3

@@ -60,6 +60,25 @@ deassertion, GPUEB boot or accelerated render node is enabled by this candidate.
 
 ## Earlier Supply Evidence
 
+### Standard CSF Firmware Package
+
+Device package8-r18 depends on Alpine `linux-firmware-arm`, rather than copying
+another Android vendor file or installing a private GPU blob. The inspected
+official aarch64 package20260810-r0 contains the standard architecture paths.
+Its decompressed arch11.8 image exactly matches linux-firmware commit
+`afabaf773c4c2e2c841429933a6a084a5af4d14d`: 299008 bytes, SHA256
+`98ef32f43f05d03711580fb78f44a5b24dcd1f8a2f3ab09a25410fb3d39d7e1d`.
+The existing bounded CSF parser accepts its version0.3 framing and shared region.
+The kernel already enables compressed-firmware and zstd support. Full-image CI
+checks the installed package's arch11.8 payload and retains a metadata report.
+
+This is a firmware availability prerequisite, not a handset GPU-ID measurement
+or runtime interface test. Panthor still derives its path from the powered
+GPU_ID; no architecture is forced, no board GPU node is added and GPUEB is a
+separate processor/firmware. No runtime firmware or GPU activation occurs.
+Authoritative inputs: [Alpine package](https://pkgs.alpinelinux.org/package/edge/main/aarch64/linux-firmware-arm)
+and [linux-firmware manifest](https://gitlab.com/kernel-firmware/linux-firmware/-/blob/afabaf773c4c2e2c841429933a6a084a5af4d14d/WHENCE).
+
 r177 candidate describes disabled USID-6 VBUCK2/VGPU and MT6363 VSRAM_CPUM
 without attaching a GPU consumer. The existing MT6363 registration loop now
 honours disabled children. A partial MT6315 provider cannot register VBUCK1
@@ -311,9 +330,10 @@ clock, reset, SRAM and firmware ownership are complete.
    while patch `0009` provides PLLs and top muxes. Neither proves gate/reset/SRAM
    ordering, stack clock, or vendor SCMI/GPUEB frequency ownership.
 4. **Firmware.** Panthor derives
-   `arm/mali/arch<major>.<minor>/mali_csffw.bin` from the live GPU ID. No CSF
-   firmware is packaged in this port. The exact GPU ID, redistributable
-   firmware source, header compatibility, and hash remain unknown.
+   `arm/mali/arch<major>.<minor>/mali_csffw.bin` from the live GPU ID. Device8-r18
+   adds the standard redistributable firmware package; installed availability
+   awaits image CI. The powered GPU ID and actual firmware interface remain
+   untested. Do not equate the package or offline header check with a GPU boot.
 5. **Memory protection.** The vendor Mali node has no external `iommus`
    property and the Panthor binding does not require one; Panthor manages the
    Mali MMU directly. However, MT6878 GPUMPU, protected-memory, reserved-memory

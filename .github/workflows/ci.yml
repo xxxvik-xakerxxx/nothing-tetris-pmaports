@@ -284,6 +284,7 @@ jobs:
         run: |
           sh patches/gnss-navigation-audit/run_agps_host_ci.sh
           sh patches/gnss-navigation-audit/run_receiver_policy_ci.sh
+          sh patches/gnss-navigation-audit/run_receiver_inputs_ci.sh
           sh patches/gnss-navigation-audit/run_control_notify_ci.sh
           sh patches/gnss-navigation-audit/run_second_config_ci.sh
           sh patches/gnss-navigation-audit/run_navigation_output_ci.sh
@@ -361,6 +362,9 @@ jobs:
           BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
             sh patches/gnss-navigation-audit/run_receiver_policy_ci.sh \
               --bionic-compile out/b41-receiver-policy-test
+          BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
+            sh patches/gnss-navigation-audit/run_receiver_inputs_ci.sh \
+              --bionic-compile out/b41-receiver-inputs-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
             patches/gnss-navigation-audit/b41_startup_adapter.c \
             patches/gnss-navigation-audit/test_b41_startup_adapter.c \
@@ -986,6 +990,13 @@ jobs:
           }
           test "$(rootfs_modinfo -F name rfcomm)" = rfcomm
           test "$(rootfs_modinfo -F name bnep)" = bnep
+          test -s "$rootfs/usr/lib/firmware/arm/mali/arch11.8/mali_csffw.bin.zst"
+          zstd -dc "$rootfs/usr/lib/firmware/arm/mali/arch11.8/mali_csffw.bin.zst" \
+            > /tmp/nothing-tetris-public-csf.bin
+          PYTHONPATH=/work/patches/gpu python3 -c \
+            'import json,sys; from pathlib import Path; from csf_preflight import parse; json.dump(parse(Path(sys.argv[1]).read_bytes()), sys.stdout, indent=2)' \
+            /tmp/nothing-tetris-public-csf.bin > /work/out/mali-csf-preflight.json
+          rm /tmp/nothing-tetris-public-csf.bin
           gzip -cd "$rootfs/boot/vmlinuz" > /tmp/nothing-tetris-Image
           check_contains "LLVM 21 compiler identity" \
             'clang version 21' /tmp/nothing-tetris-Image

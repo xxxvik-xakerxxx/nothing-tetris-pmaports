@@ -38,8 +38,16 @@ independent SMEM primitive fixture also exercises mapped-unpublished export.
 Exact r181 linking produces `ccci-util-smem-map-only.ko` and the
 `map_only_module` manifest alongside the three unchanged profile boundaries.
 
-Native compilation, linkage and physical MAP_ONLY validation remain pending.
-The preceding physical initial NC read completed once with zero and stable
-USB/sensors/SSH; that is not a MAP_ONLY result or permission/READY certificate.
-Parent integration must regenerate the shipping `ccci-owned-metadata.overlay`
-from this frozen candidate and update its APK checksum before dispatching CI.
+[CI38245658821](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38245658821)
+passed the native fixtures, actual ARM64 objects and strict original-r181 link.
+The ARM64 gate checks `ioremap_prot`, the pinned architecture's actual expansion
+of `ioremap_wc`, rather than expecting the mock's literal function name.
+Module SHA256: `cdb2841bfd0bfb0baf0933ae6e0c189ad8d75abcd393f77f9334b43392711eb2`.
+On fresh r181 boot `7d4b87cb-bd4e-412e-a7ea-b54eb9729c34`, with U-Boot8d2ccc12,
+one insmod at uptime229.86s returned0 and logged retained private mappings.
+Both exact iomem claims and module reference1 remained held. USB/sensors/SSH
+stayed active; there was no reboot, failed unit or new abort/Oops.
+The same boot later registered gpsdl0/1 through the explicit GNSS transport
+service without opening either link. No memory access, runtime transport,
+modem READY or SIM/call result is inferred. Three-start/lifecycle validation
+and the actual CCCI consumer integration remain.

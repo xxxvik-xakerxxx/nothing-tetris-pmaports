@@ -89,6 +89,20 @@ class CSF(unittest.TestCase):
             with self.assertRaises(ValueError):
                 csf.source_contract(Path("untrusted-kernel"))
 
+    def test_standard_firmware_dependency_does_not_activate_hardware(self):
+        root = Path(__file__).resolve().parents[2]
+        package = root / "pmaports/device/testing"
+        recipe = (package / "device-nothing-tetris/APKBUILD").read_text()
+        depends = recipe.split('depends="\n', 1)[1].split('\n"', 1)[0].split()
+        self.assertIn("linux-firmware-arm", depends)
+        config = (package / "linux-postmarketos-mediatek-mt6878/config-postmarketos-mediatek-mt6878.aarch64").read_text()
+        for symbol in ("CONFIG_FW_LOADER_COMPRESS=y", "CONFIG_FW_LOADER_COMPRESS_ZSTD=y"):
+            self.assertIn(symbol, config.splitlines())
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        self.assertIn('mali-csf-preflight.json', workflow)
+        self.assertIn('No runtime firmware or GPU activation',
+                      (root / "docs/GPU_BRINGUP.md").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

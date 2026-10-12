@@ -1,6 +1,7 @@
 # Transactional runtime SMEM candidate
 
-PHYSICAL MAPPING DISABLED / UNTESTED. Only new files in this directory. No shared
+DEFAULT PHYSICAL MAPPING DISABLED. The separate AP-only MAP_ONLY profile passed
+one physical private mapping transaction on r181; see its record below. No shared
 headers, shipping recipe, Kconfig, DT, board hook or operational registration
 changed. Physical START/STOP and monitor paths remain denied by the existing
 owner/prepare stack. Native C runs only in GitHub CI; no local compilation.
@@ -95,16 +96,20 @@ vendor templates. Complete positional initializers are padded with zeros to
 match C semantics without relaxing strict native warnings. No unused general
 memory-map planner is pulled into this translation unit.
 
-## Real missing producer, not a new boolean gate
+## Initial Boot Scope And Remaining Integration
 
-The current chosen80-byte BROM report and final21 tags bind layout/result but
-do NOT carry authenticated platform/SKU or an immutable kernel-consumable
-binding of actual EMI slot42/43 policy+range readbacks to these bank reservations.
-The existing source-scoped NS BL33 startup proof is not silently promoted to
-a runtime Linux admission record. No concrete NS denial is asserted here;
-the real range/security/ownership producer needed for automatic Linux mapping
-is absent from the current handoff ABI. There is no grant callback, chosen hash,
-caller READY bit or newly invented global no-repower assertion in this code.
+The older80-byte BROM report and21 tags alone describe layout/result. The current
+loader additionally supplies336 bytes of real scope-1 slot42/43 boot readbacks,
+bound to the retained bank ranges and pinned preloader profile. That history is
+not an immutable runtime policy or modem READY. Matching trustedboot policy can
+be inherited by initial Linux EL1; there is no fictional new certificate that
+must be manufactured before this bounded initial mapping experiment.
+
+The isolated caller validates that record, actual CurrentEL1, decoded bank/row
+ownership and exact Linux iomem claims before mapping. Its default profiles
+remain map-free. The single-word NC read completed with zero; zero neither proves
+denial nor excludes hardware zero-on-deny behavior. No arbitrary secure service,
+permission callback, caller READY flag or no-repower assertion was introduced.
 
 Coherency prerequisite: actual U-Boot service initialization/cache flush must
 complete for the same retained allocations, all former WB aliases must cease,
@@ -115,10 +120,11 @@ is a separate owner and must not be mapped/cleared via this transaction. Pinned
 CCIF register-write helper uses mb(); future runtime-data/doorbell ordering must
 remain on the real source transport path, not be replaced by a guessed sync.
 
-Until these producers and the reviewed cold/final publication exist, only the
-pure create/arguments/preview path is admissible for integration. The private
-mapping functions are review/CI candidates, NOT permission checks; calling them
-early could fault despite a successful ioremap. Physical registration stays OFF.
+The standalone mapping functions are not permission checks. Their isolated
+caller now supplies the reviewed initial-boot bindings and retains the actual
+owner/claims/mappings. Global publication and physical registration stay OFF.
+Independent secure writers, lifecycle and slot-overlap arbitration remain
+unresolved; the boot result must not be generalized to all future accesses.
 
 Next actual integration, AFTER admission: retain/export the existing immutable
 bank metadata under its actual lifetime; replace legacy util SMEM mapping/hash
@@ -173,5 +179,11 @@ passed all70 native scenarios at both page sizes and actual ARM64 compilation.
 [CI38179025105](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38179025105)
 additionally passed the actual packaged producer/import/plan chain (59 scenarios
 at each page size) and linked its AP-only module against real r181 kernel exports.
-Only the pure path was exercised physically; transactional mappings, runtime
-admission, transport registration and SIM remain untested/disabled.
+Subsequent [CI38245658821](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38245658821)
+passed mapped-unpublished export, actual-init fault/unwind cases and exact-r181
+ARM64 linkage. One MAP_ONLY init on fresh boot7d4b87cb at uptime229.86s retained
+both WC mappings, copied tables and resource claims with module reference1,
+without a reboot or USB/sensor failure. No SMEM access, public slot/global
+publication, runtime transport or SIM operation occurred. See the
+[mapped profile](../runtime-metadata/MAP_ONLY.md). Actual CCCI consumer
+integration and repeated cold/warm/suspend lifecycle remain untested.
