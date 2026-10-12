@@ -73,6 +73,25 @@ This boot automatically followed poweroff with USB attached, not a confirmed
 physical cold cycle. Native MD ON adoption, actual HIF activation and end-user
 radio functions remain separate pending steps.
 
+#### Actual GNSS power and ROM-reset cycle
+
+On the same r182 boot, one packaged `gnss-readonly --probe-link0` attempt at
+uptime3175.908-3175.916s opened link0 through the actual driver. ADIE6631 was
+detected, conninfra/GPS power-on succeeded, DSP changed OFF -> ON -> RST after
+its real RST_DONE event, and the link became OPENED. Status ioctl returned0;
+boot-info reported code_size42505 and fragment_count106. Cipher material is
+redacted, not published. No userspace transport write/read or firmware fragment
+download was performed.
+
+Close confirmed TX/RX DMA stop0/OKAY, GPS power-off, DSP OFF and link CLOSED.
+Wi-Fi/BT power states remained ON, USB and sensor services survived, and the
+82-line kernel delta contains no Oops/BUG/WARNING/SError/panic/refcount fault.
+Full local evidence archive SHA256:
+`c49e67f80be192f09446623e50479c5401a15f093298939c3a00eaaad227d692`.
+The missing pinctrl/LNA metadata diagnostic remains; stock MT6631 has no L5.
+This proves one power/ROM-reset/open/close cycle, **not** working DSP firmware,
+navigation INIT, calibrated RF reception, repeated lifecycle or a position fix.
+
 [Modem power integration](../patches/modem/md-pm-integration/ON-ADOPTION.md)
 must adopt the real ON state left by successful BROM. AID241 is the stock NS-CPU
 identity; the loader's reported v2 cells encode RW for the declared service
@@ -324,7 +343,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | Audio | Partial | Earlier speaker paths and microphone capture demonstrated; cellular audio and full route coverage remain. |
 | Haptics / torch | Partial | Earlier bounded physical effects tested; lifecycle and camera strobe remain. |
 | Battery, charging, thermal | Partial | Telemetry and charging observations exist; sustained safety and idle power remain. |
-| GNSS | Partial, transport only | No position fix or operational GeoClue navigation stack. |
+| GNSS | Partial | One real power/ROM-reset/open/DMA-stop/close cycle passes; DSP code download, navigation INIT, position fix and GeoClue remain. |
 | SIM, calls, SMS, mobile data | Broken | BROM, metadata import and real CCIF/DPMAIF resource binding pass; runtime transport, SIM/registration and calls remain unavailable. Proximity testing used a local dummy call, not GSM. |
 | GPU acceleration | Broken | No render node or accelerated compositor. |
 | Cameras | Broken | No preview/capture or operational video/media node. |

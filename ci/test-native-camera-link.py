@@ -41,7 +41,12 @@ class NativeCameraLink(unittest.TestCase):
         self.assertIn('"--prepared-kernel", kernel, "--ci-apply"', source)
         self.assertIn('"--md-on-adoption"', source)
         self.assertIn('md_plan["ci"]["required_resolved_config"]', source)
-        self.assertIn('("OF_OVERLAY", "OF_UNITTEST", "OF_DYNAMIC", "MEMORY_HOTREMOVE")', source)
+        for symbol in ("OF_DYNAMIC", "OF_OVERLAY", "I2C_DEMUX_PINCTRL", "CHROMEOS_OF_HW_PROBER",
+                       "VIDEO_QCOM_VENUS", "PCI_DYNAMIC_OF_NODES", "STM32_FIREWALL"):
+            self.assertIn(symbol, LINK.STATIC_DIAGNOSTIC_DISABLE)
+        fragment = (ROOT / "patches/modem/md-pm-integration/diagnostic.config").read_text().splitlines()
+        for symbol in LINK.STATIC_DIAGNOSTIC_DISABLE:
+            self.assertIn("# CONFIG_" + symbol + " is not set", fragment)
 
 
 if __name__ == "__main__":

@@ -443,12 +443,14 @@ def main():
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--dt-only", action="store_true",
                         help="compile checked native/HIF DTs without rebuilding any driver or kernel image")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="prepare exact packaged provider sources without compiling any objects")
     parser.add_argument("--research-owners", action="store_true",
                         help="also compile frozen default-off owners without shipping wiring")
     parser.add_argument("--work", type=Path, default=Path("/tmp/tetris-kernel-smoke"))
     args = parser.parse_args()
-    if args.dt_only and args.research_owners:
-        parser.error("DT-only and driver-owner modes are separate experiments")
+    if sum((args.dt_only, args.prepare_only, args.research_owners)) > 1:
+        parser.error("DT-only, source-only and driver-owner modes are separate experiments")
     package = PACKAGE.resolve()
     manifest = plan(package)
     objects = OBJECTS
@@ -526,7 +528,7 @@ def main():
         tar.extractall(args.work, filter="data")
     kernel = args.work / f'linux-{manifest["kernel_commit"]}'
     md_pristine = args.work / "md-native-pristine"
-    if args.research_owners:
+    if args.research_owners or args.prepare_only:
         md_pristine.mkdir()
         for name in ("drivers/pmdomain/mediatek/mtk-pm-domains.c",
                      "drivers/pmdomain/mediatek/mtk-pm-domains.h"):
@@ -547,13 +549,18 @@ def main():
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
         run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
-    if args.research_owners:
+    if args.research_owners or args.prepare_only:
         source_report = report / "native-provider-inputs"
         source_report.mkdir()
         for name in ("mtk-pm-domains.c", "mtk-pm-domains.h", "mt6878-modem-pm.h"):
             shutil.copyfile(kernel / "drivers/pmdomain/mediatek" / name, source_report / name)
         run(["python3", "patches/modem/md-pm-integration/stage.py", "--kernel", md_pristine,
              "--prepared-kernel", kernel])
+    if args.prepare_only:
+        manifest.update(status="passed", scope="source preparation and exact native-provider input checks only",
+                        objects=[])
+        manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
+        return
     if args.dt_only:
         manifest = compile_dt_only(kernel, package, args.work, report, manifest)
         manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")

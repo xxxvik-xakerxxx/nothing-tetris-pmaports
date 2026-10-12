@@ -14,6 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 DRAFT = ROOT / "patches/camera-camisp/native-integration"
 SUPPLIER_SYMBOLS = ("mt6878_vmm_supplier_init", "mt6878_vmm_check",
                     "mt6878_vmm_isp_vcore_ctl_set")
+STATIC_DIAGNOSTIC_DISABLE = (
+    "OF_OVERLAY", "OF_UNITTEST", "OF_DYNAMIC", "MEMORY_HOTREMOVE",
+    "PCI_DYNAMIC_OF_NODES", "I2C_DEMUX_PINCTRL", "CHROMEOS_OF_HW_PROBER",
+    "VIDEO_QCOM_VENUS", "STM32_FIREWALL", "HOTPLUG_PCI_POWERNV",
+    "MPC885ADS", "PPC_PSERIES",
+)
 
 
 def run(command):
@@ -97,7 +103,7 @@ def main(md_on_adoption=False):
             for symbol in plan["required_enabled"]:
                 config.extend(["-e", symbol])
             if md_on_adoption:
-                for symbol in ("OF_OVERLAY", "OF_UNITTEST", "OF_DYNAMIC", "MEMORY_HOTREMOVE"):
+                for symbol in STATIC_DIAGNOSTIC_DISABLE:
                     config.extend(["-d", symbol])
             config.extend(["-e" if unit == "y" else "-d", "KUNIT"])
             run(config)

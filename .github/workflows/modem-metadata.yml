@@ -118,8 +118,6 @@ jobs:
           git fetch --no-tags --depth=1 origin e0c67c561ff7c1a0472da851edfafd5a0abb6cec
           git init out/infra-vendor
           git -C out/infra-vendor fetch --depth=1 https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git ee2be53cb75670b548948636a0db1d1ff112bf12
-          git init out/camera-modules
-          git -C out/camera-modules fetch --depth=1 --filter=blob:none https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
       - name: Compile actual isolated ARM64 driver stack
         env:
           GH_TOKEN: ${{ github.token }}
@@ -163,14 +161,44 @@ jobs:
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B patches/modem/infra-clocks/run_ci.py
-      - name: Link one actual native modem and camera genpd provider
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: modem-metadata-arm64-evidence
+          path: out/kernel-object-smoke/
+          if-no-files-found: error
+
+  native-provider-link:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
+    steps:
+      - name: Install exact native kernel compiler
+        run: |
+          apk add --no-cache bash build-base bc bison flex openssl-dev perl python3 py3-yaml patch git dtc curl
+          apk add --no-cache \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
+            clang21=21.1.8-r3 llvm21=21.1.8-r1 lld21=21.1.8-r1
+      - uses: actions/checkout@v6
+      - name: Fetch exact camera and shared-power source inputs
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init out/infra-vendor
+          git -C out/infra-vendor fetch --depth=1 https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git ee2be53cb75670b548948636a0db1d1ff112bf12
+          git init out/camera-modules
+          git -C out/camera-modules fetch --depth=1 --filter=blob:none https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+      - name: Check native source composition before compiling anything
+        run: python3 -B ci/kernel-object-smoke.py --prepare-only
+      - name: Compile and link one actual native modem and camera genpd provider
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B ci/link-native-camera-vmm.py --md-on-adoption
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: modem-metadata-arm64-evidence
+          name: native-modem-camera-provider-evidence
           path: out/kernel-object-smoke/
           if-no-files-found: error
 
