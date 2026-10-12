@@ -116,6 +116,13 @@ struct b41_native_session_result {
     unsigned notices, joined_threads;
     int native_stop_status, worker_stop_status;
 };
+/* Read-only, nonblocking rejection of a failed/stopping/completed host worker.
+ * RUNNING is controller state, not proof the detached worker is still alive.
+ * Preserve dispatch failure and completion fd for quiescence; never releases
+ * resources or authorizes engine startup. Sole controller, initialized worker.
+ * Zero is only a sampled observation, not immunity to subsequent worker failure.
+ */
+int b41_native_worker_admission(const struct b41_frame_worker *worker);
 /* ACTUAL register/run/control/stop controller, Bionic ARM64 dedicated child
  * only. Existing arguments' unresolved audit contracts must be ZERO; no flags
  * are cleared or replaced with caller opt-ins. Thus today's partial builders

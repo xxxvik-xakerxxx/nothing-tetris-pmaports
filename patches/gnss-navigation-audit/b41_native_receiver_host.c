@@ -205,6 +205,29 @@ int b41_native_child_wait(pid_t child, const struct timespec *deadline,
     return b41_native_child_wait_owned(&owner, child, deadline, cleanup_deadline, wait_status);
 }
 
+int b41_native_worker_admission(const struct b41_frame_worker *worker)
+{
+    struct pollfd done;
+    int status;
+    if (!worker) return -EINVAL;
+    if (worker->state != B41_WORKER_RUNNING) return -ESHUTDOWN;
+    status = atomic_load(&worker->failure);
+    if (status) return status;
+    if (atomic_load(&worker->stop_requested)) return -ESHUTDOWN;
+    if (worker->done_fd < 0) return -EBADF;
+    done = (struct pollfd){worker->done_fd, POLLIN, 0};
+    status = poll(&done, 1, 0);
+    if (status < 0) return -errno;
+    if (done.revents & (POLLERR | POLLHUP | POLLNVAL)) return -EIO;
+    if (done.revents & POLLIN) {
+        /* Dispatch failures leave controller state RUNNING. Do not consume
+         * completion: quiescence still owns that acknowledgement. */
+        status = atomic_load(&worker->failure);
+        return status ? status : -ESHUTDOWN;
+    }
+    return 0;
+}
+
 int b41_native_session_execute(const struct b41_library_association *image,
     const struct b41_engine_arguments *arguments, struct b41_native_control *control,
     struct b41_frame_worker *worker, struct b41_native_stop_owner *stop,
@@ -261,6 +284,8 @@ int b41_native_session_execute(const struct b41_library_association *image,
     if (status) return status;
     status = atomic_load(&control->first_error);
     if (status) return status;
+    status = b41_native_worker_admission(worker);
+    if (status) return status;
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return -errno;
     if (compare_time(&now, run_deadline) >= 0) return -ETIMEDOUT;
     memset(result, 0, sizeof(*result));
@@ -271,6 +296,8 @@ int b41_native_session_execute(const struct b41_library_association *image,
         (uint32_t (*)(const void *, const void *))(image->base + 0x52e2bcu);
     result->registration_entered = 1;
     if (registration(&arguments->callbacks)) return -EPROTO;
+    status = b41_native_worker_admission(worker);
+    if (status) return status;
     result->run_entered = 1;
     result->run_status = run(arguments->first, arguments->second);
     /* Partial initialization may have retained threads; do not invoke a

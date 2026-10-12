@@ -5,10 +5,13 @@ if [ "${CI:-}" != true ]; then
     exit 2
 fi
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PYTHONDONTWRITEBYTECODE=1 python3 "$here/test_b41_engine_registration_shape.py" --source-only
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT HUP INT TERM
-"${CC:-cc}" -std=c11 -Wall -Wextra -Werror -g -pthread \
+"${CC:-cc}" -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -pthread \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "$here/b41_startup_adapter.c" "$here/b41_agps_host.c" \
+    "$here/b41_navigation_output.c" "$here/b41_frame_worker.c" \
     "$here/b41_native_receiver_host.c" "$here/test_b41_native_receiver_host.c" \
     -o "$out/test_native_receiver_host"
 timeout --signal=TERM --kill-after=2 20 "$out/test_native_receiver_host"
