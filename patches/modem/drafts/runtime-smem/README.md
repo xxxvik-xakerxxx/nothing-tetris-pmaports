@@ -1,6 +1,6 @@
 # Transactional runtime SMEM candidate
 
-DISABLED / UNTESTED ON HARDWARE. Only new files in this directory. No shared
+PHYSICAL MAPPING DISABLED / UNTESTED. Only new files in this directory. No shared
 headers, shipping recipe, Kconfig, DT, board hook or operational registration
 changed. Physical START/STOP and monitor paths remain denied by the existing
 owner/prepare stack. Native C runs only in GitHub CI; no local compilation.
@@ -12,8 +12,13 @@ serialized util-init lifetime as the owned importer. It reads bounded counts,
 CHK512 and complete NC/cache rows, retains the first error/short-read failure,
 and frees staging on every exit. It NEVER maps ROM or SMEM. It requires banks
 from the existing retained DT/reservation validator, not report address40.
-The current importer has no public immutable bank-snapshot export: this adapter
-is deliberately NOT called automatically from util init.
+The frozen base importer has no public bank-snapshot export. The separate
+AP-only package overlay now retains a private copy during the same serialized
+init lifetime and invokes this adapter, preview and destruction without mapping.
+Its generated SMEM source omits physical mapping/publication/export functions;
+it is not installed or autoloaded. The first physical pure import/plan passed
+with the CI38179025105 module on r181 (NC1204224/cache39190528 bytes), with USB
+and sensors healthy. See [current evidence](../../../../docs/PORT_SUMMARY.md).
 
 `smem.c` creates one private decoded owner, without retaining caller buffers.
 It reuses exact pinned pure SMEM planner/profile functions, checks the current
@@ -163,5 +168,10 @@ unmapped zero/NO_MAP rows, alternate allocation bases, short/error arguments,
 page-rounded CONSYS exclusion and consumer-copy isolation.
 
 Local result: 15 Python/source/patch checks PASS, including exact complete-stack
-application. Native and actual ARM64 compilation
-are still pending new CI; previous metadata59+64 CI does NOT cover these files.
+application. [CI38068292750](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38068292750)
+passed all70 native scenarios at both page sizes and actual ARM64 compilation.
+[CI38179025105](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38179025105)
+additionally passed the actual packaged producer/import/plan chain (59 scenarios
+at each page size) and linked its AP-only module against real r181 kernel exports.
+Only the pure path was exercised physically; transactional mappings, runtime
+admission, transport registration and SIM remain untested/disabled.

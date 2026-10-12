@@ -238,10 +238,20 @@ LLVM21.1.8, the prepared configuration and kernel release match r181; no fake
 symbol table or relaxed modpost was used. The resulting GPL module has no
 external module dependencies, vermagic `6.18.0 SMP preempt mod_unload aarch64`,
 and SHA256 `ab2e570c5a7fdaa6e16e1f0742efb9bf1b5ea0e5f019703a6d7a67646e740426`.
-Independent review found no relevant correctness/safety bugs. Physical testing
-is pending: after the commanded normal reboot, the Mac sees postmarketOS USB
-but has no USB network interface. No new module has been loaded and no partition
-was flashed. This is not evidence of SIM, modem READY or protected-memory access.
+Independent review found no relevant correctness/safety bugs. The first physical
+import/plan passed on boot `e73e5393-de6e-4525-afeb-3e47c2a1c3ff`: a single
+insmod at uptime232.96s returned0 and logged NC1204224/cache39190528 bytes with
+memory access and runtime transport disabled. USB, sensors, SensorProxy and SSH
+stayed active, no failed units or new kernel faults appeared, and a complete
+32 MiB USB stream matched SHA256
+`83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
+The module is left loaded; no unload/reload or partition flashing occurred.
+Visual regression confirmation is pending. The preceding warm boot refused SCP
+preparation with EBUSY; one identity-guarded host USB reset restored networking.
+After a commanded poweroff the phone booted again with successful SCP preparation
+and automatic sensor services. That observation is not a user-confirmed physical
+cold start and does not fix warm reboot or poweroff behavior. This single pure
+SMEM-plan test is not evidence of SIM, modem READY or protected-memory access.
 Runtime SMEM admission, CCIF/DPMAIF/FSM lifecycle,
 SIM/registration and the userspace radio/audio path remain.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
