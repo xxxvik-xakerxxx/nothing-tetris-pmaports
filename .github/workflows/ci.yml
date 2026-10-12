@@ -278,6 +278,8 @@ jobs:
           python3 patches/camera-ccd-bus/test_worker_closed_session.py
           sh patches/camera-ccd-bus/run-native-tests.sh
           sh patches/camera-ccd-bus/run-mapped-tests.sh
+      - name: Validate native satellite configuration producers
+        run: sh patches/gnss-navigation-audit/native-config-completion/run_ci.sh
       - name: Validate GNSS host services and second configuration
         id: gnss_host_candidate
         continue-on-error: true
@@ -365,6 +367,9 @@ jobs:
           BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
             sh patches/gnss-navigation-audit/run_receiver_inputs_ci.sh \
               --bionic-compile out/b41-receiver-inputs-test
+          BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
+            sh patches/gnss-navigation-audit/native-config-completion/run_ci.sh \
+              --bionic-compile out/b41-native-satellite-config-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
             patches/gnss-navigation-audit/b41_startup_adapter.c \
             patches/gnss-navigation-audit/test_b41_startup_adapter.c \

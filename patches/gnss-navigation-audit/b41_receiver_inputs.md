@@ -1,6 +1,8 @@
 # Native receiver inputs
 
-Partial candidate, native CI pending. The seven receiver-policy files are
+Partial candidate. Native sanitized tests and the ARM64 Bionic target link
+passed CI38248220709; full images and physical INIT/fix remain pending.
+The seven receiver-policy files are
 untouched. This is a pure native configuration path; it does not read mnld
 globals, populate property receipts, initialize an engine or claim a fix.
 
@@ -68,9 +70,9 @@ Other config producers and the real AGPS receiver still block complete INIT.
 Run the static test against PINNED_MNLD PINNED_LIBMNL with
 `PYTHONDONTWRITEBYTECODE=1` and
 `PYTHONPATH=/private/tmp/tetris-gpu-offline-capstone-20261012`.
-No native compilation, emulation, hardware, SSH, CI dispatch or push occurred.
+No local native compilation or emulation occurred during source preparation.
 The C fixture covers1024 explicit quiet overrides, rejection/aliasing, fd0,
-gpsdl1 preservation and unchanged gates; execution remains pending.
+gpsdl1 preservation and unchanged gates; all1024 vectors passed parent-owned CI.
 
 ```sh
 CI=true sh patches/gnss-navigation-audit/run_receiver_inputs_ci.sh

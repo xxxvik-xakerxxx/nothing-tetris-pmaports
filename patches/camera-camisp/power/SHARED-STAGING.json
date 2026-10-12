@@ -1,0 +1,50 @@
+{
+  "scope": "shared VMM supplier research objects; no provider publication or board activation",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "sources": {
+    "patches/camera-camisp/power/mt6878-cam-power.c": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.c",
+    "patches/camera-camisp/power/mt6878-cam-power.h": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.h",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.c": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-vmm-supplier.c",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.h": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-vmm-supplier.h",
+    "patches/camera-camisp/power/Kbuild.shared": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/Kbuild"
+  },
+  "source_sha256": {
+    "patches/camera-camisp/power/mt6878-cam-power.c": "98c2fb4c1516d47acea6427d30d274354030c0dad3ead0f45fb8e6bd2cf98ae4",
+    "patches/camera-camisp/power/mt6878-cam-power.h": "ecb89cf46cd380930e856902dfb4cfac8be09a8a37874796a0304c1d86e01389",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.c": "b17d909425ece42d4de69bda1d9c4aee8abc6f4e5957f027a813cdd49de5b76d",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.h": "5504217f797a706505742bae923234408b92874a2a8889cbb0979e9120d73cd0",
+    "patches/camera-camisp/power/Kbuild.shared": "32116fcf0a9de632b50de1a0fd2ca1e219f76b19358e44a083939d67447ccdff"
+  },
+  "research_objects": [
+    "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.o",
+    "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-vmm-supplier.o"
+  ],
+  "include_directory": "drivers/pmdomain/mediatek",
+  "object_smoke": {
+    "scope": "object-only; shared composite/vmlinux link untested",
+    "supplier_directory": "drivers/pmdomain/mediatek/tetris-vmm-supplier-smoke",
+    "excluded_payload": ["Kbuild.shared"],
+    "leaf_route": "existing power/STAGING.json, staged exactly once",
+    "makefile": "harness-generated; no parent Kbuild replacement"
+  },
+  "link_plan": {
+    "composite_object": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/tetris-vmm-candidate.o",
+    "parent_research_entry": "obj-y += tetris-cam-power-smoke/",
+    "final_target": "vmlinux",
+    "original_leaf_route": "replace research entry, never link leaf object twice",
+    "shipping_integration": "none",
+    "activation": "no initcall, OF provider, DT enablement or exported module symbols"
+  },
+  "required_enabled": ["OF", "PM", "REGMAP", "REGULATOR", "PM_GENERIC_DOMAINS"],
+  "required_reachable": ["MTK_SCPSYS_PM_DOMAINS"],
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime_activation": "disabled",
+  "prior_leaf_arm64_ci": "38245658821 (user-reported success; does not cover shared supplier)",
+  "unresolved": [
+    "exclusive buck ownership, all-user migration and quiescent verified OFF initialization",
+    "native VMM voltage/rate policy and firmware ownership",
+    "checked CAM/ISP leaf callbacks and guarded graph construction before publication",
+    "new-object ARM64 build and physical lifecycle gates"
+  ]
+}

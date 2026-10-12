@@ -1,0 +1,22 @@
+{
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "extends": "evidence.json",
+  "kernel_sha256": {
+    "drivers/pmdomain/core.c": "aa2162e66ff41a9fa2a50339dfc8ed2900ee814ed9f52af75c62b4b54dcfb8d9",
+    "include/linux/pm_domain.h": "b50e87d6da25e11428bcfc5179758c621c173c0b0a47ac4476a17e2f0cb389ac",
+    "include/linux/regulator/consumer.h": "87501f03cd27f1be8ae24ea6c4d26d63eda3521d528fa37a543a418c9140b9e7",
+    "drivers/regulator/mt6315-regulator.c": "3c3cfcbf91795a7ecb08fe3f00c9c1ba69d987315f5ce1c6704f97fa733a611a"
+  },
+  "package_sha256": {
+    "0105-regulator-mt6315-read-active-voltage-selector.patch": "2cb0c829e11e5ec0e318b9e3f2751ad9db0ba474f5a26bf0c65a45aea0957305",
+    "0108-regulator-mt6315-board-mode-mask.patch": "c957fd6ad453291805b0fcba89a58d198a73c6ddd04c1f47e3f0242f8cb750d5",
+    "0109-regulator-mt6315-stop-mode-change-on-read-error.patch": "0478fab57afd1db3f2f7715d23b8d8a81fab64db381255629ec54f5f5daa8c69",
+    "0110-regulator-mt6315-register-described-rails.patch": "551d10263f413615831aa6957bbcaf4ea1a50324efe114b20a4e549465b7905b",
+    "0111-regulator-mt6315-fail-closed-shutdown.patch": "8885df38c32843ae32f608f96a12f89b2773bd9f60d86e2c9025ad4420bfd466",
+    "0113-regulator-mt6315-reject-unowned-phase-mask.patch": "dc112adca7f880f037699ea7ebbdd3e1d6272077a0e42ff41f592d9d6b48b74f",
+    "0114-regulator-mt6315-read-only-vgpu-observer.patch": "fec2a0401b502f1ad8fc9e64f54571cf4297e0f92b4e8e470a8f69b74a4ff365"
+  },
+  "b41_mt6878_dts_supply_lines": [2930, 2931, 2997, 3954],
+  "runtime_activation": "disabled"
+}

@@ -15,7 +15,9 @@ The explicit default profile requires evidence of mnld's `de22c == 0` branch;
 it is not inferred from the phone model. Calibration requires an actual complete
 16-byte input. Alternate profiles are refused. Negative queries and nonzero
 status returns for output-buffer queries are refused without changing output.
-With all supported inputs present, 27 bytes and XML policy remain unresolved.
+With all supported inputs present, 30 bytes and XML policy remain unresolved.
+The three bytes at58..5a require the explicit native satellite-mask and
+normal-start producers; their initial zero values are not final provenance.
 
 `b41_first_queries_collect()` borrows an already exclusively owned open GNSS fd,
 including fd 0. The real `b41_first_ioctl()` boundary normalizes libc errno to

@@ -63,7 +63,7 @@ def producers(path):
             m.u.mem_write(0xddd84,bytes([present]));m.u.mem_write(0x88c80,b"\x9a")
             m.run(0x63a38,0x63a8c)
             assert read(m,0x6c,1)==(0x9a if present else 0)
-    print("PASS: all27 remaining first-config bytes, 128 MPE branch vectors, exact mode flags")
+    print("PASS: 27 runtime-produced first-config bytes; satellite/start producer remains separate; 128 MPE branch vectors")
 
 if __name__ == "__main__":
     producers(Path(sys.argv[1]))

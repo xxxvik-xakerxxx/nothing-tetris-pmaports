@@ -87,11 +87,11 @@ int main(void)
         f = (struct fixture){.status16 = -EFAULT};
         assert(b41_queries_collect_with_lna_plan(37, B41_LNA_PINNED_MCUDL_DISABLED, query, &f, &s) == 0);
         assert(b41_first_config_from_lna_plan(&full, &s, &out) == 1);
-        assert(out.unresolved_bytes == 27 && out.xml_policy_missing && !out.missing_inputs);
+        assert(out.unresolved_bytes == 30 && out.xml_policy_missing && !out.missing_inputs);
         full.present |= B41_FIRST_CLOCK_QUERY | B41_FIRST_MODEM_QUERY;
         full.clock_ioctl_result = 81; full.modem_status = 7;
         assert(b41_first_config_build(&full, &expected) == 1);
-        assert(expected.unresolved_bytes == 31);
+        assert(expected.unresolved_bytes == 34);
         for (i = 0; i < B41_FIRST_SIZE; ++i) {
             if (i >= 0x54 && i < 0x58) {
                 assert(out.bytes[i] == 0 && out.provenance[i] == B41_FIRST_OEM_LNA_ZERO_PROVENANCE);

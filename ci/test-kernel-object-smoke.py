@@ -5,6 +5,8 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -118,7 +120,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 42)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 43)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o",
             "drivers/iommu/mtk_iommu.o"))
@@ -184,6 +186,7 @@ class SmokeInputs(unittest.TestCase):
         source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
         self.assertIn('manifest["camisp_resource_kunit_disabled_objects"]', source)
         self.assertIn("CAMISP_RESOURCE_OBJECTS + CAMISP_POWER_OBJECTS)", source)
+        self.assertIn("(*CAMISP_ENABLE, *CAMISP_RESOURCE_ENABLE, *CAMISP_POWER_ENABLE)", source)
 
     def test_camisp_power_staging_and_include_are_isolated(self):
         root = Path(__file__).resolve().parents[1]
@@ -216,6 +219,74 @@ class SmokeInputs(unittest.TestCase):
         data = dict(original, sources={"any": "drivers/pmdomain/mediatek/mtk-pm-domains.c"})
         with patch.object(smoke.json, "loads", return_value=data), self.assertRaises(ValueError):
             smoke.camisp_power_staging(root)
+
+    def test_shared_supplier_payload_identity_and_generated_makefile(self):
+        root = Path(__file__).resolve().parents[1]
+        parent = self.package / "drivers/pmdomain/mediatek"
+        parent.mkdir(parents=True)
+        for name in ("Makefile", "Kbuild", "Kconfig", "mtk-pm-domains.c"):
+            (parent / name).write_text("# retained parent\n")
+        smoke.stage_research_sources(self.package, root)
+        for name in ("Makefile", "Kbuild", "Kconfig", "mtk-pm-domains.c"):
+            self.assertEqual((parent / name).read_text(), "# retained parent\n")
+        sources = {**smoke.CAMISP_POWER_PLAN["sources"], **smoke.CAMISP_SHARED_SOURCES}
+        self.assertEqual(len(sources), 4)
+        for source, destination in sources.items():
+            payload = (self.package / destination).read_bytes()
+            self.assertEqual(payload, (root / source).read_bytes())
+            self.assertEqual(hashlib.sha256(payload).hexdigest(),
+                             smoke.CAMISP_SHARED_PLAN["source_sha256"][source])
+            self.assertEqual(list(smoke.RESEARCH_SOURCES.values()).count(destination), 1)
+        for name in (*smoke.CAMISP_POWER_OBJECTS, *smoke.CAMISP_SHARED_OBJECTS):
+            self.assertEqual(smoke.RESEARCH_OBJECTS.count(name), 1)
+            self.assertNotIn(name, smoke.OBJECTS + smoke.PROVIDER_OBJECTS)
+            self.assertFalse((self.package / Path(name).parent / "Kbuild").exists())
+        self.assertNotIn("patches/camera-camisp/power/Kbuild.shared", smoke.RESEARCH_SOURCES)
+        makefile = self.package / smoke.CAMISP_SHARED_DIR / "Makefile"
+        self.assertEqual(makefile.read_text(),
+                         "obj-y += mt6878-vmm-supplier.o\n"
+                         "ccflags-y += -I$(srctree)/drivers/pmdomain/mediatek "
+                         "-I$(srctree)/drivers/pmdomain/mediatek/tetris-cam-power-smoke\n")
+
+    def test_shared_supplier_plan_records_checks_and_both_variants(self):
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.check_output([
+            sys.executable, str(root / "ci/kernel-object-smoke.py"),
+            "--research-owners", "--plan-only"], cwd=root, text=True)
+        plan = json.loads(result)
+        shared = plan["camisp_shared_supplier"]
+        self.assertEqual(shared["scope"], "object-only; shared composite/vmlinux link untested")
+        self.assertEqual(shared["config_variants"], [{"KUNIT": "y"}, {"KUNIT": "n"}])
+        self.assertEqual(shared["payload_sha256"], smoke.CAMISP_SHARED_PLAN["source_sha256"])
+        self.assertEqual(shared["source_check"]["status"], "passed")
+        self.assertEqual(shared["excluded_from_staging"], ["Kbuild.shared"])
+        self.assertEqual(shared["objects"], list(smoke.CAMISP_POWER_OBJECTS + smoke.CAMISP_SHARED_OBJECTS))
+        for name in shared["objects"]:
+            self.assertEqual(plan["objects"].count(name), 1)
+        for name, digest in shared["payload_sha256"].items():
+            self.assertEqual(plan["research_source_sha256"][name], digest)
+
+    def test_shared_supplier_variants_require_native_dependencies(self):
+        command = smoke.config_options(Path("kernel"), Path("objects"), True)
+        enabled = [command[i + 1] for i, value in enumerate(command) if value == "-e"]
+        for symbol in (*smoke.CAMISP_SHARED_PLAN["required_enabled"], "KUNIT"):
+            self.assertIn(symbol, enabled)
+        source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
+        self.assertIn("variant_objects += CAMISP_SHARED_OBJECTS", source)
+        for tag in ("kunit_enabled_objects", "kunit_disabled_objects"):
+            self.assertIn('manifest["camisp_shared_supplier"]["' + tag + '"]', source)
+        self.assertIn("(*CAMISP_ENABLE, *CAMISP_RESOURCE_ENABLE, *CAMISP_POWER_ENABLE)", source)
+
+    def test_shared_supplier_payload_hash_drift_stops_plan(self):
+        altered = dict(smoke.CAMISP_SHARED_PLAN)
+        altered["source_sha256"] = dict(altered["source_sha256"])
+        source = next(iter(smoke.CAMISP_SHARED_SOURCES))
+        altered["source_sha256"][source] = "0" * 64
+        with patch.object(smoke, "CAMISP_SHARED_PLAN", altered), \
+                patch.object(sys, "argv", ["kernel-object-smoke.py", "--research-owners", "--plan-only"]), \
+                patch.object(smoke.subprocess, "check_output", return_value="source checks passed"), \
+                self.assertRaisesRegex(ValueError, "shared VMM payload hash mismatch"):
+            smoke.main()
 
     def test_camisp_resources_manifest_rejects_shipping_provider_destination(self):
         root = Path(__file__).resolve().parents[1]

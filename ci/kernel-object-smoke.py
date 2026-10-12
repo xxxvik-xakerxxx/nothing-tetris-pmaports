@@ -216,6 +216,27 @@ CAMISP_POWER_REACHABLE = tuple(CAMISP_POWER_PLAN["required_reachable"])
 CAMISP_POWER_INPUTS = tuple("patches/camera-camisp/power/" + name for name in (
     "STAGING.json", "evidence.json", "trace.py", "check.py", "test_source.py",
     "leaf-transactions.patch"))
+CAMISP_SHARED_MANIFEST = "patches/camera-camisp/power/SHARED-STAGING.json"
+CAMISP_SHARED_CHECK = "patches/camera-camisp/power/check_supplier.py"
+CAMISP_SHARED_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAMISP_SHARED_MANIFEST).read_text())
+CAMISP_SHARED_DIR = CAMISP_SHARED_PLAN["object_smoke"]["supplier_directory"]
+if (CAMISP_SHARED_DIR != "drivers/pmdomain/mediatek/tetris-vmm-supplier-smoke" or
+        CAMISP_SHARED_PLAN["config_variants"] != [{"KUNIT": "y"}, {"KUNIT": "n"}] or
+        CAMISP_SHARED_PLAN["runtime_activation"] != "disabled"):
+    raise ValueError("invalid shared VMM object-only staging")
+CAMISP_SHARED_SOURCES = {
+    "patches/camera-camisp/power/" + name: f"{CAMISP_SHARED_DIR}/{name}"
+    for name in ("mt6878-vmm-supplier.c", "mt6878-vmm-supplier.h")
+}
+if set(CAMISP_SHARED_SOURCES.values()) & set(RESEARCH_SOURCES.values()):
+    raise ValueError("duplicate shared VMM staging destination")
+RESEARCH_SOURCES.update(CAMISP_SHARED_SOURCES)
+CAMISP_SHARED_OBJECTS = (f"{CAMISP_SHARED_DIR}/mt6878-vmm-supplier.o",)
+RESEARCH_OBJECTS += CAMISP_SHARED_OBJECTS
+CAMISP_POWER_ENABLE += tuple(CAMISP_SHARED_PLAN["required_enabled"]) + ("KUNIT",)
+CAMISP_SHARED_INPUTS = tuple("patches/camera-camisp/power/" + name for name in (
+    "SHARED-STAGING.json", "supplier-evidence.json", "check_supplier.py",
+    "test_supplier.py", "Kbuild.shared"))
 
 
 def block(source, key):
@@ -297,6 +318,9 @@ def stage_research_sources(kernel, root=Path(".")):
         makefile = "obj-y += " + " ".join(names) + "\n"
         if directory == str(Path(CAMISP_POWER_OBJECTS[0]).parent):
             makefile += "ccflags-y += -I$(srctree)/" + CAMISP_POWER_PLAN["include_directory"] + "\n"
+        if directory == CAMISP_SHARED_DIR:
+            makefile += ("ccflags-y += -I$(srctree)/drivers/pmdomain/mediatek "
+                         "-I$(srctree)/" + str(Path(CAMISP_POWER_OBJECTS[0]).parent) + "\n")
         (kernel / directory / "Makefile").write_text(makefile)
 
 
@@ -410,6 +434,23 @@ def main():
         for name in CAMISP_POWER_INPUTS:
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
         manifest["camisp_power_config_variants"] = CAMISP_POWER_PLAN["config_variants"]
+        shared_check = subprocess.check_output(["python3", CAMISP_SHARED_CHECK], text=True)
+        for name, expected in CAMISP_SHARED_PLAN["source_sha256"].items():
+            actual = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+            if actual != expected:
+                raise ValueError(f"shared VMM payload hash mismatch: {name}")
+            manifest["research_source_sha256"][name] = actual
+        for name in CAMISP_SHARED_INPUTS:
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        manifest["camisp_shared_supplier"] = {
+            "scope": "object-only; shared composite/vmlinux link untested",
+            "config_variants": CAMISP_SHARED_PLAN["config_variants"],
+            "payload_sha256": CAMISP_SHARED_PLAN["source_sha256"],
+            "source_check": {"status": "passed", "output": shared_check.strip()},
+            "staged_sources": {**CAMISP_POWER_PLAN["sources"], **CAMISP_SHARED_SOURCES},
+            "objects": CAMISP_POWER_OBJECTS + CAMISP_SHARED_OBJECTS,
+            "excluded_from_staging": ["Kbuild.shared"],
+        }
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -439,6 +480,8 @@ def main():
         run(["python3", "patches/camera-camisp/resources/test-source.py"])
         run(["python3", CAMISP_POWER_CHECK])
         run(["python3", "patches/camera-camisp/power/test_source.py"])
+        run(["python3", "patches/camera-camisp/power/test_supplier.py"])
+        manifest["camisp_shared_supplier"]["source_tests"] = "passed"
     for patch in manifest["patches"]:
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
@@ -456,6 +499,10 @@ def main():
         manifest["derived_camisp_power_sources_sha256"] = {
             destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
             for destination in CAMISP_POWER_PLAN["sources"].values()
+        }
+        manifest["camisp_shared_supplier"]["staged_source_sha256"] = {
+            destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
+            for destination in (*CAMISP_POWER_PLAN["sources"].values(), *CAMISP_SHARED_SOURCES.values())
         }
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(PROVIDER_PATCH).resolve()])
@@ -503,7 +550,7 @@ def main():
         for symbol in CAMERA_ENABLE:
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated camera dependency missing: {symbol}")
-        for symbol in (*CAMISP_ENABLE, *CAMISP_RESOURCE_ENABLE):
+        for symbol in (*CAMISP_ENABLE, *CAMISP_RESOURCE_ENABLE, *CAMISP_POWER_ENABLE):
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated CAMISP dependency missing: {symbol}")
         for symbol in (*CAM_MAIN_REACHABLE, *CAMISP_RESOURCE_REACHABLE):
@@ -535,6 +582,7 @@ def main():
         variant_objects = (video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS +
                            CAMERA_REPEAT_OBJECTS + repeat_consumers + CAMISP_OBJECTS +
                            CAMISP_RESOURCE_OBJECTS + CAMISP_POWER_OBJECTS)
+        variant_objects += CAMISP_SHARED_OBJECTS
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
@@ -578,6 +626,14 @@ def main():
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in CAMISP_POWER_OBJECTS
+        }
+        manifest["camisp_shared_supplier"]["kunit_enabled_objects"] = {
+            name: identities[name] for name in (*CAMISP_POWER_OBJECTS, *CAMISP_SHARED_OBJECTS)
+        }
+        manifest["camisp_shared_supplier"]["kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in (*CAMISP_POWER_OBJECTS, *CAMISP_SHARED_OBJECTS)
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

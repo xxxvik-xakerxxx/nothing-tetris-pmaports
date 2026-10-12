@@ -1,0 +1,3 @@
+# Full vendor composites share one strict modpost pass. Util is supplied by
+# the separately linked private SMEM provider, never a second legacy instance.
+obj-m += eccci/ ccmni/ rps/

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Negative source tests only; these do not simulate or execute the driver."""
+import copy
+import json
+import unittest
+
+import check_supplier as check
+
+
+class SharedSupplierTests(unittest.TestCase):
+    def setUp(self):
+        self.code = (check.HERE / "mt6878-vmm-supplier.c").read_text()
+        self.header = (check.HERE / "mt6878-vmm-supplier.h").read_text()
+        self.plan = json.loads((check.HERE / "SHARED-STAGING.json").read_text())
+
+    def reject(self, old, new):
+        self.assertIn(old, self.code)
+        with self.assertRaises(ValueError):
+            check.source_contract(self.code.replace(old, new), self.header)
+
+    def test_candidate(self):
+        check.source_contract(self.code, self.header)
+        check.staging_contract(self.plan)
+
+    def test_cannot_bypass_first_failure(self):
+        for old, new in [("if (ret)\n\t\tgoto fault;", "if (false) goto fault;"),
+                         ("if (!vmm->first_error)", "if (true)"),
+                         ("if (vmm->first_error)", "if (false)"),
+                         ("return vmm->first_error;", "return 0;")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_no_early_isolation_release_or_disable(self):
+        for old, new in [("regulator_enable(vmm->buck)", "regulator_disable(vmm->buck)"),
+                         ("mt6878_vmm_iso_set(vmm->spm, true)", "mt6878_vmm_iso_set(vmm->spm, false)"),
+                         ("vmm_check_rail(vmm, false)", "vmm_check_rail(vmm, true)")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_shared_users_require_exclusive_owner(self):
+        self.reject('regulator_get_exclusive(dev, "vmm")', 'regulator_get(dev, "vmm")')
+
+    def test_inherited_state_and_read_errors_fail_closed(self):
+        for old, new in [("if (enabled < 0)", "if (false)"),
+                         ("if (enabled)\n\t\treturn vmm_fail(vmm, -EBUSY);", ""),
+                         ("pm_genpd_init(&vmm->genpd, NULL, !enabled)",
+                          "pm_genpd_init(&vmm->genpd, NULL, true)"),
+                         ("GENMASK(26, 24)", "BIT(24)"),
+                         ("if (ret < 0)", "if (false)")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_cached_on_fault_and_leaf_unwind_guard(self):
+        for old, new in [("ret = mt6878_vmm_check(guard->supplier);", "ret = 0;"),
+                         ("return notifier_from_errno(ret);", "return NOTIFY_OK;"),
+                         ("ret = mt6878_vmm_fail_child(guard->supplier, -EIO);", "ret = 0;"),
+                         ("ret = vmm_fail(vmm, error);", "ret = error;"),
+                         ("guard->pending = event;", "guard->pending = 0;")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_all_children_use_real_guarded_parent(self):
+        for old, new in [("child->status != GENPD_STATE_OFF", "false"),
+                         ("child->flags & GENPD_FLAG_IRQ_SAFE", "0"),
+                         ("guard_dev->pm_domain != &child->domain", "false"),
+                         ("ret = dev_pm_genpd_add_notifier(guard_dev, &guard->nb);", "ret = 0;"),
+                         ("ret = pm_genpd_add_subdomain(&vmm->genpd, child);", "ret = 0;")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_fault_retains_mm_infra_parent(self):
+        self.reject("ret = pm_genpd_add_subdomain(mm_infra, &vmm->genpd);", "ret = 0;")
+
+    def test_no_unsafe_unwind_or_invented_policy(self):
+        for call in ("regulator_put(vmm->buck);", "regulator_set_voltage(vmm->buck, 1, 1);",
+                     "vmm->first_error = 0;", "of_genpd_add_provider_simple(np, &vmm->genpd);"):
+            with self.subTest(call=call), self.assertRaises(ValueError):
+                check.source_contract(self.code + call, self.header)
+
+    def test_staging_cannot_activate_or_drop_native_dependencies(self):
+        for key, value in (("runtime_activation", "enabled"), ("sources", {}),
+                           ("source_sha256", {}), ("link_plan", {}),
+                           ("required_enabled", ["PM"]),
+                           ("research_objects", ["drivers/pmdomain/mediatek/mtk-pm-domains.o"])):
+            plan = copy.deepcopy(self.plan)
+            plan[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                check.staging_contract(plan)
+
+
+if __name__ == "__main__":
+    unittest.main()

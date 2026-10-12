@@ -75,7 +75,7 @@ int b41_first_config_build(const struct b41_first_inputs *inputs,
     mark(&result, 0x25, 3, B41_FIRST_CONSTANT);
     mark(&result, 0x4c, 4, B41_FIRST_CONSTANT);
     mark(&result, 0x51, 3, B41_FIRST_CONSTANT);
-    mark(&result, 0x58, 3, B41_FIRST_CONSTANT);
+    /* Satellite mask and normal/factory selector need explicit producers. */
     mark(&result, 0x5c, 8, B41_FIRST_CONSTANT);
     mark(&result, 0x6d, 3, B41_FIRST_CONSTANT);
 

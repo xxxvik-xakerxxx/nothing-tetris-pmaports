@@ -37,7 +37,9 @@ int main(void)
     inputs.xml_size = sizeof("<unparsed/>") - 1;
     assert(b41_first_config_build(&inputs, &config) == 1);
     assert(!config.missing_inputs && config.unresolved_bytes && config.xml_policy_missing);
-    assert(config.unresolved_bytes == 27);
+    assert(config.unresolved_bytes == 30);
+    for (unsigned i = 0x58; i <= 0x5a; ++i)
+        assert(config.provenance[i] == B41_FIRST_UNKNOWN);
     assert(value(&config, 0x18) == 26000000 && value(&config, 0x1c) == 115200);
     assert(config.bytes[0x13] == 255 && config.bytes[0x14] == 0xd0);
     assert(value(&config, 0x54) == 23 && value(&config, 0x64) == 0x12345678);

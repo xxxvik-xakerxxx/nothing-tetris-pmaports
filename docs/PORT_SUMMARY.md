@@ -354,10 +354,26 @@ The next [private CCCI consumer](../patches/modem/drafts/runtime-smem-consumer/R
 binds to a real GPL provider export, copies the mapped tables into the fresh
 native modem structure and balances its separate module reference on abort.
 It bypasses legacy void SMEM initialization and leaves ROM unmapped. Fifteen
-source checks and independent review pass; actual native fault fixtures,
-64 consistent consumer objects and strict r181 provider/copy-module linkage
-are now wired into targeted CI, pending for this revision. This does not enable
-post-bind publication, HIF, START or radio operation.
+source checks, independent review, native sanitized fault fixtures, 64 consistent
+consumer objects and strict r181 provider/copy-module linkage passed
+[CI38251600849](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38251600849)
+at `d0336ee085585c56d80e17e8cbb12bd641219774`.
+On fresh boot `2b17cde3-1cce-4b85-bb2a-d920cc7c685e`, one provider init and one
+actual-kernel private-copy test returned0 at uptime143.34s. The real patched
+`ccci_modem` received the checked tables, then its private copy/reference was
+released. The provider retains both original claims/mappings and reference2:
+one boot pin plus the normal loaded test-module dependency, not a leaked copy
+lease. Provider SHA256 `726a606154aa8aa7351aa49cd809b804faab135990d9fcf5714ae420b323d9d7`;
+copy module SHA256 `4e84e01bb1d13893f949460993da874b9dc9ce69ccc6ade304628cd8fc5d8a28`.
+A subsequent 32MiB USB transfer matched
+`83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`;
+USB/sensors/SSH remained active without failed units or new kernel faults.
+This establishes the real provider/copy ABI boundary, not FSM/HIF preparation,
+post-bind publication, START or radio operation. The next
+[complete-module link](../patches/modem/drafts/runtime-link-closure/README.md)
+supplies the actual packaged first-start backend's missing exports and rebuilds
+all eight vendor modules against genuine r181/provider exports. It remains
+CI-pending and does not authorize activating the linked hardware operations.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -399,6 +415,11 @@ static tests against those exact private inputs. It verifies branch targets,
 cold caller dominance with explicitly conditional callee returns, BSS/stack
 fill bounds and the alternate full-SRAM reader. Vendor instructions remain
 opaque; the source-tail producer and whole-startup memory coverage are unresolved.
+The [LK tail audit](../patches/gpu/lk-tail/README.md) adds 18 passing source tests
+and a pinned 1,937-instruction census. It establishes the exact extra-copy bounds,
+excludes cache maintenance as a zero-fill producer and resolves the mapper's
+branch tables. Its strict closure check still refuses activation: transitive
+writer/callee coverage is incomplete. No excess upload or zero-padding is enabled.
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
 buffers, power/reset and repeated-frame ownership candidates exist. Actual
@@ -432,6 +453,14 @@ MT6878 VMM isolation operations. Thirteen static negative-test groups and pinned
 source/patch checks pass; its object is now included in both ARM64 config
 variants, with actual ARM64 compilation passed in CI38245658821. Shared VMM ownership/voltage policy and
 complete callback wiring remain missing; no provider or board node is enabled.
+The new [shared VMM supplier](../patches/camera-camisp/power/SHARED-SUPPLIER.md)
+uses native genpd child accounting and an exclusive regulator handle, checks
+isolation synchronously, preserves the first error and guards cached-ON child
+transitions. Ten new source mutation groups and exact pinned source checks pass.
+Its two source objects are now included once in the isolated ARM64 CI, with both
+KUnit configs; target compilation is pending. A complete provider/link, verified
+voltage/rate policy, quiescent handoff and all-user migration are still required.
+No camera bus access or capture is enabled by the object-only candidate.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -464,9 +493,17 @@ ARM64 Bionic link passed CI38245663571. The property
 service is an Android/Bionic boundary, not a new mandatory pmOS daemon; complete
 native policy inputs and startup configuration still need integration.
 The next pure [native quiet-policy builder](../patches/gnss-navigation-audit/b41_receiver_inputs.md)
-selects the proven host/NMEA path without an Android property service. It
-preserves all remaining receiver/stop/MPE/AGPS gates; native compilation is
-pending for this new revision. On r181 boot7d4b87cb the explicit GPS transport
+selects the proven host/NMEA path without an Android property service. Its
+1,024-vector native sanitizer fixture and ARM64 Bionic target link passed the
+prerequisite jobs in CI38248220709; full install images remain pending. It
+preserves all remaining receiver/stop/MPE/AGPS gates. A new
+[native satellite configuration](../patches/gnss-navigation-audit/native-config-completion/TRACE.md)
+implements the exact twelve-option AGPS mask and normal-start selector, replacing
+three incorrect constant-zero receipts in the first block. Seven pinned binary
+source checks pass; 4,096-vector native fixtures and ARM64 target compilation
+are now wired into mandatory CI checks, pending for this revision. These are
+native configuration producers, not an AGPS receiver or successful INIT.
+On r181 boot7d4b87cb the explicit GPS transport
 probe returned0 at uptime427.85s and created gpsdl0/1 beside the retained SMEM
 owner; USB/sensors/SSH remained active. Neither link was opened and no navigation
 or position fix was attempted.

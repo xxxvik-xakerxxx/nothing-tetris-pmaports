@@ -1,0 +1,3057 @@
+{
+  "census": [
+    {
+      "caller_reachable_instructions": 101,
+      "calls": [
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126068,
+          "target": 82156
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126080,
+          "target": 93888
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 126128,
+          "target": 84188
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 126160,
+          "target": 520068
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126204,
+          "target": 424084
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126236,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126284,
+          "target": 82156
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126312,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126356,
+          "target": 478624
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126396,
+          "target": 24180
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126416,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 126460,
+          "target": 436620
+        }
+      ],
+      "decoded_instructions": 114,
+      "end_exclusive": 126492,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 126320,
+          "target": 125980
+        },
+        {
+          "kind": "window_exit",
+          "site": 126240,
+          "target": 126732
+        },
+        {
+          "kind": "window_exit",
+          "site": 126360,
+          "target": 126596
+        },
+        {
+          "kind": "window_exit",
+          "site": 126488,
+          "target": 126492
+        }
+      ],
+      "name": "caller",
+      "sha256": "7cb863d962350735da608ab11d29f3260d07ea16ba6951f193496a5d8edd11ba",
+      "start": 126036,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 126152
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 126156
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x25"
+          ],
+          "operation": "str",
+          "site": 126448
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x22"
+          ],
+          "operation": "str",
+          "site": 126456
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x23"
+          ],
+          "operation": "ldr",
+          "site": 126472
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x26"
+          ],
+          "operation": "str",
+          "site": 126484
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 41,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82220,
+          "target": 73504
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82252,
+          "target": 82320
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82264,
+          "target": 73648
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82316,
+          "target": 429040
+        }
+      ],
+      "decoded_instructions": 41,
+      "end_exclusive": 82320,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 82316,
+          "target": 82320
+        }
+      ],
+      "name": "reserve",
+      "sha256": "a35e3b4eb57666ffd1d3879cc14ce8d11039e30ae90339740caac5197ec4fed1",
+      "start": 82156,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82156
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 82160
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82164
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82168
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82172
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "ldp",
+          "site": 82292
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 467,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82408,
+          "target": 438076
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82420,
+          "target": 437404
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82448,
+          "target": 437628
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82480,
+          "target": 437628
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82516,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82540,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82596,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82644,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82652,
+          "target": 81696
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82768,
+          "target": 92876
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 82784,
+          "target": 437404
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 82840,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83336,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83380,
+          "target": 437404
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83404,
+          "target": 437480
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83412,
+          "target": 437404
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83524,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83676,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83736,
+          "target": 436092
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83804,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83832,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83860,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83884,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83936,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 83960,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 83984,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 84036,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 84060,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 84084,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 84136,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 84160,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 84184,
+          "target": 429152
+        }
+      ],
+      "decoded_instructions": 467,
+      "end_exclusive": 84188,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 84184,
+          "target": 84188
+        }
+      ],
+      "name": "mblock",
+      "sha256": "716f8c4493d0743ce142f28671c29f1e49ba85d5f206b613885090ef77254b20",
+      "start": 82320,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82324
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82328
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82332
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82336
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82340
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82344
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 82640
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 83348
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 83352
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 83356
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 83360
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 83364
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x27"
+          ],
+          "operation": "stur",
+          "site": 83368
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x27"
+          ],
+          "operation": "stur",
+          "site": 83372
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x27"
+          ],
+          "operation": "stur",
+          "site": 83376
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x27"
+          ],
+          "operation": "strb",
+          "site": 83420
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 83440
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x11"
+          ],
+          "operation": "str",
+          "site": 83464
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x10"
+          ],
+          "operation": "str",
+          "site": 83472
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 83648
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x24"
+          ],
+          "operation": "stp",
+          "site": 83744
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x24"
+          ],
+          "operation": "stp",
+          "site": 83748
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 83760
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 83932
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 84032
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 84132
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 77,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 93104,
+          "target": 436092
+        }
+      ],
+      "decoded_instructions": 77,
+      "end_exclusive": 93184,
+      "exits": [],
+      "name": "mblock_merge",
+      "sha256": "6481f869901571070b84c45905e7c73e85ebb096484ff550447cee2440383ead",
+      "start": 92876,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 92876
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 92880
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 92884
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x14"
+          ],
+          "operation": "str",
+          "site": 93016
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x13"
+          ],
+          "operation": "str",
+          "site": 93024
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x14"
+          ],
+          "operation": "str",
+          "site": 93040
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x13"
+          ],
+          "operation": "str",
+          "site": 93044
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 93124
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "ldp",
+          "site": 93176
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 2,
+      "calls": [],
+      "decoded_instructions": 2,
+      "end_exclusive": 93896,
+      "exits": [],
+      "name": "high_address_selector",
+      "sha256": "2b59db05426e0f313d72b30f3398c65721de2562a59dc46ceeba224f98d0b876",
+      "start": 93888,
+      "writers": []
+    },
+    {
+      "caller_reachable_instructions": 105,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424224,
+          "target": 73504
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 424260,
+          "target": 423360
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 424312,
+          "target": 28564
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424340,
+          "target": 73648
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424476,
+          "target": 29140
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424488,
+          "target": 73648
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424496,
+          "target": 430836
+        }
+      ],
+      "decoded_instructions": 105,
+      "end_exclusive": 424504,
+      "exits": [],
+      "name": "map",
+      "sha256": "b1188cb9a3973715062a48608a66cf9ca1b807a72d5d92cd380b4a82334db597",
+      "start": 424084,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 424084
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 424088
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 424092
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 424096
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 424100
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 424104
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x25"
+          ],
+          "operation": "str",
+          "site": 424280
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "ldp",
+          "site": 424368
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x10"
+          ],
+          "operation": "str",
+          "site": 424460
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 424468
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x8"
+          ],
+          "operation": "stp",
+          "site": 424472
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 181,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 423432,
+          "target": 430664
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 423456,
+          "target": 437308
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 423724,
+          "target": 423004
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 423964,
+          "target": 423004
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 424040,
+          "target": 430836
+        }
+      ],
+      "decoded_instructions": 181,
+      "end_exclusive": 424084,
+      "exits": [],
+      "name": "map_descriptor",
+      "sha256": "ba44571452bf80b79d6ab94b649a56017a29a594a2d923a92a9ad30b9c6e0926",
+      "start": 423360,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423364
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423368
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423372
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423376
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423380
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 423384
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "stp",
+          "site": 423464
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "stp",
+          "site": 423468
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "stp",
+          "site": 423472
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 423520
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 423652
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 423660
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x20"
+          ],
+          "operation": "str",
+          "site": 423664
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 423668
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 424000
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 424012
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "str",
+          "site": 424016
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x8"
+          ],
+          "operation": "str",
+          "site": 424024
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 424028
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 144,
+      "calls": [
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 28940,
+          "target": 27160
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 29056,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 29100,
+          "target": 27160
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 29132,
+          "target": 433192
+        }
+      ],
+      "decoded_instructions": 144,
+      "end_exclusive": 29140,
+      "exits": [],
+      "name": "arch_map",
+      "sha256": "a52b22676c82b997e6f930efd43acf803471175f45315423dc2ea02173939064",
+      "start": 28564,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 28568
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 28936
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 29096
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 213,
+      "calls": [
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 27252,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27556,
+          "target": 422060
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27588,
+          "target": 420356
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27596,
+          "target": 419880
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27636,
+          "target": 421552
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27664,
+          "target": 430596
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27676,
+          "target": 422164
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27688,
+          "target": 422060
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 27704,
+          "target": 436620
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 27772,
+          "target": 27160
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 27824,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27868,
+          "target": 429040
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27876,
+          "target": 430836
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 27900,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 27940,
+          "target": 28012
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 28008,
+          "target": 213964
+        }
+      ],
+      "decoded_instructions": 213,
+      "end_exclusive": 28012,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 28008,
+          "target": 28012
+        }
+      ],
+      "name": "page_table",
+      "sha256": "db087abcb77d9c93d1b6081049a3c085e647d4234eece7476e20c68b9ce5af6c",
+      "start": 27160,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27164
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27168
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27172
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27176
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27180
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27184
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27224
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27292
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27328
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27332
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 27340
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27344
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27348
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27356
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27360
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 27364
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27372
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 27376
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x7"
+          ],
+          "operation": "str",
+          "site": 27492
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27532
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27600
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 27680
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x7"
+          ],
+          "operation": "str",
+          "site": 27724
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 27768
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 299,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478708,
+          "target": 69992
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478720,
+          "target": 430532
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478744,
+          "target": 172972
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478752,
+          "target": 425552
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 478776,
+          "target": 425692
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 478804,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 478836,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478844,
+          "target": 430836
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 478900,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478932,
+          "target": 516916
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 478956,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 478988,
+          "target": 516924
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479000,
+          "target": 516832
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479016,
+          "target": 516928
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479040,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479064,
+          "target": 429152
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479136,
+          "target": 437692
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479192,
+          "target": 425692
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479236,
+          "target": 516920
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479260,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479280,
+          "target": 425692
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479312,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479368,
+          "target": 516932
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479392,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479416,
+          "target": 429152
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479428,
+          "target": 516936
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479436,
+          "target": 69992
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479464,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479480,
+          "target": 514816
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479504,
+          "target": 432752
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479520,
+          "target": 425440
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479528,
+          "target": 430836
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479612,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479636,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479652,
+          "target": 213964
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479664,
+          "target": 432752
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479688,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479708,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479732,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479748,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479772,
+          "target": 429152
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 479792,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 479816,
+          "target": 429152
+        }
+      ],
+      "decoded_instructions": 299,
+      "end_exclusive": 479820,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 479816,
+          "target": 479820
+        }
+      ],
+      "name": "loader",
+      "sha256": "37fbf6132fc3fbf21e3cd3a9918b348d600933ee1e0f879a4a957d242eea4434",
+      "start": 478624,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478628
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478632
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478636
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478640
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478644
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478648
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 478684
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478688
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478692
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478696
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 478700
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 478704
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x19"
+          ],
+          "operation": "strb",
+          "site": 479132
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 42,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 514864,
+          "target": 69992
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 514888,
+          "target": 437028
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 514908,
+          "target": 620704
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 514944,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 514960,
+          "target": 625156
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 514964,
+          "target": 69992
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 515000,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 515016,
+          "target": 437028
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515036,
+          "target": 620704
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 515072,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515088,
+          "target": 625156
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515092,
+          "target": 69992
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 515128,
+          "target": 433192
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": true,
+          "site": 515144,
+          "target": 437028
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515164,
+          "target": 620704
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 515200,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515216,
+          "target": 625156
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": false,
+          "site": 515220,
+          "target": 69992
+        },
+        {
+          "callee_window_present": true,
+          "caller_reachable": false,
+          "site": 515256,
+          "target": 433192
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 515304,
+          "target": 213964
+        }
+      ],
+      "decoded_instructions": 123,
+      "end_exclusive": 515308,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 515304,
+          "target": 515308
+        }
+      ],
+      "name": "post_load",
+      "sha256": "36b4f576ddc910ca0b65547c17f0377ef9b433b7475f66593e6c4704d6b0c00e",
+      "start": 514816,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 514820
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 514824
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 514828
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 514860
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 514884
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 8,
+      "calls": [],
+      "decoded_instructions": 8,
+      "end_exclusive": 437060,
+      "exits": [],
+      "name": "strcmp",
+      "sha256": "907f0ab9a83415ae47b60ebc724515131a5e76dbee70db3d39c951049fe5d73e",
+      "start": 437028,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "ldrb",
+          "site": 437028
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x1"
+          ],
+          "operation": "ldrb",
+          "site": 437032
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 8,
+      "calls": [],
+      "decoded_instructions": 8,
+      "end_exclusive": 24212,
+      "exits": [],
+      "name": "cache",
+      "sha256": "5bf61889c1dd84c7bc0af3de04aff0e963802683aab8753eb5d534fcc5c7e36a",
+      "start": 24180,
+      "writers": [
+        {
+          "alias_proof": "system effect; requires separate contract",
+          "bases": [],
+          "operation": "dc",
+          "site": 24188
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 91,
+      "calls": [],
+      "decoded_instructions": 91,
+      "end_exclusive": 436984,
+      "exits": [],
+      "name": "memset",
+      "sha256": "b9a5950864ab631a1874cceb62fbe869f43759eaa5aab1faf4949302b9d12e0a",
+      "start": 436620,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x11"
+          ],
+          "operation": "strb",
+          "site": 436656
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436668
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436700
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436720
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436740
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436760
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 436780
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x11"
+          ],
+          "operation": "stp",
+          "site": 436860
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "str",
+          "site": 436888
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "sturb",
+          "site": 436948
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "strb",
+          "site": 436952
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x8"
+          ],
+          "operation": "strb",
+          "site": 436972
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 52,
+      "calls": [
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 433288,
+          "target": 683676
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 433328,
+          "target": 439012
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 433340,
+          "target": 683656
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 433348,
+          "target": 683696
+        },
+        {
+          "callee_window_present": false,
+          "caller_reachable": true,
+          "site": 433396,
+          "target": 213964
+        }
+      ],
+      "decoded_instructions": 52,
+      "end_exclusive": 433400,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 433396,
+          "target": 433400
+        }
+      ],
+      "name": "logger",
+      "sha256": "fdd21e44465c449759253ead7a1894ec58bc747b4f68de3285d5fe3fe834f6c3",
+      "start": 433192,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433196
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433200
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433212
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433216
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433236
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "str",
+          "site": 433240
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stur",
+          "site": 433260
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stp",
+          "site": 433272
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433276
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stp",
+          "site": 433280
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "sp"
+          ],
+          "operation": "stp",
+          "site": 433284
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stp",
+          "site": 433320
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "fp"
+          ],
+          "operation": "stp",
+          "site": 433324
+        }
+      ]
+    },
+    {
+      "caller_reachable_instructions": 12,
+      "calls": [],
+      "decoded_instructions": 12,
+      "end_exclusive": 425740,
+      "exits": [
+        {
+          "kind": "window_exit",
+          "site": 425692,
+          "target": 425740
+        },
+        {
+          "kind": "window_exit",
+          "site": 425696,
+          "target": 425740
+        },
+        {
+          "kind": "window_exit",
+          "site": 425708,
+          "target": 425740
+        },
+        {
+          "kind": "window_exit",
+          "site": 425728,
+          "target": 425740
+        },
+        {
+          "kind": "br",
+          "site": 425736,
+          "target": null
+        }
+      ],
+      "name": "byte_reader_dispatch",
+      "sha256": "93c30eca152109a73862c45339ad6e226bee65c49ab3e5f6d92faa040acf96d5",
+      "start": 425692,
+      "writers": []
+    }
+  ],
+  "conclusion": {
+    "activation_permitted": false,
+    "closed_boundary": "cache operation is not a fill; RV33 skips named post-load action blocks",
+    "copy_or_padding_authorized": false,
+    "producer_resolved": false,
+    "remaining_boundary": "complete producer/alias proof before enlarging signed upload or starting",
+    "scratch_proven": false,
+    "tail_classification": "unresolved",
+    "zero_proven": false
+  },
+  "coverage": {
+    "assumptions": "normal AAPCS64 returns; callback receives selected RV33 header name",
+    "cfg_scope": "caller may-return overapproximation; indirect jumps are explicit exits",
+    "complete_decode_of_declared_windows": true,
+    "indirect_storage_site": 425736,
+    "resolved_indirect_mapper_sites": [
+      28744,
+      28792
+    ],
+    "whole_program_or_transitive_writer_proof": false
+  },
+  "decoder": "5.0.6",
+  "identity": {
+    "basis": "exact supplied digest pins; signatures not reauthenticated here",
+    "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
+    "primary_bytes": 156064,
+    "primary_sha256": "9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7"
+  },
+  "local_proofs": {
+    "copy_words": 64686,
+    "high_address_allocation_branch_excluded": true,
+    "mapper_jump_tables": [
+      {
+        "index_bits": 2,
+        "site": 28744,
+        "targets": [
+          28816,
+          28748,
+          28804,
+          28812
+        ]
+      },
+      {
+        "index_bits": 2,
+        "site": 28792,
+        "targets": [
+          28964,
+          28796,
+          28952,
+          28960
+        ]
+      }
+    ],
+    "other_zero_candidates": [
+      {
+        "bytes": 88,
+        "call": 423432,
+        "object": "mapping descriptor"
+      },
+      {
+        "call": 27704,
+        "nonalias_with_staging_proven": false,
+        "object": "page-table buffer from 0x670ac"
+      },
+      {
+        "bytes": 262144,
+        "call": 126460,
+        "object": "SRAM destination"
+      }
+    ],
+    "post_load_cache": {
+      "bytes": 1048576,
+      "call": 126396,
+      "effect": "clean/invalidate; can write back existing dirty bytes",
+      "entry": 24180,
+      "fills_memory": false
+    },
+    "post_load_callback": {
+      "assumption": "selected header name is RV33; normal AAPCS64 callee returns",
+      "reachable_sites": [
+        514816,
+        514820,
+        514824,
+        514828,
+        514832,
+        514836,
+        514840,
+        514844,
+        514848,
+        514852,
+        514856,
+        514860,
+        514864,
+        514868,
+        514872,
+        514876,
+        514880,
+        514884,
+        514888,
+        514892,
+        515004,
+        515008,
+        515012,
+        515016,
+        515020,
+        515132,
+        515136,
+        515140,
+        515144,
+        515148,
+        515260,
+        515264,
+        515268,
+        515272,
+        515276,
+        515280,
+        515284,
+        515288,
+        515292,
+        515296,
+        515300,
+        515304
+      ],
+      "rv33_action_calls": [],
+      "window_exits": [
+        {
+          "kind": "window_exit",
+          "site": 515304,
+          "target": 515308
+        }
+      ]
+    },
+    "read_request": {
+      "call": 479280,
+      "count_producer": 479616,
+      "count_source": "selected member header +4; not the 1 MiB limit",
+      "lower_driver_write_extent_proven_here": false
+    },
+    "source_expression": "mapped_reservation + 0x18 + copy_index",
+    "tail_bytes": 102680,
+    "tail_destination_relative_to_sram": [
+      156064,
+      258744
+    ],
+    "tail_source_relative_to_mapping": [
+      156088,
+      258768
+    ]
+  },
+  "schema": 1,
+  "unexpanded_call_frontier": [
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 126160,
+      "target": 520068,
+      "window": "caller"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82220,
+      "target": 73504,
+      "window": "reserve"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82264,
+      "target": 73648,
+      "window": "reserve"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82316,
+      "target": 429040,
+      "window": "reserve"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82408,
+      "target": 438076,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82420,
+      "target": 437404,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82448,
+      "target": 437628,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82480,
+      "target": 437628,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82540,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82652,
+      "target": 81696,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 82784,
+      "target": 437404,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83380,
+      "target": 437404,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83404,
+      "target": 437480,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83412,
+      "target": 437404,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83524,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83736,
+      "target": 436092,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83884,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 83984,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 84084,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 84184,
+      "target": 429152,
+      "window": "mblock"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 93104,
+      "target": 436092,
+      "window": "mblock_merge"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424224,
+      "target": 73504,
+      "window": "map"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424340,
+      "target": 73648,
+      "window": "map"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424476,
+      "target": 29140,
+      "window": "map"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424488,
+      "target": 73648,
+      "window": "map"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424496,
+      "target": 430836,
+      "window": "map"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 423432,
+      "target": 430664,
+      "window": "map_descriptor"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 423456,
+      "target": 437308,
+      "window": "map_descriptor"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 423724,
+      "target": 423004,
+      "window": "map_descriptor"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 423964,
+      "target": 423004,
+      "window": "map_descriptor"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 424040,
+      "target": 430836,
+      "window": "map_descriptor"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27556,
+      "target": 422060,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27588,
+      "target": 420356,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27596,
+      "target": 419880,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27636,
+      "target": 421552,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27664,
+      "target": 430596,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27676,
+      "target": 422164,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27688,
+      "target": 422060,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27868,
+      "target": 429040,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27876,
+      "target": 430836,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 27940,
+      "target": 28012,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 28008,
+      "target": 213964,
+      "window": "page_table"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478708,
+      "target": 69992,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478720,
+      "target": 430532,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478744,
+      "target": 172972,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478752,
+      "target": 425552,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478844,
+      "target": 430836,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478932,
+      "target": 516916,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 478988,
+      "target": 516924,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479000,
+      "target": 516832,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479016,
+      "target": 516928,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479064,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479136,
+      "target": 437692,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479236,
+      "target": 516920,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479368,
+      "target": 516932,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479416,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479428,
+      "target": 516936,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479436,
+      "target": 69992,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479504,
+      "target": 432752,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479520,
+      "target": 425440,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479528,
+      "target": 430836,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479652,
+      "target": 213964,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479664,
+      "target": 432752,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479688,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479732,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479772,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 479816,
+      "target": 429152,
+      "window": "loader"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 514864,
+      "target": 69992,
+      "window": "post_load"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 515304,
+      "target": 213964,
+      "window": "post_load"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 433288,
+      "target": 683676,
+      "window": "logger"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 433328,
+      "target": 439012,
+      "window": "logger"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 433340,
+      "target": 683656,
+      "window": "logger"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 433348,
+      "target": 683696,
+      "window": "logger"
+    },
+    {
+      "callee_window_present": false,
+      "caller_reachable": true,
+      "site": 433396,
+      "target": 213964,
+      "window": "logger"
+    }
+  ],
+  "unresolved_obligations": [
+    "All unexpanded reachable callees and indirect exits need write/alias contracts.",
+    "Allocator metadata, heap/page tables and logger globals must be disjoint from staging.",
+    "Storage DMA, authentication/secure transforms and callbacks need transitive bounds.",
+    "Initial reserved DRAM contents and earlier/async writers are not in these inputs.",
+    "RV33 transitive startup memory requirements remain outside this ARM64-only audit."
+  ]
+}

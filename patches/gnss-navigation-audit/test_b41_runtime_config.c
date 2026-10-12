@@ -23,7 +23,7 @@ int main(int argc, char **argv)
         .transport = B41_FIRST_HOST, .primary_fd = 9,
         .xml_asset = B41_FIRST_XML_VENDOR, .xml_bytes = xml, .xml_size = size,
     };
-    assert(b41_first_config_build(&input, &base) == 1 && base.unresolved_bytes == 27);
+    assert(b41_first_config_build(&input, &base) == 1 && base.unresolved_bytes == 30);
     struct b41_runtime_sources source = {
         .present = B41_RUNTIME_ALL, .host_mode_88794 = 1,
         .chip_id_de304 = 0x12345678, .capabilities_de308 = 0x10203040,
@@ -34,12 +34,15 @@ int main(int argc, char **argv)
         .feature_present_ddd84 = 255, .feature_88c80 = 0x9b,
     };
     assert(b41_runtime_config_apply(&base, &source, xml, size, &result) == 1);
-    assert(result.first.unresolved_bytes == 0 && result.engine_contract_missing == 1);
+    assert(result.first.unresolved_bytes == 3 && result.engine_contract_missing == 1);
     assert(result.xml_get_verified == 1 && result.first.xml_policy_missing == base.xml_policy_missing);
     assert(result.first.missing_inputs == base.missing_inputs);
     unsigned changed = 0;
     for (unsigned i = 0; i < B41_FIRST_SIZE; ++i) {
-        if (base.provenance[i] == B41_FIRST_UNKNOWN) {
+        if (i >= 0x58 && i <= 0x5a) {
+            assert(result.first.provenance[i] == B41_FIRST_UNKNOWN);
+            assert(result.first.bytes[i] == base.bytes[i]);
+        } else if (base.provenance[i] == B41_FIRST_UNKNOWN) {
             ++changed; assert(result.first.provenance[i] == B41_RUNTIME_PROVENANCE);
         } else {
             assert(result.first.bytes[i] == base.bytes[i]);

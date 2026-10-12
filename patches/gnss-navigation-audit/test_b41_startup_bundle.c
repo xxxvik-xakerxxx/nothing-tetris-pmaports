@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     };
     struct b41_startup_bundle bundle, before;
     assert(b41_startup_bundle_build(&first, &runtime, &second, &sources, xml, size, &bundle) == 1);
-    assert(bundle.runtime.first.unresolved_bytes == 0);
+    assert(bundle.runtime.first.unresolved_bytes == 3);
     assert(bundle.second.unresolved_bytes + 26 == second.unresolved_bytes);
     assert(bundle.second.bytes[0x68] == 0xff && bundle.second.bytes[0x69] == 0xff &&
            bundle.second.bytes[0x6a] == 4 && bundle.second.bytes[0x6b] == 0);

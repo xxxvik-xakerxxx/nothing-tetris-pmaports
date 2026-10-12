@@ -1,5 +1,11 @@
 # Native camera power prerequisite: Untested
 
+The next integration candidate is the [shared VMM supplier](SHARED-SUPPLIER.md):
+native genpd aggregation, exclusive regulator ownership, checked isolation,
+MM_INFRA retention and child fault guards. It remains uncalled and unactivated.
+The original leaf payload below passed ARM64 CI38245658821 per the user's
+reported result; that build does not cover the new shared-supplier object.
+
 This candidate contains two real Linux `scpsys_domain_data` descriptors and
 checked, bounded leaf transactions. It registers no provider, runs no probe,
 exports no module symbols, changes no existing source or DT, and is not in the
@@ -96,7 +102,9 @@ transition, not unconditionally around each camera consumer reference.
    owner must validate/reconcile inherited isolation, preserve ISP_VCORE and
    every other rail user, propagate failure before releasing camera reset/bus
    access, and define recovery when isolation succeeds but buck disable fails.
-   This candidate supplies the local transaction; it does not invent that owner.
+   The new shared-supplier candidate implements that Linux ownership contract
+   and checked callbacks; see SHARED-SUPPLIER.md for the all-user migration,
+   verified-OFF handoff and permanent-lifetime activation requirements.
 
 2. **Voltage and firmware policy.** The PMIC's 300000..1193750 uV DT constraints
    are its allowed range, not a camera operating point. Neither a safe fixed VMM
@@ -154,5 +162,6 @@ source hashes and compiler/config identity in its ARM64 artifact manifest.
 
 Local result: source/static Python tests and additive patch application only.
 No SSH, compilation, emulation, CI dispatch, push or hardware access performed.
-ARM64 compilation is pending parent integration. Power transitions, recovery,
+Original leaf ARM64 compilation passed CI38245658821 per the user's report;
+new shared-supplier compilation is pending. Power transitions, recovery,
 cold start, camera capture and lifecycle/variant validation remain Untested.

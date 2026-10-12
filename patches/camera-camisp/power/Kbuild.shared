@@ -1,0 +1,4 @@
+# Research full-link candidate only; no initcall, provider publication or DT.
+ccflags-y += -I$(srctree)/drivers/pmdomain/mediatek
+obj-y += tetris-vmm-candidate.o
+tetris-vmm-candidate-y := mt6878-cam-power.o mt6878-vmm-supplier.o

@@ -38,6 +38,7 @@ jobs:
         run: python3 ci/extract-stock-modem.py
       - name: Execute producer to actual import fixtures
         run: |
+          python3 -B patches/modem/drafts/runtime-link-closure/test_link.py
           python3 ci/test-modem-metadata-native.py
           python3 ci/modem-metadata-native.py --vendor out/vendor --uboot out/uboot
       - name: Execute unattached SMEM transaction fixtures
@@ -121,6 +122,21 @@ jobs:
           python3 patches/modem/drafts/runtime-object-ci/check_objects.py \
             --metadata --smem --uboot out/uboot
           python3 ci/packaged-smem-objects.py --link-r181 --gpueb-analysis --smem-consumer
+      - name: Link complete private CCCI stack against real r181 exports
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/modem/drafts/runtime-link-closure/link_full.py \
+            --vendor /tmp/tetris-kernel-smoke/vendor-git-source \
+            --destination /tmp/tetris-ccci-full-link
+      - name: Preserve complete CCCI link outcome
+        if: always()
+        run: |
+          mkdir -p out/kernel-object-smoke/full-ccci-link
+          for name in full-link.json backend-link.log full-link.log artifacts; do
+            if test -e "/tmp/tetris-ccci-full-link/$name"; then
+              cp -R "/tmp/tetris-ccci-full-link/$name" out/kernel-object-smoke/full-ccci-link/
+            fi
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
