@@ -55,6 +55,16 @@ class NativeCameraLink(unittest.TestCase):
             self.assertNotEqual(LINK.config_values(["CONFIG_OF_DYNAMIC=" + value]).get("OF_DYNAMIC", "n"), "n")
         self.assertNotEqual(LINK.config_values([]).get("OF", "n"), "y")
 
+    def test_object_evidence_survives_final_link_failure(self):
+        source = (ROOT / "ci/link-native-camera-vmm.py").read_text()
+        start = source.index('run([*make, "vmlinux"])')
+        for marker in ('shutil.copyfile(compiled, retained)',
+                       'outcome["status"] = "objects-compiled"',
+                       'outcome["status"] = "vmlinux-link-started"'):
+            self.assertLess(source.index(marker), start)
+        self.assertGreater(source.index('"status": "passed",'), start)
+        self.assertIn('finally:', source)
+
 
 if __name__ == "__main__":
     unittest.main()

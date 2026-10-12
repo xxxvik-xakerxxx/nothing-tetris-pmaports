@@ -2,39 +2,31 @@
 
 ## Current integration
 
-r170 CI `37744399850` failed compiling `ccci_hif_cldma.c:519`: the newly
-included CLDMA module still used `from_timer`, removed in Linux 6.18.
-r172 adds `0109`, replacing it with `timer_container_of`, as already done
-for CCIF. Callback behavior and timer ownership are unchanged. The pinned
-modem source has no other active `from_timer` calls after these two patches
-(CCMNI retains only a commented-out historical line). The patch-application
-gate now checks CLDMA too. CI `37753866853` attempt 2 passed the full link;
-all nine module hashes from its evidence artifact were verified against the
-manifest for source `17fbac0`. The failed r170 run produced no install image.
-r172 also retains r171's
-GPU/camera PMIC phase-mask patch, whose separate native tests passed.
+The installed system is r182. Its guarded HIF-only DT has bound the actual
+CCIF and DPMAIF resource helpers: all eight MMIO claims, real OF clock handles
+and IRQ descriptors passed on the handset without a screen/sensor/USB regression.
+Those helpers do not enable IRQs, submit DMA, register control ports or start
+firmware. They remain manually loaded for this boot, not installed/autoloaded.
+The real modem consumer is still disabled. Exact installed identities, recovery
+FIT and evidence hashes are in [the port summary](../../docs/PORT_SUMMARY.md).
 
-r170 moves 0001, 0002, 0003 and 0006 into the kernel package's source and
-prepare sequence. Their canonical files now live in
-`pmaports/device/testing/linux-postmarketos-mediatek-mt6878/`; the candidate
-tests use those files directly. 0004/0005 remain research-only because the
-vendor CMA page-pool path is excluded from the integrated build.
+The full private CCCI stack and the resource-only profile pass strict ARM64
+Kbuild/modpost against genuine kernel/SCP exports. Latest completed driver job:
+[CI38307965880](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38307965880).
+That run's separate native MD/camera provider job failed its configuration check;
+it is not a successful aggregate build. The hidden-false Kconfig check is fixed
+in main and the joint provider is being rebuilt separately.
 
-After the existing kernel and SCP builds, `_build_modem_link()` invokes one
-external Kbuild/modpost for CCCI util, ECCCI (including AUXADC, CCIF, DPMAIF,
-CLDMA and SCP sync), CCMNI and RPS. It uses the actual kernel/SCP export tables
-and the same LLVM toolchain, checks all nine output modules and their kernel
-release, and treats unresolved symbols as errors. The legacy CLDMA component
-is included by the vendor Makefile; compiling it does not select it at runtime.
-This link gate passed in r172. The r172 image is installed, but the linked
-modem modules are deliberately absent from its rootfs.
+The current boundary is [native inherited-ON adoption](md-pm-integration/README.md),
+then the first physical OFF/ON, execution inhibition, powered transport and the
+CCCI boot handshake. The ordinary trusted U-Boot handoff is valid evidence;
+no invented permission certificate is required. Native power callbacks currently
+veto transitions rather than fabricate success. SIM detection, network
+registration, calls, SMS, data and voice audio have not been demonstrated.
 
-The resulting modules are **not installed or autoloaded**, and the modem DT
-remains disabled. Loading them is unsafe before bootloader memory/firmware
-handoff, MD power/clock ownership and SCP coordination are validated. The
-remaining userspace work includes modem filesystem/calibration requests,
-SIM/control transport, network registration and the voice/audio path. No
-working SIM or calls are claimed.
+Canonical Linux 6.18 adaptation patches live in
+`pmaports/device/testing/linux-postmarketos-mediatek-mt6878/`. The optional vendor
+CMA page-pool path remains excluded; normal skb/page allocation is used.
 
 ## Historical candidate evidence
 
@@ -341,7 +333,7 @@ Do not fix this merely by forcing the missing count while leaving CMA release,
 pool inflight accounting and single-producer requirements unreviewed. The
 native allocation/ownership design needs the full lifetime, including pages
 still held by the network stack, rather than a compile-only field update.
-This optional page-pool path remains unactivated. The first current live
-modem failure is earlier: U-Boot publishes no-fdt and payload-not-checked, as
-recorded in docs/MODEM_SIM_EVIDENCE_PLAN.md. Resolve the boot handoff before
-attempting modem power/DMA execution.
+This optional page-pool path remains unactivated. The historical no-fdt handoff
+failure is superseded by the installed r182 checkpoint above. First native
+shutdown/startup and actual transport ownership remain required before DMA or
+modem execution.

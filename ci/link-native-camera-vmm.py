@@ -120,6 +120,11 @@ def main(md_on_adoption=False):
             variant = report / ("kunit-" + unit)
             variant.mkdir()
             shutil.copyfile(output / ".config", variant / "config")
+            outcome = result["variants"][unit] = {
+                "status": "configuration-resolved",
+                "config_sha256": sha(variant / "config"),
+                "objects": {},
+            }
             resolved = config_values(text)
             if resolved.get("KUNIT", "n") != unit:
                 raise ValueError("KUNIT variant did not resolve: " + unit)
@@ -130,23 +135,33 @@ def main(md_on_adoption=False):
                     if resolved.get(symbol, "n") != value:
                         raise ValueError("MD static diagnostic config unresolved: " + symbol)
             run([*make, "-k", *plan["combined_objects"]])
+            for name in plan["combined_objects"]:
+                compiled = output / name
+                retained = variant / name
+                retained.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(compiled, retained)
+                outcome["objects"][name] = {
+                    **smoke.object_identity(retained), "sha256": sha(retained),
+                }
+            outcome["status"] = "objects-compiled"
             supplier = output / "drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.o"
             symbols = subprocess.check_output(["llvm-nm", "--defined-only", supplier], text=True)
             defined = {line.split()[-1] for line in symbols.splitlines() if line.split()}
             for name in SUPPLIER_SYMBOLS:
                 if name not in defined:
                     raise ValueError("missing actual supplier object definition: " + name)
+            outcome["supplier_symbols"] = list(SUPPLIER_SYMBOLS)
+            outcome["status"] = "vmlinux-link-started"
             run([*make, "vmlinux"])
             with (output / "vmlinux").open("rb") as binary:
                 elf = binary.read(20)
             if elf[:6] != b"\x7fELF\x02\x01" or int.from_bytes(elf[18:20], "little") != 183:
                 raise ValueError("not the genuine ARM64 vmlinux")
-            result["variants"][unit] = {
+            outcome.update({
+                "status": "passed",
                 "vmlinux_sha256": sha(output / "vmlinux"),
-                "objects": {name: {**smoke.object_identity(output / name),
-                                   "sha256": sha(output / name)} for name in plan["combined_objects"]},
-                "supplier_symbols": list(SUPPLIER_SYMBOLS),
-                "supplier_resolution": "real object definitions and strict vmlinux link; final ThinLTO may inline helpers"}
+                "supplier_resolution": "real object definitions and strict vmlinux link; final ThinLTO may inline helpers",
+            })
         result["status"] = "passed"
     except BaseException as error:
         result.update(status="failed", error=str(error))
