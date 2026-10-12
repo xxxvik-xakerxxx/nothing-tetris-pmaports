@@ -59,7 +59,7 @@
   "physical_gate": {
     "owner": "parent only",
     "load": "Actual ELF profile and boot FDT/platform-device inventory first; no enabled or manually-created matching automatic probe target",
-    "prepare": "Separate explicit private_prepare request only after actual DT/resource/clock/pericfg/PM relationships and this profile's CI are reviewed",
+    "prepare": "Separate explicit private_prepare request only after actual DT/resource/clock/PM relationships and this profile's CI are reviewed; MT6878/6299 does not require absent pericfg",
     "still_disabled": ["IRQ mappings from these helpers", "IRQ handlers/wake/enable", "DMA", "MMIO mappings/access", "START/STOP", "modem/FSM/port/sysfs/monitor publication", "worker wake", "post-bind commit"],
     "no_inferred_permissions": ["READY", "NS certificate", "physical OFF", "SIM/calls", "full-core safe unload"]
   }

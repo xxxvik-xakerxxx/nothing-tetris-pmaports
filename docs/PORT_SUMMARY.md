@@ -31,7 +31,8 @@ After commanded poweroff, the phone booted again as
 errors0, valid 21-tag descriptor, all three sensor/SSH services active and no
 failed units. The service reports 24 inventory entries and physical mask31.
 This was an automatic boot with USB attached, not a confirmed physical cold
-cycle. Visual checks remain pending. One explicit packaged GNSS transport start
+cycle. The user subsequently confirmed normal screen, touch, rotation and
+auto-brightness. One explicit packaged GNSS transport start
 at uptime907.39s created both gpsdl nodes and preserved those services/USB;
 no link was opened, engine started or position fix attempted. The installed
 arch11.8 CSF firmware's decompressed hash matches the expected public payload:
@@ -425,7 +426,32 @@ The resource fixture passed ASAN/UBSAN in the completed producer job of
 at `5e2c0b1`. Its artifact ZIP SHA256 is
 `a5194043fae4a27129b4ae2db00d07dd38802066e22e861ca32010d08ef96cb5`;
 reviewed overlay hash `8567e75c09cdb485ba19f52b65c67e2aaedf899ed21a843a98027e3699b5202f`.
-The ARM64 resource profile is still building.
+Both jobs of that CI passed, including the baseline and separate resource-only
+strict ARM64 links plus both camera supplier object configurations. Resource
+artifact ZIP SHA256:
+`966c311f22e17e724479b69808075c6ae4770a2a21b81bb15f4bfcd6b10df009`.
+All ten module hashes, actual constructor symbols/source identity and bounded
+constructor disassembly were checked. Resource-profile core SHA256:
+`ed11c9f274df533798af96ca86b546fa252c818431f2d8ab272e93452144e91e`.
+
+On r182 boot `19e13ae5`, actual DT/platform inventory showed only the disabled
+metadata anchor, no matching devices, overlays or prior CCCI modules. One
+guarded load at uptime5588.17-5588.25s inserted RPS, CCMNI, AUXADC, real backend,
+mapped provider, core with `private_prepare=0`, CCIF and DPMAIF. All returned0;
+the parameter remained `N`, provider references4 and core references2. Both
+optional CLDMA/SCP modules remain unloaded. The only new kernel records were
+retained mappings/import with transport disabled; no new fault or failed unit.
+USB and sensor services stayed active, and a completed 32 MiB transfer matched
+`83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
+These temporary modules remain loaded until reboot, not packaged/autoloaded.
+No resource probe or private preparation occurred because targets are absent;
+this closes actual default-off full-core load/dependency linkage, not SIM/calls.
+The subsequent source correction removes an artificial pericfg prerequisite:
+pinned B4.1 uses that register only in the <=6297 clock-off branch; MT6878's
+6299 uses infracfg and its DT intentionally lacks the pericfg phandle. Missing
+pericfg is now accepted for resource-only acquisition, while supplied malformed
+relationships still fail. This changed supplier needs a fresh CI result and is
+not the already loaded artifact above.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -523,7 +549,10 @@ No camera bus access or capture is enabled by the object-only candidate.
 The supplier now also owns the CAM_MAIN/CAM_VCORE control phase under its lock,
 validates shared rail/isolation before entry and latches the original leaf
 failure before genpd parent unwind. Sixteen supplier source tests pass. This
-new addition needs fresh ARM64 compilation and complete callback wiring;
+new addition passed fresh ARM64 compilation in both KUnit configurations of
+CI38265540133 at 5e2c0b1. The manifest matches changed source SHA256
+`23c4cdea6559703fffd09b8591d213b207d8a7fd1ac19afb5f435f99bb798f8b`.
+Complete callback/provider wiring and physical power/frame checks remain;
 the prior object hashes do not validate the changed code.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
@@ -574,7 +603,10 @@ image. Pre-INIT preparation parks the worker; dispatch requires the actual
 engine record after successful INIT. Eight static tests pass (seven pinned);
 the AArch64 Bionic link passed CI38265545233. Its host compiler caught an ignored
 terminal acknowledgement write; error handling is corrected and fortified
-native sanitizer CI must be repeated. The forward assistance consumer
+native sanitizer CI was repeated successfully in
+[CI38274644174](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38274644174)
+at `140e85c`: all validation jobs passed, including 15 real-Linux-IPC receiver
+fixtures under ASAN/UBSAN and the AArch64 Bionic link. The forward assistance consumer
 and full session/control protocol remain missing; no receiver gate is cleared
 and no GPS fix is claimed.
 The common first constructor now keeps these three bytes unresolved until the

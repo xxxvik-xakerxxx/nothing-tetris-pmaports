@@ -198,6 +198,23 @@ def build(vendor):
             vendor_nodes[label] = found[0]
         if 'ccif-pericfg' in vendor_nodes['ccifdriver'] or 'power-domains' not in vendor_nodes['mddriver']:
             raise ValueError('B4.1 pericfg/PM gate source drift')
+        ccif_source = before[ECCCI + 'hif/ccci_hif_ccif.c']
+        reset = function(ccif_source, 'ccif_set_clk_off')
+        lookup = function(ccif_source, 'ccif_hif_hw_init')
+        reset_body = re.sub(r'\s+', '', reset[0])
+        if ('ccif_ctrl->plat_val.md_gen>=6298' not in reset_body or
+                'elseif(ccif_ctrl->plat_val.md_gen<=6297)' not in reset_body or
+                reset_body.count('regmap_write(ccif_ctrl->pericfg_base,0x30c,0x0);') != 1 or
+                'mediatek,md-generation = <6299>;' not in vendor_nodes['mddriver']):
+            raise ValueError('B4.1 pericfg generation contract drift')
+        outside = ccif_source
+        for match in sorted((reset, lookup), key=lambda item: item.start(), reverse=True):
+            outside = outside[:match.start()] + outside[match.end():]
+        if 'pericfg_base' in outside:
+            raise ValueError('new CCIF pericfg user outside the reviewed generation path')
+        pericfg = dict(policy='optional for resource-only MT6878/6299; validate if present',
+                       reset_body_sha256=sha(reset[0].encode()),
+                       lookup_body_sha256=sha(lookup[0].encode()), generation=6299)
         old_census = census(stage)
         after = dict(before)
         for local, target in PAYLOADS.items():
@@ -309,6 +326,7 @@ def build(vendor):
     report = {key: report[key] for key in ('frozen_reviews', 'overlays_sha256',
               'consumer_review_sha256', 'package_sha256', 'vendor_prepare')}
     report.update(vendor_commit=VENDOR, linux_commit=LINUX, baseline_commit=BASELINE,
+                  ccif_pericfg=pericfg,
                   overlay_sha256=sha(patch.encode()),
                   base_init_census=old_census, resource_init_census=new_census,
                   touched_source_sha256={name: sha(source.encode()) for name, source in sorted(after.items())},

@@ -54,10 +54,17 @@ static int tetris_hif_supplier_probe(struct platform_device *pdev, unsigned int 
 		if (IS_ERR(res->clk[i]))
 			return PTR_ERR(res->clk[i]);
 	}
-	ret = tetris_relation(&pdev->dev, id == CCIF_HIF_ID ?
-		"ccif-pericfg" : "dpmaif-infracfg", NULL, false);
-	if (ret)
-		return ret;
+	/* B4.1's pericfg reset is only for <=6297; the consumer admits 6299.
+	 * Do not demand a provider absent from the real MT6878 board description.
+	 * A supplied relationship is still validated, never silently discarded.
+	 */
+	if (id != CCIF_HIF_ID ||
+	    of_find_property(pdev->dev.of_node, "ccif-pericfg", NULL)) {
+		ret = tetris_relation(&pdev->dev, id == CCIF_HIF_ID ?
+			"ccif-pericfg" : "dpmaif-infracfg", NULL, false);
+		if (ret)
+			return ret;
+	}
 	/* The B4.1 reset implementation finds this compatible globally. Requiring
 	 * exactly one retains that relationship without its of_iomap side effect. */
 	ret = tetris_relation(&pdev->dev, NULL, "mediatek,infracfg", false);

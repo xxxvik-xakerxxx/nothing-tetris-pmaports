@@ -61,7 +61,7 @@ the IRQ controller: the profile does not certify their side effects or physical
 mask state. The modem WDT IRQ number remains zero until a reviewed activation.
 
 The supplier retains real OF relationships: DPMAIF `dpmaif-infracfg`; CCIF
-`ccif-pericfg`; uniquely available `mediatek,infracfg`; and the actual CCIF4/5
+optional `ccif-pericfg`; uniquely available `mediatek,infracfg`; and the actual CCIF4/5
 nodes. Dedicated CCIF4/5 windows are reserved; shared syscons retain node
 references without mapping/claiming another driver's region. Any absent,
 disabled, ambiguous, busy or malformed required resource fails with its first
@@ -69,10 +69,13 @@ error. Deferred clock errors propagate. There is no fabricated resource address,
 success fallback, READY state or NS certificate.
 
 In B4.1 MT6878 DT, `ccif-pericfg` is absent although legacy CCIF logs its lookup
-failure and continues. This checked candidate rejects that incomplete closure.
+failure and continues. Its only register user is the <=6297 clock-off branch;
+MT6878's 6299 path uses infracfg instead. Therefore absence is not a new
+prerequisite for this resource-only profile. A supplied phandle is validated;
+malformation still fails. The private consumer continues to admit only 6878/6299.
 The original sequencer index 1 is also absent; resource-only modem preparation
 retains no sequencer pointer and never uses the legacy literal fallback. These
-facts are blockers for future physical paths, not reasons to guess new nodes.
+facts must guide future physical paths, not guesses of new nodes.
 
 Only a completed supplier transaction becomes real drvdata under a distinct
 resource-driver name. It never fills `ccci_hif`, `ccci_hif_op`, legacy control
@@ -157,7 +160,7 @@ and boot FDT/platform-device inventory as described in INIT-PROBE-CENSUS.md.
 
 Before requesting private preparation, review and supply the actual CCIF,
 DPMAIF and modem DT/resource/provider relationships, including the unresolved
-CCIF pericfg, clock owners, auxiliary windows and modem PM attachment boundary.
+clock owners, auxiliary windows and modem PM attachment boundary.
 No address or missing provider is invented here. A separate PM integration must
 preserve the real domain relationship without pre-probe power-on; this directory
 does not fake a PM domain or modify Linux to bypass its platform contract.

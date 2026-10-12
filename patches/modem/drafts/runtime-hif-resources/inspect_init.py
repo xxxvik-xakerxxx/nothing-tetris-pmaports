@@ -28,6 +28,14 @@ def inspect(root, profile):
     if '-DCONFIG_MTK_TINYSYS_SCP_SUPPORT' in flags:
         raise ValueError('SCP feature override differs from the reviewed actual r181 profile')
     evidence = json.loads((HERE / 'SOURCE-EVIDENCE.json').read_text())
+    if profile == 'resource':
+        recorded = report.get('hif_resources', {})
+        if (recorded.get('overlay_sha256') != evidence['overlay_sha256'] or
+                recorded.get('overlay_sha256') != sha((HERE / 'resources.overlay').read_bytes())):
+            raise ValueError('resource artifact belongs to a different reviewed overlay')
+        for name, digest in evidence['touched_source_sha256'].items():
+            if report['vendor_source_sha256'].get(name) != digest:
+                raise ValueError('compiled resource header/source differs: ' + name)
     census = evidence['resource_init_census' if profile == 'resource' else 'base_init_census']
     module_rows = report['modules']
     if {Path(name).name for name in module_rows} != set(CENSUS):

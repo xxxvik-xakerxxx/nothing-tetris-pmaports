@@ -44,7 +44,13 @@
   "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
   "linux_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
   "baseline_commit": "e0c67c561ff7c1a0472da851edfafd5a0abb6cec",
-  "overlay_sha256": "8567e75c09cdb485ba19f52b65c67e2aaedf899ed21a843a98027e3699b5202f",
+  "ccif_pericfg": {
+    "policy": "optional for resource-only MT6878/6299; validate if present",
+    "reset_body_sha256": "7a1dcb95a0bd16b0d4115a7ee64515ff4578a937a1fd7349dfae3f40614cc51b",
+    "lookup_body_sha256": "57d0f3f32240da7685c1aeab8cc4d69c4a3ea6f164934610684e5e2fca55c8d5",
+    "generation": 6299
+  },
+  "overlay_sha256": "f561be18dbbc10e649a8aa834c68240e0d970a063c687261b25eac2bd666f727",
   "base_init_census": {
     "ccci_md_all": {
       "source": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
@@ -380,7 +386,7 @@
     "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c": "7bf29dbc38e3a476830a0bd39526fd044f2890174cd67d09ec6b355fa37c6c79",
     "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c": "7a58335d196a7a935b199888f6a115308ee136ade03359715c07f65198761017",
     "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c": "c7ae56fa92fd1bbe2d02370ef1469feb8be6f3e239d6a4217caf39cb09510d32",
-    "drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h": "bc8b40a85d72d940095295b4c61c4e06733e572c1134945a4a4623ec4b46f244",
+    "drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h": "84288ce27e38a212996b788f9f76d4479928b2655894ed1a2ab04342daaf9009",
     "drivers/misc/mediatek/eccci/inc/tetris_hif_resources.h": "aaa2f9cbe490ef74ec32bc3c071031edf2fd3d976dd2da30b5403009f4dc97c3"
   },
   "dpmaif_clock_source_sha256": "8f9694998abb0a9199328008db984254ac93dfe2a0687db6f39eebc3512b3a64",

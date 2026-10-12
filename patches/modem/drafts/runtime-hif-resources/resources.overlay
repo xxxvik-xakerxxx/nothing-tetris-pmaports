@@ -503,7 +503,7 @@ diff --git a/drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h b/drivers/mis
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,91 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#include "tetris_hif_resources.h"
 +
@@ -560,10 +560,17 @@ new file mode 100644
 +		if (IS_ERR(res->clk[i]))
 +			return PTR_ERR(res->clk[i]);
 +	}
-+	ret = tetris_relation(&pdev->dev, id == CCIF_HIF_ID ?
-+		"ccif-pericfg" : "dpmaif-infracfg", NULL, false);
-+	if (ret)
-+		return ret;
++	/* B4.1's pericfg reset is only for <=6297; the consumer admits 6299.
++	 * Do not demand a provider absent from the real MT6878 board description.
++	 * A supplied relationship is still validated, never silently discarded.
++	 */
++	if (id != CCIF_HIF_ID ||
++	    of_find_property(pdev->dev.of_node, "ccif-pericfg", NULL)) {
++		ret = tetris_relation(&pdev->dev, id == CCIF_HIF_ID ?
++			"ccif-pericfg" : "dpmaif-infracfg", NULL, false);
++		if (ret)
++			return ret;
++	}
 +	/* The B4.1 reset implementation finds this compatible globally. Requiring
 +	 * exactly one retains that relationship without its of_iomap side effect. */
 +	ret = tetris_relation(&pdev->dev, NULL, "mediatek,infracfg", false);

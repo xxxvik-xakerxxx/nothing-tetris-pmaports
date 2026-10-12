@@ -85,6 +85,20 @@ class ResourceSourceTests(unittest.TestCase):
         self.assertIn('tetris_prepared_md = md;', registration)
         self.assertIn('ccci_tetris_registration_quarantine(ret)', registration)
 
+    def test_unused_pericfg_is_not_a_new_mt6878_prerequisite(self):
+        source = (HERE / 'supplier.h').read_text()
+        self.assertIn('if (id != CCIF_HIF_ID ||', source)
+        self.assertIn('of_find_property(pdev->dev.of_node, "ccif-pericfg", NULL)', source)
+        self.assertIn('generation != 6299 || platform != 6878', (HERE / 'modem.h').read_text())
+        self.assertEqual(self.report['ccif_pericfg']['policy'],
+                         'optional for resource-only MT6878/6299; validate if present')
+
+    def test_artifact_inspector_checks_headers_not_only_constructor_source(self):
+        source = (HERE / 'inspect_init.py').read_text()
+        self.assertIn("recorded.get('overlay_sha256') != evidence['overlay_sha256']", source)
+        self.assertIn("evidence['touched_source_sha256'].items()", source)
+        self.assertIn("compiled resource header/source differs", source)
+
     def test_preprobe_pm_hazard_fails_before_registration(self):
         common = (HERE / 'resources.h').read_text()
         for token in ('power-domains', 'assigned-clocks', 'iommus', 'iommu-map', 'of_device_is_available(node)'):

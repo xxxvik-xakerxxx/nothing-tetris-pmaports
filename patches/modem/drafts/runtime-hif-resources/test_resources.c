@@ -31,6 +31,7 @@ struct device_node {
 	bool extended, controller, irq_map;
 	unsigned int irq_cells, irq_words;
 	bool has_address_cells;
+	bool pericfg_present, pericfg_bad;
 	unsigned int address_cells, address_words;
 	struct device_node *parent;
 	int refs;
@@ -188,6 +189,7 @@ static void *of_find_property(struct device_node *n, const char *name, void *len
 	if (!strcmp(name, "interrupt-controller") && n->controller) return n;
 	if (!strcmp(name, "interrupt-map") && n->irq_map) return n;
 	if (!strcmp(name, "#address-cells") && n->has_address_cells) return n;
+	if (!strcmp(name, "ccif-pericfg") && n->pericfg_present) return n;
 	return NULL;
 }
 static struct device_node *next_node(struct device_node *old, const char *compatible)
@@ -201,7 +203,11 @@ static struct device_node *next_node(struct device_node *old, const char *compat
 #define for_each_compatible_node(n, type, compatible) \
 	for ((n) = next_node(NULL, compatible); (n); (n) = next_node(n, compatible))
 static struct device_node *of_parse_phandle(struct device_node *n, const char *property, int index)
-{ assert(n && property && index == 0); return fault() ? NULL : of_node_get(nodes + 5); }
+{
+	assert(n && property && index == 0);
+	if (!strcmp(property, "ccif-pericfg") && n->pericfg_bad) return NULL;
+	return fault() ? NULL : of_node_get(nodes + 5);
+}
 static int of_address_to_resource(struct device_node *n, int index, struct resource *r)
 {
 	assert(n && index == 0);
@@ -286,6 +292,12 @@ int main(void)
 			assert(!suppliers[i].drvdata); finish();
 		}
 	}
+	reset(); nodes[0].pericfg_present = true;
+	assert(prepare(0) == 0); int optional_total = step; finish();
+	for (int f = 1; f <= optional_total; f++) {
+		reset(); nodes[0].pericfg_present = true; fail_at = f;
+		assert(prepare(0) < 0 && !suppliers[0].drvdata); finish();
+	}
 	reset(); nodes[0].power = true;
 	assert(tetris_preflight_driver("mediatek,ccci_ccif") == -EOPNOTSUPP);
 	assert(prepare(0) == -EOPNOTSUPP && !step); finish();
@@ -313,6 +325,10 @@ int main(void)
 	assert(prepare(0) == -EINVAL && irq_parses == 0); finish();
 	reset(); nodes[0].extended = true;
 	assert(prepare(0) == -EOPNOTSUPP && irq_parses == 0); finish();
+	reset(); assert(!nodes[0].pericfg_present && prepare(0) == 0); finish();
+	reset(); nodes[0].pericfg_present = true; assert(prepare(0) == 0); finish();
+	reset(); nodes[0].pericfg_present = nodes[0].pericfg_bad = true;
+	assert(prepare(0) == -ENODEV); finish();
 	reset(); nodes[5].irq_map = true;
 	assert(prepare(0) == -EOPNOTSUPP && irq_parses == 0); finish();
 	reset(); auxiliary[1] = auxiliary[0];

@@ -10,7 +10,9 @@ ignored terminal acknowledgement write under fortified libc. The write is now
 checked: failure latches the original errno without publishing completion;
 the parent still must retain ownership until its deadline/quarantine completes.
 Successful completion performs no subsequent owner access. The host fixture
-explicitly enables FORTIFY_SOURCE=2; repeat native CI remains pending.
+explicitly enables FORTIFY_SOURCE=2. Repeat CI38274644174 at 140e85c passed all
+validation jobs: 15 real-Linux-IPC native ASAN/UBSAN fixtures and the AArch64
+Bionic link. This does not execute the proprietary engine or prove a GPS fix.
 No local emulation or native compilation occurred.
 All additions are within this directory. No private binary/payload is included.
 
