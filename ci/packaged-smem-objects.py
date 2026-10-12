@@ -105,8 +105,9 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
     for forbidden in ('map', 'publish', 'export'):
         if re.search(r'\btetris_smem_' + forbidden + r'_private$', symbols, re.M):
             raise ValueError('AP-only module contains physical SMEM transaction')
-    if 'mtk_ccci_owned_smem_init' not in symbols:
-        raise ValueError('SMEM integration missing from linked module')
+    for required in ('mtk_ccci_owned_smem_init', 'tetris_smem_boot_decode'):
+        if not re.search(r'\b' + required + r'$', symbols, re.M):
+            raise ValueError('SMEM integration missing from linked module: ' + required)
     release = subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip()
     if not release.startswith(identity['kernel_release'] + ' '):
         raise ValueError('linked module vermagic differs from installed kernel')
@@ -162,9 +163,9 @@ def main():
     staging.run(['git', 'apply', '-'], cwd=destination, input=patch, text=True)
     util = destination / PREFIX
     evidence = util / 'smem_boot_evidence'
-    evidence.mkdir(exist_ok=False)
     for name in ('boot_evidence.c', 'boot_evidence.h'):
-        shutil.copyfile(ROOT / 'patches/modem/drafts/smem-boot-evidence' / name, evidence / name)
+        if (evidence / name).read_bytes() != (ROOT / 'patches/modem/drafts/smem-boot-evidence' / name).read_bytes():
+            raise ValueError('packaged decoder differs from reviewed body: ' + name)
     original_vendor = work / 'runtime-vendor'
     objects = ('ccci_util_boot_args.o', 'ccci_util_lib_fo.o', 'ccci_util_lib_main.o',
                'owned_smem_plan.o', 'tetris_runtime_smem/smem.o', 'tetris_runtime_smem/arguments.o',

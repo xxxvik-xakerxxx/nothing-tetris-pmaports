@@ -1,4 +1,4 @@
-# Port summary, 2026-10-11
+# Port summary, 2026-10-12
 
 Native postmarketOS port for Nothing CMF Phone 1 (`nothing-tetris`, MT6878).
 Experimental, not a fully functional daily-driver phone.
@@ -19,16 +19,41 @@ FIT matches CI SHA256 `91d7f77a7d8b177fe6320d7bdce267dc88ec26ed146feff9227b55645
 | --- | --- |
 | Kernel | `7.2.1-r181`, Linux `6.18.0 #182` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `cdd806438d73e2e163fcc9aded557b029816011e` |
-| Loader image SHA256 | `1dd571bf3965851c2d79a9417482ec172f62b56fbf9c84f429d70f8b09bf187d` |
+| Running U-Boot / `lk_a` | Experimental `e2929baa549f54ce5518b2dd84952318ba857fda` |
+| Loader image SHA256 | `26a9dea98387803ddbcd4097610f4d7f0e12a084c0113d8f69f985c10e25d984` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, included in the image |
 | Root filesystem | Writable; expanded to 104.5 GiB on the next boot; first-install issue recorded below |
 
-The latest loader passed [CI 38113985169](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38113985169).
+The latest loader passed [CI 38217024964](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38217024964).
 Its image was synchronously written only to `lk_a` and prefix-readback verified.
 Stock `lk_b`, NV and calibration remain unchanged. The ordinary minimum loader
 `dcb20ce` in the pmOS manifest is a recovery baseline, not this diagnostic profile.
 See [installation and risk disclaimer](INSTALL.md) before flashing.
+
+### Current loader handoff
+
+The new loader publishes a 336-byte v1 SMEM boot-evidence record, scoped to
+historical BL33 readbacks, alongside the existing v2 AP descriptor. Linux field
+inspection confirms NC/cache reservations, ranges, slots42/43, enables and the
+pinned preloader profile. Endpoint marker bit43 is absent on this hardware and
+is handled symmetrically; no other readback bits are masked.
+
+On boot `0b955ce0-a0d9-4442-b362-ac980d0d83fc`, the existing exact-r181 isolated
+module `ab2e570c5a7fdaa6e16e1f0742efb9bf1b5ea0e5f019703a6d7a67646e740426`
+passed one import/plan at uptime299.77s. USB, sensors, SensorProxy and SSH stayed
+active with no new kernel faults. No module unload/reload, firmware START or
+protected SMEM access was performed. Fresh visual confirmation remains pending.
+The preceding warm start refused SCP with EBUSY; after commanded poweroff the
+phone booted again with automatic sensor initialization. This is not proof of
+a physical cold start or a fix for warm/poweroff lifecycle behavior.
+
+The pure Linux decoder and actual U-Boot producer/decoder round-trip passed
+[CI 38218370472](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38218370472),
+including sanitizer rejection cases and actual ARM64 objects. The isolated
+module candidate now connects that decoder to init and retains an optional
+validated snapshot bound to the same reservations and plan. This additional
+consumer still needs its own linked-module CI and hardware test. Neither the
+boot record nor its decoder grants Linux NS memory access or proves modem READY.
 
 ### First r181 observation: warm boot
 
@@ -245,7 +270,8 @@ memory access and runtime transport disabled. USB, sensors, SensorProxy and SSH
 stayed active, no failed units or new kernel faults appeared, and a complete
 32 MiB USB stream matched SHA256
 `83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
-The module is left loaded; no unload/reload or partition flashing occurred.
+That module was left loaded until the later planned loader update; no unload/reload
+or partition flashing occurred during the first import/plan experiment.
 Visual regression confirmation is pending. The preceding warm boot refused SCP
 preparation with EBUSY; one identity-guarded host USB reset restored networking.
 After a commanded poweroff the phone booted again with successful SCP preparation

@@ -43,11 +43,31 @@ python3 -B patches/modem/drafts/smem-boot-evidence/check.py --uboot out/uboot --
 Fixtures cover relocated reservations and dynamic/full-capacity sizes,
 every wire bit and policy group, marker presence/absence, absent/truncated
 buffers, reservation/range faults, aliasing, pointer/physical overflow,
-aperture endpoints and unchanged output. No Kbuild, APKBUILD, workflow,
-runtime-smem or runtime-metadata activation is included. The native runner
+aperture endpoints and unchanged output. The native runner
 requires both CI=true and GITHUB_ACTIONS=true. It additionally links the real
 new U-Boot encoder to this decoder and checks round-trip bytes with relocated
-allocations and both endpoint marker variants. Native sanitizer
-results remain pending until the parent schedules CI. The parent's r181
+allocations and both endpoint marker variants.
+[CI 38218370472](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38218370472)
+passed 12,229 decoder field/range rejections, bounds/aliases, the actual
+producer/decoder round-trip under ASan/UBSan and actual ARM64 compilation.
+The parent's r181
 NC=1204224/cache=39190528 proof with NULL virtuals establishes a metadata
 plan only; these totals are not decoder constants or permission evidence.
+
+The isolated AP-only overlay now links this exact decoder and copies the
+optional property during serialized plan initialization. Present records must
+match the validated reservations and cover both imported plan ranges. An absent
+record supports the previous loader; zero-length, malformed, short/long or
+incompatible records fail visibly and clear the plan. The node reference is
+released on every path, and no DT pointer survives init. Cleanup erases both
+plan and evidence. This candidate is not installed/autoloaded and still contains
+no SMEM mapping/publication bodies. Native integration and linked-module CI for
+this additional consumer are pending; the earlier CI only compiled the decoder.
+
+U-Boot `e2929baa549f54ce5518b2dd84952318ba857fda` passed
+[CI 38217024964](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38217024964)
+and was flashed only to `lk_a`. Linux physically received the 336-byte record:
+both reserved banks, endpoints, enables and profile matched the published DT.
+This field inspection did not execute the C decoder on the handset. The older
+AP-only module also passed import/plan on the new loader with USB/sensors active.
+No Linux NS access permission, modem START/READY or SIM operation is inferred.

@@ -95,6 +95,27 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertIn('#include "test_packaged_smem.c"', fixture)
         self.assertIn('kernel_import_probe(buffer,', boot)
 
+    def test_boot_evidence_is_copied_without_access_permission(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        self.assertIn('of_find_property(node, TETRIS_SMEM_BOOT_PROPERTY, &length)', owner)
+        self.assertIn('length != (int)sizeof(wire)', owner)
+        self.assertLess(owner.index('of_node_put(node)'), owner.index('tetris_smem_boot_decode('))
+        self.assertIn('regions[i]->size > evidence.record[i].range_size', owner)
+        self.assertIn('regions[i]->base_ap_view_phy != evidence.record[i].range_start', owner)
+        self.assertLess(owner.index('ret = collect_boot_evidence(&banks)'),
+                        owner.index('tetris_owned_smem_plan.ready = true'))
+        self.assertEqual(self.sources[PREFIX + 'smem_boot_evidence/boot_evidence.c'],
+                         (SMEM.parent / 'smem-boot-evidence/boot_evidence.c').read_text())
+        self.assertIn('smem_boot_evidence/boot_evidence.o', self.sources[PREFIX + 'Makefile'])
+        for forbidden in ('ioremap(', 'ioremap_wc(', 'arm_smccc_smc(', 'EXPORT_SYMBOL'):
+            self.assertNotIn(forbidden, owner)
+        fixture = (Path(__file__).parent / 'test_packaged_smem.c').read_text()
+        for required in ('test_evidence_collection(&copied)', 'property_length = 0',
+                         'property_read_error = -EIO', 'node_exists = false',
+                         'acquired == released', 'compatible = false',
+                         'memset(evidence_wire, 0xa5', 'put64(evidence_wire + 80 + 32, 4096)'):
+            self.assertIn(required, fixture)
+
     def test_native_compilation_rejected_outside_ci(self):
         env = dict(os.environ)
         env.pop('CI', None)

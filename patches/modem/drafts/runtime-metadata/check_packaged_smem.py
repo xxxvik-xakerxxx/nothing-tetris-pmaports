@@ -71,7 +71,7 @@ def native_ci(vendor, uboot, stock):
             path.write_text(source)
         for relative in ('linux/errno.h', 'linux/io.h', 'linux/kernel.h', 'linux/slab.h',
                          'linux/string.h', 'linux/unaligned.h', 'linux/mutex.h',
-                         'linux/types.h', 'asm/page.h'):
+                         'linux/types.h', 'linux/of.h', 'asm/page.h'):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             headers = {'linux/errno.h': '#include <asm-generic/errno.h>\n',
@@ -104,10 +104,11 @@ def native_ci(vendor, uboot, stock):
             for name in ('tetris_modem_layout.c', 'tetris_modem_emi.c',
                          'tetris_modem_emi_rows.c', 'tetris_modem_ccci_tags.c',
                          'producer_test.c', 'import.c', 'tetris_runtime_smem/smem.c',
-                         'tetris_runtime_smem/arguments.c'):
+                         'tetris_runtime_smem/arguments.c', 'smem_boot_evidence/boot_evidence.c'):
                 obj = root / (name.replace('/', '-') + '.o')
                 flags = ['-include', str(root / 'boundary.h')] if name in (
-                    'import.c', 'tetris_runtime_smem/smem.c', 'tetris_runtime_smem/arguments.c') else []
+                    'import.c', 'tetris_runtime_smem/smem.c', 'tetris_runtime_smem/arguments.c',
+                    'smem_boot_evidence/boot_evidence.c') else []
                 subprocess.run([os.environ.get('CC', 'clang'), '-std=gnu11', '-Wall', '-Wextra',
                     '-Werror', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined',
                     '-fno-omit-frame-pointer', '-g', f'-DTEST_PAGE_SIZE={page}',

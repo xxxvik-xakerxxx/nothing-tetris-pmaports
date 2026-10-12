@@ -1,7 +1,7 @@
 diff --git a/drivers/misc/mediatek/ccci_util/Makefile b/drivers/misc/mediatek/ccci_util/Makefile
 --- a/drivers/misc/mediatek/ccci_util/Makefile
 +++ b/drivers/misc/mediatek/ccci_util/Makefile
-@@ -53,8 +53,14 @@
+@@ -53,8 +53,15 @@
  			ccci_util_md_rat.o \
  			ccci_util_boot_args.o \
  			ccci_util_img_parsing.o \
@@ -9,7 +9,8 @@ diff --git a/drivers/misc/mediatek/ccci_util/Makefile b/drivers/misc/mediatek/cc
 +			ccci_util_md_mem.o \
 +			owned_smem_plan.o \
 +			tetris_runtime_smem/arguments.o \
-+			tetris_runtime_smem/smem.o
++			tetris_runtime_smem/smem.o \
++			smem_boot_evidence/boot_evidence.o
  
  endif
  endif
@@ -873,20 +874,73 @@ diff --git a/drivers/misc/mediatek/ccci_util/owned_smem_plan.c b/drivers/misc/me
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/ccci_util/owned_smem_plan.c
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,106 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#include <linux/errno.h>
 +#include <linux/kernel.h>
++#include <linux/of.h>
 +#include <linux/string.h>
 +#include "ccci_util_lib_main.h"
 +#include "tetris_runtime_smem/smem.h"
++#include "smem_boot_evidence/boot_evidence.h"
 +
 +/* Sole serialized util init/exit lifetime; no runtime consumer or mappings. */
 +static struct {
 +	struct ccci_mem_layout layout;
 +	struct ccci_smem_region nc[26], cache[11];
++	struct tetris_smem_boot_evidence boot_evidence;
++	bool has_boot_evidence;
 +	bool ready;
 +} tetris_owned_smem_plan;
++
++static int collect_boot_evidence(const struct tetris_metadata_banks *banks)
++{
++	struct device_node *node;
++	struct tetris_smem_boot_evidence evidence;
++	const struct ccci_mem_region *regions[2] = {
++		&tetris_owned_smem_plan.layout.md_bank4_noncacheable_total,
++		&tetris_owned_smem_plan.layout.md_bank4_cacheable_total,
++	};
++	unsigned char wire[TETRIS_SMEM_BOOT_BYTES];
++	unsigned int i;
++	int length = 0, ret = 0;
++
++	/* The producer uses this sole disabled anchor; importer checked uniqueness.
++	 * Absence supports older loaders. A present malformed record is fatal.
++	 */
++	node = of_find_node_by_path("/modem");
++	if (!node)
++		return -ENODEV;
++	if (!of_device_is_compatible(node, "mediatek,mddriver")) {
++		ret = -EINVAL;
++		goto put;
++	}
++	if (!of_find_property(node, TETRIS_SMEM_BOOT_PROPERTY, &length))
++		goto put;
++	if (length != (int)sizeof(wire)) {
++		ret = -EMSGSIZE;
++		goto put;
++	}
++	ret = of_property_read_u8_array(node, TETRIS_SMEM_BOOT_PROPERTY, wire, sizeof(wire));
++put:
++	of_node_put(node);
++	if (ret || !length)
++		return ret;
++	ret = tetris_smem_boot_decode(wire, sizeof(wire), banks, sizeof(*banks),
++			&evidence, sizeof(evidence));
++	if (ret)
++		return ret;
++	for (i = 0; i < ARRAY_SIZE(regions); i++) {
++		if (regions[i]->base_ap_view_phy != evidence.record[i].range_start ||
++		    !regions[i]->size || regions[i]->size > evidence.record[i].range_size ||
++		    regions[i]->base_ap_view_vir)
++			return -ERANGE;
++	}
++	/* Historical BL33 readbacks only, never Linux NS admission or a mapping. */
++	tetris_owned_smem_plan.boot_evidence = evidence;
++	tetris_owned_smem_plan.has_boot_evidence = true;
++	return 0;
++}
 +
 +void mtk_ccci_owned_smem_cleanup(void)
 +{
@@ -913,11 +967,15 @@ new file mode 100644
 +	release = tetris_smem_destroy(owner);
 +	if (!ret)
 +		ret = release;
++	if (!ret)
++		ret = collect_boot_evidence(&banks);
 +	if (ret) {
 +		mtk_ccci_owned_smem_cleanup();
 +		return ret;
 +	}
 +	tetris_owned_smem_plan.ready = true;
++	if (tetris_owned_smem_plan.has_boot_evidence)
++		pr_info("Tetris CCCI: SMEM boot evidence retained; Linux NS admission not established\n");
 +	pr_info("Tetris CCCI: owned SMEM plan ready; NC=%u cache=%u; memory access disabled\n",
 +		tetris_owned_smem_plan.layout.md_bank4_noncacheable_total.size,
 +		tetris_owned_smem_plan.layout.md_bank4_cacheable_total.size);
@@ -1280,6 +1338,196 @@ new file mode 100644
 +	 */
 +	return 0;
 +}
+diff --git a/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.c b/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.c
+@@ -0,0 +1,135 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#ifdef TETRIS_SMEM_BOOT_HOST_TEST
++#include <errno.h>
++#include <string.h>
++#else
++#include <linux/errno.h>
++#include <linux/string.h>
++#endif
++#include "boot_evidence.h"
++
++static unsigned int le32(const unsigned char *p)
++{
++	return (unsigned int)p[0] | (unsigned int)p[1] << 8 |
++		(unsigned int)p[2] << 16 | (unsigned int)p[3] << 24;
++}
++
++static unsigned long long le64(const unsigned char *p)
++{
++	return le32(p) | (unsigned long long)le32(p + 4) << 32;
++}
++
++static int span(const void *p, size_t bytes)
++{
++	return p && bytes && (size_t)p <= (size_t)-1 - bytes;
++}
++
++static int overlaps(const void *a, size_t an, const void *b, size_t bn)
++{
++	return (size_t)a < (size_t)b + bn && (size_t)b < (size_t)a + an;
++}
++
++static int window_valid(const struct tetris_metadata_window *w)
++{
++	return w->base && w->capacity && !((w->base | w->capacity) & 4095) &&
++		w->base <= ~0ULL - w->capacity;
++}
++
++int tetris_smem_boot_decode(const void *wire, size_t wire_bytes,
++		const struct tetris_metadata_banks *banks, size_t banks_bytes,
++		struct tetris_smem_boot_evidence *output, size_t output_bytes)
++{
++	/* These words are checked against the pinned policy helper in source tests
++	 * and against its actual extracted C body in the CI sanitizer fixture.
++	 */
++	static const unsigned long long expected_policy[2][8] = {
++		{ 0, 0xcff0f0c0ULL, 0, 0, 0, 0, 0, 0xc00000000ULL },
++		{ 0, 0xc00300c0ULL, 0, 0, 0, 0, 0, 0xc00000000ULL },
++	};
++	static const unsigned char digest[32] =
++		"\x5d\x2b\xed\xd0\x00\x49\xfc\xed\x98\x3d\x3a\xe5\x39\x89\x61\x6c"
++		"\x5c\x9f\x46\xc4\xed\xdd\x32\xa0\x1a\x1a\xd4\x6f\xf8\xd2\xc5\x0f";
++	const unsigned char *p = wire;
++	const unsigned long long origin = 0x40000000ULL;
++	const unsigned long long limit = origin + (1ULL << 35);
++	struct tetris_smem_boot_evidence result = { 0 };
++	struct tetris_metadata_banks snapshot;
++	unsigned int bank, group;
++
++	/* No dereference precedes validation of all externally supplied spans. */
++	if (!span(wire, wire_bytes) || !span(banks, banks_bytes) ||
++	    !span(output, output_bytes))
++		return -EINVAL;
++	if (wire_bytes != TETRIS_SMEM_BOOT_BYTES || banks_bytes != sizeof(snapshot))
++		return -EMSGSIZE;
++	if (output_bytes < sizeof(result))
++		return -ENOSPC;
++	if (overlaps(wire, wire_bytes, banks, banks_bytes) ||
++	    overlaps(wire, wire_bytes, output, output_bytes) ||
++	    overlaps(banks, banks_bytes, output, output_bytes))
++		return -EINVAL;
++	memcpy(&snapshot, banks, sizeof(snapshot));
++	if (!window_valid(&snapshot.nc) || !window_valid(&snapshot.cache) ||
++	    (snapshot.nc.base < snapshot.cache.base + snapshot.cache.capacity &&
++	     snapshot.cache.base < snapshot.nc.base + snapshot.nc.capacity))
++		return -ERANGE;
++	result.version = le32(p);
++	result.bytes = le32(p + 4);
++	result.scope = le32(p + 8);
++	result.count = le32(p + 12);
++	result.ap = le32(p + 16);
++	result.md = le32(p + 20);
++	result.loaded_stage = le32(p + 24);
++	result.boot_stage = le32(p + 28);
++	for (group = 0; group < 3; group++)
++		result.errors[group] = le32(p + 32 + group * 4);
++	result.reserved = le32(p + 44);
++	memcpy(result.preloader_sha256, p + 48, 32);
++	if (result.version != 1 || result.bytes != TETRIS_SMEM_BOOT_BYTES ||
++	    result.scope != 1 || result.count != 2 || result.ap != 6878 ||
++	    result.md != 6299 || result.loaded_stage != 11 || result.boot_stage != 15 ||
++	    result.errors[0] || result.errors[1] || result.errors[2] || result.reserved ||
++	    memcmp(result.preloader_sha256, digest, 32))
++		return -EBADMSG;
++	for (bank = 0; bank < 2; bank++) {
++		struct tetris_smem_boot_record *r = &result.record[bank];
++		const struct tetris_metadata_window *w = bank ? &snapshot.cache : &snapshot.nc;
++		unsigned long long end;
++
++		p = (const unsigned char *)wire + 80 + bank * 128;
++		r->bank = le32(p);
++		r->slot = le32(p + 4);
++		r->reservation_base = le64(p + 8);
++		r->reservation_capacity = le64(p + 16);
++		r->range_start = le64(p + 24);
++		r->range_size = le64(p + 32);
++		r->actual_start = le64(p + 40);
++		r->actual_end = le64(p + 48);
++		r->actual_enable = le64(p + 56);
++		if (r->bank != bank || r->slot != 42 + bank ||
++		    r->reservation_base != w->base || r->reservation_capacity != w->capacity)
++			return -EBADMSG;
++		/* Producer starts at the reservation base. Sizes are dynamic, not
++		 * this handset's live NC/cache totals. Endpoint is start+size, NOT
++		 * last-byte inclusive; ATF rejects the aperture's upper boundary.
++		 */
++		if (r->range_start != w->base || !r->range_size ||
++		    ((r->range_start | r->range_size) & 4095) ||
++		    r->range_start > ~0ULL - r->range_size ||
++		    r->range_size > w->capacity || r->range_start < origin ||
++		    r->range_start >= limit || r->range_size >= limit - r->range_start)
++			return -ERANGE;
++		end = r->range_start + r->range_size;
++		if (r->actual_start != r->range_start ||
++		    (r->actual_end & ~TETRIS_SMEM_BOOT_END_MARKER) != end ||
++		    r->actual_enable != 1)
++			return -EBADMSG;
++		for (group = 0; group < 8; group++) {
++			r->policy[group] = le64(p + 64 + group * 8);
++			if (r->policy[group] != expected_policy[bank][group])
++				return -EBADMSG;
++		}
++	}
++	memcpy(output, &result, sizeof(result));
++	return 0;
++}
+diff --git a/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.h b/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/ccci_util/smem_boot_evidence/boot_evidence.h
+@@ -0,0 +1,45 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef TETRIS_SMEM_BOOT_EVIDENCE_H
++#define TETRIS_SMEM_BOOT_EVIDENCE_H
++#ifdef TETRIS_SMEM_BOOT_HOST_TEST
++#include <stddef.h>
++#else
++#include <linux/types.h>
++#endif
++#include "metadata_resources.h"
++
++#define TETRIS_SMEM_BOOT_PROPERTY "nothing,modem-smem-boot-evidence"
++#define TETRIS_SMEM_BOOT_BYTES 336U
++#define TETRIS_SMEM_BOOT_END_MARKER (1ULL << 43)
++
++struct tetris_smem_boot_record {
++	unsigned int bank, slot;
++	unsigned long long reservation_base, reservation_capacity;
++	unsigned long long range_start, range_size;
++	unsigned long long actual_start, actual_end, actual_enable;
++	unsigned long long policy[8];
++};
++
++/* A copied value snapshot. Consume through const pointers after decoding;
++ * no retained input pointers, mutator, ownership or permission state exists.
++ * Raw actual_end preserves END_MARKER, including its absence.
++ */
++struct tetris_smem_boot_evidence {
++	unsigned int version, bytes, scope, count, ap, md;
++	unsigned int loaded_stage, boot_stage, errors[3], reserved;
++	unsigned char preloader_sha256[32];
++	struct tetris_smem_boot_record record[2];
++};
++
++/* Pure v1 decoder; return 0 or negative errno. The banks are an immutable,
++ * already validated reservation snapshot, NOT addresses learned from evidence.
++ * Caller keeps all input bytes stable for the duration of the call. All three
++ * supplied spans must be disjoint and nonwrapping; bank bytes must be exact.
++ * Output is unchanged on every error, including absent/truncated properties.
++ * This checks NS_BL33_BOOT_EVIDENCE only: no Linux NS grant, authentication,
++ * mapping, START, transport, readiness or protection assertion is produced.
++ */
++int tetris_smem_boot_decode(const void *wire, size_t wire_bytes,
++		const struct tetris_metadata_banks *banks, size_t banks_bytes,
++		struct tetris_smem_boot_evidence *output, size_t output_bytes);
++#endif
 diff --git a/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/arguments.c b/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/arguments.c
 new file mode 100644
 --- /dev/null

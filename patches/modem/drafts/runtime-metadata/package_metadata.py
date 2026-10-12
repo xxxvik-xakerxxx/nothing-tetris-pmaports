@@ -70,6 +70,9 @@ def build(vendor):
         '\tif (!s_init_done || !tetris_owned_tags)\n\t\treturn -ENODATA;\n'
         '\t*out = tetris_owned_banks;\n\treturn 0;\n}\n')
     after.update(plan_sources(producer))
+    for name in ('boot_evidence.c', 'boot_evidence.h'):
+        after[PREFIX + 'smem_boot_evidence/' + name] = (
+            HERE.parent / 'smem-boot-evidence' / name).read_text()
     after[PREFIX + 'owned_smem_plan.c'] = (HERE / 'owned_smem_plan.c').read_text()
     makefile = PREFIX + 'Makefile'
     before[makefile] = producer.stock(vendor, 'Makefile')
@@ -77,7 +80,8 @@ def build(vendor):
         '\t\t\tccci_util_md_mem.o \\\n'
         '\t\t\towned_smem_plan.o \\\n'
         '\t\t\ttetris_runtime_smem/arguments.o \\\n'
-        '\t\t\ttetris_runtime_smem/smem.o')
+        '\t\t\ttetris_runtime_smem/smem.o \\\n'
+        '\t\t\tsmem_boot_evidence/boot_evidence.o')
     after[makefile] += ('\nccflags-y += -I$(src)\n'
         'ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/eccci/fsm\n')
     main = PREFIX + 'ccci_util_lib_main.c'
