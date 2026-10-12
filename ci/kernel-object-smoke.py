@@ -324,6 +324,14 @@ def stage_research_sources(kernel, root=Path(".")):
         (kernel / directory / "Makefile").write_text(makefile)
 
 
+def research_compile_flags(kernel):
+    # Direct object targets may bypass the isolated child Makefile.
+    headers = (Path(next(iter(CAMERA_SOURCES.values()))).parent,
+               Path(CAMISP_RESOURCE_PLAN["include_directory"]),
+               Path(CAMISP_POWER_OBJECTS[0]).parent)
+    return "KCFLAGS=" + " ".join(f"-I{kernel / path}" for path in headers)
+
+
 def stage_camera_overlays(kernel, root=Path(".")):
     destination = kernel / Path(next(iter(CAMERA_SOURCES.values()))).parent
     graph = kernel / CAMERA_GRAPH
@@ -535,9 +543,7 @@ def main():
     run(config_options(kernel, output, args.research_owners))
     make = ["make", "-C", kernel, f"O={output}", "ARCH=arm64", "LLVM=1", "-j4"]
     if args.research_owners:
-        camera_dir = Path(next(iter(CAMERA_SOURCES.values()))).parent
-        resource_headers = kernel / CAMISP_RESOURCE_PLAN["include_directory"]
-        make.append(f"KCFLAGS=-I{kernel / camera_dir} -I{resource_headers}")
+        make.append(research_compile_flags(kernel))
     run([*make, "olddefconfig"])
     manifest["dtb_sha256"] = compile_dtbs(make, output, report)
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")

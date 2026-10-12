@@ -1,8 +1,10 @@
 # Native satellite mask and normal-start completion
 
-Status: Partial candidate, static validation passed; native fixture execution
-pending parent CI. No engine, emulator, compiler, phone, CI dispatch or push was
-used. All new files are inside this directory; no existing producer was edited.
+Status: Partial candidate. Static checks, the 4,096-vector native sanitizer
+fixture and ARM64 Bionic target link passed parent CI38254829662 at d7b6f9e.
+Source preparation used no engine, emulator, local compiler or phone. Parent
+integration also corrected the common first constructor's provenance and its
+related fixtures. No engine INIT or position fix is established.
 
 ## New result
 
@@ -148,7 +150,7 @@ CI=true BIONIC_CC=/path/to/aarch64-linux-android28-clang \
 ```
 
 The default CI route uses ASan/UBSan and synthetic inputs only. The Bionic route
-compiles without running. Fixtures cover4096 settings, every invalid byte for
+compiles without running. The CI-passed fixtures cover4096 settings, every invalid byte for
 every setting, aliasing/idempotence, conflict rejection, unchanged failure
 output, normal/factory policy and preservation of unrelated fields and gates.
 No vendor object is linked.
@@ -165,6 +167,7 @@ python3 upstream/nothing-tetris-pmaports/patches/gnss-navigation-audit/native-co
 
 Seven static tests pass, including both producer traces, complete Boolean
 algebra, hash rejection and consumer pairs; shell syntax passes. Static Python
-checks do not execute the C candidate. Actual AGPS reception, remaining config
+checks do not themselves execute the C candidate. Parent CI executed the native
+fixture and compiled the target independently. Actual AGPS reception, remaining config
 producers and the existing owner/XML/stop gates still require parent work.
 No real INIT, fix, portability or lifecycle result is claimed.

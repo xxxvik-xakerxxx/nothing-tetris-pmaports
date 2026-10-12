@@ -248,6 +248,17 @@ class SmokeInputs(unittest.TestCase):
                          "ccflags-y += -I$(srctree)/drivers/pmdomain/mediatek "
                          "-I$(srctree)/drivers/pmdomain/mediatek/tetris-cam-power-smoke\n")
 
+    def test_direct_object_flags_include_shared_leaf_headers(self):
+        kernel = Path("/tmp/kernel")
+        flags = smoke.research_compile_flags(kernel)
+        leaf = str(kernel / Path(smoke.CAMISP_POWER_OBJECTS[0]).parent)
+        self.assertIn("-I" + leaf, flags.split())
+        self.assertIn("-I" + str(kernel / smoke.CAMISP_RESOURCE_PLAN["include_directory"]),
+                      flags.split())
+        self.assertTrue(flags.startswith("KCFLAGS="))
+        source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
+        self.assertIn("make.append(research_compile_flags(kernel))", source)
+
     def test_shared_supplier_plan_records_checks_and_both_variants(self):
         root = Path(__file__).resolve().parents[1]
         result = subprocess.check_output([

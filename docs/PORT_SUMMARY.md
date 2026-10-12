@@ -458,7 +458,10 @@ uses native genpd child accounting and an exclusive regulator handle, checks
 isolation synchronously, preserves the first error and guards cached-ON child
 transitions. Ten new source mutation groups and exact pinned source checks pass.
 Its two source objects are now included once in the isolated ARM64 CI, with both
-KUnit configs; target compilation is pending. A complete provider/link, verified
+KUnit configs; CI38254821266 exposed a missing cross-directory header include
+in the object harness before full CCCI linkage. The explicit compiler include
+closure is corrected with a regression test; target compilation remains pending.
+A complete provider/link, verified
 voltage/rate policy, quiescent handoff and all-user migration are still required.
 No camera bus access or capture is enabled by the object-only candidate.
 
@@ -500,8 +503,11 @@ preserves all remaining receiver/stop/MPE/AGPS gates. A new
 [native satellite configuration](../patches/gnss-navigation-audit/native-config-completion/TRACE.md)
 implements the exact twelve-option AGPS mask and normal-start selector, replacing
 three incorrect constant-zero receipts in the first block. Seven pinned binary
-source checks pass; 4,096-vector native fixtures and ARM64 target compilation
-are now wired into mandatory CI checks, pending for this revision. These are
+source checks pass; the 4,096-vector native sanitizer fixture, related constructor/
+runtime/bundle regressions and ARM64 Bionic target link passed mandatory checks in
+[CI38254829662](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38254829662).
+The common first constructor now keeps these three bytes unresolved until the
+explicit producers run; runtime/bundle fixtures preserve that gate. These are
 native configuration producers, not an AGPS receiver or successful INIT.
 On r181 boot7d4b87cb the explicit GPS transport
 probe returned0 at uptime427.85s and created gpsdl0/1 beside the retained SMEM
