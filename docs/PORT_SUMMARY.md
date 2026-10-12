@@ -19,12 +19,12 @@ FIT matches CI SHA256 `91d7f77a7d8b177fe6320d7bdce267dc88ec26ed146feff9227b55645
 | --- | --- |
 | Kernel | `7.2.1-r181`, Linux `6.18.0 #182` |
 | Device package | `8-r17` |
-| Running U-Boot / `lk_a` | Experimental `e2929baa549f54ce5518b2dd84952318ba857fda` |
-| Loader image SHA256 | `26a9dea98387803ddbcd4097610f4d7f0e12a084c0113d8f69f985c10e25d984` |
+| Running U-Boot / `lk_a` | Experimental `8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5` |
+| Loader image SHA256 | `adaefa00f662bcd126ecc9b3ee2b0c5352a8168130c4ce7d6a18c4a53a65573f` |
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, included in the image |
 | Root filesystem | Writable; expanded to 104.5 GiB on the next boot; first-install issue recorded below |
 
-The latest loader passed [CI 38217024964](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38217024964).
+The latest installed modem/SCP loader passed [CI 38235543158](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38235543158).
 Its image was synchronously written only to `lk_a` and prefix-readback verified.
 Stock `lk_b`, NV and calibration remain unchanged. The ordinary minimum loader
 `dcb20ce` in the pmOS manifest is a recovery baseline, not this diagnostic profile.
@@ -266,7 +266,7 @@ bank reservations and feeds the existing pinned SMEM argument adapter during
 serialized module initialization. It retains consumer-ready NC/cache tables
 with NULL virtual addresses, then destroys the transient planner owner. Module
 failure/exit clears the tables before freeing the argument storage. Physical
-SMEM mapping/publication functions are omitted from this candidate's source;
+SMEM mapping/publication functions are omitted from the default candidate's source;
 it is not installed or autoloaded. [CI38179025105](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38179025105)
 passed 59 native end-to-end producer/import/plan scenarios at both 4 KiB and
 64 KiB geometry, actual ARM64 compilation and strict module linking against
@@ -297,7 +297,7 @@ evidence and extents together and claims only the planned page-rounded Linux
 iomem ranges. It excludes CONSYS and unused bank tails, unwinds conflicts and
 pins successful ownership until reboot. It performs no physical access,
 secure-monitor call, mapping, publication or modem START. It is not installed
-or autoloaded; successful physical resource ownership is still pending.
+or autoloaded; the first physical resource result is recorded below.
 Both profiles and init-level resource fault cases passed
 [CI 38233900132](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38233900132).
 The first handset resource attempt on boot `ae496989-7fc8-4759-af93-a5e61e3125c1`
@@ -310,8 +310,25 @@ and the same resource module then passed on boot `6902543e-e25b-48ce-9dae-84f4db
 at uptime200.56s: init returned0, two exact iomem children appeared, and the
 module reference count was1. CONSYS and bank tails remained unclaimed.
 USB/sensors/SSH stayed active; the user confirmed display, touch, rotation and
-auto-brightness. This is one resource-ownership test, not physical SMEM access,
-modem READY or a completed cold/warm/suspend lifecycle.
+auto-brightness. This is one resource-ownership test, not modem READY or a
+completed cold/warm/suspend lifecycle.
+
+The separate initial-read profile passed
+[CI 38240582807](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38240582807):
+actual producer/import/init fixtures at both page sizes, post-claim geometry and
+policy failures, wrong EL, map failure, default-profile boundary traps, and a
+strict ARM64 module link against the original r181 configuration/exports.
+Module SHA256: `a9e32ac8720c64119ca492c1a5f2c47629c00141574166232839c48cfaa26f30`.
+On fresh boot `71cf27cd-4289-49f1-b79d-e65eb131fef8`, with the restored 8d2ccc12
+loader, one insmod completed at uptime806.70s. It checked retained ownership,
+the copied NC extents, boot range/policy and actual EL1, mapped the first NC page,
+read one 32-bit word, and immediately unmapped it. The kernel logged
+`initial NC read completed; zero`. Both iomem claims remain held with module
+reference1; USB/sensors/SSH stayed active without a reboot or new abort/Oops.
+No writes, cache/NV reads, modem START or transport activation occurred.
+Zero does not exclude hardware zero-on-deny behavior, certify immutable secure
+policy, prove modem communication or supply a fresh NS certificate. It is one
+completed bounded initial read, not successful SIM detection or registration.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -337,8 +354,8 @@ until reboot; failures unwind. The r182 package carries that fix.
 linked its GPL module against the exact original r181 source/config/exports:
 SHA256 `b32aa610d34464f87bab19afe005d127af8cd690f8cfa26297edf80cf83d4095`.
 That module is staged on the handset; the original is retained for rollback.
-The unchanged initramfs contains no GPUEB reader. Physical retained-firmware
-analysis remains pending; no SRAM upload or GPU start is implied.
+The unchanged initramfs contains no GPUEB reader. Complete startup-layout and
+upload analysis remain pending; no SRAM upload or GPU start is implied.
 The first physical capture on boot `39116740-88af-499a-993b-7e02682918ab`
 succeeded using the separate retention profile from
 [U-Boot CI 38234399917](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38234399917).
@@ -348,6 +365,11 @@ matches the signed plaintext `9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1
 USB/sensors/SSH stayed active. The private snapshot is not committed or uploaded.
 Offline inspection identifies a RISC-V entry and a BSS-clear loop wholly inside
 the signed span; it does not yet authorize LK's excess copy or a GPU start.
+The [bounded startup audit](../patches/gpu/rv33-startup/README.md) passes 16
+static tests against those exact private inputs. It verifies branch targets,
+cold caller dominance with explicitly conditional callee returns, BSS/stack
+fill bounds and the alternate full-SRAM reader. Vendor instructions remain
+opaque; the source-tail producer and whole-startup memory coverage are unresolved.
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
 buffers, power/reset and repeated-frame ownership candidates exist. Actual
