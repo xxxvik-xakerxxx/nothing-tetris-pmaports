@@ -10,6 +10,12 @@
 #include "b41_startup_adapter.h"
 
 #define B41_AGPS_PACKET_MAX 65536u
+#define B41_AGPS_CONFIGURATION_SIZE 0x29cu
+/* Snapshot produced by lib6a70e0/53ef3c, borrowed in callback7 only. This is
+ * the source's fixed binary service payload, not a host readiness structure.
+ * Do not synthesize it from the first-block satellite mask or zero defaults.
+ */
+struct b41_agps_configuration { uint8_t bytes[B41_AGPS_CONFIGURATION_SIZE]; };
 enum b41_agps_owner_state { B41_AGPS_EMPTY, B41_AGPS_OWNED, B41_AGPS_FAILED, B41_AGPS_CLOSED };
 struct b41_agps_owner {
     unsigned initialized;
@@ -29,6 +35,11 @@ struct b41_agps_owner {
 int b41_agps_data_packet(const void *string, size_t length, void *output,
                          size_t capacity, size_t *written);
 int b41_agps_selector1_packet(void *output, size_t capacity, size_t *written);
+/* mnld398d0/35730: u32LE1,u32LE160,u32LE668,exact native snapshot.
+ * No optional-string presence/terminator. Failure leaves output untouched.
+ */
+int b41_agps_configuration_packet(const struct b41_agps_configuration *config,
+    void *output, size_t capacity, size_t *written);
 /* Initialize fresh ZEROED storage once before worker start. Mutex lives until
  * process exit. Reinitialization is refused, including after stop.
  */
@@ -45,6 +56,8 @@ int b41_agps_owner_take(struct b41_agps_owner *owner, int *fd,
  */
 int b41_agps_owner_send_data(struct b41_agps_owner *owner, const void *string, size_t length);
 int b41_agps_owner_send_selector1(struct b41_agps_owner *owner);
+int b41_agps_owner_send_configuration(struct b41_agps_owner *owner,
+    const struct b41_agps_configuration *config);
 int b41_agps_owner_send_event(struct b41_agps_owner *owner, const struct b41_host_event *event);
 /* Close ONLY this IPC fd after worker use. This is not libMNL engine stop and
  * does not close receiver fds or unregister retained callbacks. Never retry close.

@@ -49,8 +49,31 @@ static void take(struct b41_agps_owner *owner, int *fd)
     assert(*fd == -1);
 }
 
+static void configuration_packets(void)
+{
+    struct b41_agps_configuration config;
+    uint8_t packet[12 + sizeof(config)], before[sizeof(packet)];
+    size_t length = 99;
+    for (unsigned i = 0; i < sizeof(config); ++i) config.bytes[i] = (uint8_t)i;
+    memset(before, 0xa5, sizeof(before));
+    for (size_t capacity = 0; capacity < sizeof(packet); ++capacity) {
+        memcpy(packet, before, sizeof(packet));
+        assert(b41_agps_configuration_packet(&config, packet, capacity, &length) == -ENOSPC);
+        assert(length == 99 && !memcmp(packet, before, sizeof(packet)));
+    }
+    assert(b41_agps_configuration_packet(NULL, packet, sizeof(packet), &length) == -EINVAL);
+    assert(b41_agps_configuration_packet((const struct b41_agps_configuration *)packet,
+        packet, sizeof(packet), &length) == -EINVAL);
+    assert(length == 99 && !memcmp(packet, before, sizeof(packet)));
+    assert(!b41_agps_configuration_packet(&config, packet, sizeof(packet), &length));
+    const uint8_t prefix[] = {1,0,0,0,160,0,0,0,0x9c,2,0,0};
+    assert(length == sizeof(packet) && !memcmp(packet, prefix, sizeof(prefix)));
+    assert(!memcmp(packet + 12, config.bytes, sizeof(config)));
+}
+
 int main(void)
 {
+    configuration_packets();
     uint8_t packet[64], before[64], received[64];
     const uint8_t data[] = {1,0,0,0,150,0,0,0,1,4,0,0,0,'a','b','c',0};
     const uint8_t absent[] = {1,0,0,0,150,0,0,0,0};

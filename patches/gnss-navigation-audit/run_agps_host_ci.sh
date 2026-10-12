@@ -3,6 +3,7 @@
 set -eu
 if [ "${CI:-}" != true ]; then echo 'Native AGPS fixtures are CI-only.' >&2; exit 2; fi
 directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PYTHONDONTWRITEBYTECODE=1 python3 "$directory/test_b41_agps_configuration_source.py" --source-only
 temporary=$(mktemp -d)
 trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 timeout --signal=TERM --kill-after=2 60 "${CC:-cc}" -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -pthread \

@@ -94,7 +94,7 @@ static void fixture(unsigned scenario)
         assert(close(sockets[1]) == 0);
         assert(b41_slot6_service_dispatch(&ipc, &event) < 0);
         assert(ipc.first_error < 0);
-    } else {
+    } else if (scenario == 6) {
         struct b41_frame_worker worker = {.dispatch = b41_slot6_service_dispatch};
         struct pollfd peer_fd = {sockets[1], POLLIN, 0};
         struct timespec deadline;
@@ -107,17 +107,62 @@ static void fixture(unsigned scenario)
         assert(poll(&peer_fd, 1, 1000) == 1 && (peer_fd.revents & POLLIN));
         assert(recv(sockets[1], received, sizeof(received), MSG_DONTWAIT) == 8);
         assert(received[4] == 152);
+        struct b41_agps_configuration config;
+        for (unsigned i = 0; i < sizeof(config); ++i) config.bytes[i] = (uint8_t)i;
+        assert(callbacks.agps(7, sizeof(config), &config) == 0);
+        assert(poll(&peer_fd, 1, 1000) == 1 && (peer_fd.revents & POLLIN));
+        assert(recv(sockets[1], received, sizeof(received), MSG_DONTWAIT) == 12 + (ssize_t)sizeof(config));
+        assert(received[4] == 160 && !memcmp(received + 12, config.bytes, sizeof(config)));
         assert(clock_gettime(CLOCK_MONOTONIC, &deadline) == 0);
         ++deadline.tv_sec;
         assert(b41_frame_worker_quiesce(&worker, &deadline) == 0);
         assert(b41_frame_worker_release_unused(&worker) == 0);
+    } else if (scenario == 7) {
+        struct b41_agps_configuration config, saved;
+        for (unsigned i = 0; i < sizeof(config); ++i) config.bytes[i] = (uint8_t)(i * 7);
+        saved = config;
+        assert(callbacks.agps(0x10007, 0xffff0000u, (void *)1) == 0);
+        assert(b41_host_adapter_take(&adapter, &event) == -EAGAIN);
+        assert(callbacks.agps(0x10007, 0xffff0000u | sizeof(config), &config) == 0);
+        memset(&config, 0, sizeof(config));
+        assert(b41_host_adapter_take(&adapter, &event) == 0);
+        assert(event.length == 12 + sizeof(saved));
+        assert(event.bytes[4] == 160 && event.bytes[8] == 0x9c && event.bytes[9] == 2);
+        assert(!memcmp(event.bytes + 12, saved.bytes, sizeof(saved)));
+        struct b41_host_event bad = event;
+        --bad.bytes[8];
+        assert(b41_slot6_service_dispatch(&ipc, &bad) == -EBADMSG);
+        bad = event; --bad.length;
+        assert(b41_slot6_service_dispatch(&ipc, &bad) == -EBADMSG);
+        bad = event; ++bad.length;
+        assert(b41_slot6_service_dispatch(&ipc, &bad) == -EBADMSG);
+        assert(recv(sockets[1], received, sizeof(received), MSG_DONTWAIT) == -1 && errno == EAGAIN);
+        assert(b41_slot6_service_dispatch(&ipc, &event) == 0);
+        assert(recv(sockets[1], received, sizeof(received), MSG_DONTWAIT) == (ssize_t)event.length);
+        assert(!memcmp(received, event.bytes, event.length));
+    } else if (scenario == 8) {
+        assert(callbacks.agps(7, B41_AGPS_CONFIGURATION_SIZE - 1, (void *)1) == -EOPNOTSUPP);
+        assert(callbacks.agps(1, 0, NULL) == -EOPNOTSUPP);
+        assert(b41_host_adapter_take(&adapter, &event) == -EAGAIN);
+    } else if (scenario == 9) {
+        assert(callbacks.agps(7, B41_AGPS_CONFIGURATION_SIZE, NULL) == -EINVAL);
+        assert(callbacks.agps(7, 0, (void *)1) == -EINVAL);
+        assert(b41_host_adapter_take(&adapter, &event) == -EAGAIN);
+    } else {
+        struct b41_agps_configuration config = {{0}};
+        assert(callbacks.agps(7, sizeof(config), &config) == 0);
+        assert(b41_host_adapter_take(&adapter, &event) == 0);
+        assert(close(sockets[1]) == 0);
+        int first = b41_slot6_service_dispatch(&ipc, &event);
+        assert(first < 0 && ipc.first_error == first);
+        assert(b41_agps_owner_send_configuration(&ipc, &config) == first);
     }
     /* Process-lifetime callback/storage/IPC ownership: no premature unbind. */
     _exit(0);
 }
 int main(void)
 {
-    for (unsigned scenario = 0; scenario < 7; ++scenario) {
+    for (unsigned scenario = 0; scenario < 11; ++scenario) {
         pid_t child = fork(); assert(child >= 0);
         if (!child) fixture(scenario);
         int status;

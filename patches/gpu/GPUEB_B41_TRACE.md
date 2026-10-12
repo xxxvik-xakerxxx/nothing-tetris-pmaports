@@ -1,5 +1,72 @@
 # Declared B4.1 RV33 Transform Contract
 
+## Retained Primary Extent Recheck
+
+The selected-member contract is now checked by `primary_extent()` and
+`retained_profile()` in audit_gpueb_b41.py. The latter links the actual signed
+container, matching private post-transform snapshot, pinned LK/ATF and all
+three actual producer/publication/Linux-consumer source files. Existing MTK
+root/delegation/signature/header/ciphertext/postdigest semantics are used;
+there is no additional certificate or firmware call-tree admission policy.
+
+Both the public B4.1 component (SHA256
+58c337b0e713d643a1cb129fd444bce0b8bc00e38877c3f242ac9a7f5901ba22) and the
+handset slot-a container declare a 156064-byte primary. Their signed plaintext
+digests differ; the handset snapshot cannot be paired with the public container.
+The supplied handset snapshot matches its own signed postdigest and the observed
+flat entry: reset fetch at SRAM offset0, first jump target0xac. This identifies
+the legitimate stock flat image without resolving every RV33 firmware call.
+It does not establish GPU acceleration or every firmware memory access.
+
+At 0x75180, header+4 produces w25, the payload count. Source offset+512 is
+formed at 0x7518c; 0x75024/28/2c pass destination/source/count to the byte
+reader. The ordinary signed MTK header does not match the special reversed
+0xd7b7ab1e magic at 0x75060..7c, so the inner-header adjustment is zero:
+authentication and transform receive the same pointer and 156064-byte count.
+The success branch at 0x7508c skips the fallback transform. The returned w0
+at 0x7514c is the reader count preserved in x24, not a decompression result.
+The reader success check accepts a count at least as large as the request;
+this recheck does not silently equate its return value with a new image extent.
+
+The caller at 0x1ed98 tests only that return's error sign. It does not compare
+the authenticated count with its later fixed 258744-byte copy. The actual
+retained producer already correctly copies/transforms only the declared
+156064 bytes and publishes that length. Its source offset0 is intentional;
+LK's mapping-relative +24 is not a prefix to prepend to the retained image.
+No larger producer correction is justified by these inputs. In particular,
+neither the public container, xfile, an allocation limit, nor the reader return
+supplies the missing 102680 bytes. Source-proven full SRAM clearing is separate
+from inventing source padding; this recheck does not authorize either a larger
+copy or a primary-only experimental start.
+
+The 73-call global writer frontier remains useful for a full source-tail proof,
+but it is not a requirement to identify/authenticate the selected flat primary.
+The exact remaining boundary is still the excess source interval plus a real
+startup API: the current owned reset checkpoint has assertion/drain/binding
+only, with no upload/reset-release/IRQ-enable operation. A caller cannot start
+through that API without adding the missing native owner operations and proving
+their power/protection/error lifecycle. No SIP or arbitrary MMIO substitute is
+introduced here. reset-owner-draft remains parent-owned and unmodified.
+
+Reproduce with the supplied local inputs, without builds or firmware execution:
+
+```sh
+env PYTHONPATH=/private/tmp/tetris-gpu-offline-capstone-20261012 python3 -B patches/gpu/test_retained_gpueb_profile.py \
+  --lk '/Users/vlysko/Documents/Nothing CMF Phone 1/worktrees/hardware-integration/local/uboot-c931695-ci34584756418/stock-b41/lk.img' \
+  --atf '/Users/vlysko/Documents/Nothing CMF Phone 1/worktrees/hardware-integration/local/uboot-38192f2-ci34575135682/atf-declared-image.bin' \
+  --gpueb /private/tmp/tetris-gpueb-stock-20261009-e6f6/gpueb_a.img \
+  --snapshot /private/tmp/tetris-gpueb-signed-39116740.bin \
+  --factory /private/tmp/tetris-gpueb-b41-cached-review/gpueb.img
+```
+
+audit_gpueb_b41.py accepts matching --gpueb/--snapshot inputs and
+--require-stock-copy. A valid identity/extent report with that strict flag exits
+2 because stock copy coverage is missing. Exit0 without the flag means only
+that the inspection succeeded. Reports contain bounded public identity/extent
+metadata; no private firmware contents, wrapped material or snapshot path.
+No native compilation/execution, phone operation, U-Boot or CI/workflow edit
+is performed. GPU remains Broken.
+
 ## Independently Verified Inputs
 
 - LK: provided `stock-b41/lk.img`, first payload SHA256

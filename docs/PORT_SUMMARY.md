@@ -34,6 +34,12 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
   All mandatory source/native, sealed-loader and Bionic checks passed
   [CI38301035398](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38301035398)
   at `247e714`, including the reviewed deliberate-IRQ-quiescence correction.
+  The next forward configuration hook copies native selector7's exact 668-byte
+  snapshot into the existing worker queue and sends stock message160, without
+  retaining a callback pointer. Source checks pass; its new native delivery
+  fixtures and Bionic regression build are pending CI. Quiet logging does not
+  remove the actual AGPS-agent initialization dependency; no startup gate is
+  cleared by this change.
 
 #### Actual r182 HIF DT test
 

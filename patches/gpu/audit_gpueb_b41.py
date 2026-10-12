@@ -4,15 +4,131 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+import stat
 import struct
 
 from audit_gpueb_lk import ROOT_PIN, LK_BASE, expect
-from gpueb_firmware import certificate, metadata, bits, require, inspect, MAX_IMAGE
+from gpueb_firmware import certificate, metadata, bits, require, inspect, sections, MAX_IMAGE
 
 LK_SHA = "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a"
 ATF_SHA = "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
 MAX_LK = 8 * 1024 * 1024
+PRIMARY_BYTES = 156064
+LK_COPY_BYTES = 258744
+RETAINED_SOURCES = {
+    "tetris_gpueb_flat.c": "9a425bfa1a824459a6e0fd4c7fa31397a798aa91fdc7bcdff17907437b256d7f",
+    "tetris_gpueb_flat_publish.c": "6cb04f7b33b86c9b5937624dc7221cad4ad6d9b87f436d9d662ea9cc22d2f34b",
+    "gpueb-flat-analysis.c": "90659a3481c240f58673cd769d44245fb2814dcb61ac8ffce371311c5359ea86",
+}
+
+
+def primary_extent(lk, header):
+    """Selected signed member's producer extent, not every possible RAM writer.
+
+    The ordinary MTK header takes the no-inner-header path. The loader passes
+    its declared count to authentication/transform and returns the reader's
+    count, not an expanded size. The GPUEB caller checks only the error sign.
+    Full payload identity is still established by inspect(), not this helper.
+    """
+    require(hashlib.sha256(lk).hexdigest() == LK_SHA, "not pinned B4.1 LK")
+    require(len(header) == 512 and struct.unpack_from("<II", header) ==
+            (0x58881688, PRIMARY_BYTES) and
+            header[8:40] == b"tinysys-gpueb-RV33_A".ljust(32, b"\0"),
+            "not the reviewed primary header")
+    for check in (
+        (0x1ed74, "ldr", "x8, [sp, #8]"),
+        (0x1ed8c, "add", "x23, x8, #0x18"),
+        (0x1ed90, "mov", "x2, x23"), (0x1ed94, "bl", "#0x74da0"),
+        (0x1ed98, "tbnz", "w0, #0x1f, #0x1ee84"),
+        (0x74dc8, "mov", "x21, x2"),
+        (0x75180, "ldr", "w25, [x19, #4]"),
+        (0x7518c, "add", "x24, x27, #0x200"),
+        (0x75024, "mov", "x1, x21"), (0x75028, "mov", "x2, x24"),
+        (0x7502c, "mov", "x3, x25"), (0x75030, "bl", "#0x67edc"),
+        (0x75038, "mov", "x24, x0"), (0x7503c, "cmp", "x25, w24, sxtw"),
+        (0x75040, "b.le", "#0x7505c"),
+        (0x75060, "ldr", "w8, [x19]"),
+        (0x75064, "mov", "w9, #0xab1e"),
+        (0x75068, "movk", "w9, #0xd7b7, lsl #16"),
+        (0x7506c, "rev", "w8, w8"), (0x75070, "cmp", "w8, w9"),
+        (0x75074, "csel", "w8, w28, wzr, eq"),
+        (0x75078, "add", "x21, x21, x8"), (0x7507c, "sub", "x25, x25, x8"),
+        (0x75080, "mov", "x0, x21"), (0x75084, "mov", "w1, w25"),
+        (0x75088, "bl", "#0x7e344"), (0x7508c, "cbz", "w0, #0x750cc"),
+        (0x750f0, "mov", "x1, x21"), (0x750f4, "mov", "x2, x25"),
+        (0x750f8, "bl", "#0x7db00"),
+        (0x750fc, "mov", "w22, wzr"), (0x75100, "mov", "w21, wzr"),
+        (0x75104, "b", "#0x7511c"),
+        (0x7512c, "cbz", "w22, #0x75134"), (0x75130, "mov", "w24, w21"),
+        (0x7514c, "mov", "w0, w24"), (0x7516c, "ret", ""),
+        (0x1ee00, "mov", "w8, #0xf2bc"), (0x1ee04, "movk", "w8, #3, lsl #16"),
+        (0x1ee08, "ldr", "w9, [x23], #4"), (0x1ee0c, "sub", "w8, w8, #4"),
+        (0x1ee10, "cmp", "w8, #4"), (0x1ee14, "str", "w9, [x26], #4"),
+        (0x1ee18, "b.hi", "#0x1ee08"),
+    ):
+        expect(lk, *check)
+    # REV(MTK magic) cannot match the special internal-header selector.
+    require(int.from_bytes(header[:4], "big") != 0xd7b7ab1e,
+            "inner header would change the authenticated pointer/count")
+    return {
+        "member_payload_bytes": PRIMARY_BYTES,
+        "member_payload_offset_from_header": 512,
+        "lk_destination_offset_from_reservation": 24,
+        "authentication_pointer_adjustment": 0,
+        "authentication_and_transform_bytes": PRIMARY_BYTES,
+        "loader_success_return": "byte-reader count; at least member size, not expanded size",
+        "caller_return_check": "negative/error sign only; no upload-span comparison",
+        "stock_copy_bytes": LK_COPY_BYTES,
+        "uncovered_copy_interval": [PRIMARY_BYTES, LK_COPY_BYTES],
+        "uncovered_copy_bytes": LK_COPY_BYTES - PRIMARY_BYTES,
+        "tail_producer": "not established by the selected member's producer contract",
+    }
+
+
+def retained_profile(lk, atf, container, snapshot, sources):
+    """Link authentic input, actual retained producer and exact private image.
+
+    This is a producer/extent contract, not an RV firmware call-tree proof.
+    No additional certificate policy, decryption or hardware execution occurs.
+    Neither the scratch contents nor any need for the excess copy is inferred.
+    """
+    inspect(container, ROOT_PIN)
+    parts = sections(container)
+    extent = primary_extent(lk, parts[0].header)
+    producer = producer_bounds(lk, atf)
+    _, fields = certificate(parts[2].payload)
+    expected = bits(metadata(fields, 4, 2), 32)
+    require(len(snapshot) == PRIMARY_BYTES and
+            hashlib.sha256(snapshot).digest() == expected,
+            "snapshot does not match this member's signed post-transform digest")
+    require(struct.unpack_from("<I", snapshot)[0] == 0x0ac0006f,
+            "not the observed flat reset vector")
+    require(set(sources) == set(RETAINED_SOURCES), "retained source set changed")
+    for name, digest in RETAINED_SOURCES.items():
+        require(hashlib.sha256(sources[name]).hexdigest() == digest,
+                "retained source changed; re-audit the producer")
+    return {
+        "container_sha256": hashlib.sha256(container).hexdigest(),
+        "signed_plaintext_sha256": expected.hex(),
+        "lk_payload_sha256": LK_SHA,
+        "atf_payload_sha256": ATF_SHA,
+        "retained_source_sha256": RETAINED_SOURCES,
+        "selected_member_extent": extent,
+        "retained_image": {
+            "bytes": PRIMARY_BYTES, "source_offset": 0, "sram_offset": 0,
+            "reset_fetch_offset": 0, "initial_jump_target": 0xac,
+            "format": "observed stock flat RV33 primary; not ELF or xfile",
+            "producer": "existing authenticated transform, digest check, then retained publication",
+            "consumer": "claimed reserved ordinary DRAM; signed-length snapshot and hash check",
+        },
+        "transform_extent": producer["cipher_dma_extent"],
+        "whole_rv_call_resolution_required_for_image_identity": False,
+        "stock_copy_covered": False,
+        "execution_permitted": False,
+        "remaining_boundary": "no source for the excess 102680 bytes; no reset-release/IRQ-enable start API",
+    }
 
 
 def signed_lk(raw):
@@ -322,17 +438,39 @@ def read_bounded(path, limit):
         return stream.read(limit + 1)
 
 
+def read_private_snapshot(path):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        require(stat.S_ISREG(before.st_mode) and before.st_size == PRIMARY_BYTES and
+                before.st_mode & 0o077 == 0, "not a bounded private snapshot")
+        data = stream.read(PRIMARY_BYTES + 1)
+        after = os.fstat(stream.fileno())
+        require(len(data) == before.st_size == after.st_size and
+                before.st_mtime_ns == after.st_mtime_ns and
+                before.st_ctime_ns == after.st_ctime_ns, "snapshot changed while reading")
+        return data
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lk", type=Path, required=True)
     parser.add_argument("--atf", type=Path, required=True)
     parser.add_argument("--gpueb", type=Path)
+    parser.add_argument("--snapshot", type=Path)
+    parser.add_argument("--require-stock-copy", action="store_true")
     args = parser.parse_args()
+    if args.snapshot and not args.gpueb:
+        parser.error("--snapshot requires its matching --gpueb container")
+    if args.require_stock_copy and not args.snapshot:
+        parser.error("--require-stock-copy requires --snapshot and --gpueb")
     try:
-        report = trace(signed_lk(read_bounded(args.lk, MAX_LK)),
-                       pinned_atf(read_bounded(args.atf, 900752)))
+        lk = signed_lk(read_bounded(args.lk, MAX_LK))
+        atf = pinned_atf(read_bounded(args.atf, 900752))
+        report = trace(lk, atf)
         if args.gpueb:
-            firmware = inspect(read_bounded(args.gpueb, MAX_IMAGE), ROOT_PIN)
+            container = read_bounded(args.gpueb, MAX_IMAGE)
+            firmware = inspect(container, ROOT_PIN)
             primary = firmware["components"][0]
             report["firmware"] = {
                 "container_sha256": firmware["container_sha256"],
@@ -344,9 +482,18 @@ def main():
                 "uncovered_copy_bytes": max(0, report["stock_copy_bytes"] - primary["payload_size"]),
                 "plaintext_layout": "unobserved; transform-only review first",
             }
+            report["firmware"]["selected_member_extent"] = primary_extent(lk, sections(container)[0].header)
+            if args.snapshot:
+                directory = Path(__file__).resolve().parent / "flat-handoff-draft"
+                sources = {name: (directory / name).read_bytes() for name in RETAINED_SOURCES}
+                report["retained_profile"] = retained_profile(
+                    lk, atf, container, read_private_snapshot(args.snapshot), sources)
+                report["firmware"]["plaintext_layout"] = report["retained_profile"]["retained_image"]["format"]
     except Exception as error:
         parser.exit(1, f"B4.1 GPUEB audit failed ({type(error).__name__})\n")
     print(json.dumps(report, indent=2))
+    if args.require_stock_copy:
+        parser.exit(2, "signed retained image does not cover the stock copy; no upload/start authorized\n")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string.h>
 static _Atomic(struct b41_host_adapter *) bound;
+_Static_assert(12u + B41_AGPS_CONFIGURATION_SIZE <= B41_HOST_OUTPUT_MAX,
+               "B4.1 configuration fits copied callback event");
 
 static uint32_t word(const uint8_t *p)
 {
@@ -39,6 +41,13 @@ static int32_t callback(uint32_t selector, uint32_t parameter, const void *point
         status = b41_agps_data_packet(pointer, length, packet, sizeof(packet), &written);
     } else if (selector == 1) {
         status = b41_agps_selector1_packet(packet, sizeof(packet), &written);
+    } else if (selector == 7) {
+        if (!(parameter & 0xffffu)) return 0; /* Stock5fc80: no pointer access. */
+        if ((parameter & 0xffffu) != B41_AGPS_CONFIGURATION_SIZE)
+            return fail(a, -EOPNOTSUPP);
+        /* Native6a70f4..6a7100 supplies this exact borrowed binary extent.
+         * Encode/copy before callback return; worker never retains x2. */
+        status = b41_agps_configuration_packet(pointer, packet, sizeof(packet), &written);
     } else return fail(a, -EOPNOTSUPP);
     if (status) return fail(a, status);
     if (atomic_flag_test_and_set_explicit(&a->lock, memory_order_acquire))
@@ -72,6 +81,12 @@ int b41_slot6_service_dispatch(struct b41_agps_owner *ipc, const struct b41_host
     if (event->length < 8 || event->length > B41_HOST_OUTPUT_MAX || word(event->bytes) != 1)
         return -EBADMSG;
     uint32_t type = word(event->bytes + 4);
+    if (type == 160) {
+        if (event->length != 12u + B41_AGPS_CONFIGURATION_SIZE ||
+            word(event->bytes + 8) != B41_AGPS_CONFIGURATION_SIZE) return -EBADMSG;
+        return b41_agps_owner_send_configuration(ipc,
+            (const struct b41_agps_configuration *)(event->bytes + 12));
+    }
     if (type == 152) {
         if (event->length != 8) return -EBADMSG;
         return b41_agps_owner_send_selector1(ipc);

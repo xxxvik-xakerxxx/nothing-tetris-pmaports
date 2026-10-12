@@ -5,6 +5,7 @@ if [ "${CI:-}" != true ]; then
     exit 2
 fi
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PYTHONDONTWRITEBYTECODE=1 python3 "$here/test_b41_agps_configuration_source.py" --source-only
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT HUP INT TERM
 "${CC:-cc}" -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -pthread \

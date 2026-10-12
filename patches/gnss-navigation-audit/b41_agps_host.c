@@ -54,6 +54,24 @@ int b41_agps_selector1_packet(void *output, size_t capacity, size_t *written)
     return 0;
 }
 
+int b41_agps_configuration_packet(const struct b41_agps_configuration *config,
+    void *output, size_t capacity, size_t *written)
+{
+    const size_t size = 12u + sizeof(*config);
+    uintptr_t source = (uintptr_t)config, destination = (uintptr_t)output;
+    uint8_t *out = output;
+    if (!config || !output || !written) return -EINVAL;
+    if (capacity < size) return -ENOSPC;
+    if (source > UINTPTR_MAX - sizeof(*config) || destination > UINTPTR_MAX - size ||
+        (source < destination + size && destination < source + sizeof(*config))) return -EINVAL;
+    word(out, 1);
+    word(out + 4, 160);
+    word(out + 8, sizeof(*config));
+    memcpy(out + 12, config, sizeof(*config));
+    *written = size;
+    return 0;
+}
+
 int b41_agps_owner_init(struct b41_agps_owner *owner)
 {
     int status;
@@ -119,7 +137,7 @@ out:
     return status;
 }
 
-static int send_packet(struct b41_agps_owner *owner, const void *string, size_t length, int selector1)
+static int send_packet(struct b41_agps_owner *owner, const void *payload, size_t length, unsigned type)
 {
     size_t written;
     ssize_t sent;
@@ -140,8 +158,12 @@ static int send_packet(struct b41_agps_owner *owner, const void *string, size_t 
     status = identity(owner);
     if (status)
         goto failed;
-    status = selector1 ? b41_agps_selector1_packet(owner->packet, sizeof(owner->packet), &written) :
-        b41_agps_data_packet(string, length, owner->packet, sizeof(owner->packet), &written);
+    if (type == 152)
+        status = b41_agps_selector1_packet(owner->packet, sizeof(owner->packet), &written);
+    else if (type == 160)
+        status = b41_agps_configuration_packet(payload, owner->packet, sizeof(owner->packet), &written);
+    else
+        status = b41_agps_data_packet(payload, length, owner->packet, sizeof(owner->packet), &written);
     if (status)
         goto failed;
     sent = send(owner->fd, owner->packet, written, MSG_DONTWAIT | MSG_NOSIGNAL);
@@ -165,12 +187,18 @@ out:
 
 int b41_agps_owner_send_data(struct b41_agps_owner *owner, const void *string, size_t length)
 {
-    return send_packet(owner, string, length, 0);
+    return send_packet(owner, string, length, 150);
 }
 
 int b41_agps_owner_send_selector1(struct b41_agps_owner *owner)
 {
-    return send_packet(owner, NULL, 0, 1);
+    return send_packet(owner, NULL, 0, 152);
+}
+
+int b41_agps_owner_send_configuration(struct b41_agps_owner *owner,
+    const struct b41_agps_configuration *config)
+{
+    return send_packet(owner, config, sizeof(*config), 160);
 }
 
 int b41_agps_owner_send_event(struct b41_agps_owner *owner, const struct b41_host_event *event)
