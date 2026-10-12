@@ -13,7 +13,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: modem-metadata-candidate
+  group: ${{ inputs.drivers_only && 'modem-driver-rebuild' || 'modem-metadata-candidate' }}
   cancel-in-progress: false
 
 jobs:
