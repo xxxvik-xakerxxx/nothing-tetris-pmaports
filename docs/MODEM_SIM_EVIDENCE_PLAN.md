@@ -4,6 +4,29 @@ This document defines the smallest safe next step toward modem support on the
 Nothing CMF Phone 1 (`nothing-tetris`). It does not promote modem support and
 does not authorize loading a modem module or enabling a DT node.
 
+## Current Boundary
+
+The installed r182/default-off CCCI module checkpoint, exact CI artifacts and
+remaining radio status are in [PORT_SUMMARY.md](PORT_SUMMARY.md). The older
+experiments below are historical source evidence, not deployment instructions.
+
+Linux `d84b264a54a37611f2f46bc19363cb9b41606205` has a concrete pre-probe PM
+boundary: `drivers/base/platform.c:platform_probe` and
+`drivers/base/auxiliary.c:auxiliary_bus_probe` attach the domain before calling
+the driver. An auxiliary-bus conversion alone therefore does not fix ordering.
+For DT, `dev_pm_domain_attach(dev, 0)` is not a passive substitute: the path in
+`drivers/base/power/common.c` calls `genpd_dev_pm_attach`, whose single-domain
+branch passes `power_on=true` in `drivers/pmdomain/core.c` regardless of that
+flag. Do not remove the real power relationship or fabricate duplicate domains
+to bypass it.
+
+The virtual-device `dev_pm_domain_attach_by_id` path passes `power_on=false`,
+but may apply required OPPs and then queues domain power-off work. It is not a
+hardware-free resource getter either. Native sequencing must establish the
+actual quiescent handoff and domain ownership before using that path, and retain
+the first failure and dependencies through activation/stop. No such PM operation
+was executed during the r182 default-off module-load check.
+
 ## Source identity
 
 - Canonical port branch: `main`; current hardware status is recorded in

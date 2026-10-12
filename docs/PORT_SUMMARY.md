@@ -450,8 +450,17 @@ The subsequent source correction removes an artificial pericfg prerequisite:
 pinned B4.1 uses that register only in the <=6297 clock-off branch; MT6878's
 6299 uses infracfg and its DT intentionally lacks the pericfg phandle. Missing
 pericfg is now accepted for resource-only acquisition, while supplied malformed
-relationships still fail. This changed supplier needs a fresh CI result and is
-not the already loaded artifact above.
+relationships still fail. Native fixtures and both strict ARM64 profiles passed
+[CI38277279422](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38277279422)
+at `c317404`. Its artifact ZIP matches SHA256
+`77ec2beb77c7b21c9b1896eac5173cf93cd13424746ceb032716cddeada3016a`;
+all ten module hashes and every changed header/source match the reviewed overlay
+`f561be18dbbc10e649a8aa834c68240e0d970a063c687261b25eac2bd666f727`.
+New CCIF SHA256:
+`5979b19c4387f86dc9881ed7b47d52521cb8b87b96cf53ceb01420536039a537`.
+This is not the already loaded CCIF above; no module replacement or unload was
+attempted. The artifact inspector now rejects a different header/overlay profile,
+even when constructor source happens to match.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -609,6 +618,15 @@ at `140e85c`: all validation jobs passed, including 15 real-Linux-IPC receiver
 fixtures under ASAN/UBSAN and the AArch64 Bionic link. The forward assistance consumer
 and full session/control protocol remain missing; no receiver gate is cleared
 and no GPS fix is claimed.
+The [LNA startup trace](../patches/gnss-navigation-audit/lna-start-contract/TRACE.md)
+closes the actual OEM producer and MT6878 consumer: failed ioctl16 retains its
+initialized zero, which the engine serializes. This is not a validated GPIO or
+proof of RF interpretation. The existing typed LNA-plan wrapper already
+propagates this origin through runtime/bundle consumers; production functions
+were not changed. Seven static groups and 1,108 window-byte mutation checks pass.
+A dedicated native CI fixture now exercises the complete dataflow while retaining
+other INIT gates and distinguishing OEM EFAULT from the port's ENODATA profile.
+Real startup caller integration remains missing.
 The common first constructor now keeps these three bytes unresolved until the
 explicit producers run; runtime/bundle fixtures preserve that gate. These are
 native configuration producers, not an AGPS receiver or successful INIT.

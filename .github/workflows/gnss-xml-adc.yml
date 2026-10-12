@@ -2,6 +2,11 @@ name: GNSS XML and ADC native backends
 
 on:
   workflow_dispatch:
+    inputs:
+      lna_only:
+        description: Run only the native LNA startup dataflow, without unchanged XML oracles
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -12,7 +17,66 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  lna-start-dataflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install native and static decoder dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang pkg-config libxml2-dev libssl-dev python3 python3-pip git
+          python3 -m pip install --target out/lna-python capstone==5.0.6
+      - uses: actions/download-artifact@v7
+        with:
+          name: tetris-b41-selected-stock-port-assets
+          run-id: 38048111345
+          github-token: ${{ github.token }}
+          path: out/lna-stock
+      - name: Fetch exact stock ioctl source
+        run: |
+          git init out/lna-kernel-source
+          git -C out/lna-kernel-source fetch --depth=1 --filter=blob:none \
+            https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git \
+            e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+          test "$(git -C out/lna-kernel-source rev-parse FETCH_HEAD)" = e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+          source=connectivity/gps/gps_mcudl/linux/gps_mcudl_each_device.c
+          mkdir -p "out/lna-kernel-source/$(dirname "$source")"
+          git -C out/lna-kernel-source show "FETCH_HEAD:$source" > "out/lna-kernel-source/$source"
+      - name: Verify producer and consumer, then execute native dataflow
+        id: lna
+        env:
+          CC: clang
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$PWD/out/lna-python"
+          export TETRIS_MODULES_TREE="$PWD/out/lna-kernel-source"
+          mkdir -p out/lna-start-evidence
+          draft=patches/gnss-navigation-audit/lna-start-contract
+          vendor=$PWD/out/lna-stock/vendor
+          python3 -B "$draft/test_static.py" "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/static.log
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
+            sh "$draft/run_ci.sh" "$vendor/etc/MNL_Config.xml" \
+            2>&1 | tee out/lna-start-evidence/native.log
+          sha256sum "$draft"/* > out/lna-start-evidence/SOURCE-SHA256SUMS
+      - name: Preserve actual result
+        if: always()
+        run: |
+          mkdir -p out/lna-start-evidence
+          printf '%s\n' \
+            '{"commit":"${{ github.sha }}","outcome":"${{ steps.lna.outcome }}","vendor_init_called":false,"hardware_readiness":false}' \
+            > out/lna-start-evidence/RESULT.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gnss-lna-start-dataflow
+          path: out/lna-start-evidence/
+          if-no-files-found: error
+
   native-backends:
+    if: ${{ !inputs.lna_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
