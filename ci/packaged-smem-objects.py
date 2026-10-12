@@ -161,11 +161,18 @@ def main():
     staging.run(['git', 'apply', '--check', '-'], cwd=destination, input=patch, text=True)
     staging.run(['git', 'apply', '-'], cwd=destination, input=patch, text=True)
     util = destination / PREFIX
+    evidence = util / 'smem_boot_evidence'
+    evidence.mkdir(exist_ok=False)
+    for name in ('boot_evidence.c', 'boot_evidence.h'):
+        shutil.copyfile(ROOT / 'patches/modem/drafts/smem-boot-evidence' / name, evidence / name)
     original_vendor = work / 'runtime-vendor'
     objects = ('ccci_util_boot_args.o', 'ccci_util_lib_fo.o', 'ccci_util_lib_main.o',
-               'owned_smem_plan.o', 'tetris_runtime_smem/smem.o', 'tetris_runtime_smem/arguments.o')
+               'owned_smem_plan.o', 'tetris_runtime_smem/smem.o', 'tetris_runtime_smem/arguments.o',
+               'smem_boot_evidence/boot_evidence.o')
     report = dict(commit=os.environ.get('GITHUB_SHA'), scope='actual packaged translation units only; no modpost, install or hardware',
                   overlay_sha256=hashlib.sha256(patch.encode()).hexdigest(), status='started')
+    report['boot_evidence_source_sha256'] = {name: staging.sha(evidence / name)
+                                           for name in ('boot_evidence.c', 'boot_evidence.h')}
     target = ROOT / 'out/kernel-object-smoke/packaged-smem.json'
     try:
         staging.run(['make', '-j2', '-C', kernel, 'O=' + str(output), 'M=' + str(util),
@@ -181,7 +188,8 @@ def main():
         symbols = subprocess.check_output(['llvm-nm', '--defined-only',
             *(str(util / name) for name in objects)], text=True)
         for name in ('mtk_ccci_owned_banks_copy', 'mtk_ccci_owned_smem_init',
-                     'tetris_smem_create', 'tetris_smem_from_arguments', 'tetris_smem_preview'):
+                     'tetris_smem_create', 'tetris_smem_from_arguments', 'tetris_smem_preview',
+                     'tetris_smem_boot_decode'):
             if not any(line.split()[-1:] == [name] for line in symbols.splitlines()):
                 raise ValueError('missing actual integration symbol: ' + name)
         undefined = subprocess.check_output(['llvm-nm', '--undefined-only',
