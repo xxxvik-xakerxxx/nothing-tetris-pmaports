@@ -30,6 +30,21 @@ implement rail/TOP/FLIGHT shutdown, inhibited restart or SIM/call service.
 All mandatory validation, Bionic and sealed-loader checks for the preceding
 CI/configuration correction passed
 [CI38310658085](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38310658085).
+For the joint candidate `cbb777d`, all mandatory native validation, new GPU
+mailbox fixtures, GNSS framing/clock fixtures, Bionic and sealed-loader jobs
+passed [CI38315471685](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315471685).
+The exact pinned GNSS wire/clock/driver producer checks and native fixtures also
+passed [CI38315481513](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315481513).
+Joint first-OFF ARM64/DT/vmlinux build
+[CI38315490334](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315490334)
+is pending. No install image or hardware function is inferred from these tests.
+
+The older observation-only source `57f97dd` compiled all three actual native
+objects in both KUNIT configurations in
+[CI38309216336](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38309216336).
+Its KUNIT=y vmlinux completed and the job entered the second configuration,
+but the KUNIT=n build hit the one-hour job limit before completion. The aggregate
+job is cancelled, not passed; this does not validate the newer first-OFF code.
 
 - A separate [CCIF/DPMAIF DT](../patches/modem/drafts/runtime-hif-dt/README.md)
   supplies the actual B4.1 registers, IRQs and CCF references. CI repackages

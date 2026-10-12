@@ -68,6 +68,7 @@ class NativeCameraLink(unittest.TestCase):
             self.assertLess(source.index(marker), start)
         self.assertGreater(source.index('"status": "passed",'), start)
         self.assertIn('finally:', source)
+        self.assertGreaterEqual(source.count('(report / "BUILD-MANIFEST.json").write_text('), 3)
 
 
 if __name__ == "__main__":

@@ -161,6 +161,7 @@ def main(md_on_adoption=False, md_first_off=False):
                     raise ValueError("missing actual supplier object definition: " + name)
             outcome["supplier_symbols"] = list(SUPPLIER_SYMBOLS)
             outcome["status"] = "vmlinux-link-started"
+            (report / "BUILD-MANIFEST.json").write_text(json.dumps(result, indent=2) + "\n")
             run([*make, "vmlinux"])
             with (output / "vmlinux").open("rb") as binary:
                 elf = binary.read(20)
@@ -171,6 +172,7 @@ def main(md_on_adoption=False, md_first_off=False):
                 "vmlinux_sha256": sha(output / "vmlinux"),
                 "supplier_resolution": "real object definitions and strict vmlinux link; final ThinLTO may inline helpers",
             })
+            (report / "BUILD-MANIFEST.json").write_text(json.dumps(result, indent=2) + "\n")
         result["status"] = "passed"
     except BaseException as error:
         result.update(status="failed", error=str(error))
