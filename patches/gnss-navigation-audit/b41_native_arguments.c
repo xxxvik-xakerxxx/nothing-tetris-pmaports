@@ -3,6 +3,7 @@
 #include "b41_slot6_service.h"
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 unsigned b41_native_arguments_config_missing(const struct b41_startup_bundle *b)
 {
@@ -49,11 +50,13 @@ static int stop_profile(const struct b41_library_association *image)
 int b41_native_arguments_prepare(struct b41_native_arguments_owner *o,
     const struct b41_startup_bundle *b,
     const void *elf, size_t elf_size, const struct b41_library_view *view,
-    struct b41_agps_owner *ipc, int fds[2], unsigned count, int *app, int *raw)
+    struct b41_agps_owner *ipc, int fds[2], unsigned count, int *app, int *raw,
+    pid_t peer_pid, uid_t peer_uid)
 {
 #if !defined(__aarch64__) || !defined(__BIONIC__)
     (void)o; (void)b; (void)elf; (void)elf_size; (void)view;
     (void)ipc; (void)fds; (void)count; (void)app; (void)raw;
+    (void)peer_pid; (void)peer_uid;
     return -EOPNOTSUPP;
 #else
     struct b41_known_callbacks callbacks;
@@ -65,6 +68,7 @@ int b41_native_arguments_prepare(struct b41_native_arguments_owner *o,
         return -EINVAL;
     if (o->entered) return -EALREADY;
     if (!ipc->initialized || ipc->state != B41_AGPS_OWNED) return -ENODATA;
+    if (peer_pid <= 0) return -EINVAL;
     /* Reject stale fd snapshots BEFORE binding or transferring anything. */
     if (word(b->second.bytes + 0x10) != (uint32_t)fds[0] ||
         word(b->second.bytes + 0x14) != (count == 2 ? (uint32_t)fds[1] : 0u))
@@ -93,6 +97,13 @@ int b41_native_arguments_prepare(struct b41_native_arguments_owner *o,
     o->entered = 1;
     o->image = image;
     o->devices = devices;
+    status = b41_agps_receiver_open(&o->agps, peer_pid, peer_uid);
+    if (status) goto fail;
+    status = b41_agps_receiver_prepare(&o->agps, elf, elf_size, view);
+    if (status < 0) goto fail;
+    if (o->agps.image.base != image.base || o->agps.image.extent != image.extent ||
+        o->agps.image.xml_global != image.xml_global ||
+        o->agps.image.chip_global != image.chip_global) { status = -ESTALE; goto fail; }
     status = b41_host_adapter_init(&o->adapter);
     if (status) goto fail;
     status = b41_host_adapter_bind(&o->adapter, &callbacks);
@@ -132,8 +143,31 @@ int b41_native_arguments_execute(struct b41_native_arguments_owner *o,
     const struct timespec *run, const struct timespec *worker,
     struct b41_native_session_result *result)
 {
+    int status;
     if (!o || !o->entered) return -EINVAL;
     if (o->first_error) return o->first_error;
-    return b41_native_session_execute(&o->image, &o->arguments, &o->control,
-        &o->worker, &o->stop, run, worker, result);
+#if defined(__aarch64__) && defined(__BIONIC__)
+    if (o->agps.controller_pid != getpid() ||
+        !pthread_equal(o->agps.controller, pthread_self())) return -EPERM;
+#endif
+    if (!result) return -EINVAL;
+    if (o->executed) return -EALREADY;
+    o->executed = 1;
+    memset(result, 0, sizeof(*result));
+    status = b41_native_session_execute(&o->image, &o->arguments, &o->control,
+        &o->worker, &o->stop, &o->agps, run, worker, result);
+#if defined(__aarch64__) && defined(__BIONIC__)
+    /* Session admission may refuse before entering registration. Its parked
+     * reverse worker still belongs to this owner and must be stopped once. */
+    if (!result->agps_quiesce_entered &&
+        (o->agps.state == B41_AGPS_RX_PREPARED || o->agps.state == B41_AGPS_RX_RUNNING)) {
+        result->agps_quiesce_entered = 1;
+        result->agps_quiesce_status = b41_agps_receiver_quiesce(&o->agps, worker);
+        result->native_stop_status = -ECANCELED;
+        result->worker_stop_status = -EBUSY;
+        if (!status) status = result->agps_quiesce_status;
+    }
+#endif
+    if (status && !o->first_error) o->first_error = status;
+    return status;
 }

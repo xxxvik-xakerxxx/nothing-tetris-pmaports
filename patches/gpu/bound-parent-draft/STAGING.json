@@ -9,5 +9,6 @@
   "required_enabled": ["PM", "OF", "RESET_CONTROLLER"],
   "static_gate": "python3 -B patches/gpu/bound-parent-draft/test_control.py",
   "resource_static_gate": "python3 -B patches/gpu/reset-owner-draft/test_resources.py",
+  "dispatcher_static_gate": "python3 -B patches/gpu/reset-owner-draft/test_dispatch.py",
   "runtime_gate": "No activation. Parent must implement fixed bound-parent serialized work and lifetime retention; no probe error unwind or forced supplier detach."
 }

@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#include "mt6878-nothing-tetris-native.dts"
+
+/ {
+	model = "Nothing CMF Phone 1 (CCCI HIF resource binding)";
+
+	chosen {
+		tetris,ccci-hif-resources-diagnostic;
+	};
+};
+
+&infracfg_ao {
+	#clock-cells = <1>;
+};
+
+&soc {
+	ccif@10209000 {
+		compatible = "mediatek,ccci_ccif";
+		reg = <0x10209000 0x1000>, <0x1020a000 0x1000>;
+		interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH 0>;
+		mediatek,sram-size = <512>;
+		mediatek,ccif-hw-reset-ver = <1>;
+		mediatek,ccif-hw-reset-bit = <26>;
+		clocks = <&infracfg_ao CLK_IFRAO_CCIF_AP>,
+			 <&infracfg_ao CLK_IFRAO_CCIF_MD>,
+			 <&infracfg_ao CLK_IFRAO_CCIF1_AP>,
+			 <&infracfg_ao CLK_IFRAO_CCIF1_MD>,
+			 <&infracfg_ao CLK_IFRAO_CCIF4_MD>,
+			 <&infracfg_ao CLK_IFRAO_CCIF5_MD>;
+		clock-names = "infra-ccif-ap", "infra-ccif-md",
+			      "infra-ccif1-ap", "infra-ccif1-md",
+			      "infra-ccif4-md", "infra-ccif5-md";
+		status = "okay";
+	};
+
+	dpmaif@10014000 {
+		compatible = "mediatek,dpmaif";
+		reg = <0x10014000 0x1000>, <0x1022d000 0x1000>,
+		      <0x1022c000 0x1000>, <0x1022e000 0x1000>;
+		interrupts = <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH 0>,
+			     <GIC_SPI 259 IRQ_TYPE_LEVEL_HIGH 0>;
+		mediatek,dpmaif-ver = <3>;
+		mediatek,dpmaif-cap = <4>;
+		mediatek,plat-info = <6878>;
+		clocks = <&infracfg_ao CLK_IFRAO_DPMAIF_MAIN>,
+			 <&infracfg_ao CLK_IFRAO_CLDMA_BCLK>,
+			 <&infracfg_ao CLK_IFRAO_RG_MMW_DPMAIF26M>;
+		clock-names = "infra-dpmaif-clk", "infra-dpmaif-blk-clk",
+			      "infra-dpmaif-rg-mmw-clk";
+		dpmaif-infracfg = <&infracfg_ao>;
+		hw-reset-ver = <1>;
+		status = "okay";
+	};
+
+	syscon@1020e000 {
+		compatible = "mediatek,infracfg", "syscon";
+		reg = <0x1020e000 0x1000>;
+		status = "okay";
+	};
+
+	ccif@1024d000 {
+		compatible = "mediatek,md_ccif4";
+		reg = <0x1024d000 0x1000>;
+		status = "okay";
+	};
+
+	ccif@1025d000 {
+		compatible = "mediatek,md_ccif5";
+		reg = <0x1025d000 0x1000>;
+		status = "okay";
+	};
+};

@@ -40,9 +40,12 @@ class SramOwnerTests(unittest.TestCase):
         source = (CANDIDATE / "mt6878-gpueb-sram.c").read_text()
         self.assertEqual(source.count("request_mem_region("), 1)
         self.assertEqual(source.count("ioremap("), 1)
-        for forbidden in ("devm_", "writel(", "readl(", "memset_io(", "memcpy_toio(",
+        for forbidden in ("devm_", "writel(", "memset_io(", "memcpy_toio(",
                           "rproc_boot(", "platform_driver", "module_init", "regulator_", "clk_"):
             self.assertNotIn(forbidden, source)
+        read = definition(source, "int mt6878_gpueb_sram_reader_words(")
+        self.assertLess(read.index("gpueb_sram_window_range("), read.index("readl("))
+        self.assertEqual(source.count("readl("), 1)
         destroy = definition(source, "int mt6878_gpueb_sram_destroy(")
         self.assertLess(destroy.index("gpueb_sram_close("), destroy.index("iounmap("))
         self.assertLess(destroy.index("return ret;"), destroy.index("iounmap("))

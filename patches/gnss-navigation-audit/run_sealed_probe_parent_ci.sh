@@ -19,7 +19,11 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -pthread \
     -ffunction-sections -fdata-sections -Wl,--gc-sections -I"$here" \
     "$here/b41_sealed_probe_parent.c" "$here/b41_mipc_sealed_isolate.c" \
     "$here/b41_mipc_loader_root.c" "$here/b41_mipc_supervised_child.c" \
-    "$here/b41_native_receiver_host.c" -o "$build/parent"
+    "$here/b41_native_receiver_host.c" \
+    "$here/native-agps-receiver/b41_agps_decode.c" \
+    "$here/native-agps-receiver/b41_agps_receiver.c" \
+    "$here/native-agps-receiver/b41_agps_native.c" "$here/b41_library_association.c" \
+    -o "$build/parent"
 chmod 500 "$build/parent"
 PYTHONDONTWRITEBYTECODE=1 python3 "$here/test_b41_sealed_probe_ci.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$here/b41_sealed_probe_ci.py" \

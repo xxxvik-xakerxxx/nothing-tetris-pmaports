@@ -3,6 +3,7 @@
 #define B41_AGPS_RECEIVER_H
 #include "../b41_library_association.h"
 #include <stdatomic.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
@@ -30,6 +31,8 @@ struct b41_agps_receiver {
     struct stat identity[4];
     pid_t peer_pid;
     uid_t peer_uid;
+    pid_t controller_pid;
+    pthread_t controller;
     struct b41_library_association image;
     atomic_int stop, first_error;
     atomic_uint delivered;
@@ -52,6 +55,11 @@ int b41_agps_receiver_open(struct b41_agps_receiver *owner, pid_t peer, uid_t ui
  */
 int b41_agps_receiver_prepare(struct b41_agps_receiver *owner,
     const void *elf, size_t size, const struct b41_library_view *view);
+/* Sole controller, PREPARED/RUNNING only. Sample sticky failure, descriptor
+ * identities and completion without consuming its acknowledgement. No native
+ * calls, readiness assertion or cleanup. Zero is a sampled observation only.
+ */
+int b41_agps_receiver_observe(struct b41_agps_receiver *owner);
 /* POST-INIT: controller calls only after real native run returned18. Checks
  * actual live primary RX/nonoffload records, then wakes the parked worker via
  * its owned activation eventfd. No caller run-status/ready flag is accepted.

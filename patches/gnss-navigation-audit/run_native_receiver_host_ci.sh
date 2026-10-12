@@ -13,5 +13,8 @@ trap 'rm -rf "$out"' EXIT HUP INT TERM
     "$here/b41_startup_adapter.c" "$here/b41_agps_host.c" \
     "$here/b41_navigation_output.c" "$here/b41_frame_worker.c" \
     "$here/b41_native_receiver_host.c" "$here/test_b41_native_receiver_host.c" \
+    "$here/native-agps-receiver/b41_agps_decode.c" \
+    "$here/native-agps-receiver/b41_agps_receiver.c" \
+    "$here/native-agps-receiver/b41_agps_native.c" "$here/b41_library_association.c" \
     -Wl,--wrap=write -o "$out/test_native_receiver_host"
 timeout --signal=TERM --kill-after=2 20 "$out/test_native_receiver_host"

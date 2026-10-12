@@ -125,22 +125,25 @@ class Resources(unittest.TestCase):
         self.assertLess(loop.index("goto release_mbox;"), loop.index("scope->mbox_claims++"))
         self.assertLess(loop.index("scope->mbox_control[i] = mbox;"), loop.index("scope->mbox_claims++"))
         self.assertLess(loop.index("scope->mbox_claims++"), loop.index("ioremap("))
-        self.assertLess(loop.index("scope->mbox_claims++"), loop.index("request_irq("))
+        self.assertLess(loop.index("scope->mbox_claims++"), loop.index("request_threaded_irq("))
         self.assertEqual(prepare.count("request_mem_region("), 2)  # one bank + four loop claims
         cleanup = prepare.split("release_mbox:\n", 1)[1]
         self.assertLess(cleanup.index("release_mailbox_resources(scope)"), cleanup.index("release_mem_region("))
         self.assertLess(cleanup.index("release_mem_region("), cleanup.index("mt6878_gpueb_sram_put_window("))
         release = definition(self.code, "static void release_mailbox_resources(")
         self.assertIn("while (scope->mbox_claims)", release)
-        self.assertIn("scope->mbox_control[--scope->mbox_claims]", release)
+        self.assertIn("unsigned int i = --scope->mbox_claims;", release)
+        self.assertIn("resource = scope->mbox_control[i];", release)
+        self.assertLess(release.index("iounmap(scope->mbox_maps[i])"), release.index("release_mem_region("))
         self.assertIn("release_mem_region(resource->start, resource_size(resource))", release)
 
-    def test_quarantine_retains_new_claims_and_does_not_access_them(self):
+    def test_quarantine_retains_new_claims_and_prepare_does_not_access_them(self):
         destroy = definition(self.code, "int mt6878_gpueb_reset_destroy(")
         self.assertLess(destroy.index("return ret ?: -EBUSY"), destroy.index("release_mailbox_resources(scope)"))
         self.assertLess(destroy.index("free_irq("), destroy.index("release_mailbox_resources(scope)"))
         prepare = definition(self.code, "struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(")
-        self.assertEqual(prepare.count("ioremap("), 1)
+        self.assertEqual(prepare.count("ioremap("), 2)  # four controls loop + reset bank
+        self.assertIn("scope->mbox_maps[i] = ioremap(mbox->start, resource_size(mbox))", prepare)
         self.assertIn("ioremap(resource->start, resource_size(resource))", prepare)
         for token in ("readl(", "writel(", "enable_irq(", "IRQF_SHARED", "devm_"):
             self.assertNotIn(token, prepare)

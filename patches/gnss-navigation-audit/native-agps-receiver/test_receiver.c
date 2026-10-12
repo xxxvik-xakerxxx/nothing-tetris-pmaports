@@ -326,17 +326,55 @@ static void truncated(void)
     send_packet(fd, p, sizeof(p)); ready(owner.fd[2]);
     stop(-EBADMSG); assert(!atomic_load(&owner.delivered));
 }
+static void *foreign_controller(void *context)
+{
+    struct timespec t = deadline(100);
+    assert(context == &owner);
+    assert(b41_agps_receiver_observe(&owner) == -EPERM);
+    assert(b41_agps_receiver_activate(&owner) == -EPERM);
+    assert(b41_agps_receiver_quiesce(&owner, &t) == -EPERM);
+    assert(b41_agps_receiver_close(&owner) == -EPERM);
+    return NULL;
+}
+static void observer_ownership(void)
+{
+    pthread_t thread;
+    assert(!b41_agps_receiver_open(&owner, getpid(), getuid()));
+    assert(b41_agps_receiver_prepare(&owner, NULL, 0, NULL) == 1);
+    assert(!b41_agps_receiver_observe(&owner));
+    assert(!pthread_create(&thread, NULL, foreign_controller, &owner));
+    assert(!pthread_join(thread, NULL));
+    pid_t child = fork(); assert(child >= 0);
+    if (!child) { foreign_controller(&owner); _exit(0); }
+    int status; assert(waitpid(child, &status, 0) == child);
+    assert(WIFEXITED(status) && !WEXITSTATUS(status));
+    assert(owner.state == B41_AGPS_RX_PREPARED);
+    assert(!atomic_load(&owner.stop) && !atomic_load(&owner.first_error));
+    stop(0);
+    assert(b41_agps_receiver_observe(&owner) == -ESHUTDOWN);
+}
+static void observer_failure(void)
+{
+    int fd = sender(); delivery_error = -EPIPE; start(getpid());
+    unsigned char p[32]; size_t n = packet(p, 250, "X", 2);
+    send_packet(fd, p, n); ready(owner.fd[2]);
+    assert(b41_agps_receiver_observe(&owner) == -EPIPE);
+    assert(b41_agps_receiver_observe(&owner) == -EPIPE);
+    struct pollfd done = {owner.fd[2], POLLIN, 0};
+    assert(poll(&done, 1, 0) == 1 && done.revents == POLLIN);
+    stop(-EPIPE); assert(!atomic_load(&owner.delivered)); close(fd);
+}
 int main(void)
 {
     void (*cases[])(void) = {decode, lifecycle, wrong_peer, malformed, unsupported,
         native_failure, timeout_ownership, rights, collision, replacement, association_refused,
-        parked, failed_activation, parked_stop, truncated};
+        parked, failed_activation, parked_stop, truncated, observer_ownership, observer_failure};
     for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
         pid_t p = fork(); assert(p >= 0);
         if (!p) { cases[i](); _exit(0); }
         int status; assert(waitpid(p, &status, 0) == p);
         assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
     }
-    puts("15 receiver fixtures passed (synthetic native sink, real Linux IPC)");
+    puts("17 receiver fixtures passed (synthetic native sink, real Linux IPC)");
     return 0;
 }

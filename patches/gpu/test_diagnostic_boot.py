@@ -278,6 +278,33 @@ class DiagnosticBuilder(unittest.TestCase):
             builder.validate_mode("vgpu-observe", self.args.normal_dtb,
                                   self.args.diagnostic_dtb, self.args.normal_dtb)
 
+    def test_hif_mode_invokes_complete_delta_checker_and_preserves_fit_inputs(self):
+        self.args.mode = "ccci-hif-resources"
+        checker = SimpleNamespace(validate_trees=Mock(return_value="/soc@0/ccif@10209000"))
+        loader = SimpleNamespace(exec_module=lambda module: setattr(module, "validate_trees", checker.validate_trees))
+        spec = SimpleNamespace(loader=loader)
+        with patch.object(builder.importlib.util, "spec_from_file_location", return_value=spec), \
+                patch.object(builder.importlib.util, "module_from_spec", return_value=SimpleNamespace()):
+            result = builder.build(self.args, self.tools)
+        checker.validate_trees.assert_called_once_with(self.normal_tree, self.diagnostic_tree)
+        self.assertEqual(result["mode"], "ccci-hif-resources")
+        self.assertEqual(set(result["artifacts"]), set(builder.artifact_names("ccci-hif-resources")))
+        self.assertEqual(result["immutable_kernel_sha256"], hashlib.sha256(self.tools.kernel).hexdigest())
+        self.assertEqual(result["immutable_initramfs_sha256"], hashlib.sha256(self.tools.initrd).hexdigest())
+
+    def test_hif_mode_rejects_alternate_baseline_and_bad_delta_before_build(self):
+        with self.assertRaisesRegex(ValueError, "actual normal DT"):
+            builder.validate_mode("ccci-hif-resources", self.args.normal_dtb,
+                                  self.args.diagnostic_dtb, self.args.normal_dtb)
+        self.args.mode = "ccci-hif-resources"
+        checker = SimpleNamespace(validate_trees=Mock(side_effect=ValueError("unsafe HIF delta")))
+        loader = SimpleNamespace(exec_module=lambda module: setattr(module, "validate_trees", checker.validate_trees))
+        with patch.object(builder.importlib.util, "spec_from_file_location", return_value=SimpleNamespace(loader=loader)), \
+                patch.object(builder.importlib.util, "module_from_spec", return_value=SimpleNamespace()):
+            with self.assertRaisesRegex(ValueError, "unsafe HIF delta"):
+                builder.build(self.args, self.tools)
+        self.assertFalse(self.tools.calls)
+
 
 if __name__ == "__main__":
     unittest.main()

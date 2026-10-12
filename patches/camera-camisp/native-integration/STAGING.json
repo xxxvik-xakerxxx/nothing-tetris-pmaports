@@ -1,0 +1,24 @@
+{
+  "status": "Untested native provider integration; source and application checks only",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "patch": "patches/camera-camisp/native-integration/native-provider.patch",
+  "apply_after": "all packaged native pmdomain hunks in APKBUILD source order",
+  "required_enabled": ["OF", "PM", "REGMAP", "REGULATOR", "PM_GENERIC_DOMAINS", "MTK_SCPSYS_PM_DOMAINS", "MTK_MT6878_NATIVE_VMM"],
+  "default_selector": "CONFIG_MTK_MT6878_NATIVE_VMM=n",
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "combined_objects": [
+    "drivers/pmdomain/mediatek/mtk-pm-domains.o",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.o",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.o"
+  ],
+  "final_link_target": "vmlinux",
+  "exclude_duplicate_routes": ["power/STAGING.json leaf object", "power/SHARED-STAGING.json leaf and supplier objects"],
+  "source_hashes": "evidence.json payload_sha256 and baseline_payload_sha256",
+  "graph": ["existing MM_INFRA -> shared VMM", "shared VMM -> CAM_VCORE", "shared VMM -> ISP_VCORE", "CAM_VCORE -> CAM_MAIN"],
+  "native_dt_edges_retained": ["MM_INFRA -> CAM_VCORE", "MM_INFRA -> ISP_VCORE"],
+  "dt_activation": "none; parent owns board wiring and firmware/voltage gates",
+  "unsupported_descendants": ["CAM_SUBA", "CAM_SUBB", "CAM_CCU", "CAM_CCU_AO", "ISP_MAIN", "ISP_DIP1"],
+  "local_execution": "static source checks and git apply only; no native compile, dtc, emulation, JIT or SSH"
+}

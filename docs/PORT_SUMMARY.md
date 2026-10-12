@@ -8,6 +8,34 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
 ## Latest installed checkpoint: r182
 
+### Current integration candidate (not installed or CI-validated yet)
+
+- A separate [CCIF/DPMAIF DT](../patches/modem/drafts/runtime-hif-dt/README.md)
+  supplies the actual B4.1 registers, IRQs and CCF references. CI repackages
+  only this checked DT into the original r182 kernel/initramfs; the shipping
+  disabled modem metadata anchor remains unchanged. The first target test is
+  real resource binding, not firmware START or SIM service.
+- [GPU mailbox dispatch](../patches/gpu/reset-owner-draft/MAILBOX-DISPATCH.md)
+  connects the existing exclusive reset/SRAM owner to all eleven source-backed
+  RX channels. IRQ activation, complete firmware upload and GPUFREQ admission
+  remain disabled; no render node is claimed.
+- [Native camera VMM integration](../patches/camera-camisp/native-integration/README.md)
+  connects the shared supplier to the actual Linux genpd provider. CI must link
+  the combined provider in genuine ARM64 vmlinux with KUNIT enabled and disabled;
+  firmware/voltage ownership and board DT activation are still unverified.
+- GNSS now embeds the reverse AGPS owner in the production startup controller,
+  activates it only after a real successful engine-run result, and acknowledges
+  quiescence before native teardown. Remaining assistance/configuration gates
+  are preserved; no engine INIT or position fix is claimed.
+
+[Modem power integration](../patches/modem/md-pm-integration/ON-ADOPTION.md)
+must adopt the real ON state left by successful BROM. AID241 is the stock NS-CPU
+identity; the loader's reported v2 cells encode RW for the declared service
+ranges. An additional invented permission certificate is not required by an
+ordinary trusted-loader handoff. These are boot-time observations, not a current
+policy lock or coverage of reservation tails. Native shutdown/restart and final
+producer activation remain outstanding.
+
 Clean installation used [CI38248220709](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38248220709),
 source `75a510f072239825b9de7e620205a513568cce6e`. ZIP SHA256:
 `1ca7f7ca96d7a7290bdec94b19caeb5917b97508d640c49fa136617c4b130a3e`.

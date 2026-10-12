@@ -231,24 +231,31 @@ int b41_native_worker_admission(const struct b41_frame_worker *worker)
 int b41_native_session_execute(const struct b41_library_association *image,
     const struct b41_engine_arguments *arguments, struct b41_native_control *control,
     struct b41_frame_worker *worker, struct b41_native_stop_owner *stop,
+    struct b41_agps_receiver *agps,
     const struct timespec *run_deadline, const struct timespec *worker_deadline,
     struct b41_native_session_result *result)
 {
 #if !defined(__aarch64__) || !defined(__BIONIC__)
     (void)image; (void)arguments; (void)control; (void)worker; (void)stop;
-    (void)run_deadline; (void)worker_deadline; (void)result;
+    (void)agps; (void)run_deadline; (void)worker_deadline; (void)result;
     return -EOPNOTSUPP;
 #else
     struct b41_native_stop_snapshot mapping;
     struct timespec now;
-    struct pollfd pollset[2];
+    struct pollfd pollset[3];
     int status, reason = 0;
     unsigned notices;
     uint32_t primary;
-    if (!arguments || !control || !worker || !stop || !result ||
+    if (!arguments || !control || !worker || !stop || !agps || !result ||
         !valid_time(run_deadline) || !valid_time(worker_deadline) ||
         compare_time(worker_deadline, run_deadline) < 0) return -EINVAL;
     if (arguments->missing_contracts) return -EOPNOTSUPP;
+    if (!image || agps->state != B41_AGPS_RX_PREPARED ||
+        agps->image.base != image->base || agps->image.extent != image->extent ||
+        agps->image.xml_global != image->xml_global ||
+        agps->image.chip_global != image->chip_global) return -ESTALE;
+    status = b41_agps_receiver_observe(agps);
+    if (status) return status;
     if (atomic_load(&bound) != control || control->initialized != 1 ||
         arguments->callbacks.notify != native_notify ||
         worker->state != B41_WORKER_RUNNING || !worker->exposed ||
@@ -295,20 +302,27 @@ int b41_native_session_execute(const struct b41_library_association *image,
     uint32_t (*run)(const void *, const void *) =
         (uint32_t (*)(const void *, const void *))(image->base + 0x52e2bcu);
     result->registration_entered = 1;
-    if (registration(&arguments->callbacks)) return -EPROTO;
+    if (registration(&arguments->callbacks)) { reason = -EPROTO; goto quiesce_only; }
     status = b41_native_worker_admission(worker);
-    if (status) return status;
+    if (status) { reason = status; goto quiesce_only; }
+    status = b41_agps_receiver_observe(agps);
+    if (status) { reason = status; goto quiesce_only; }
     result->run_entered = 1;
     result->run_status = run(arguments->first, arguments->second);
     /* Partial initialization may have retained threads; do not invoke a
      * guessed partial-stop path. Parent supervises process exit/quarantine. */
-    if (result->run_status != 18) return -EPROTO;
+    if (result->run_status != 18) { reason = -EPROTO; goto quiesce_only; }
+    result->agps_activation_entered = 1;
+    result->agps_activation_status = b41_agps_receiver_activate(agps);
+    if (result->agps_activation_status) { reason = result->agps_activation_status; goto stop_session; }
     pollset[0] = (struct pollfd){control->fd, POLLIN, 0};
     pollset[1] = (struct pollfd){worker->done_fd, POLLIN, 0};
+    pollset[2] = (struct pollfd){agps->fd[2], POLLIN, 0};
     for (;;) {
         notices = 0;
         reason = b41_host_adapter_error(worker->adapter);
         if (!reason) reason = atomic_load(&worker->failure);
+        if (!reason) reason = b41_agps_receiver_observe(agps);
         if (!reason) reason = b41_native_control_take(control, &notices);
         result->notices |= notices;
         if (reason) break;
@@ -323,13 +337,29 @@ int b41_native_session_execute(const struct b41_library_association *image,
             int remaining = (int)((ns + 999999) / 1000000);
             if (remaining < ms) ms = remaining;
         }
-        if (poll(pollset, 2, ms) < 0) { reason = -errno; break; }
+        if (poll(pollset, 3, ms) < 0) { reason = -errno; break; }
         if (pollset[0].revents & (POLLERR | POLLHUP | POLLNVAL)) { reason = -EIO; break; }
         if (pollset[1].revents) {
             reason = atomic_load(&worker->failure);
             if (!reason) reason = -ESHUTDOWN;
             break;
         }
+        if (pollset[2].revents) {
+            reason = b41_agps_receiver_observe(agps);
+            if (!reason) reason = -ESHUTDOWN;
+            break;
+        }
+    }
+stop_session:
+    result->agps_quiesce_entered = 1;
+    result->agps_quiesce_status = b41_agps_receiver_quiesce(agps, worker_deadline);
+    if (!reason) reason = result->agps_quiesce_status;
+    /* A sticky receive error may coexist with acknowledged completion. State,
+     * not a zero error code, establishes exclusion of native dispatch. */
+    if (agps->state != B41_AGPS_RX_QUIESCED) {
+        result->native_stop_status = -ECANCELED;
+        result->worker_stop_status = -EBUSY;
+        return reason ? reason : -EBUSY;
     }
     /* Capture actual live records at STOP admission, not immediately after
      * init returns while a successfully created thread may still be starting. */
@@ -342,6 +372,13 @@ int b41_native_session_execute(const struct b41_library_association *image,
     if (reason) return reason;
     if (result->native_stop_status) return result->native_stop_status;
     return result->worker_stop_status;
+quiesce_only:
+    /* No guessed native stop after registration failure or partial run. */
+    result->agps_quiesce_entered = 1;
+    result->agps_quiesce_status = b41_agps_receiver_quiesce(agps, worker_deadline);
+    result->native_stop_status = -ECANCELED;
+    result->worker_stop_status = -EBUSY;
+    return reason ? reason : result->agps_quiesce_status;
 #endif
 }
 

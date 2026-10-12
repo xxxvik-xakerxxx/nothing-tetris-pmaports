@@ -1,15 +1,17 @@
 # Actual reset/IRQ pre-start checkpoint draft
 
-Not packaged, bound or activated. Frozen SRAM/adoption/MMIO/U-Boot code is
-unchanged. This is an actual Linux resource/MMIO adapter, not a full remoteproc
-provider or a power-on proof. No native C/kernel build or phone operation was
-performed locally.
+Not packaged, bound or activated. The current unified native receive candidate
+is described in [MAILBOX-DISPATCH.md](MAILBOX-DISPATCH.md). It revises this owner,
+the SRAM read accessor, and parent/provider channel binding. This is an actual
+Linux resource/MMIO adapter, not a full remoteproc provider or a power-on proof.
+No native C/kernel build or phone operation was performed locally.
 
 Resource ownership revision: see [RESOURCE-CONTRACT.md](RESOURCE-CONTRACT.md)
 and its exact-source/base-DTB pins. Prepare now validates all eight memory
 resources and reserves the four mailbox control words outside the reset bank.
-The bound-parent caller uses the same validator before MFG0 resume. No mailbox
-control access or firmware transport is implemented by this revision.
+The bound-parent caller uses the same validator before MFG0 resume. The current
+source also validates the complete mailbox tables, maps the four already-owned
+control words, and requests the real threaded receive dispatcher, still disabled.
 
 ## Executable API and boundary
 
@@ -34,11 +36,12 @@ The write is recorded before MMIO; destroy always refuses afterwards, retaining
 module/PM/resource/window references even if the readback succeeds. A mismatch
 preserves first error and quarantines the full SRAM parent. No retry is allowed.
 
-`mt6878_gpueb_reset_drain_irq()` synchronizes Linux handlers on the disabled
-owned IRQ. It does not acknowledge pending firmware bits, stop DMA or drain
-unrelated workqueues. There is no IRQ enable API or firmware receive engine.
-Unexpected delivery latches failure and disables the IRQ without speculative
-status reads/ACK; process-context paths forward quarantine.
+`mt6878_gpueb_reset_drain_irq()` closes dispatch, masks the owned IRQ and drains
+the threaded handler/callbacks without holding its mutex. It does not acknowledge
+pending firmware bits, stop DMA or drain unrelated workqueues. There is no IRQ
+enable API. The native receive implementation reads actual GPR2 and bounded
+payloads before its only ACK; rejected delivery preserves the first failure and
+quarantines SRAM. See MAILBOX-DISPATCH.md for exact ownership and remaining gates.
 
 Pinned vendor DT also names SPI273 as Mali's PWR interrupt. Therefore another
 claim MUST fail EBUSY, not switch to SHARED. A future unified parent must own

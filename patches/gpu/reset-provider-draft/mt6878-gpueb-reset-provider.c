@@ -146,6 +146,27 @@ free:
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_provider_register);
 
+int mt6878_gpueb_reset_provider_bind_channel(struct mt6878_gpueb_reset_provider *provider,
+		struct device *client, unsigned int channel,
+		mt6878_gpueb_receive_t receive, void *context)
+{
+	int ret;
+
+	if (IS_ERR_OR_NULL(provider))
+		return -EINVAL;
+	mutex_lock(&provider->lock);
+	if (provider->first_error)
+		ret = provider->first_error;
+	else if (provider->asserted)
+		ret = -ESHUTDOWN;
+	else
+		ret = mt6878_gpueb_reset_bind_channel(provider->scope, client, channel,
+						    receive, context);
+	mutex_unlock(&provider->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_provider_bind_channel);
+
 int mt6878_gpueb_reset_provider_stop(struct mt6878_gpueb_reset_provider *provider)
 {
 	int ret;

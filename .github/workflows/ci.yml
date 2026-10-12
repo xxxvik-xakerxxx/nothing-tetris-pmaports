@@ -55,6 +55,7 @@ jobs:
         run: |
           python3 ci/test-kernel-object-smoke.py
           python3 ci/kernel-object-smoke.py --plan-only
+          python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
         run: python3 ci/test-extract-stock-port-assets.py
       - name: Validate MT6878 display route
@@ -207,9 +208,14 @@ jobs:
           python3 patches/gpu/test_csf_preflight.py
       - name: Validate GPUEB bound-parent power ownership
         run: |
+          export TETRIS_KERNEL_TREE="$PWD/upstream/linux"
           export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
           python3 patches/gpu/mfg0-supplier-draft/test_supplier.py
           python3 patches/gpu/bound-parent-draft/test_control.py
+          python3 patches/gpu/reset-owner-draft/test_resources.py
+          python3 patches/gpu/reset-owner-draft/test_reset.py
+          python3 patches/gpu/reset-owner-draft/test_dispatch.py
+          python3 patches/gpu/reset-provider-draft/test_provider.py
           sh patches/gpu/mfg0-supplier-draft/run-native-ci.sh
       - name: Validate actual U-Boot GPUEB segment integration
         run: |
@@ -431,6 +437,9 @@ jobs:
               patches/gnss-navigation-audit/b41_agps_host.c \
               patches/gnss-navigation-audit/b41_frame_worker.c \
               patches/gnss-navigation-audit/b41_navigation_output.c \
+              patches/gnss-navigation-audit/native-agps-receiver/b41_agps_decode.c \
+              patches/gnss-navigation-audit/native-agps-receiver/b41_agps_receiver.c \
+              patches/gnss-navigation-audit/native-agps-receiver/b41_agps_native.c \
               "patches/gnss-navigation-audit/test_b41_${fixture}.c" \
               "${write_wrapper[@]}" \
               -o "out/b41-${fixture}-test"
@@ -492,7 +501,10 @@ jobs:
             -ffunction-sections -fdata-sections -Wl,--gc-sections -I"$here" \
             "$here/b41_sealed_probe_parent.c" "$here/b41_mipc_sealed_isolate.c" \
             "$here/b41_mipc_loader_root.c" "$here/b41_mipc_supervised_child.c" \
-            "$here/b41_native_receiver_host.c" -o /tmp/b41-sealed-probe-parent
+            "$here/b41_native_receiver_host.c" "$here/b41_library_association.c" \
+            "$here/native-agps-receiver/b41_agps_decode.c" \
+            "$here/native-agps-receiver/b41_agps_receiver.c" \
+            "$here/native-agps-receiver/b41_agps_native.c" -o /tmp/b41-sealed-probe-parent
           python3 "$here/test_b41_sealed_probe_cli.py"
           python3 "$here/test_b41_sealed_probe_ci.py"
           python3 ci/test-gnss-delegated-load.py

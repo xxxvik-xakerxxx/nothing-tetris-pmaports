@@ -19,5 +19,8 @@ libs=$(pkg-config --libs libxml-2.0 libcrypto)
     "$audit/b41_runtime_config.c" "$audit/b41_startup_adapter.c" \
     "$audit/b41_second_config.c" "$audit/b41_startup_bundle.c" \
     "$audit/b41_native_arguments.c" "$audit/b41_native_receiver_host.c" \
+    "$audit/native-agps-receiver/b41_agps_decode.c" \
+    "$audit/native-agps-receiver/b41_agps_receiver.c" \
+    "$audit/native-agps-receiver/b41_agps_native.c" "$audit/b41_library_association.c" \
     "$here/test_integration.c" $libs -o "$out/test_lna_integration"
 timeout --signal=TERM --kill-after=2 30 "$out/test_lna_integration" "$asset"

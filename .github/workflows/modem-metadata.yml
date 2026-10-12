@@ -96,14 +96,14 @@ jobs:
 
   driver-objects:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     container:
       image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
     steps:
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex \
-            openssl-dev perl python3 patch linux-headers git dtc curl kmod
+            openssl-dev perl python3 py3-yaml patch linux-headers git dtc curl kmod
           apk add --no-cache \
             --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
             --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
@@ -161,9 +161,37 @@ jobs:
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B patches/modem/infra-clocks/run_ci.py
+      - name: Link actual native camera genpd provider with shared VMM ownership
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B ci/link-native-camera-vmm.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: modem-metadata-arm64-evidence
           path: out/kernel-object-smoke/
+          if-no-files-found: error
+
+  hif-dt-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install DT and immutable FIT packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 curl device-tree-compiler u-boot-tools e2fsprogs clang lld llvm make gcc flex bison bc libssl-dev
+      - name: Compile the exact packaged native and HIF DTs only
+        run: python3 -B ci/kernel-object-smoke.py --dt-only --work /tmp/tetris-hif-dt-kernel
+      - name: Repackage only the checked HIF DT into original r182 boot inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B ci/build-hif-dt-image.py \
+            --dtbs out/kernel-object-smoke/dtbs --output out/hif-r182-boot
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nothing-tetris-r182-hif-dt-boot
+          path: out/hif-r182-boot/
           if-no-files-found: error

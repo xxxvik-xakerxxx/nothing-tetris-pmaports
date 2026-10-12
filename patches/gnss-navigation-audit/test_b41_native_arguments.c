@@ -32,21 +32,21 @@ int main(void)
     assert(b41_native_arguments_execute(owner, NULL, NULL, NULL) == -EINVAL);
 #if !defined(__aarch64__) || !defined(__BIONIC__)
     assert(b41_native_arguments_prepare(owner, NULL, NULL, 0, NULL,
-        NULL, NULL, 0, NULL, NULL) == -EOPNOTSUPP);
+        NULL, NULL, 0, NULL, NULL, 1, 0) == -EOPNOTSUPP);
     assert(!owner->entered);
 #else
     assert(b41_native_arguments_prepare(owner, NULL, NULL, 0, NULL,
-        NULL, NULL, 0, NULL, NULL) == -EINVAL);
+        NULL, NULL, 0, NULL, NULL, 1, 0) == -EINVAL);
     assert(!owner->entered);
     {
         struct b41_agps_owner ipc = {0};
         int fds[2] = {-1, -1}, app = -1, raw = -1;
         assert(b41_native_arguments_prepare(owner, &bundle, NULL, 0, NULL,
-            &ipc, fds, 1, &app, &raw) == -ENODATA);
+            &ipc, fds, 1, &app, &raw, 1, 0) == -ENODATA);
         ipc.initialized = 1;
         ipc.state = B41_AGPS_OWNED;
         assert(b41_native_arguments_prepare(owner, &bundle, NULL, 0, NULL,
-            &ipc, fds, 1, &app, &raw) == -ESTALE);
+            &ipc, fds, 1, &app, &raw, 1, 0) == -ESTALE);
         assert(!owner->entered && app == -1 && raw == -1 && fds[0] == -1);
     }
 #endif

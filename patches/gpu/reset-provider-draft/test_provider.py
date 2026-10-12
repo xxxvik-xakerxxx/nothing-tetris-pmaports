@@ -44,7 +44,8 @@ class Provider(unittest.TestCase):
         self.assertEqual(body.count("mt6878_gpueb_reset_hold("), 1)
         helper = (HERE.parent / "reset-owner-draft/mt6878-gpueb-reset.c").read_text()
         self.assertIn("writel(0, scope->registers + 0x600)", helper)
-        self.assertIn("request_irq(irq, unexpected_irq, IRQF_NO_AUTOEN", helper)
+        self.assertIn("request_threaded_irq(irq, NULL, mailbox_irq_thread", helper)
+        self.assertIn("IRQF_ONESHOT | IRQF_NO_AUTOEN", helper)
 
     def test_stop_never_reports_off_or_frees(self):
         body = definition(self.code, "int mt6878_gpueb_reset_provider_stop(")

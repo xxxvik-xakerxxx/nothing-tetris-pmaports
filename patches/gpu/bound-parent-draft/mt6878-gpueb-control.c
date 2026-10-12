@@ -113,5 +113,20 @@ free:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_control_prepare);
+
+int mt6878_gpueb_control_bind_channel(struct mt6878_gpueb_control *control,
+		struct device *client, unsigned int channel,
+		mt6878_gpueb_receive_t receive, void *context)
+{
+	if (IS_ERR_OR_NULL(control))
+		return -EINVAL;
+	if (control->first_error)
+		return control->first_error;
+	if (!control->reset || control->power)
+		return -EAGAIN;
+	return mt6878_gpueb_reset_provider_bind_channel(control->reset, client, channel,
+						       receive, context);
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_control_bind_channel);
 MODULE_DESCRIPTION("MT6878 GPUEB bound-parent SRAM/MFG0/reset ownership transaction");
 MODULE_LICENSE("GPL");

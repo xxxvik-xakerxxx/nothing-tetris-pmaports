@@ -9,6 +9,9 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -pthread \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     -I"$here" "$here/b41_native_receiver_host.c" \
     "$here/b41_mipc_supervised_child.c" "$here/test_b41_mipc_supervised_child.c" \
+    "$here/native-agps-receiver/b41_agps_decode.c" \
+    "$here/native-agps-receiver/b41_agps_receiver.c" \
+    "$here/native-agps-receiver/b41_agps_native.c" "$here/b41_library_association.c" \
     -o "$build/supervised"
 timeout 15 "$build/supervised"
 python3 -c 'import os; assert hasattr(os, "memfd_create"), "Linux sealing required"'

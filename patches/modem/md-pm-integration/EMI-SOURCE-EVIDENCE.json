@@ -1,0 +1,770 @@
+{
+  "method": "pinned source parsing and static ATF disassembly; no target execution",
+  "trust_model": "ordinary trusted bootloader handing its successful transaction to Linux; no new NS certificate",
+  "classic_apc_zero": "NO_PROTECTION in legacy header; not this v2 permission field",
+  "actual_query2_zero": "constant return from unused/default query; no AP permission register was read",
+  "v2_aid_zero": "No; AID0 is not the pinned NS CPU AID",
+  "initial_ns_cpu_rights": "RW in both enabled slots42/43 through AID241=3",
+  "lifetime": "boot snapshot, not immutable hardware policy or exclusive memory ownership",
+  "scope": "reported programmed service ranges; not entire reservation tails or MMIO/IRQ/DMA authority",
+  "sources": {
+    "emi-header": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/soc/mediatek/emi.h",
+      "sha256": "e32f4f77e479c3b1fdc019a20b9fb4f2b3eada3daf5b2ae67391c8ad417550d3"
+    },
+    "v2-decoder": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/memory/mediatek/emi-mpu-test-v2.c",
+      "sha256": "b07744505e56fb35fc9d5da461745cee78bc9c8827b327db94b3c6b89031a3da"
+    },
+    "cpu-aid": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/memory/mediatek/smpu.c",
+      "sha256": "470ef84871c832ed7d076de9171c0e8aa3b7a5e1a791e41b984b419198c73bdd"
+    },
+    "smpu-dt": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    "boot-policy": {
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "path": "board/mediatek/mt6878/tetris_modem_emi.c",
+      "sha256": "c055ac548b11aa22411b0d3e736ecce3458ba1e103357bdc2c1e1f34e64dddce"
+    },
+    "boot-evidence": {
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "path": "board/mediatek/mt6878/tetris_modem_smem_evidence.c",
+      "sha256": "d25615ba39e836cf1d13ee2f9f98c62efde43809fe77612069e79e9881c0f0bb"
+    },
+    "boot-admission": {
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "path": "board/mediatek/mt6878/tetris_modem_brom_board.c",
+      "sha256": "6bc7d8a6b20f579ee0787eaa2485fff35cecc0c723786d158d82ea0bbcf8630a"
+    }
+  },
+  "anchors": [
+    {
+      "source": "emi-header",
+      "line": 11,
+      "anchor": "#define MTK_EMIMPU_NO_PROTECTION\t0"
+    },
+    {
+      "source": "emi-header",
+      "line": 37,
+      "anchor": "#define MTK_EMIMPU_READ_APC\t\t2"
+    },
+    {
+      "source": "emi-header",
+      "line": 39,
+      "anchor": "#define MTK_EMIMPU_READ_AID\t\t4"
+    },
+    {
+      "source": "v2-decoder",
+      "line": 64,
+      "anchor": "static const char *aid_permission[4] = {"
+    },
+    {
+      "source": "cpu-aid",
+      "line": 386,
+      "anchor": "int ns_cpu_aid = 241;"
+    },
+    {
+      "source": "cpu-aid",
+      "line": 385,
+      "anchor": "int sec_cpu_aid = 240;"
+    },
+    {
+      "source": "cpu-aid",
+      "line": 387,
+      "anchor": "int hyp_cpu_aid = 243;"
+    },
+    {
+      "source": "smpu-dt",
+      "line": 5214,
+      "anchor": "nsmpu: nsmpu@10351000 {"
+    },
+    {
+      "source": "boot-policy",
+      "line": 53,
+      "anchor": "/* AID order: 35, 47, 93. Values are No / WO / RO / RW (0..3). */"
+    },
+    {
+      "source": "boot-evidence",
+      "line": 114,
+      "anchor": "encode64(record + 56, transaction->reply[12]);"
+    },
+    {
+      "source": "boot-evidence",
+      "line": 104,
+      "anchor": "encode64(record + 64 + group * 8, transaction->reply[13 + group]);"
+    },
+    {
+      "source": "boot-admission",
+      "line": 227,
+      "anchor": "ret = disabled(final, \"mediatek,mt6878-modem-power-controller\");"
+    }
+  ],
+  "slots": [
+    {
+      "slot": 42,
+      "aid_rw": [
+        35,
+        38,
+        39,
+        42,
+        43,
+        44,
+        45,
+        47,
+        241
+      ],
+      "policy_words": [
+        "0x0",
+        "0xcff0f0c0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0xc00000000"
+      ],
+      "ns_cpu_aid": 241,
+      "ns_cpu_group": 7,
+      "ns_cpu_shift": 34,
+      "ns_cpu_value": 3,
+      "ns_cpu_permission": "RW",
+      "aid0_value": 0,
+      "aid0_permission": "No",
+      "wire_bank": 0,
+      "wire_policy_group7_offset": 200,
+      "wire_enable_offset": 136,
+      "start_register": "0x10351148",
+      "end_register": "0x1035114c",
+      "enable_register": "0x103512a8",
+      "enable_bit": 9,
+      "selected_aid241_read_register": "0x103519ec",
+      "selected_aid241_read_shift": 18
+    },
+    {
+      "slot": 43,
+      "aid_rw": [
+        35,
+        40,
+        47,
+        241
+      ],
+      "policy_words": [
+        "0x0",
+        "0xc00300c0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0xc00000000"
+      ],
+      "ns_cpu_aid": 241,
+      "ns_cpu_group": 7,
+      "ns_cpu_shift": 34,
+      "ns_cpu_value": 3,
+      "ns_cpu_permission": "RW",
+      "aid0_value": 0,
+      "aid0_permission": "No",
+      "wire_bank": 1,
+      "wire_policy_group7_offset": 328,
+      "wire_enable_offset": 264,
+      "start_register": "0x10351150",
+      "end_register": "0x10351154",
+      "enable_register": "0x103512a8",
+      "enable_bit": 10,
+      "selected_aid241_read_register": "0x103519ec",
+      "selected_aid241_read_shift": 20
+    }
+  ],
+  "atf": {
+    "payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e",
+    "query_targets": {
+      "0": "0x2f530",
+      "1": "0x2f53c",
+      "2": "0x2f548",
+      "3": "0x2f550",
+      "4": "0x2f558",
+      "5": "0x2f564",
+      "6": "0x2f568",
+      "7": "0x2f574",
+      "8": "0x2f548",
+      "9": "0x2f578"
+    },
+    "disassembly": {
+      "unused-query2": [
+        {
+          "offset": "0x2f548",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f54c",
+          "instruction": "ret "
+        }
+      ],
+      "aid-reader": [
+        {
+          "offset": "0x2f464",
+          "instruction": "cmp x0, #0x3f"
+        },
+        {
+          "offset": "0x2f468",
+          "instruction": "b.ls #0x2f474"
+        },
+        {
+          "offset": "0x2f46c",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f470",
+          "instruction": "ret "
+        },
+        {
+          "offset": "0x2f474",
+          "instruction": "mov w9, #0x19bc"
+        },
+        {
+          "offset": "0x2f478",
+          "instruction": "mov x8, x0"
+        },
+        {
+          "offset": "0x2f47c",
+          "instruction": "movk w9, #0x1035, lsl #16"
+        },
+        {
+          "offset": "0x2f480",
+          "instruction": "cbz x0, #0x2f4dc"
+        },
+        {
+          "offset": "0x2f484",
+          "instruction": "sub x8, x8, #1"
+        },
+        {
+          "offset": "0x2f488",
+          "instruction": "mov x10, xzr"
+        },
+        {
+          "offset": "0x2f48c",
+          "instruction": "lsr x11, x8, #2"
+        },
+        {
+          "offset": "0x2f490",
+          "instruction": "lsl w12, w8, #1"
+        },
+        {
+          "offset": "0x2f494",
+          "instruction": "add w11, w9, w11"
+        },
+        {
+          "offset": "0x2f498",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f49c",
+          "instruction": "add w11, w11, #0x28"
+        },
+        {
+          "offset": "0x2f4a0",
+          "instruction": "and x8, x11, #0xfffffffc"
+        },
+        {
+          "offset": "0x2f4a4",
+          "instruction": "and x11, x12, #0x1e"
+        },
+        {
+          "offset": "0x2f4a8",
+          "instruction": "lsl w12, w1, #5"
+        },
+        {
+          "offset": "0x2f4ac",
+          "instruction": "str w12, [x9]"
+        },
+        {
+          "offset": "0x2f4b0",
+          "instruction": "add w12, w12, #1"
+        },
+        {
+          "offset": "0x2f4b4",
+          "instruction": "dsb sy"
+        },
+        {
+          "offset": "0x2f4b8",
+          "instruction": "ldr w13, [x8]"
+        },
+        {
+          "offset": "0x2f4bc",
+          "instruction": "lsr x13, x13, x11"
+        },
+        {
+          "offset": "0x2f4c0",
+          "instruction": "and x13, x13, #3"
+        },
+        {
+          "offset": "0x2f4c4",
+          "instruction": "lsl x13, x13, x10"
+        },
+        {
+          "offset": "0x2f4c8",
+          "instruction": "add x10, x10, #2"
+        },
+        {
+          "offset": "0x2f4cc",
+          "instruction": "orr x0, x13, x0"
+        },
+        {
+          "offset": "0x2f4d0",
+          "instruction": "cmp x10, #0x40"
+        },
+        {
+          "offset": "0x2f4d4",
+          "instruction": "b.ne #0x2f4ac"
+        },
+        {
+          "offset": "0x2f4d8",
+          "instruction": "b #0x2f50c"
+        },
+        {
+          "offset": "0x2f4dc",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f4e0",
+          "instruction": "lsl w10, w1, #5"
+        },
+        {
+          "offset": "0x2f4e4",
+          "instruction": "str w10, [x9]"
+        },
+        {
+          "offset": "0x2f4e8",
+          "instruction": "add w10, w10, #1"
+        },
+        {
+          "offset": "0x2f4ec",
+          "instruction": "dsb sy"
+        },
+        {
+          "offset": "0x2f4f0",
+          "instruction": "ldr w11, [x9, #0x24]"
+        },
+        {
+          "offset": "0x2f4f4",
+          "instruction": "and x11, x11, #3"
+        },
+        {
+          "offset": "0x2f4f8",
+          "instruction": "lsl x11, x11, x8"
+        },
+        {
+          "offset": "0x2f4fc",
+          "instruction": "add x8, x8, #2"
+        },
+        {
+          "offset": "0x2f500",
+          "instruction": "orr x0, x11, x0"
+        },
+        {
+          "offset": "0x2f504",
+          "instruction": "cmp x8, #0x40"
+        },
+        {
+          "offset": "0x2f508",
+          "instruction": "b.ne #0x2f4e4"
+        },
+        {
+          "offset": "0x2f50c",
+          "instruction": "ret "
+        }
+      ],
+      "enable-reader": [
+        {
+          "offset": "0x2f57c",
+          "instruction": "cmp x0, #0x3f"
+        },
+        {
+          "offset": "0x2f580",
+          "instruction": "b.ls #0x2f58c"
+        },
+        {
+          "offset": "0x2f584",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f588",
+          "instruction": "ret "
+        },
+        {
+          "offset": "0x2f58c",
+          "instruction": "mov w8, #0x12a0"
+        },
+        {
+          "offset": "0x2f590",
+          "instruction": "movk w8, #0x1035, lsl #16"
+        },
+        {
+          "offset": "0x2f594",
+          "instruction": "cbz x0, #0x2f5b8"
+        },
+        {
+          "offset": "0x2f598",
+          "instruction": "sub x9, x0, #1"
+        },
+        {
+          "offset": "0x2f59c",
+          "instruction": "lsr x10, x9, #3"
+        },
+        {
+          "offset": "0x2f5a0",
+          "instruction": "add w8, w8, w10"
+        },
+        {
+          "offset": "0x2f5a4",
+          "instruction": "add w8, w8, #4"
+        },
+        {
+          "offset": "0x2f5a8",
+          "instruction": "and x8, x8, #0xfffffffc"
+        },
+        {
+          "offset": "0x2f5ac",
+          "instruction": "ldr w8, [x8]"
+        },
+        {
+          "offset": "0x2f5b0",
+          "instruction": "lsr w8, w8, w9"
+        },
+        {
+          "offset": "0x2f5b4",
+          "instruction": "b #0x2f5bc"
+        },
+        {
+          "offset": "0x2f5b8",
+          "instruction": "ldr w8, [x8]"
+        },
+        {
+          "offset": "0x2f5bc",
+          "instruction": "and w0, w8, #1"
+        },
+        {
+          "offset": "0x2f5c0",
+          "instruction": "ret "
+        }
+      ],
+      "range-writer": [
+        {
+          "offset": "0x2d61c",
+          "instruction": "cbz x2, #0x2d66c"
+        },
+        {
+          "offset": "0x2d620",
+          "instruction": "sub x8, x2, #1"
+        },
+        {
+          "offset": "0x2d624",
+          "instruction": "mov w9, #0x1000"
+        },
+        {
+          "offset": "0x2d628",
+          "instruction": "mov w13, #0x12a4"
+        },
+        {
+          "offset": "0x2d62c",
+          "instruction": "movk w9, #0x1035, lsl #16"
+        },
+        {
+          "offset": "0x2d630",
+          "instruction": "mov w11, #-0x80000000"
+        },
+        {
+          "offset": "0x2d634",
+          "instruction": "lsr x12, x8, #3"
+        },
+        {
+          "offset": "0x2d638",
+          "instruction": "movk w13, #0x1035, lsl #16"
+        },
+        {
+          "offset": "0x2d63c",
+          "instruction": "and w10, w0, #0x7fffff"
+        },
+        {
+          "offset": "0x2d640",
+          "instruction": "add x9, x9, x8, lsl #3"
+        },
+        {
+          "offset": "0x2d644",
+          "instruction": "bfxil w11, w1, #0, #0x17"
+        },
+        {
+          "offset": "0x2d648",
+          "instruction": "add w12, w12, w13"
+        },
+        {
+          "offset": "0x2d64c",
+          "instruction": "and x12, x12, #0xfffffffc"
+        },
+        {
+          "offset": "0x2d650",
+          "instruction": "str w10, [x9]"
+        },
+        {
+          "offset": "0x2d654",
+          "instruction": "mov w10, #1"
+        },
+        {
+          "offset": "0x2d658",
+          "instruction": "str w11, [x9, #4]"
+        },
+        {
+          "offset": "0x2d65c",
+          "instruction": "lsl w8, w10, w8"
+        },
+        {
+          "offset": "0x2d660",
+          "instruction": "ldr w9, [x12]"
+        },
+        {
+          "offset": "0x2d664",
+          "instruction": "orr w8, w9, w8"
+        },
+        {
+          "offset": "0x2d668",
+          "instruction": "str w8, [x12]"
+        },
+        {
+          "offset": "0x2d66c",
+          "instruction": "ret "
+        }
+      ],
+      "range-admission": [
+        {
+          "offset": "0x2f618",
+          "instruction": "sub sp, sp, #0x30"
+        },
+        {
+          "offset": "0x2f61c",
+          "instruction": "stp x29, x30, [sp, #0x10]"
+        },
+        {
+          "offset": "0x2f620",
+          "instruction": "add x29, sp, #0x10"
+        },
+        {
+          "offset": "0x2f624",
+          "instruction": "str x19, [sp, #0x20]"
+        },
+        {
+          "offset": "0x2f628",
+          "instruction": "mov x19, x2"
+        },
+        {
+          "offset": "0x2f62c",
+          "instruction": "str x1, [sp, #8]"
+        },
+        {
+          "offset": "0x2f630",
+          "instruction": "str x0, [x29, #0x18]"
+        },
+        {
+          "offset": "0x2f634",
+          "instruction": "bl #0x10354"
+        },
+        {
+          "offset": "0x2f638",
+          "instruction": "cbz x0, #0x2f644"
+        },
+        {
+          "offset": "0x2f63c",
+          "instruction": "mov x0, xzr"
+        },
+        {
+          "offset": "0x2f640",
+          "instruction": "b #0x2f664"
+        },
+        {
+          "offset": "0x2f644",
+          "instruction": "add x0, x29, #0x18"
+        },
+        {
+          "offset": "0x2f648",
+          "instruction": "add x1, sp, #8"
+        },
+        {
+          "offset": "0x2f64c",
+          "instruction": "bl #0x10300"
+        },
+        {
+          "offset": "0x2f650",
+          "instruction": "cbnz x0, #0x2f660"
+        },
+        {
+          "offset": "0x2f654",
+          "instruction": "mov x0, x19"
+        },
+        {
+          "offset": "0x2f658",
+          "instruction": "bl #0x10370"
+        },
+        {
+          "offset": "0x2f65c",
+          "instruction": "cbz x0, #0x2f674"
+        },
+        {
+          "offset": "0x2f660",
+          "instruction": "mov x0, #-3"
+        },
+        {
+          "offset": "0x2f664",
+          "instruction": "ldp x29, x30, [sp, #0x10]"
+        },
+        {
+          "offset": "0x2f668",
+          "instruction": "ldr x19, [sp, #0x20]"
+        },
+        {
+          "offset": "0x2f66c",
+          "instruction": "add sp, sp, #0x30"
+        },
+        {
+          "offset": "0x2f670",
+          "instruction": "ret "
+        },
+        {
+          "offset": "0x2f674",
+          "instruction": "mov x0, x19"
+        },
+        {
+          "offset": "0x2f678",
+          "instruction": "bl #0x10380"
+        },
+        {
+          "offset": "0x2f67c",
+          "instruction": "cbz x0, #0x2f688"
+        },
+        {
+          "offset": "0x2f680",
+          "instruction": "mov x0, #-4"
+        },
+        {
+          "offset": "0x2f684",
+          "instruction": "b #0x2f664"
+        },
+        {
+          "offset": "0x2f688",
+          "instruction": "ldr x0, [x29, #0x18]"
+        },
+        {
+          "offset": "0x2f68c",
+          "instruction": "mov x2, x19"
+        },
+        {
+          "offset": "0x2f690",
+          "instruction": "ldr x1, [sp, #8]"
+        },
+        {
+          "offset": "0x2f694",
+          "instruction": "bl #0x2d61c"
+        },
+        {
+          "offset": "0x2f698",
+          "instruction": "b #0x2f63c"
+        }
+      ],
+      "one-shot-guard": [
+        {
+          "offset": "0x10380",
+          "instruction": "adrp x9, #0x47000"
+        },
+        {
+          "offset": "0x10384",
+          "instruction": "mov x8, xzr"
+        },
+        {
+          "offset": "0x10388",
+          "instruction": "add x9, x9, #0x71c"
+        },
+        {
+          "offset": "0x1038c",
+          "instruction": "ldr w10, [x9, x8]"
+        },
+        {
+          "offset": "0x10390",
+          "instruction": "cmp x10, x0"
+        },
+        {
+          "offset": "0x10394",
+          "instruction": "b.eq #0x103c4"
+        },
+        {
+          "offset": "0x10398",
+          "instruction": "add x8, x8, #4"
+        },
+        {
+          "offset": "0x1039c",
+          "instruction": "cmp x8, #0x10"
+        },
+        {
+          "offset": "0x103a0",
+          "instruction": "b.ne #0x1038c"
+        },
+        {
+          "offset": "0x103a4",
+          "instruction": "adrp x9, #0xf7000"
+        },
+        {
+          "offset": "0x103a8",
+          "instruction": "mov w10, #1"
+        },
+        {
+          "offset": "0x103ac",
+          "instruction": "add x9, x9, #0xa25"
+        },
+        {
+          "offset": "0x103b0",
+          "instruction": "ldrb w8, [x9, x0]"
+        },
+        {
+          "offset": "0x103b4",
+          "instruction": "strb w10, [x9, x0]"
+        },
+        {
+          "offset": "0x103b8",
+          "instruction": "cmp w8, #1"
+        },
+        {
+          "offset": "0x103bc",
+          "instruction": "cset w8, eq"
+        },
+        {
+          "offset": "0x103c0",
+          "instruction": "b #0x103c8"
+        },
+        {
+          "offset": "0x103c4",
+          "instruction": "mov x8, xzr"
+        },
+        {
+          "offset": "0x103c8",
+          "instruction": "mov x0, x8"
+        },
+        {
+          "offset": "0x103cc",
+          "instruction": "ret "
+        }
+      ]
+    }
+  },
+  "remaining": [
+    "current effective overlapping-region/NSR/KP policy",
+    "actual execution EL/master identity",
+    "secure policy writers and power-cycle lifetime",
+    "first MD shutdown and inhibited restart",
+    "installed BROM hook requires native MD provider disabled on entry"
+  ]
+}

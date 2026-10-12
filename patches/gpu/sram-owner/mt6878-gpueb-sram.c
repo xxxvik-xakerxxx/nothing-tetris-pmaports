@@ -109,6 +109,58 @@ int mt6878_gpueb_sram_describe(struct mt6878_gpueb_window *window,
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_describe);
 
+struct mt6878_gpueb_reader {
+	struct mt6878_gpueb_sram *sram;
+};
+
+int mt6878_gpueb_sram_reader_words(struct mt6878_gpueb_reader *reader,
+		enum gpueb_sram_window type, u64 offset, u32 *words, unsigned int count)
+{
+	struct mt6878_gpueb_sram *sram;
+	struct gpueb_sram_range range;
+	unsigned int i;
+	int ret;
+
+	if (!reader || !words || !count ||
+	    count > GPUEB_MBOX_SIZE / sizeof(*words))
+		return -EINVAL;
+	sram = reader->sram;
+	ret = gpueb_sram_window_range(&sram->core, type, offset,
+				     (u64)count * sizeof(*words), &range);
+	if (!ret)
+		for (i = 0; i < count; i++)
+			words[i] = readl(sram->mapping + (range.start - sram->core.whole.start) +
+					 i * sizeof(*words));
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_reader_words);
+
+int mt6878_gpueb_sram_read_transaction(struct mt6878_gpueb_window *gpr,
+		struct mt6878_gpueb_window *mbox,
+		int (*consume)(struct mt6878_gpueb_reader *, void *), void *context)
+{
+	struct mt6878_gpueb_reader reader;
+	struct gpueb_sram_range range;
+	int ret;
+
+	if (IS_ERR_OR_NULL(gpr) || IS_ERR_OR_NULL(mbox) || !consume ||
+	    gpr->sram != mbox->sram || gpr->type != GPUEB_WINDOW_GPR ||
+	    mbox->type != GPUEB_WINDOW_MBOX)
+		return -EINVAL;
+	reader.sram = gpr->sram;
+	mutex_lock(&reader.sram->lock);
+	ret = gpueb_sram_window_range(&reader.sram->core, GPUEB_WINDOW_GPR,
+				     0, GPUEB_GPR_SIZE, &range);
+	if (!ret)
+		ret = gpueb_sram_window_range(&reader.sram->core, GPUEB_WINDOW_MBOX,
+					     0, GPUEB_MBOX_SIZE, &range);
+	if (!ret)
+		ret = consume(&reader, context);
+	mutex_unlock(&reader.sram->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_read_transaction);
+
 void mt6878_gpueb_sram_put_window(struct mt6878_gpueb_window *window)
 {
 	struct mt6878_gpueb_sram *sram;

@@ -56,4 +56,12 @@ static struct resource *request_mem_region(uint64_t start, uint64_t size, const 
 static void release_mem_region(uint64_t start, uint64_t size);
 static void *ioremap(uint64_t start, uint64_t size);
 static void iounmap(void *mapping);
+/* Existing CI fixture does not perform hardware access. The new read path
+ * must acquire dedicated mock-read coverage before that path is exercised.
+ */
+static inline uint32_t readl(const void *mapping)
+{
+	(void)mapping;
+	abort();
+}
 #endif

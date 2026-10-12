@@ -4,6 +4,7 @@
 #ifdef GPUEB_SRAM_HOST_TEST
 #include <stdint.h>
 typedef uint64_t u64;
+typedef uint32_t u32;
 #else
 #include <linux/types.h>
 #endif

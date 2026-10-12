@@ -97,6 +97,27 @@ class SmokeInputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing compiled DTB"):
                 smoke.compile_dtbs(["make"], self.package, self.package / "evidence")
 
+    def test_hif_dt_is_compiled_and_checked_without_changing_normal_dts(self):
+        kernel = self.package / "kernel"
+        sources = kernel / "arch/arm64/boot/dts/mediatek"
+        sources.mkdir(parents=True)
+        normal_source = sources / "mt6878-nothing-tetris-native.dts"
+        normal_source.write_text("// shipping native source\n")
+        output = self.package / "objects"
+        dtb = output / "arch/arm64/boot/dts" / smoke.HIF_DTB
+        dtb.parent.mkdir(parents=True)
+        dtb.write_bytes(b"checked HIF fixture")
+        report = self.package / "report"
+        (report / "dtbs").mkdir(parents=True)
+        with patch.object(smoke, "run") as run:
+            result = smoke.compile_hif_dtb(["make", "ARCH=arm64"], kernel, output, report)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args_list[0].args[0], ["make", "ARCH=arm64", smoke.HIF_DTB])
+        self.assertIn("patches/modem/drafts/runtime-hif-dt/check.py", run.call_args_list[1].args[0])
+        self.assertEqual(normal_source.read_text(), "// shipping native source\n")
+        self.assertEqual((report / "dtbs" / dtb.name).read_bytes(), dtb.read_bytes())
+        self.assertEqual(result["dtb_sha256"], hashlib.sha256(dtb.read_bytes()).hexdigest())
+
     def test_research_requests_every_cam_main_dependency(self):
         command = smoke.config_options(Path("kernel"), Path("objects"), True)
         enabled = [command[i + 1] for i, value in enumerate(command) if value == "-e"]
@@ -105,6 +126,23 @@ class SmokeInputs(unittest.TestCase):
         self.assertEqual(len(enabled), len(set(enabled)))
         normal = smoke.config_options(Path("kernel"), Path("objects"), False)
         self.assertNotIn("COMMON_CLK_MT6878_CAM", normal)
+
+    def test_dt_only_never_builds_driver_objects_or_links_kernel(self):
+        kernel = self.package / "kernel"
+        work = self.package / "work"
+        work.mkdir()
+        report = self.package / "report"
+        (report / "dtbs").mkdir(parents=True)
+        with patch.object(smoke, "run") as run, \
+                patch.object(smoke, "compile_dtbs", return_value={"native": "hash"}) as dt, \
+                patch.object(smoke, "compile_hif_dtb", return_value={"dtb_sha256": "hif"}) as hif:
+            result = smoke.compile_dt_only(kernel, self.package, work, report, {"objects": ["driver.o"]})
+        self.assertEqual(result["objects"], [])
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0][-1], "olddefconfig")
+        dt.assert_called_once()
+        hif.assert_called_once()
 
     def test_research_staging_preserves_bytes_without_shipping_wiring(self):
         root = Path(__file__).resolve().parents[1]

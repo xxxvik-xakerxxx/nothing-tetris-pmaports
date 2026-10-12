@@ -38,6 +38,8 @@ DTBS = tuple("mediatek/" + name + ".dtb" for name in (
     "mt6878-nothing-tetris-native", "mt6878-nothing-tetris-vgpu-observe",
     "mt6878-nothing-tetris-modem-preflight-off", "mt6878-nothing-tetris-modem-preflight",
 ))
+HIF_DT_SOURCE = "patches/modem/drafts/runtime-hif-dt/mt6878-nothing-tetris-ccci-hif-resources.dts"
+HIF_DTB = "mediatek/mt6878-nothing-tetris-ccci-hif-resources.dtb"
 STRICT_PATCHES = frozenset((
     "0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch",
     "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
@@ -298,6 +300,38 @@ def compile_dtbs(make, output, report):
     return identities
 
 
+def compile_hif_dtb(make, kernel, output, report):
+    source = Path(HIF_DT_SOURCE)
+    target = kernel / "arch/arm64/boot/dts/mediatek" / source.name
+    if target.exists():
+        raise ValueError("HIF DT staging would replace an existing source")
+    shutil.copyfile(source, target)
+    run([*make, HIF_DTB])
+    dtb = output / "arch/arm64/boot/dts" / HIF_DTB
+    normal = output / "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb"
+    run(["python3", "patches/modem/drafts/runtime-hif-dt/check.py", normal, dtb])
+    destination = report / "dtbs" / dtb.name
+    if destination.exists() or not dtb.is_file() or not dtb.stat().st_size:
+        raise ValueError("missing or nonunique checked HIF DTB")
+    shutil.copyfile(dtb, destination)
+    return {"source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "dtb_sha256": hashlib.sha256(dtb.read_bytes()).hexdigest(),
+            "scope": "separate DT: HIF resources only, shipping modem remains disabled"}
+
+
+def compile_dt_only(kernel, package, work, report, manifest):
+    output = work / "dt-only-output"
+    output.mkdir(exist_ok=False)
+    shutil.copyfile(package / CONFIG, output / ".config")
+    make = ["make", "-j4", "-C", kernel, "O=" + str(output), "ARCH=arm64", "LLVM=1"]
+    run([*make, "olddefconfig"])
+    manifest.update(objects=[], scope="compiled DT only; no driver/kernel image/link or hardware execution")
+    manifest["dtb_sha256"] = compile_dtbs(make, output, report)
+    manifest["hif_dt"] = compile_hif_dtb(make, kernel, output, report)
+    manifest["status"] = "passed"
+    return manifest
+
+
 def run(command):
     print("+ " + " ".join(map(str, command)), flush=True)
     subprocess.run(list(map(str, command)), check=True)
@@ -407,10 +441,14 @@ def config_options(kernel, output, research_owners):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--dt-only", action="store_true",
+                        help="compile checked native/HIF DTs without rebuilding any driver or kernel image")
     parser.add_argument("--research-owners", action="store_true",
                         help="also compile frozen default-off owners without shipping wiring")
     parser.add_argument("--work", type=Path, default=Path("/tmp/tetris-kernel-smoke"))
     args = parser.parse_args()
+    if args.dt_only and args.research_owners:
+        parser.error("DT-only and driver-owner modes are separate experiments")
     package = PACKAGE.resolve()
     manifest = plan(package)
     objects = OBJECTS
@@ -500,6 +538,10 @@ def main():
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
         run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
+    if args.dt_only:
+        manifest = compile_dt_only(kernel, package, args.work, report, manifest)
+        manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
+        return
     if args.research_owners:
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
@@ -552,6 +594,8 @@ def main():
         make.append(research_compile_flags(kernel))
     run([*make, "olddefconfig"])
     manifest["dtb_sha256"] = compile_dtbs(make, output, report)
+    if args.research_owners:
+        manifest["hif_dt"] = compile_hif_dtb(make, kernel, output, report)
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copyfile(output / ".config", report / "isolated.config")
     config = (output / ".config").read_text().splitlines()

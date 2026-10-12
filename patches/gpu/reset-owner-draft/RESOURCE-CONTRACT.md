@@ -1,5 +1,10 @@
 # GPUEB mailbox control ownership correction
 
+The current native receive source revision is described in
+[MAILBOX-DISPATCH.md](MAILBOX-DISPATCH.md). The no-mapping/no-dispatch and CI
+statements below describe the earlier e73b771 resource-owner snapshot; they
+must not be applied to the revised dispatcher source as validation evidence.
+
 Status: disabled native resource-owner draft, statically checked and ARM64
 object-compiled in CI38287440390 at e73b771. This is not native C execution,
 composite module linkage or hardware activation. No local native build,

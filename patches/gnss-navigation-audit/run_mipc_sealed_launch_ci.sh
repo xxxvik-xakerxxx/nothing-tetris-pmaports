@@ -10,6 +10,9 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -pthread \
     -I"$here" "$here/test_b41_mipc_sealed_launch.c" \
     "$here/b41_mipc_sealed_isolate.c" "$here/b41_mipc_loader_root.c" \
     "$here/b41_mipc_supervised_child.c" "$here/b41_native_receiver_host.c" \
+    "$here/native-agps-receiver/b41_agps_decode.c" \
+    "$here/native-agps-receiver/b41_agps_receiver.c" \
+    "$here/native-agps-receiver/b41_agps_native.c" "$here/b41_library_association.c" \
     -o "$build/sealed-launch"
 # A real systemd cgroup-v2 scope is mandatory. No environment variable bypass
 # of production memory_bound(), namespace creation, or child policy is allowed.

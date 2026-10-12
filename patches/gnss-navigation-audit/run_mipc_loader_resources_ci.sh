@@ -30,6 +30,9 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror \
     -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -I"$here" \
     "$here/b41_mipc_loader_root.c" "$here/test_b41_mipc_loader_root.c" \
     "$here/b41_mipc_supervised_child.c" "$here/b41_native_receiver_host.c" \
+    "$here/native-agps-receiver/b41_agps_decode.c" \
+    "$here/native-agps-receiver/b41_agps_receiver.c" \
+    "$here/native-agps-receiver/b41_agps_native.c" "$here/b41_library_association.c" \
     -o "$build/root-fixture"
 # Requires a CI host granting CAP_SYS_ADMIN. No silent skip/root-policy downgrade.
 if [ "$(id -u)" -eq 0 ]; then

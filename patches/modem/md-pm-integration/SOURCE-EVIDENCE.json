@@ -1,0 +1,264 @@
+{
+  "status": "readonly-adoption-design-prepared-first-shutdown-blocked",
+  "method": "read-only source anchors and ordering; no target-code execution",
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "linux_base": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "uboot_installed_user_supplied": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5"
+  },
+  "linux_provenance": "local base files hashed; no independently measured running-kernel claim",
+  "boot_result": "successful installed-source bootstrap leaves physical ON; live state unmeasured",
+  "adoption": "ordinary trusted boot handoff and measured ON can support native observational adoption; final activation and real caller integration still required",
+  "trust_correction": "independent Linux signature verification and a generic NS certificate are not imposed for ordinary trusted-loader adoption; see EMI-SOURCE-EVIDENCE.json",
+  "installed_tag_names": [
+    "hdr_count",
+    "hdr_tbl_inf",
+    "smem_layout",
+    "ccb_info",
+    "udc_layout",
+    "md1_sib_info",
+    "md1_phy_cap",
+    "md1_chk",
+    "md1img",
+    "md_bank0_base",
+    "md_mem_layout",
+    "nc_smem_layout_num",
+    "nc_smem_layout",
+    "c_smem_layout_num",
+    "c_smem_layout",
+    "md1_bank4_cache_info",
+    "md1_bank4_cache_layout",
+    "nc_smem_info_ext_num",
+    "nc_smem_info_ext",
+    "md1_smem_cahce_offset",
+    "free_in_kernel"
+  ],
+  "native_dvfsrc_matches": [
+    "mediatek,mt6893-dvfsrc",
+    "mediatek,mt8183-dvfsrc",
+    "mediatek,mt8195-dvfsrc"
+  ],
+  "sources": {
+    "uboot-bootstrap": {
+      "path": "board/mediatek/mt6878/tetris_modem_bootstrap.c",
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "sha256": "76b9b056f07be1fa5a4b717ac20915f9c03d37041f04d18771108dd6b4f7d1e3"
+    },
+    "uboot-owner": {
+      "path": "board/mediatek/mt6878/tetris_modem_loaded_boot.c",
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "sha256": "ee9710e5345f15ae51919c586a1160c52db7257683e825630468c980fcc82d99"
+    },
+    "uboot-tags": {
+      "path": "board/mediatek/mt6878/tetris_modem_ccci_tags.c",
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "sha256": "d488cc2ec3a3c4c81ea6260875829990b73856cb2446d99ab3248930c9dc3d46"
+    },
+    "uboot-board": {
+      "path": "board/mediatek/mt6878/tetris_modem_brom_board.c",
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "sha256": "6bc7d8a6b20f579ee0787eaa2485fff35cecc0c723786d158d82ea0bbcf8630a"
+    },
+    "uboot-evidence": {
+      "path": "board/mediatek/mt6878/tetris_modem_smem_evidence.c",
+      "revision": "8d2ccc12e7861c5726e9c37a07f62c4ae18db7b5",
+      "sha256": "d25615ba39e836cf1d13ee2f9f98c62efde43809fe77612069e79e9881c0f0bb"
+    },
+    "linux-platform": {
+      "path": "drivers/base/platform.c",
+      "revision": null,
+      "sha256": "b2330f57b496fbe0d7e29b2873303c6294b9c207b4212becc52638e6efe86f4d"
+    },
+    "linux-genpd": {
+      "path": "drivers/pmdomain/core.c",
+      "revision": null,
+      "sha256": "aa2162e66ff41a9fa2a50339dfc8ed2900ee814ed9f52af75c62b4b54dcfb8d9"
+    },
+    "linux-dvfsrc": {
+      "path": "drivers/soc/mediatek/mtk-dvfsrc.c",
+      "revision": null,
+      "sha256": "0b98731e8fd7fe8a9762cb873a7014f8c20f5a3bba57cb5dfa3ba213df05b775"
+    },
+    "vendor-pm": {
+      "path": "drivers/soc/mediatek/mtk-scpsys.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "d6652e98da3d4193dfc1d2f112aea656606f314135168c6ab20d086b63cd67ea"
+    },
+    "vendor-pm-data": {
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    "vendor-md": {
+      "path": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ae3e3998c2ce060ef7e5e406fa647cbff2fae14f196f1d2494784cc4c46848af"
+    },
+    "native-md-patch": {
+      "path": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0113-pmdomain-mediatek-mt6878-modem-power.patch",
+      "revision": null,
+      "sha256": "03924af715632607de8329d18a7ccdff3f6d403ff4315863fe6b5d3418d90cac"
+    },
+    "native-start-patch": {
+      "path": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
+      "revision": null,
+      "sha256": "374e673c04ca6d0220e4791737ee4232b60cb47e77e3d5ae5822a4daedd4af96"
+    },
+    "package-config": {
+      "path": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/config-postmarketos-mediatek-mt6878.aarch64",
+      "revision": null,
+      "sha256": "8aff33a9850ecd0f3374b0706a3c5122ff03ed8286c2e9701d939604d5a74088"
+    },
+    "frozen-owner": {
+      "path": "patches/modem/ccci_tetris_owner.c",
+      "revision": null,
+      "sha256": "1024e1a8a35eb1c764ea89e04d48b8fe488466e7b7712809e3a71fb4811550aa"
+    },
+    "scope": {
+      "path": "patches/modem/mt6878_md_startup_scope.c",
+      "revision": null,
+      "sha256": "bba5689ec1c9e763a75295614ef9a52aca656baee1e0b0361712d4565f6544e9"
+    },
+    "reservation-owner": {
+      "path": "patches/modem/mt6878_md_handoff_reservation.c",
+      "revision": null,
+      "sha256": "3462a022483008ffd50182e41679b206bab0a642da44105a9d276995f651598f"
+    }
+  },
+  "causal_edges": [
+    {
+      "source": "uboot-bootstrap",
+      "line": 347,
+      "anchor": "ret = md_boot_ccci(6, 1);",
+      "meaning": "execution release precedes successful handoff; success has no OFF call"
+    },
+    {
+      "source": "uboot-owner",
+      "line": 281,
+      "anchor": "ret = tetris_modem_bootstrap_once(dev, boot);",
+      "meaning": "real loaded owner calls bootstrap after authentication/copy/services"
+    },
+    {
+      "source": "uboot-owner",
+      "line": 322,
+      "anchor": "return tetris_modem_build_smem_evidence(&owner.report, buffer, size);",
+      "meaning": "evidence producer consumes the retained actual owner report"
+    },
+    {
+      "source": "uboot-board",
+      "line": 69,
+      "anchor": "/* Independent observation fields; never permission to execute hardware.",
+      "meaning": "diagnostic fields do not request an operation; validate the actual trusted-loader transaction and region policy"
+    },
+    {
+      "source": "uboot-board",
+      "line": 227,
+      "anchor": "ret = disabled(final, \"mediatek,mt6878-modem-power-controller\");",
+      "meaning": "installed BROM hook rejects input-DT provider activation before loader execution"
+    },
+    {
+      "source": "uboot-evidence",
+      "line": 118,
+      "anchor": "encode32(encoded + 8, TETRIS_MODEM_SMEM_EVIDENCE_SCOPE_BL33);",
+      "meaning": "EMI evidence is explicitly BL33 scoped"
+    },
+    {
+      "source": "uboot-tags",
+      "line": 148,
+      "anchor": "TAG(20, \"free_in_kernel\", p.scalars + 28, 4);",
+      "meaning": "exact 21-tag ABI has metadata/CHK, no certificate witness"
+    },
+    {
+      "source": "linux-platform",
+      "line": 1399,
+      "anchor": "ret = dev_pm_domain_attach(_dev, PD_FLAG_ATTACH_POWER_ON |",
+      "meaning": "attach power-on precedes modem driver checks"
+    },
+    {
+      "source": "linux-genpd",
+      "line": 3172,
+      "anchor": "static int __genpd_dev_pm_attach(",
+      "meaning": "single-domain attachment calls genpd_power_on"
+    },
+    {
+      "source": "linux-genpd",
+      "line": 1043,
+      "anchor": "static int genpd_power_on(struct generic_pm_domain *genpd, unsigned int depth)",
+      "meaning": "already-ON domain returns without power callback; permits truthful read-only adoption in principle"
+    },
+    {
+      "source": "native-md-patch",
+      "line": 51,
+      "anchor": "+\t\tret = mt6878_md_check_off(pd);",
+      "meaning": "supplier rejects inherited ON before domain registration"
+    },
+    {
+      "source": "native-md-patch",
+      "line": 199,
+      "anchor": "+\tpd->md_owned = true;",
+      "meaning": "write ownership arises only after supplier completes its own ON sequence"
+    },
+    {
+      "source": "vendor-pm-data",
+      "line": 121,
+      "anchor": "MTK_SCPD_BYPASS_INIT_ON | MTK_SCPD_REMOVE_MD_RSTB,",
+      "meaning": "vendor MD skips init-on and reset-bit handling"
+    },
+    {
+      "source": "vendor-pm",
+      "line": 1793,
+      "anchor": "if (MTK_SCPD_CAPS(scpd, MTK_SCPD_BYPASS_INIT_ON))",
+      "meaning": "vendor bypass seeds software OFF; does not adopt measured physical ON"
+    },
+    {
+      "source": "vendor-md",
+      "line": 985,
+      "anchor": "static int md_start_platform(struct ccci_modem *md)",
+      "meaning": "vendor first boot checks BROM then calls physical power-off"
+    },
+    {
+      "source": "native-start-patch",
+      "line": 341,
+      "anchor": "+\tSTEP(OFF, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_EXCLUSIVE_OFF_BOOT_INHIBITED));",
+      "meaning": "backend requires exclusive OFF/inhibit before binding or SMC"
+    },
+    {
+      "source": "frozen-owner",
+      "line": 72,
+      "anchor": "if (runtime_dev == &md->plat_dev->dev || md->plat_dev->dev.pm_domain ||",
+      "meaning": "caller rejects normal platform-domain attachment and demands separate virtual genpd device"
+    },
+    {
+      "source": "scope",
+      "line": 116,
+      "anchor": "dev = get_device(md_scope.supplier);",
+      "meaning": "scope requires a real completed scoped DVFSRC INIT supplier"
+    },
+    {
+      "source": "reservation-owner",
+      "line": 145,
+      "anchor": "return -ENOKEY;",
+      "meaning": "existing reservation owner cannot authenticate installed firmware"
+    },
+    {
+      "source": "package-config",
+      "line": 5658,
+      "anchor": "# CONFIG_MTK_DVFSRC is not set",
+      "meaning": "packaged native DVFSRC supplier is disabled"
+    },
+    {
+      "source": "linux-dvfsrc",
+      "line": 559,
+      "anchor": "static const struct of_device_id mtk_dvfsrc_of_match[] = {",
+      "meaning": "native match table lacks MT6878; existing wrapper cannot create a supplier"
+    }
+  ],
+  "blockers": [
+    "Installed BROM hook requires provider disabled before loader and final handoff leaves it disabled",
+    "Managed first shutdown and secure SPM/PCM exclusion lifetime remain unproved",
+    "No proven execution-inhibited state after inherited ON is cycled OFF then ON",
+    "Frozen caller rejects normal attached MD; backend assumes OFF before first start",
+    "Native DVFSRC disabled and no MT6878 match; frozen startup scope supplier absent (not a prerequisite for read-only ON observation)"
+  ],
+  "hardware_validation": "untested"
+}

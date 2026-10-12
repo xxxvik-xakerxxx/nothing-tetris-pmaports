@@ -22,7 +22,8 @@ class Reset(unittest.TestCase):
         for token in ("pm_runtime_get_if_in_use(&parent->dev)", "GPUEB_WINDOW_GPR",
                       "GPUEB_WINDOW_MBOX", "MT6878_POWER_DOMAIN_MFG0_SHUTDOWN",
                       '"mediatek,mt6878-power-controller"', "request_mem_region(",
-                      "request_irq(irq, unexpected_irq, IRQF_NO_AUTOEN",
+                      "request_threaded_irq(irq, NULL, mailbox_irq_thread",
+                      "IRQF_ONESHOT | IRQF_NO_AUTOEN",
                       "try_module_get(THIS_MODULE)"):
             self.assertIn(token, body)
         for token in ("writel(", "readl(", "pm_runtime_resume", "pm_runtime_set_active",
@@ -82,7 +83,15 @@ class Reset(unittest.TestCase):
                       (0x1ee04, "movk", "w8, #3, lsl #16"),
                       (0x1ee0c, "sub", "w8, w8, #4"),
                       (0x1ee10, "cmp", "w8, #4"),
-                      (0x1ee18, "b.hi", "#0x1ee08")):
+                      (0x1ee18, "b.hi", "#0x1ee08"),
+                      (0x1ee1c, "mov", "x23, #0xfd1c"),
+                      (0x1ee24, "movk", "x23, #0x13c3, lsl #16"),
+                      (0x1ee30, "movk", "x23, #0xffff, lsl #48"),
+                      (0x1eedc, "mov", "w20, #0x7788"),
+                      (0x1eee4, "movk", "w20, #0x5566, lsl #16"),
+                      (0x1eeec, "ldr", "w8, [x23, #8]"),
+                      (0x1eef0, "cmp", "w8, w20"),
+                      (0x1eef4, "b.ne", "#0x1ef18")):
             expect(code, *check)
         remaining = 0x3f2bc
         iterations = 0

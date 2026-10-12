@@ -10,6 +10,7 @@
 #include "b41_startup_adapter.h"
 #include "b41_engine_arguments.h"
 #include "b41_frame_worker.h"
+#include "native-agps-receiver/b41_agps_receiver.h"
 
 enum b41_native_notice {
     B41_NATIVE_REPORT = 1u, B41_NATIVE_PROHIBITED = 2u,
@@ -115,6 +116,8 @@ struct b41_native_session_result {
     uint32_t run_status;
     unsigned notices, joined_threads;
     int native_stop_status, worker_stop_status;
+    int agps_activation_entered, agps_activation_status;
+    int agps_quiesce_entered, agps_quiesce_status;
 };
 /* Read-only, nonblocking rejection of a failed/stopping/completed host worker.
  * RUNNING is controller state, not proof the detached worker is still alive.
@@ -134,10 +137,15 @@ int b41_native_worker_admission(const struct b41_frame_worker *worker);
  * return (even failure); no free/unload/reinit/replacement in this child.
  * Normal deadline ends observation, not proof of a GNSS fix. Host exposure
  * quarantine remains visible as worker_stop_status=-EBUSY, never cleared.
+ * agps must be the same-image, controller-owned PREPARED reverse receiver.
+ * Activate only after actual run18; observe its failure/completion; quiesce
+ * BEFORE native queue teardown. Unknown completion skips stop and retains all
+ * resources for child exit/reap. This hook clears no assistance/config gate.
  */
 int b41_native_session_execute(const struct b41_library_association *image,
     const struct b41_engine_arguments *arguments, struct b41_native_control *control,
     struct b41_frame_worker *worker, struct b41_native_stop_owner *stop,
+    struct b41_agps_receiver *agps,
     const struct timespec *run_deadline, const struct timespec *worker_deadline,
     struct b41_native_session_result *result);
 #endif

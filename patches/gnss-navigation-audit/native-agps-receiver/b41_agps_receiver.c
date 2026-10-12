@@ -28,6 +28,37 @@ static int same_fd(const struct b41_agps_receiver *o, unsigned i)
         s.st_mode == saved->st_mode && s.st_rdev == saved->st_rdev ? 0 : -ESTALE;
 }
 
+static int controller(const struct b41_agps_receiver *o)
+{
+    return o && o->entered && o->controller_pid == getpid() &&
+        pthread_equal(o->controller, pthread_self());
+}
+
+int b41_agps_receiver_observe(struct b41_agps_receiver *o)
+{
+    struct pollfd done;
+    int status;
+    if (!controller(o)) return -EPERM;
+    status = atomic_load(&o->first_error);
+    if (status) return status;
+    if (o->state != B41_AGPS_RX_PREPARED && o->state != B41_AGPS_RX_RUNNING)
+        return -ESHUTDOWN;
+    if (atomic_load(&o->stop)) return -ESHUTDOWN;
+    for (unsigned i = 0; i < 4; ++i) {
+        status = same_fd(o, i);
+        if (status) return fail(o, status);
+    }
+    done = (struct pollfd){o->fd[2], POLLIN, 0};
+    status = poll(&done, 1, 0);
+    if (status < 0) return fail(o, -errno);
+    if (done.revents & (POLLERR | POLLHUP | POLLNVAL)) return fail(o, -EIO);
+    if (done.revents & POLLIN) {
+        status = atomic_load(&o->first_error);
+        return status ? status : -ESHUTDOWN;
+    }
+    return atomic_load(&o->first_error);
+}
+
 int b41_agps_receiver_open(struct b41_agps_receiver *o, pid_t peer, uid_t uid)
 {
     static const char name[] = "mtk_agps2mnl";
@@ -39,6 +70,8 @@ int b41_agps_receiver_open(struct b41_agps_receiver *o, pid_t peer, uid_t uid)
     if (!o || peer <= 0) return -EINVAL;
     if (o->entered) return -EALREADY;
     o->entered = 1;
+    o->controller_pid = getpid();
+    o->controller = pthread_self();
     for (unsigned i = 0; i < 4; ++i) o->fd[i] = -1;
     atomic_init(&o->stop, 0);
     atomic_init(&o->first_error, 0);
@@ -156,6 +189,7 @@ int b41_agps_receiver_prepare(struct b41_agps_receiver *o,
     struct b41_library_association image;
     int status;
     if (!o || !o->entered || o->state != B41_AGPS_RX_BOUND) return -EINVAL;
+    if (!controller(o)) return -EPERM;
     status = atomic_load(&o->first_error);
     if (status) return status;
     status = b41_agps_native_associate(elf, size, view, &image);
@@ -180,7 +214,8 @@ int b41_agps_receiver_activate(struct b41_agps_receiver *o)
     uint64_t one = 1;
     int status;
     if (!o || o->state != B41_AGPS_RX_PREPARED) return -EINVAL;
-    status = atomic_load(&o->first_error);
+    if (!controller(o)) return -EPERM;
+    status = b41_agps_receiver_observe(o);
     if (!status) status = b41_agps_native_admit(&o->image);
     if (!status) status = same_fd(o, 3);
     if (status) return fail(o, status);
@@ -215,6 +250,7 @@ int b41_agps_receiver_quiesce(struct b41_agps_receiver *o, const struct timespec
     int status = 0;
     if (!o || !deadline || deadline->tv_sec < 0 || deadline->tv_nsec < 0 ||
         deadline->tv_nsec >= 1000000000) return -EINVAL;
+    if (!controller(o)) return -EPERM;
     if (o->state == B41_AGPS_RX_QUARANTINED) return -EBUSY;
     if (o->state != B41_AGPS_RX_RUNNING && o->state != B41_AGPS_RX_PREPARED) return -EINVAL;
     atomic_store_explicit(&o->stop, 1, memory_order_release);
@@ -244,6 +280,7 @@ int b41_agps_receiver_close(struct b41_agps_receiver *o)
 {
     int status;
     if (!o || !o->entered) return -EINVAL;
+    if (!controller(o)) return -EPERM;
     if (o->state != B41_AGPS_RX_BOUND && o->state != B41_AGPS_RX_QUIESCED)
         return -EPERM;
     for (unsigned i = 0; i < 4; ++i) {

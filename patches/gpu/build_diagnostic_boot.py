@@ -18,7 +18,7 @@ IMAGES = ("kernel", "fdt", "initrd")
 FILES = ("vmlinuz", "mt6878-nothing-tetris-native.dtb", "initramfs")
 FIT_NAME = "boot_image-vgpu-observe-diagnostic.itb"
 BOOT_NAME = "nothing-tetris-boot-vgpu-observe-diagnostic.img"
-MODES = ("vgpu-observe", "modem-preflight")
+MODES = ("vgpu-observe", "modem-preflight", "ccci-hif-resources")
 
 
 def artifact_names(mode):
@@ -36,6 +36,14 @@ def load_modem_checker():
 
 
 def validate_mode(mode, normal, diagnostic, baseline=None):
+    if mode == "ccci-hif-resources":
+        require(baseline is None, "HIF resource mode must preserve the actual normal DT")
+        path = Path(__file__).resolve().parents[1] / "modem/drafts/runtime-hif-dt/check.py"
+        spec = importlib.util.spec_from_file_location("tetris_hif_dt_checker", path)
+        require(spec is not None and spec.loader is not None, "HIF DT checker unavailable")
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        return checker.validate_trees(read_tree(normal), read_tree(diagnostic))
     if mode == "vgpu-observe":
         require(baseline is None, "--baseline-dtb is supported only for modem-preflight")
         return validate_trees(read_tree(normal), read_tree(diagnostic))

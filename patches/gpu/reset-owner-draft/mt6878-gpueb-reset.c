@@ -17,7 +17,64 @@
 #include "mt6878-gpueb-sram.h"
 #include "mt6878-gpueb-reset.h"
 
-enum { GPUEB_MBOX_CONTROL_FIRST = 4, GPUEB_MBOX_CONTROL_COUNT = 4 };
+enum { GPUEB_MBOX_CONTROL_FIRST = 4, GPUEB_MBOX_CONTROL_COUNT = 4,
+	GPUEB_MBOX_CHANNELS = 11, GPUEB_MBOX_MAX_RX_WORDS = 8 };
+enum { GPUEB_MBOX_SET, GPUEB_MBOX_CLR, GPUEB_MBOX_SEND, GPUEB_MBOX_RECV };
+
+/* ee2be53 send-table then recv-table, in four-byte slots. */
+static const struct {
+	u32 send_words, recv_words, recv_opt, cb_opt, recv_offset;
+} gpueb_channels[] = {
+	{ 4, 4, 0, 0, 216 },
+	{ 8, 8, 1, 1, 232 },
+	{ 3, 1, 0, 1, 264 },
+	{ 6, 1, 0, 1, 268 },
+	{ 9, 1, 1, 1, 272 },
+	{ 4, 4, 1, 1, 276 },
+	{ 6, 1, 1, 1, 292 },
+	{ 6, 6, 1, 1, 296 },
+	{ 1, 4, 0, 1, 320 },
+	{ 4, 1, 1, 1, 336 },
+	{ 3, 3, 1, 1, 340 },
+};
+
+static int validate_mailbox_layout(struct device_node *node)
+{
+	u32 value, expected;
+	unsigned int i, j;
+	static const struct { const char *name; u32 value; } scalars[] = {
+		{ "mbox-count", 1 }, { "mbox-size", 160 },
+		{ "slot-size", 4 }, { "ts-mbox", 0 },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(scalars); i++)
+		if (of_property_count_u32_elems(node, scalars[i].name) != 1 ||
+		    of_property_read_u32(node, scalars[i].name, &value) ||
+		    value != scalars[i].value)
+			return -EINVAL;
+	if (of_property_count_u32_elems(node, "send-table") != GPUEB_MBOX_CHANNELS * 3 ||
+	    of_property_count_u32_elems(node, "recv-table") != GPUEB_MBOX_CHANNELS * 5)
+		return -EINVAL;
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++) {
+		const u32 send[] = { i, 0, gpueb_channels[i].send_words };
+		const u32 recv[] = { i, 0, gpueb_channels[i].recv_words,
+			gpueb_channels[i].recv_opt, gpueb_channels[i].cb_opt };
+
+		for (j = 0; j < 3; j++) {
+			expected = send[j];
+			if (of_property_read_u32_index(node, "send-table", i * 3 + j, &value) ||
+			    value != expected)
+				return -EINVAL;
+		}
+		for (j = 0; j < 5; j++) {
+			expected = recv[j];
+			if (of_property_read_u32_index(node, "recv-table", i * 5 + j, &value) ||
+			    value != expected)
+				return -EINVAL;
+		}
+	}
+	return 0;
+}
 
 /* ee2be53 MT6878 DT. GPR/data are aliases inside the sole SRAM claim;
  * the four mailbox control words are OUTSIDE the separate reset bank.
@@ -61,7 +118,7 @@ int mt6878_gpueb_reset_validate_resources(struct platform_device *parent)
 		    resource->end != gpueb_resources[i].start + gpueb_resources[i].size - 1)
 			return -ERANGE;
 	}
-	return 0;
+	return validate_mailbox_layout(parent->dev.of_node);
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_validate_resources);
 
@@ -71,11 +128,19 @@ struct mt6878_gpueb_reset {
 	struct mt6878_gpueb_window *gpr, *mbox;
 	void __iomem *registers;
 	struct resource *mbox_control[GPUEB_MBOX_CONTROL_COUNT];
+	void __iomem *mbox_maps[GPUEB_MBOX_CONTROL_COUNT];
+	struct {
+		struct device *device;
+		struct module *module;
+		mt6878_gpueb_receive_t receive;
+		void *context;
+	} channels[GPUEB_MBOX_CHANNELS];
+	u32 registered;
 	unsigned int mbox_claims;
 	struct mutex lock;
 	spinlock_t irq_lock;
 	int irq, first_error;
-	bool reset_written;
+	bool reset_written, dispatch_quiesced, irq_contained;
 };
 
 static void release_mailbox_resources(struct mt6878_gpueb_reset *scope)
@@ -83,7 +148,11 @@ static void release_mailbox_resources(struct mt6878_gpueb_reset *scope)
 	struct resource *resource;
 
 	while (scope->mbox_claims) {
-		resource = scope->mbox_control[--scope->mbox_claims];
+		unsigned int i = --scope->mbox_claims;
+
+		if (scope->mbox_maps[i])
+			iounmap(scope->mbox_maps[i]);
+		resource = scope->mbox_control[i];
 		release_mem_region(resource->start, resource_size(resource));
 	}
 }
@@ -100,16 +169,147 @@ static int latch(struct mt6878_gpueb_reset *scope, int error)
 	return ret;
 }
 
-static irqreturn_t unexpected_irq(int irq, void *data)
+static void mask_irq_once(struct mt6878_gpueb_reset *scope)
+{
+	unsigned long flags;
+	bool disable;
+
+	spin_lock_irqsave(&scope->irq_lock, flags);
+	disable = !scope->irq_contained;
+	scope->irq_contained = true;
+	spin_unlock_irqrestore(&scope->irq_lock, flags);
+	if (disable)
+		disable_irq_nosync(scope->irq);
+}
+
+static void contain_irq(struct mt6878_gpueb_reset *scope, int error)
+{
+	latch(scope, error);
+	mask_irq_once(scope);
+	mt6878_gpueb_sram_unknown_start(scope->sram);
+}
+
+struct gpueb_irq_snapshot {
+	struct mt6878_gpueb_reset *scope;
+	u32 payload[GPUEB_MBOX_CHANNELS][GPUEB_MBOX_MAX_RX_WORDS];
+	u32 pending;
+};
+
+/* Runs with BOTH scope and whole-SRAM mutexes held, including the ACK. */
+static int snapshot_mailbox(struct mt6878_gpueb_reader *reader, void *data)
+{
+	struct gpueb_irq_snapshot *snapshot = data;
+	struct mt6878_gpueb_reset *scope = snapshot->scope;
+	u32 pending, boot_word;
+	unsigned int i;
+	int ret;
+
+	/* BOOTREADY is read from the sole GPR lease every time. It neither proves
+	 * cold-start provenance nor replaces GPUFREQ's separate GPR13 handshake.
+	 */
+	ret = mt6878_gpueb_sram_reader_words(reader, GPUEB_WINDOW_GPR, 0x8, &boot_word, 1);
+	if (ret)
+		return ret;
+	if (boot_word != 0x55667788)
+		return -EHOSTDOWN;
+	pending = readl(scope->mbox_maps[GPUEB_MBOX_RECV]);
+	if (!pending)
+		return 0;
+	/* Unregistered/unknown bits are never silently ACKed or discarded. */
+	if (pending & ~scope->registered)
+		return -EPROTO;
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++) {
+		if (!(pending & BIT(i)))
+			continue;
+		ret = mt6878_gpueb_sram_reader_words(reader, GPUEB_WINDOW_MBOX,
+				gpueb_channels[i].recv_offset,
+				snapshot->payload[i], gpueb_channels[i].recv_words);
+		if (ret)
+			return ret;
+	}
+	ret = mt6878_gpueb_sram_reader_words(reader, GPUEB_WINDOW_GPR, 0x8, &boot_word, 1);
+	if (ret)
+		return ret;
+	if (boot_word != 0x55667788)
+		return -EHOSTDOWN;
+	/* All pending payloads are now local. Clear only this captured mask,
+	 * then flush the posted clear through the same source-backed status word.
+	 */
+	writel(pending, scope->mbox_maps[GPUEB_MBOX_CLR]);
+	readl(scope->mbox_maps[GPUEB_MBOX_RECV]);
+	snapshot->pending = pending;
+	return 0;
+}
+
+static irqreturn_t mailbox_irq_thread(int irq, void *data)
 {
 	struct mt6878_gpueb_reset *scope = data;
-	/* NO_AUTOEN and no enable API: no firmware channel may be consumed yet.
- * Unexpected delivery is contained, not ACKed or called BOOTREADY/OFF.
- */
-	latch(scope, -EPROTO);
-	disable_irq_nosync(irq);
+	struct gpueb_irq_snapshot snapshot = { .scope = scope };
+	unsigned int i;
+	int ret;
+
+	mutex_lock(&scope->lock);
+	ret = READ_ONCE(scope->first_error);
+	if (ret)
+		goto fault;
+	if (scope->dispatch_quiesced || scope->reset_written) {
+		ret = -ESHUTDOWN;
+		goto fault;
+	}
+	ret = mt6878_gpueb_sram_read_transaction(scope->gpr, scope->mbox,
+					       snapshot_mailbox, &snapshot);
+	if (ret)
+		goto fault;
+	mutex_unlock(&scope->lock);
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++)
+		if (snapshot.pending & BIT(i))
+			scope->channels[i].receive(scope->channels[i].context, i,
+						snapshot.payload[i], gpueb_channels[i].recv_words);
+	return snapshot.pending ? IRQ_HANDLED : IRQ_NONE;
+fault:
+	contain_irq(scope, ret);
+	mutex_unlock(&scope->lock);
 	return IRQ_HANDLED;
 }
+
+int mt6878_gpueb_reset_bind_channel(struct mt6878_gpueb_reset *scope,
+		struct device *client, unsigned int channel,
+		mt6878_gpueb_receive_t receive, void *context)
+{
+	struct module *module;
+	int ret = 0;
+
+	if (IS_ERR_OR_NULL(scope) || !client || !receive || channel >= GPUEB_MBOX_CHANNELS ||
+	    !client->driver || !client->driver->suppress_bind_attrs)
+		return -EINVAL;
+	mutex_lock(&scope->lock);
+	if (READ_ONCE(scope->first_error)) {
+		ret = READ_ONCE(scope->first_error);
+		goto out;
+	}
+	if (scope->dispatch_quiesced || scope->reset_written) {
+		ret = -ESHUTDOWN;
+		goto out;
+	}
+	if (scope->registered & BIT(channel)) {
+		ret = -EBUSY;
+		goto out;
+	}
+	module = client->driver->owner;
+	if (!try_module_get(module)) {
+		ret = -ENODEV;
+		goto out;
+	}
+	scope->channels[channel].device = get_device(client);
+	scope->channels[channel].module = module;
+	scope->channels[channel].receive = receive;
+	scope->channels[channel].context = context;
+	scope->registered |= BIT(channel);
+out:
+	mutex_unlock(&scope->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_bind_channel);
 
 struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 	struct platform_device *parent, struct mt6878_gpueb_sram *sram)
@@ -192,16 +392,22 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 		scope->mbox_control[i] = mbox;
 		scope->mbox_claims++;
 	}
-	/* Retain exclusive mailbox control claims, but do not map/read/ACK them.
-	 * A future IRQ dispatcher must use this owner rather than claim them again.
-	 */
+	for (i = 0; i < GPUEB_MBOX_CONTROL_COUNT; i++) {
+		struct resource *mbox = scope->mbox_control[i];
+
+		scope->mbox_maps[i] = ioremap(mbox->start, resource_size(mbox));
+		if (!scope->mbox_maps[i]) {
+			ret = -ENOMEM;
+			goto release_mbox;
+		}
+	}
 	scope->registers = ioremap(resource->start, resource_size(resource));
 	if (!scope->registers) {
 		ret = -ENOMEM;
 		goto release_mbox;
 	}
-	ret = request_irq(irq, unexpected_irq, IRQF_NO_AUTOEN,
-			  dev_name(scope->parent), scope);
+	ret = request_threaded_irq(irq, NULL, mailbox_irq_thread,
+			  IRQF_ONESHOT | IRQF_NO_AUTOEN, dev_name(scope->parent), scope);
 	if (ret)
 		goto unmap;
 	return scope;
@@ -231,10 +437,14 @@ int mt6878_gpueb_reset_drain_irq(struct mt6878_gpueb_reset *scope)
 	if (IS_ERR_OR_NULL(scope))
 		return -EINVAL;
 	mutex_lock(&scope->lock);
-	/* The exclusive IRQ is disabled since request; synchronize drains Linux
-	 * handlers only. This does not drain AXI/DMA or clear pending firmware IRQs.
+	scope->dispatch_quiesced = true;
+	mask_irq_once(scope);
+	mutex_unlock(&scope->lock);
+	/* Never wait holding the threaded handler's mutex. NO_AUTOEN still has no
+	 * enable API; the future activation owner must close the boot gates first.
 	 */
 	synchronize_irq(scope->irq);
+	mutex_lock(&scope->lock);
 	ret = READ_ONCE(scope->first_error);
 	if (ret)
 		mt6878_gpueb_sram_unknown_start(scope->sram);
@@ -249,8 +459,10 @@ int mt6878_gpueb_reset_hold(struct mt6878_gpueb_reset *scope)
 	unsigned long flags;
 	if (IS_ERR_OR_NULL(scope))
 		return -EINVAL;
+	ret = mt6878_gpueb_reset_drain_irq(scope);
+	if (ret)
+		return ret;
 	mutex_lock(&scope->lock);
-	synchronize_irq(scope->irq);
 	spin_lock_irqsave(&scope->irq_lock, flags);
 	ret = scope->first_error;
 	if (ret)
@@ -280,8 +492,12 @@ EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_hold);
 int mt6878_gpueb_reset_destroy(struct mt6878_gpueb_reset *scope)
 {
 	int ret;
+	unsigned int i;
 	if (IS_ERR_OR_NULL(scope))
 		return -EINVAL;
+	ret = mt6878_gpueb_reset_drain_irq(scope);
+	if (ret)
+		return ret;
 	mutex_lock(&scope->lock);
 	ret = READ_ONCE(scope->first_error);
 	if (scope->reset_written || ret) {
@@ -290,7 +506,14 @@ int mt6878_gpueb_reset_destroy(struct mt6878_gpueb_reset *scope)
 		mutex_unlock(&scope->lock);
 		return ret ?: -EBUSY;
 	}
+	mutex_unlock(&scope->lock);
 	free_irq(scope->irq, scope);
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++) {
+		if (!(scope->registered & BIT(i)))
+			continue;
+		put_device(scope->channels[i].device);
+		module_put(scope->channels[i].module);
+	}
 	iounmap(scope->registers);
 	release_mailbox_resources(scope);
 	release_mem_region(0x13c60000, 0x2000);
@@ -298,7 +521,6 @@ int mt6878_gpueb_reset_destroy(struct mt6878_gpueb_reset *scope)
 	mt6878_gpueb_sram_put_window(scope->gpr);
 	pm_runtime_put_noidle(scope->parent);
 	put_device(scope->parent);
-	mutex_unlock(&scope->lock);
 	kfree(scope);
 	module_put(THIS_MODULE);
 	return 0;
