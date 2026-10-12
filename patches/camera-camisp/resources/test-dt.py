@@ -111,6 +111,19 @@ class CompiledTreeGuards(unittest.TestCase):
     def test_valid_shape(self):
         check.validate(self.base, self.tree, self.data)
 
+    def test_literal_hwid_is_not_an_incidental_phandle(self):
+        consys = "/consys@18000000"
+        for tree in (self.base, self.tree):
+            tree[consys] = {"hwid-node": u32(92)}
+        self.base["/unrelated-a"] = {"phandle": u32(92)}
+        self.base["/unrelated-b"] = {"phandle": u32(93)}
+        self.tree["/unrelated-a"] = {"phandle": u32(93)}
+        self.tree["/unrelated-b"] = {"phandle": u32(92)}
+        check.validate(self.base, self.tree, self.data)
+        self.tree[consys]["hwid-node"] = u32(93)
+        with self.assertRaisesRegex(ValueError, "Base property changed"):
+            check.validate(self.base, self.tree, self.data)
+
     def test_every_new_node_and_owner_must_stay_disabled(self):
         for path in set(self.tree) - set(self.base) | {SPM, MM, PMIC}:
             tree = copy.deepcopy(self.tree)

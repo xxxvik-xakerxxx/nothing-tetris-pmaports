@@ -2,6 +2,11 @@ name: Modem metadata producer and driver
 
 on:
   workflow_dispatch:
+    inputs:
+      drivers_only:
+        description: Rebuild driver and DT evidence without repeating an unchanged full native kernel link
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,6 +18,7 @@ concurrency:
 
 jobs:
   producer-import:
+    if: ${{ !inputs.drivers_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -169,6 +175,7 @@ jobs:
           if-no-files-found: error
 
   native-provider-link:
+    if: ${{ !inputs.drivers_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 95
     container:
@@ -203,6 +210,7 @@ jobs:
           if-no-files-found: error
 
   hif-dt-image:
+    if: ${{ !inputs.drivers_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

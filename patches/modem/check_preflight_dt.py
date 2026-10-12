@@ -59,10 +59,11 @@ def reference_value(tree, owners, prop, data):
         "performance-domains": "#performance-domain-cells",
         "thermal-sensors": "#thermal-sensor-cells", "sound-dai": "#sound-dai-cells",
     }
+    # Stock hwid-node=<92> has no source-backed phandle binding; keep it opaque.
     plain = {"access-controllers", "affinity", "cpu", "cpus", "cpu-idle-states",
              "interrupt-parent", "memory-region", "remote-endpoint", "nvmem-cells",
              "nvmem", "monitored-battery", "power-supplies", "apmixedsys", "infracfg",
-             "topckgen", "hw-voter-regmap", "hwid-node", "mediatek,codec",
+             "topckgen", "hw-voter-regmap", "mediatek,codec",
              "mediatek,ipm", "mediatek,platform", "mediatek,hardware-voter",
              "mediatek,infracfg", "mediatek,larbs", "mediatek,smi",
              "mediatek,main-pmic", "mediatek,secondary-pmic"}

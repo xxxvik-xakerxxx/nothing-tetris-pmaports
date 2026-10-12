@@ -119,6 +119,7 @@ class SmokeInputs(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 smoke.compile_camisp_resource_dtb(["make"], output, report)
         self.assertFalse((report / "nonbootable-dtbs").exists())
+        self.assertEqual((report / "unvalidated-nonbootable-dtbs" / dtb.name).read_bytes(), dtb.read_bytes())
 
     def test_missing_dtb_stops_smoke(self):
         with patch.object(smoke, "run"):

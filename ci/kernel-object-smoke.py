@@ -329,6 +329,9 @@ def compile_camisp_resource_dtb(make, output, report):
     base = output / "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb"
     if not dtb.is_file() or not dtb.stat().st_size:
         raise ValueError("missing compiled CAMISP board fixture")
+    raw = report / "unvalidated-nonbootable-dtbs"
+    raw.mkdir(exist_ok=False)
+    shutil.copyfile(dtb, raw / dtb.name)
     run(["python3", board["validator"], "--base", base, "--fixture", dtb])
     # Never put this nonbootable fixture alongside FIT packaging inputs.
     destination = report / "nonbootable-dtbs"
