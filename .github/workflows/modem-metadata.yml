@@ -117,7 +117,7 @@ jobs:
           python3 ci/kernel-object-smoke.py --research-owners
           python3 patches/modem/drafts/runtime-object-ci/check_objects.py \
             --metadata --smem --uboot out/uboot
-          python3 ci/packaged-smem-objects.py --link-r181
+          python3 ci/packaged-smem-objects.py --link-r181 --gpueb-analysis
       - uses: actions/upload-artifact@v7
         if: always()
         with:

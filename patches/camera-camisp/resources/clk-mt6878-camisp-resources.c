@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2023 MediaTek Inc.
+ * B4.1 gate data adapted to the native Linux MediaTek clock API.
+ * Clock gates only: this driver does not implement CAM/VMM power ownership.
+ */
+#include <dt-bindings/clock/mediatek,mt6878-camisp-clock.h>
+#include <linux/clk-provider.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
+
+#include "clk-gate.h"
+#include "clk-mtk.h"
+
+static const struct mtk_gate_regs cam_mraw_regs = {
+	.set_ofs = 0x4,
+	.clr_ofs = 0x8,
+	.sta_ofs = 0x0,
+};
+
+#define GATE_CAM_MRAW(_id, _name, _parent, _shift) \
+	GATE_MTK(_id, _name, _parent, &cam_mraw_regs, _shift, \
+		 &mtk_clk_gate_ops_setclr)
+
+static const struct mtk_gate cam_mraw_clks[] = {
+	GATE_CAM_MRAW(CLK_CAM_MR_LARBX, "cam_mr_larbx",
+			 "cam_sel", 0),
+	GATE_CAM_MRAW(CLK_CAM_MR_GALS, "cam_mr_gals",
+			 "cam_sel", 1),
+	GATE_CAM_MRAW(CLK_CAM_MR_CAMTG, "cam_mr_camtg",
+			 "camtm_sel", 2),
+	GATE_CAM_MRAW(CLK_CAM_MR_MRAW0, "cam_mr_mraw0",
+			 "cam_sel", 3),
+	GATE_CAM_MRAW(CLK_CAM_MR_MRAW1, "cam_mr_mraw1",
+			 "cam_sel", 4),
+	GATE_CAM_MRAW(CLK_CAM_MR_MRAW2, "cam_mr_mraw2",
+			 "cam_sel", 5),
+	GATE_CAM_MRAW(CLK_CAM_MR_MRAW3, "cam_mr_mraw3",
+			 "cam_sel", 6),
+	GATE_CAM_MRAW(CLK_CAM_MR_PDA0, "cam_mr_pda0",
+			 "cam_sel", 7),
+	GATE_CAM_MRAW(CLK_CAM_MR_PDA1, "cam_mr_pda1",
+			 "cam_sel", 8),
+};
+
+static const struct mtk_clk_desc cam_mraw_desc = {
+	.clks = cam_mraw_clks,
+	.num_clks = ARRAY_SIZE(cam_mraw_clks),
+};
+
+static const struct mtk_gate_regs cam_vcore_regs = {
+	.set_ofs = 0x2c,
+	.clr_ofs = 0x2c,
+	.sta_ofs = 0x2c,
+};
+
+#define GATE_CAM_VCORE(_id, _name, _parent, _shift) \
+	GATE_MTK(_id, _name, _parent, &cam_vcore_regs, _shift, \
+		 &mtk_clk_gate_ops_no_setclr_inv)
+
+static const struct mtk_gate cam_vcore_clks[] = {
+	GATE_CAM_VCORE(CLK_CAM_VCORE_C2MM0_DCM_DIS, "cam_vcore_c2mm0_dis",
+			 "cam_sel", 0),
+	GATE_CAM_VCORE(CLK_CAM_VCORE_MM0_DCM_DIS, "cam_vcore_mm0_dis",
+			 "cam_sel", 1),
+};
+
+static const struct mtk_clk_desc cam_vcore_desc = {
+	.clks = cam_vcore_clks,
+	.num_clks = ARRAY_SIZE(cam_vcore_clks),
+};
+
+static const struct of_device_id camisp_resource_match[] = {
+	{ .compatible = "mediatek,mt6878-camsys_mraw", .data = &cam_mraw_desc },
+	{ .compatible = "mediatek,mt6878-cam_vcore", .data = &cam_vcore_desc },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, camisp_resource_match);
+
+static struct platform_driver camisp_resource_driver = {
+	.probe = mtk_clk_simple_probe,
+	.remove = mtk_clk_simple_remove,
+	.driver = {
+		.name = "clk-mt6878-camisp-resources",
+		.of_match_table = camisp_resource_match,
+	},
+};
+module_platform_driver(camisp_resource_driver);
+MODULE_DESCRIPTION("MediaTek MT6878 MRAW and CAM_VCORE gates");
+MODULE_LICENSE("GPL");

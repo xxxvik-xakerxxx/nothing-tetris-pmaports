@@ -161,6 +161,18 @@ class PackageMetadataTests(unittest.TestCase):
         runner = (Path(__file__).parent / 'check_packaged_smem.py').read_text()
         self.assertIn('(4096, 0), (65536, 0), (4096, 1), (65536, 1)', runner)
 
+    def test_exact_r181_snapshot_is_independent_of_new_shipping_kernel(self):
+        script = (ROOT / 'ci/packaged-smem-objects.py').read_text()
+        self.assertIn("baseline = smoke.plan(baseline_package)", script)
+        self.assertIn("for name in baseline['patches']:", script)
+        self.assertIn("kernel, '-i', baseline_package / name", script)
+        self.assertIn("hashlib.sha512(source).hexdigest() != old_hashes.get(name)", script)
+        self.assertIn("hashlib.file_digest(stream, 'sha512').hexdigest()", script)
+        self.assertIn("(output / '.config').read_bytes() != config", script)
+        self.assertIn("(output / 'Module.symvers').write_bytes(exports)", script)
+        self.assertIn("parser.error('--gpueb-analysis requires exact --link-r181 exports')", script)
+        self.assertIn("source_sha256=staging.sha(source)", script)
+
     def test_only_ap_buffer_is_mapped_and_unmapped(self):
         handoff = self.sources[PREFIX + 'handoff.h']
         collect = handoff[handoff.index('static int tetris_collect_owned_metadata('):]

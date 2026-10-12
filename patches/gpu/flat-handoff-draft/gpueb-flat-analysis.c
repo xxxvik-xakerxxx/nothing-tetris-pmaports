@@ -14,31 +14,66 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <asm/page.h>
 
 struct flat_analysis {
 	struct miscdevice misc;
+	struct resource *reservation;
 	u8 *snapshot;
 	u32 size;
 };
 
 struct flat_ram_check {
-	resource_size_t start, end;
-	bool found;
+	resource_size_t cursor, end;
 };
 
 static int flat_reserved_resource(struct resource *resource, void *data)
 {
 	struct flat_ram_check *check = data;
 
-	/* ARM64 setup.c registers memblock NOMAP DRAM as "reserved", not
-	 * IORESOURCE_SYSTEM_RAM. Require that exact covering resource as well
-	 * as the firmware memory-node bounds below; arbitrary MMIO is rejected.
+	/* Linux d84b264: ARM64 setup.c creates top-level IORESOURCE_MEM for
+	 * NOMAP DRAM. resource.c clips spans, preserving flags/desc/parent but
+	 * NOT name or child. Require gap-free coverage, then claim below.
 	 */
-	if (resource->start <= check->start && resource->end >= check->end &&
-	    resource->name && !strcmp(resource->name, "reserved") &&
-	    !(resource->flags & IORESOURCE_SYSRAM))
-		check->found = true;
+	if (resource->flags != IORESOURCE_MEM ||
+	    resource->desc != IORES_DESC_NONE ||
+	    resource->parent != &iomem_resource ||
+	    resource->start != check->cursor || resource->end < resource->start ||
+	    resource->end >= check->end)
+		return -ENXIO;
+	check->cursor = resource->end + 1;
 	return 0;
+}
+
+static int flat_plain_reservation(struct device_node *node,
+				  struct reserved_mem *memory)
+{
+	struct device_node *parent;
+	struct resource resource;
+	int length, ret = -EINVAL;
+
+	/* Failed compatible init can clear NOMAP without removing the catalog.
+	 * Match the producer's static plain node, with no init/release owner.
+	 */
+	if (!memory || memory->ops || !of_device_is_available(node) ||
+	    !of_find_property(node, "no-map", &length) || length ||
+	    of_find_property(node, "compatible", NULL) ||
+	    of_find_property(node, "reusable", NULL) ||
+	    of_n_addr_cells(node) != 2 || of_n_size_cells(node) != 2 ||
+	    !of_find_property(node, "reg", &length) || length != 16)
+		return -EINVAL;
+	parent = of_find_node_by_path("/reserved-memory");
+	if (!parent)
+		return -EINVAL;
+	if (node->parent == parent && of_device_is_available(parent) &&
+	    of_n_addr_cells(parent) == 2 && of_n_size_cells(parent) == 2 &&
+	    of_find_property(parent, "ranges", &length) && !length &&
+	    !of_address_to_resource(node, 0, &resource) &&
+	    resource.flags == IORESOURCE_MEM && resource.start == memory->base &&
+	    resource_size(&resource) == memory->size)
+		ret = 0;
+	of_node_put(parent);
+	return ret;
 }
 
 static int flat_normal_reserved_ram(struct reserved_mem *memory)
@@ -46,23 +81,73 @@ static int flat_normal_reserved_ram(struct reserved_mem *memory)
 	struct device_node *node;
 	struct resource resource;
 	struct flat_ram_check check = {
-		.start = memory->base,
-		.end = memory->base + memory->size - 1,
+		.cursor = memory->base,
+		.end = memory->base + memory->size,
 	};
+	phys_addr_t address;
 	bool in_ram = false;
 	int i, ret;
 
+	if ((memory->base | memory->size) & (PAGE_SIZE - 1))
+		return -EINVAL;
 	for_each_node_by_type(node, "memory") {
 		for (i = 0; !of_address_to_resource(node, i, &resource); i++)
-			if (resource.start <= check.start && resource.end >= check.end)
+			if (of_device_is_available(node) &&
+			    resource.flags == IORESOURCE_MEM &&
+			    resource.start <= memory->base && resource.end >= check.end - 1)
 				in_ram = true;
 	}
 	if (!in_ram || region_intersects(memory->base, memory->size,
 		IORESOURCE_SYSTEM_RAM, IORES_DESC_NONE) != REGION_DISJOINT)
 		return -ENXIO;
 	ret = walk_iomem_res_desc(IORES_DESC_NONE, IORESOURCE_MEM,
-		check.start, check.end, &check, flat_reserved_resource);
-	return ret ? ret : check.found ? 0 : -ENXIO;
+		memory->base, check.end - 1, &check, flat_reserved_resource);
+	if (ret || check.cursor != check.end)
+		return ret ? ret : -ENXIO;
+	/* ARM64 exports this API and keeps memblock after init. Resource coverage
+	 * rejects holes; every PFN check also catches later NOMAP clearing.
+	 * Neither check grants secure-world access or locks arbitrary mutations.
+	 */
+	for (address = memory->base; address < check.end; address += PAGE_SIZE) {
+		unsigned long pfn = (unsigned long)(address >> PAGE_SHIFT);
+
+		if ((phys_addr_t)pfn != address >> PAGE_SHIFT || pfn_is_map_memory(pfn))
+			return -ENXIO;
+	}
+	return 0;
+}
+
+static int flat_claim_reserved_ram(struct flat_analysis *analysis,
+				   struct reserved_mem *memory)
+{
+	struct resource *claim, *parent;
+	int ret;
+
+	ret = flat_normal_reserved_ram(memory);
+	if (ret)
+		return ret;
+	claim = request_mem_region_exclusive(memory->base, memory->size,
+					     "gpueb-flat-analysis");
+	if (!claim)
+		return -EBUSY;
+	analysis->reservation = claim;
+	parent = claim->parent;
+	/* __request_region descends through nonbusy containers. Reject adoption
+	 * under a pre-existing child; overlapping children instead fail the claim.
+	 * A single exact claim must fit one top-level NOMAP resource. Even valid
+	 * adjacent spans are rejected if the whole reservation cannot be claimed.
+	 */
+	if (claim->start != memory->base ||
+	    resource_size(claim) != memory->size || claim->child ||
+	    claim->flags != (IORESOURCE_MEM | IORESOURCE_BUSY | IORESOURCE_EXCLUSIVE) ||
+	    claim->desc != IORES_DESC_NONE || !parent ||
+	    parent->parent != &iomem_resource || parent->flags != IORESOURCE_MEM ||
+	    parent->desc != IORES_DESC_NONE || !parent->name ||
+	    strcmp(parent->name, "reserved") ||
+	    parent->start > claim->start || parent->end < claim->end)
+		return -ENXIO;
+	/* Recheck retained PFNs/resources with ownership held before mapping. */
+	return flat_normal_reserved_ram(memory);
 }
 
 static ssize_t flat_read(struct file *file, char __user *out, size_t count,
@@ -102,8 +187,7 @@ static int flat_probe(struct platform_device *pdev)
 	if (!node)
 		return -EINVAL;
 	memory = of_reserved_mem_lookup(node);
-	ret = of_property_read_bool(node, "no-map") &&
-	      !of_property_read_bool(node, "reusable") ? 0 : -EINVAL;
+	ret = flat_plain_reservation(node, memory);
 	of_node_put(node);
 	if (ret || !memory)
 		return -EINVAL;
@@ -116,17 +200,16 @@ static int flat_probe(struct platform_device *pdev)
 	expected = of_get_property(pdev->dev.of_node, "nothing,plaintext-sha256", &length);
 	if (!expected || length != sizeof(digest))
 		return -EINVAL;
-	/* Never treat a no-map carveout's missing SYSRAM flag as permission for MMIO. */
-	ret = flat_normal_reserved_ram(memory);
-	if (ret)
-		return ret;
 	analysis = kzalloc(sizeof(*analysis), GFP_KERNEL);
 	if (!analysis)
 		return -ENOMEM;
+	ret = flat_claim_reserved_ram(analysis, memory);
+	if (ret)
+		goto release;
 	analysis->snapshot = kvmalloc(size, GFP_KERNEL);
 	if (!analysis->snapshot) {
 		ret = -ENOMEM;
-		goto free_analysis;
+		goto release;
 	}
 	mapping = memremap(memory->base, size, MEMREMAP_WB);
 	if (!mapping) {
@@ -168,12 +251,15 @@ static int flat_probe(struct platform_device *pdev)
 	return 0;
 erase:
 	kvfree_sensitive(analysis->snapshot, size);
-free_analysis:
+release:
+	if (analysis->reservation)
+		release_mem_region(analysis->reservation->start,
+				   resource_size(analysis->reservation));
 	kfree(analysis);
 	return ret;
 }
 
-/* No remove/unbind: open descriptors reference the immutable verified snapshot.
+/* No remove/unbind: retain the full exclusive RAM claim and verified snapshot.
  * Pin on successful probe; diagnostic module lifetime is the entire boot.
  */
 static int flat_bound_probe(struct platform_device *pdev)

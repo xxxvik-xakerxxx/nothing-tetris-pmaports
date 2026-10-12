@@ -1,0 +1,15 @@
+{
+  "scope": "isolated translation-unit CI; no parent linkage or board includes",
+  "sources": {
+    "patches/camera-camisp/resources/clk-mt6878-camisp-resources.c": "drivers/clk/mediatek/tetris-camisp-resource-smoke/clk-mt6878-camisp-resources.c",
+    "patches/camera-camisp/resources/mediatek,mt6878-camisp-clock.h": "include/dt-bindings/clock/mediatek,mt6878-camisp-clock.h",
+    "patches/camera-camisp/resources/mt6878-camisp-resources-disabled.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-resources-disabled.dtsi"
+  },
+  "research_objects": ["drivers/clk/mediatek/tetris-camisp-resource-smoke/clk-mt6878-camisp-resources.o"],
+  "required_enabled": ["COMMON_CLK", "OF", "PM"],
+  "required_reachable": ["COMMON_CLK_MEDIATEK", "COMMON_CLK_MT6878"],
+  "include_directory": "drivers/clk/mediatek",
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime_activation": "disabled",
+  "unresolved": ["native CAM_MAIN/CAM_VCORE power ownership", "VMM sequencing", "cold hardware and lifecycle evidence"]
+}

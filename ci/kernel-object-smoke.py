@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -167,6 +168,30 @@ CAMISP_OBJECTS = tuple(CAMISP_PLAN["research_objects"] + CAMISP_PLAN["provider_o
 RESEARCH_OBJECTS += tuple(CAMISP_PLAN["research_objects"])
 PROVIDER_OBJECTS = tuple(dict.fromkeys((*PROVIDER_OBJECTS, *CAMISP_PLAN["provider_objects"])))
 CAMISP_ENABLE = tuple(CAMISP_PLAN["required_enabled"])
+CAMISP_RESOURCE_MANIFEST = "patches/camera-camisp/resources/STAGING.json"
+CAMISP_RESOURCE_CHECK = "patches/camera-camisp/resources/check.py"
+
+
+def camisp_resource_staging(root):
+    spec = importlib.util.spec_from_file_location("camisp_resource_check", root / CAMISP_RESOURCE_CHECK)
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    data = json.loads((root / CAMISP_RESOURCE_MANIFEST).read_text())
+    checker.staging_contract(data)
+    return data
+
+
+CAMISP_RESOURCE_PLAN = camisp_resource_staging(Path(__file__).resolve().parents[1])
+if set(CAMISP_RESOURCE_PLAN["sources"].values()) & set(RESEARCH_SOURCES.values()):
+    raise ValueError("duplicate CAMISP resource staging destination")
+RESEARCH_SOURCES.update(CAMISP_RESOURCE_PLAN["sources"])
+CAMISP_RESOURCE_OBJECTS = tuple(CAMISP_RESOURCE_PLAN["research_objects"])
+RESEARCH_OBJECTS += CAMISP_RESOURCE_OBJECTS
+CAMISP_RESOURCE_ENABLE = tuple(CAMISP_RESOURCE_PLAN["required_enabled"])
+CAMISP_RESOURCE_REACHABLE = tuple(CAMISP_RESOURCE_PLAN["required_reachable"])
+CAMISP_RESOURCE_INPUTS = tuple("patches/camera-camisp/resources/" + name for name in (
+    "STAGING.json", "evidence.json", "generate.py", "check.py", "test-source.py",
+    "clock-providers.patch", "disabled-description.patch"))
 
 
 def block(source, key):
@@ -304,7 +329,8 @@ def object_identity(target):
 def config_options(kernel, output, research_owners):
     options = [kernel / "scripts/config", "--file", output / ".config"]
     enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE + CAM_MAIN_ENABLE +
-                        CAM_MAIN_REACHABLE + CAMISP_ENABLE if research_owners else ())
+                        CAM_MAIN_REACHABLE + CAMISP_ENABLE + CAMISP_RESOURCE_ENABLE +
+                        CAMISP_RESOURCE_REACHABLE if research_owners else ())
     for symbol in dict.fromkeys(enabled):
         options.extend(["-e", symbol])
     for symbol in MODULES:
@@ -350,6 +376,9 @@ def main():
                      "patches/camera-camisp/generate-overlays.py",
                      CAMISP_PLAN["provider_overlay"], CAMISP_PLAN["consumer_overlay"]):
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        for name in CAMISP_RESOURCE_INPUTS:
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        manifest["camisp_resource_config_variants"] = CAMISP_RESOURCE_PLAN["config_variants"]
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -375,6 +404,8 @@ def main():
     if args.research_owners:
         run(["python3", "patches/camera-camisp/generate-overlays.py",
              "--check", "--kernel-tree", kernel])
+        run(["python3", "patches/camera-camisp/resources/generate.py", "--check"])
+        run(["python3", "patches/camera-camisp/resources/test-source.py"])
     for patch in manifest["patches"]:
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
@@ -383,6 +414,12 @@ def main():
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
         stage_research_sources(kernel)
+        run(["python3", CAMISP_RESOURCE_CHECK, "--staged-tree", kernel,
+             "--kernel-tree", kernel])
+        manifest["derived_camisp_resource_sources_sha256"] = {
+            destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
+            for destination in CAMISP_RESOURCE_PLAN["sources"].values()
+        }
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
              "-i", Path(PROVIDER_PATCH).resolve()])
         stage_camera_overlays(kernel)
@@ -415,7 +452,8 @@ def main():
     make = ["make", "-C", kernel, f"O={output}", "ARCH=arm64", "LLVM=1", "-j4"]
     if args.research_owners:
         camera_dir = Path(next(iter(CAMERA_SOURCES.values()))).parent
-        make.append(f"KCFLAGS=-I{kernel / camera_dir}")
+        resource_headers = kernel / CAMISP_RESOURCE_PLAN["include_directory"]
+        make.append(f"KCFLAGS=-I{kernel / camera_dir} -I{resource_headers}")
     run([*make, "olddefconfig"])
     manifest["dtb_sha256"] = compile_dtbs(make, output, report)
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -428,10 +466,10 @@ def main():
         for symbol in CAMERA_ENABLE:
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated camera dependency missing: {symbol}")
-        for symbol in CAMISP_ENABLE:
+        for symbol in (*CAMISP_ENABLE, *CAMISP_RESOURCE_ENABLE):
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated CAMISP dependency missing: {symbol}")
-        for symbol in CAM_MAIN_REACHABLE:
+        for symbol in (*CAM_MAIN_REACHABLE, *CAMISP_RESOURCE_REACHABLE):
             if not any(f"CONFIG_{symbol}={value}" in config for value in ("y", "m")):
                 raise ValueError(f"isolated CAM_MAIN dependency missing: {symbol}")
     run([*make, "-k", *objects])
@@ -458,7 +496,8 @@ def main():
         if len(repeat_consumers) != 2:
             raise ValueError("repeat-capture variant requires both actual consumers")
         variant_objects = (video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS +
-                           CAMERA_REPEAT_OBJECTS + repeat_consumers + CAMISP_OBJECTS)
+                           CAMERA_REPEAT_OBJECTS + repeat_consumers + CAMISP_OBJECTS +
+                           CAMISP_RESOURCE_OBJECTS)
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
@@ -492,6 +531,11 @@ def main():
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in CAMISP_OBJECTS
+        }
+        manifest["camisp_resource_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in CAMISP_RESOURCE_OBJECTS
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

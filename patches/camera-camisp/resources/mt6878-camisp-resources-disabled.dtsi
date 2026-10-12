@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Review fixture only; no board includes this file.
+ * CAM_MAIN/CAM_VCORE power ownership and VMM ordering remain unproven.
+ * Vendor power-domain names are retained in evidence.json, not mapped to a
+ * fabricated native genpd. Every described device must remain disabled.
+ */
+#include <dt-bindings/clock/mediatek,mt6878-clock.h>
+#include <dt-bindings/clock/mediatek,mt6878-camisp-clock.h>
+
+&soc {
+	cam_main: clock-controller@1a000000 {
+		compatible = "mediatek,mt6878-camsys";
+		reg = <0x1a000000 0x1000>;
+		#clock-cells = <1>;
+		status = "disabled";
+	};
+
+	cam_mraw: clock-controller@1a170000 {
+		compatible = "mediatek,mt6878-camsys_mraw";
+		reg = <0x1a170000 0x1000>;
+		#clock-cells = <1>;
+		status = "disabled";
+	};
+
+	cam_vcore: clock-controller@1b204000 {
+		compatible = "mediatek,mt6878-cam_vcore";
+		reg = <0x1b204000 0x1000>;
+		#clock-cells = <1>;
+		status = "disabled";
+	};
+
+	smi_cam_vcore_2x1_sub_comm0: smi@1b203000 {
+		compatible = "mediatek,mt6878-smi-common";
+		reg = <0x1b203000 0x1000>;
+		mediatek,common-id = <31>;
+		clocks = <&cam_vcore CLK_CAM_VCORE_MM0_DCM_DIS>;
+		clock-names = "apb";
+		mediatek,smi = <&smi_disp_common>;
+		mediatek,smi-supply = <&smi_disp_common>;
+		status = "disabled";
+	};
+
+	smi_cam_4x1_sub_comm0: smi@1a005000 {
+		compatible = "mediatek,mt6878-smi-common";
+		reg = <0x1a005000 0x1000>;
+		mediatek,common-id = <16>;
+		clocks = <&cam_main CLK_CAM_MAIN_CAM2MM0_GALS>,
+			 <&cam_main CLK_CAM_MAIN_LARB13>,
+			 <&cam_main CLK_CAM_MAIN_LARB14>,
+			 <&cam_main CLK_CAM_MAIN_LARB29>,
+			 <&cam_main CLK_CAM_MAIN_CAM_MRAW>,
+			 <&cam_mraw CLK_CAM_MR_GALS>,
+			 <&cam_mraw CLK_CAM_MR_LARBX>;
+		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
+		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
+		status = "disabled";
+	};
+
+	smi_cam_4x1_sub_comm1: smi@1a006000 {
+		compatible = "mediatek,mt6878-smi-common";
+		reg = <0x1a006000 0x1000>;
+		mediatek,common-id = <19>;
+		clocks = <&cam_main CLK_CAM_MAIN_CAM2MM1_GALS>,
+			 <&cam_main CLK_CAM_MAIN_LARB13>,
+			 <&cam_main CLK_CAM_MAIN_LARB14>,
+			 <&cam_main CLK_CAM_MAIN_LARB29>,
+			 <&cam_main CLK_CAM_MAIN_CAM_MRAW>,
+			 <&cam_mraw CLK_CAM_MR_GALS>,
+			 <&cam_mraw CLK_CAM_MR_LARBX>;
+		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
+		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
+		status = "disabled";
+	};
+
+	smi_larb13: smi@1a001000 {
+		compatible = "mediatek,mt6878-smi-larb";
+		reg = <0x1a001000 0x1000>;
+		mediatek,larb-id = <13>;
+		clocks = <&cam_main CLK_CAM_MAIN_LARB13>;
+		clock-names = "apb";
+		mediatek,smi = <&smi_cam_4x1_sub_comm0>;
+		status = "disabled";
+	};
+
+	smi_larb14: smi@1a002000 {
+		compatible = "mediatek,mt6878-smi-larb";
+		reg = <0x1a002000 0x1000>;
+		mediatek,larb-id = <14>;
+		clocks = <&cam_main CLK_CAM_MAIN_LARB14>;
+		clock-names = "apb";
+		mediatek,smi = <&smi_cam_4x1_sub_comm1>;
+		status = "disabled";
+	};
+
+	camisp_l13: camisp-l13-1 {
+		compatible = "mediatek,camisp-larb";
+		mediatek,larb-id = <13>;
+		iommus = <&disp_iommu 416>,
+			 <&disp_iommu 417>;
+		status = "disabled";
+	};
+
+	camisp_l14: camisp-l14-1 {
+		compatible = "mediatek,camisp-larb";
+		mediatek,larb-id = <14>;
+		iommus = <&disp_iommu 448>,
+			 <&disp_iommu 449>;
+		status = "disabled";
+	};
+
+};
+
+/* Reference membership retains the display larb; neither IOMMU nor camera is
+ * activated. Do not include this fixture in a shipping board description.
+ */
+&disp_iommu {
+	mediatek,larbs = <&smi_larb0>, <&smi_larb13>, <&smi_larb14>;
+	status = "disabled";
+};

@@ -118,7 +118,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 40)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 41)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o",
             "drivers/iommu/mtk_iommu.o"))
@@ -152,6 +152,46 @@ class SmokeInputs(unittest.TestCase):
         source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
         self.assertIn("repeat_consumers + CAMISP_OBJECTS", source)
         self.assertIn('manifest["camisp_kunit_disabled_objects"]', source)
+
+    def test_camisp_resources_staging_preserves_clock_parent_and_dt_wiring(self):
+        root = Path(__file__).resolve().parents[1]
+        parent = self.package / "drivers/clk/mediatek"
+        parent.mkdir(parents=True)
+        for name in ("Makefile", "Kconfig"):
+            (parent / name).write_text("# original clock parent\n")
+        dts = self.package / "arch/arm64/boot/dts/mediatek"
+        dts.mkdir(parents=True)
+        (dts / "Makefile").write_text("# original DT targets\n")
+        smoke.stage_research_sources(self.package, root)
+        for name in ("Makefile", "Kconfig"):
+            self.assertEqual((parent / name).read_text(), "# original clock parent\n")
+        self.assertEqual((dts / "Makefile").read_text(), "# original DT targets\n")
+        for source, destination in smoke.CAMISP_RESOURCE_PLAN["sources"].items():
+            self.assertEqual((self.package / destination).read_bytes(), (root / source).read_bytes())
+        for name in smoke.CAMISP_RESOURCE_OBJECTS:
+            self.assertIn(name, smoke.RESEARCH_OBJECTS)
+            self.assertNotIn(name, smoke.OBJECTS + smoke.PROVIDER_OBJECTS)
+            makefile = self.package / Path(name).parent / "Makefile"
+            self.assertEqual(makefile.read_text(), "obj-y += " + Path(name).name + "\n")
+
+    def test_camisp_resources_require_native_dependencies_only_in_research_config(self):
+        research = smoke.config_options(Path("kernel"), Path("objects"), True)
+        normal = smoke.config_options(Path("kernel"), Path("objects"), False)
+        for symbol in (*smoke.CAMISP_RESOURCE_ENABLE, *smoke.CAMISP_RESOURCE_REACHABLE):
+            self.assertIn(symbol, research)
+        self.assertNotIn("COMMON_CLK_MEDIATEK", normal)
+        self.assertEqual(smoke.CAMISP_RESOURCE_PLAN["config_variants"], [{"KUNIT": "y"}, {"KUNIT": "n"}])
+        source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
+        self.assertIn('manifest["camisp_resource_kunit_disabled_objects"]', source)
+        self.assertIn("CAMISP_RESOURCE_OBJECTS)", source)
+
+    def test_camisp_resources_manifest_rejects_shipping_provider_destination(self):
+        root = Path(__file__).resolve().parents[1]
+        data = json.loads((root / smoke.CAMISP_RESOURCE_MANIFEST).read_text())
+        data["sources"][next(iter(data["sources"]))] = "drivers/clk/mediatek/clk-mt6878-cam.c"
+        with patch.object(smoke.json, "loads", return_value=data):
+            with self.assertRaisesRegex(ValueError, "closure"):
+                smoke.camisp_resource_staging(root)
 
     def test_gpu_power_staging_matches_reviewed_manifests(self):
         root = Path(__file__).resolve().parents[1]

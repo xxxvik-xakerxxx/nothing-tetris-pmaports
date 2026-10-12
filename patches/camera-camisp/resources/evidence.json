@@ -1,0 +1,242 @@
+{
+  "release": "Nothing OS B4.1",
+  "provenance": [
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/clk/mediatek/clk-mt6878-cam.c",
+      "sha256": "68c6c4107e222f46ce2401c4ce2a0a06b52c60eaef1156d58fc2cef1079d8b66"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/dt-bindings/clock/mt6878-clk.h",
+      "sha256": "04ba5d74f7575a507e54e6b4b808d43fab6f3eb02f8ddd38eb49e14cfe385955"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/dt-bindings/memory/mt6878-larb-port.h",
+      "sha256": "d58e196d124f613ec511197b1c0ebaa792bfc771120db8a2b7e337c61466b037"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/dt-bindings/memory/mtk-memory-port.h",
+      "sha256": "965511360cb10040721616642950b1035e108dcb9ad64c230df65669d376a97f"
+    },
+    {
+      "repository": "android_kernel_modules_nothing_mt6878",
+      "commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+      "path": "mtkcam/camsys/isp7sp/cam/mtk_cam-larb.c",
+      "sha256": "d46901547a33b86f2d111ab05e0c32ae956322048f4a2823587da8d146ec23d0"
+    },
+    {
+      "repository": "android_kernel_modules_nothing_mt6878",
+      "commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+      "path": "mtkcam/camsys/isp7sp/cam/mtk_cam-sv.c",
+      "sha256": "18e1a14bd6a2f8f19cccca8e5916a85fb30ac1ea9ee29253ed40bacdc56619e6"
+    }
+  ],
+  "banks": {
+    "mraw": {
+      "registers": {
+        "set_ofs": 4,
+        "clr_ofs": 8,
+        "sta_ofs": 0
+      },
+      "operations": "mtk_clk_gate_ops_setclr",
+      "gates": [
+        {
+          "symbol": "CLK_CAM_MR_LARBX",
+          "id": 0,
+          "name": "cam_mr_larbx",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 0
+        },
+        {
+          "symbol": "CLK_CAM_MR_GALS",
+          "id": 1,
+          "name": "cam_mr_gals",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 1
+        },
+        {
+          "symbol": "CLK_CAM_MR_CAMTG",
+          "id": 2,
+          "name": "cam_mr_camtg",
+          "vendor_parent": "top_camtm_ck",
+          "parent": "camtm_sel",
+          "shift": 2
+        },
+        {
+          "symbol": "CLK_CAM_MR_MRAW0",
+          "id": 3,
+          "name": "cam_mr_mraw0",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 3
+        },
+        {
+          "symbol": "CLK_CAM_MR_MRAW1",
+          "id": 4,
+          "name": "cam_mr_mraw1",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 4
+        },
+        {
+          "symbol": "CLK_CAM_MR_MRAW2",
+          "id": 5,
+          "name": "cam_mr_mraw2",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 5
+        },
+        {
+          "symbol": "CLK_CAM_MR_MRAW3",
+          "id": 6,
+          "name": "cam_mr_mraw3",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 6
+        },
+        {
+          "symbol": "CLK_CAM_MR_PDA0",
+          "id": 7,
+          "name": "cam_mr_pda0",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 7
+        },
+        {
+          "symbol": "CLK_CAM_MR_PDA1",
+          "id": 8,
+          "name": "cam_mr_pda1",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 8
+        }
+      ],
+      "count_symbol": "CLK_CAM_MR_NR_CLK",
+      "count": 9
+    },
+    "vcore": {
+      "registers": {
+        "set_ofs": 44,
+        "clr_ofs": 44,
+        "sta_ofs": 44
+      },
+      "operations": "mtk_clk_gate_ops_no_setclr_inv",
+      "gates": [
+        {
+          "symbol": "CLK_CAM_VCORE_C2MM0_DCM_DIS",
+          "id": 0,
+          "name": "cam_vcore_c2mm0_dis",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 0
+        },
+        {
+          "symbol": "CLK_CAM_VCORE_MM0_DCM_DIS",
+          "id": 1,
+          "name": "cam_vcore_mm0_dis",
+          "vendor_parent": "top_cam_ck",
+          "parent": "cam_sel",
+          "shift": 1
+        }
+      ],
+      "count_symbol": "CLK_CAM_VCORE_NR_CLK",
+      "count": 2
+    }
+  },
+  "nodes": {
+    "camsys_main_clk": {
+      "compatible": "\"mediatek,mt6878-camsys_main\", \"syscon\"",
+      "reg": "<0 0x1a000000 0 0x1000>",
+      "#clock-cells": "<1>"
+    },
+    "camsys_mraw_clk": {
+      "compatible": "\"mediatek,mt6878-camsys_mraw\", \"syscon\"",
+      "reg": "<0 0x1a170000 0 0x1000>",
+      "#clock-cells": "<1>"
+    },
+    "cam_vcore_clk": {
+      "compatible": "\"mediatek,mt6878-cam_vcore\", \"syscon\"",
+      "reg": "<0 0x1b204000 0 0x1000>",
+      "#clock-cells": "<1>"
+    },
+    "smi_cam_vcore_2x1_sub_comm0": {
+      "compatible": "\"mediatek,mt6878-smi-common\", \"mediatek,smi-common\", \"syscon\", \"mediatek,smi-sub-common\"",
+      "reg": "<0 0x1b203000 0 0x1000>",
+      "mediatek,smi-supply": "<&smi_disp_common 0>",
+      "mediatek,common-id": "<31>",
+      "power-domains": "<&scpsys MT6878_POWER_DOMAIN_CAM_VCORE>",
+      "clocks": "<&cam_vcore_clk CLK_CAM_VCORE_MM0_DCM_DIS>",
+      "clock-names": "\"apb\"",
+      "mediatek,comm-port-id": "<0>"
+    },
+    "smi_cam_4x1_sub_comm0": {
+      "compatible": "\"mediatek,mt6878-smi-common\", \"mediatek,smi-common\", \"syscon\", \"mediatek,smi-sub-common\"",
+      "reg": "<0 0x1a005000 0 0x1000>",
+      "mediatek,smi-supply": "<&smi_cam_vcore_2x1_sub_comm0 0>",
+      "mediatek,common-id": "<16>",
+      "power-domains": "<&scpsys MT6878_POWER_DOMAIN_CAM_MAIN>",
+      "clocks": "<&camsys_main_clk CLK_CAM_MAIN_CAM2MM0_GALS>, <&camsys_main_clk CLK_CAM_MAIN_LARB13>, <&camsys_main_clk CLK_CAM_MAIN_LARB14>, <&camsys_main_clk CLK_CAM_MAIN_LARB29>, <&camsys_main_clk CLK_CAM_MAIN_CAM_MRAW>, <&camsys_mraw_clk CLK_CAM_MR_GALS>, <&camsys_mraw_clk CLK_CAM_MR_LARBX>",
+      "clock-names": "\"apb\", \"smi\", \"gals0\", \"gals1\", \"gals2\", \"gals3\", \"gals4\""
+    },
+    "smi_cam_4x1_sub_comm1": {
+      "compatible": "\"mediatek,mt6878-smi-common\", \"mediatek,smi-common\", \"syscon\", \"mediatek,smi-sub-common\"",
+      "reg": "<0 0x1a006000 0 0x1000>",
+      "mediatek,smi-supply": "<&smi_cam_vcore_2x1_sub_comm0 0>",
+      "mediatek,common-id": "<19>",
+      "power-domains": "<&scpsys MT6878_POWER_DOMAIN_CAM_MAIN>",
+      "clocks": "<&camsys_main_clk CLK_CAM_MAIN_CAM2MM1_GALS>, <&camsys_main_clk CLK_CAM_MAIN_LARB13>, <&camsys_main_clk CLK_CAM_MAIN_LARB14>, <&camsys_main_clk CLK_CAM_MAIN_LARB29>, <&camsys_main_clk CLK_CAM_MAIN_CAM_MRAW>, <&camsys_mraw_clk CLK_CAM_MR_GALS>, <&camsys_mraw_clk CLK_CAM_MR_LARBX>",
+      "clock-names": "\"apb\", \"smi\", \"gals0\", \"gals1\", \"gals2\", \"gals3\", \"gals4\""
+    },
+    "smi_larb13": {
+      "compatible": "\"mediatek,smi_larb13\", \"mediatek,mt6878-smi-larb\", \"mediatek,smi-larb\"",
+      "reg": "<0 0x1a001000 0 0x1000>",
+      "mediatek,smi-supply": "<&smi_cam_4x1_sub_comm0 0>",
+      "mediatek,larb-id": "<13>",
+      "power-domains": "<&scpsys MT6878_POWER_DOMAIN_CAM_MAIN>",
+      "clocks": "<&camsys_main_clk CLK_CAM_MAIN_LARB13>",
+      "clock-names": "\"apb\""
+    },
+    "smi_larb14": {
+      "compatible": "\"mediatek,smi_larb14\", \"mediatek,mt6878-smi-larb\", \"mediatek,smi-larb\"",
+      "reg": "<0 0x1a002000 0 0x1000>",
+      "mediatek,smi-supply": "<&smi_cam_4x1_sub_comm1 0>",
+      "mediatek,larb-id": "<14>",
+      "power-domains": "<&scpsys MT6878_POWER_DOMAIN_CAM_MAIN>",
+      "clocks": "<&camsys_main_clk CLK_CAM_MAIN_LARB14>",
+      "clock-names": "\"apb\""
+    },
+    "camisp-l13-1": {
+      "compatible": "\"mediatek,camisp-larb\"",
+      "mediatek,larb-id": "<13>",
+      "iommus": "<&disp_iommu M4U_L13_P0_CAMSV_B_CQI_E1>, <&disp_iommu M4U_L13_P1_CAMSV_B0_WDMA>"
+    },
+    "camisp-l14-1": {
+      "compatible": "\"mediatek,camisp-larb\"",
+      "mediatek,larb-id": "<14>",
+      "iommus": "<&disp_iommu M4U_L14_P0_CAMSV_A_CQI_E1>, <&disp_iommu M4U_L14_P1_CAMSV_A0_WDMA>"
+    }
+  },
+  "ports": {
+    "M4U_L13_P0_CAMSV_B_CQI_E1": 416,
+    "M4U_L13_P1_CAMSV_B0_WDMA": 417,
+    "M4U_L14_P0_CAMSV_A_CQI_E1": 448,
+    "M4U_L14_P1_CAMSV_A0_WDMA": 449
+  },
+  "logical_dma_bits": 34,
+  "power_owner": "Unproven native CAM_MAIN/CAM_VCORE genpd and VMM ordering; no activation"
+}

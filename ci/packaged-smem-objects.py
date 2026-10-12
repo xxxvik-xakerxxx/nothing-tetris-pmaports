@@ -24,20 +24,32 @@ EVIDENCE_ID = 11695564086
 EVIDENCE_SHA256 = 'ff350521ca395343c62387e716c2b828e8a68b2606fc1840b7e1e6085d412442'
 
 
-def link_r181(staging, smoke, manifest, work, package, util, report):
+def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analysis=False):
     """Use actual full-build exports, never the research config or mocked symvers."""
     old_apk = subprocess.check_output(['git', 'show', BASELINE + ':' +
         str((package / 'APKBUILD').relative_to(ROOT))], cwd=ROOT, text=True)
     old_hashes = {name: digest for digest, name in re.findall(
         r'^([0-9a-f]{128})  ([A-Za-z0-9_.-]+)$', smoke.block(old_apk, 'sha512sums'), re.M)}
     old_patches = [name for name in smoke.block(old_apk, 'source').split() if name.endswith('.patch')]
-    if old_patches != manifest['kernel']['patches']:
-        raise ValueError('shipping kernel patch selection changed since r181')
-    for name, digest in manifest['kernel']['source_sha512'].items():
-        if old_hashes.get(name) != digest:
-            raise ValueError('shipping kernel source differs from r181: ' + name)
+    baseline_package = work / 'r181-package-snapshot'
+    baseline_package.mkdir(exist_ok=False)
+    (baseline_package / 'APKBUILD').write_text(old_apk)
+    for name in (smoke.CONFIG, *old_patches):
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+', name):
+            raise ValueError('unsafe baseline source name')
+        source = subprocess.check_output(['git', 'show', BASELINE + ':' +
+            str((package / name).relative_to(ROOT))], cwd=ROOT)
+        if hashlib.sha512(source).hexdigest() != old_hashes.get(name):
+            raise ValueError('r181 snapshot checksum mismatch: ' + name)
+        (baseline_package / name).write_bytes(source)
+    baseline = smoke.plan(baseline_package)
+    if baseline['archive'] != manifest['kernel']['archive']:
+        raise ValueError('staged archive cannot supply the original r181 kernel')
     if old_hashes.get(manifest['kernel']['archive']) != manifest['kernel']['archive_sha512']:
         raise ValueError('kernel archive differs from r181')
+    with (work / baseline['archive']).open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha512').hexdigest() != baseline['archive_sha512']:
+            raise ValueError('original r181 archive checksum mismatch')
     for name in ('0039-vendor-ccci-util-linux-6.18-api.patch.vendor',
                  '0173-vendor-ccci-smem-map-span.patch.vendor'):
         if hashlib.sha512((package / name).read_bytes()).hexdigest() != old_hashes.get(name):
@@ -63,12 +75,12 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
             raise ValueError('full-build evidence member hash mismatch: ' + name)
     parent = work / 'r181-module'
     parent.mkdir(exist_ok=False)
-    with tarfile.open(work / manifest['kernel']['archive']) as archive:
+    with tarfile.open(work / baseline['archive']) as archive:
         archive.extractall(parent, filter='data')
-    kernel = parent / ('linux-' + manifest['kernel']['kernel_commit'])
-    for name in manifest['kernel']['patches']:
+    kernel = parent / ('linux-' + baseline['kernel_commit'])
+    for name in baseline['patches']:
         flags = ['--fuzz=0'] if name in smoke.STRICT_PATCHES else []
-        staging.run(['patch', '--batch', *flags, '-p1', '-d', kernel, '-i', package / name])
+        staging.run(['patch', '--batch', *flags, '-p1', '-d', kernel, '-i', baseline_package / name])
     output = parent / 'kernel-output'
     output.mkdir()
     (output / '.config').write_bytes(config)
@@ -146,6 +158,25 @@ def link_r181(staging, smoke, manifest, work, package, util, report):
     shutil.copyfile(module, saved / 'ccci-util-smem-reservation.ko')
     report['reservation_module'] = dict(report['linked_module'], sha256=staging.sha(module),
         scope='exact r181 exports; kernel iomem claims only; no mappings, memory access, NS grant or START')
+    report['r181_kernel_sources'] = baseline['source_sha512']
+    if gpueb_analysis:
+        source = ROOT / 'patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c'
+        analysis = parent / 'gpueb-analysis'
+        analysis.mkdir(exist_ok=False)
+        shutil.copyfile(source, analysis / source.name)
+        (analysis / 'Makefile').write_text('obj-m += gpueb-flat-analysis.o\n')
+        staging.run([*make, 'M=' + str(analysis), 'KBUILD_MODPOST_WARN=',
+            'KCFLAGS=-Werror', 'modules'])
+        gpu_module = analysis / 'gpueb-flat-analysis.ko'
+        if smoke.object_identity(gpu_module)['machine'] != 'AArch64' or \
+                subprocess.check_output(['modinfo', '-F', 'vermagic', str(gpu_module)], text=True).strip() != release or \
+                subprocess.check_output(['modinfo', '-F', 'depends', str(gpu_module)], text=True).strip() or \
+                subprocess.check_output(['modinfo', '-F', 'license', str(gpu_module)], text=True).strip() != 'GPL':
+            raise ValueError('GPUEB analysis module ABI/dependency/license mismatch')
+        shutil.copyfile(gpu_module, saved / gpu_module.name)
+        report['gpueb_analysis_module'] = dict(report['linked_module'],
+            sha256=staging.sha(gpu_module), source_sha256=staging.sha(source),
+            scope='exact r181 exports; ordinary reserved authenticated DRAM analysis only; no GPU start')
 
 
 def main():
@@ -153,7 +184,10 @@ def main():
         raise SystemExit('actual ARM64 C compilation is GitHub CI-only')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--link-r181', action='store_true')
+    parser.add_argument('--gpueb-analysis', action='store_true')
     args = parser.parse_args()
+    if args.gpueb_analysis and not args.link_r181:
+        parser.error('--gpueb-analysis requires exact --link-r181 exports')
     spec = importlib.util.spec_from_file_location('packaged_objects',
         ROOT / 'patches/modem/drafts/runtime-object-ci/check_objects.py')
     staging = importlib.util.module_from_spec(spec)
@@ -221,7 +255,7 @@ def main():
             raise ValueError('plan object unexpectedly contains physical mapping')
         report.update(status='passed', object_sha256={name: staging.sha(util / name) for name in objects})
         if args.link_r181:
-            link_r181(staging, smoke, manifest, work, package, util, report)
+            link_r181(staging, smoke, manifest, work, package, util, report, args.gpueb_analysis)
             report['scope'] = 'actual packaged ARM64 objects and module linked against real r181 exports; no installation or hardware test'
     except BaseException as error:
         report.update(status='failed', error=str(error))
