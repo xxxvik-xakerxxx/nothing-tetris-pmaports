@@ -1,0 +1,14 @@
+--- a/mt6878-camsv-vb2.c
++++ b/mt6878-camsv-vb2.c
+@@ -57,8 +57,9 @@
+ 	resources->domain = iommu_get_domain_for_dev(port_owner);
+ 	if (!resources->domain)
+ 		return -EPROBE_DEFER;
+-	/* Managed supplier lifetime only; deliberately no runtime-PM link flag. */
+-	if (!device_link_add(dev, port_owner, DL_FLAG_AUTOREMOVE_CONSUMER))
++	/* CAMISP PM resumes the physical SMI larb/translation before CAMSV. */
++	if (!device_link_add(dev, port_owner,
++		DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER))
+ 		return -ENOMEM;
+ 	if (of_count_phandle_with_args(dev->of_node, "clocks", "#clock-cells") != 8 ||
+ 	    device_property_string_array_count(dev, "clock-names") != 8 ||

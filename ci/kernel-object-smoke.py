@@ -155,6 +155,18 @@ RESEARCH_OBJECTS += tuple(CAM_MAIN_PLAN["research_objects"])
 PROVIDER_OBJECTS += tuple(CAM_MAIN_PLAN["provider_objects"])
 CAM_MAIN_ENABLE = tuple(CAM_MAIN_PLAN["required_enabled"])
 CAM_MAIN_REACHABLE = tuple(CAM_MAIN_PLAN["required_reachable"])
+CAMISP_MANIFEST = "patches/camera-camisp/STAGING.json"
+CAMISP_CHECK = "patches/camera-camisp/check.py"
+CAMISP_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAMISP_MANIFEST).read_text())
+if (set(CAMISP_PLAN["sources"].values()) & set(RESEARCH_SOURCES.values()) or
+        any(Path(name).is_absolute() or ".." in Path(name).parts
+            for name in (*CAMISP_PLAN["sources"], *CAMISP_PLAN["sources"].values()))):
+    raise ValueError("unsafe or duplicate CAMISP staging input")
+RESEARCH_SOURCES.update(CAMISP_PLAN["sources"])
+CAMISP_OBJECTS = tuple(CAMISP_PLAN["research_objects"] + CAMISP_PLAN["provider_objects"])
+RESEARCH_OBJECTS += tuple(CAMISP_PLAN["research_objects"])
+PROVIDER_OBJECTS = tuple(dict.fromkeys((*PROVIDER_OBJECTS, *CAMISP_PLAN["provider_objects"])))
+CAMISP_ENABLE = tuple(CAMISP_PLAN["required_enabled"])
 
 
 def block(source, key):
@@ -263,6 +275,16 @@ def stage_camera_repeat(kernel, root=Path(".")):
              "-i", (root / name).resolve()])
 
 
+def stage_camisp(kernel, root=Path(".")):
+    run(["python3", root / CAMISP_CHECK, "--kernel-tree", kernel])
+    run(["patch", "--batch", "--fuzz=0", "-p1", "-d", kernel,
+         "-i", (root / CAMISP_PLAN["provider_overlay"]).resolve()])
+    destination = kernel / Path(CAMISP_PLAN["consumer_source"]).parent
+    run(["patch", "--batch", "--fuzz=0", "-p1", "-d", destination,
+         "-i", (root / CAMISP_PLAN["consumer_overlay"]).resolve()])
+    run(["python3", root / CAMISP_CHECK, "--staged-tree", kernel])
+
+
 def object_identity(target):
     with target.open("rb") as stream:
         magic = stream.read(4)
@@ -282,7 +304,7 @@ def object_identity(target):
 def config_options(kernel, output, research_owners):
     options = [kernel / "scripts/config", "--file", output / ".config"]
     enabled = ENABLE + (CAMERA_SELECTORS + CAMERA_ENABLE + CAM_MAIN_ENABLE +
-                        CAM_MAIN_REACHABLE if research_owners else ())
+                        CAM_MAIN_REACHABLE + CAMISP_ENABLE if research_owners else ())
     for symbol in dict.fromkeys(enabled):
         options.extend(["-e", symbol])
     for symbol in MODULES:
@@ -324,6 +346,10 @@ def main():
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
         for name in (CAM_MAIN_MANIFEST, CAM_MAIN_CHECK, CAM_MAIN_PLAN["overlay"]):
             manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+        for name in (CAMISP_MANIFEST, CAMISP_CHECK, "patches/camera-camisp/test-source.py",
+                     "patches/camera-camisp/generate-overlays.py",
+                     CAMISP_PLAN["provider_overlay"], CAMISP_PLAN["consumer_overlay"]):
+            manifest["research_source_sha256"][name] = hashlib.sha256(Path(name).read_bytes()).hexdigest()
     if args.plan_only:
         print(json.dumps(manifest, indent=2))
         return
@@ -346,6 +372,9 @@ def main():
     with tarfile.open(archive) as tar:
         tar.extractall(args.work, filter="data")
     kernel = args.work / f'linux-{manifest["kernel_commit"]}'
+    if args.research_owners:
+        run(["python3", "patches/camera-camisp/generate-overlays.py",
+             "--check", "--kernel-tree", kernel])
     for patch in manifest["patches"]:
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
@@ -362,6 +391,13 @@ def main():
         # Verify the cold chain first; the repeat worker delegates to that chain.
         run(["python3", CAMERA_REPEAT_CHECK])
         stage_camera_repeat(kernel)
+        run(["python3", "patches/camera-camisp/test-source.py"])
+        stage_camisp(kernel)
+        manifest["derived_camisp_sources_sha256"] = {
+            destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
+            for destination in ("drivers/memory/mtk-smi.c", "drivers/iommu/mtk_iommu.c",
+                                CAMISP_PLAN["consumer_source"], *CAMISP_PLAN["sources"].values())
+        }
         manifest["derived_camera_sources_sha256"] = {
             destination: hashlib.sha256((kernel / destination).read_bytes()).hexdigest()
             for destination in (*CAMERA_SOURCES.values(), *CAMERA_JOINT_SOURCES.values(),
@@ -392,6 +428,9 @@ def main():
         for symbol in CAMERA_ENABLE:
             if f"CONFIG_{symbol}=y" not in config:
                 raise ValueError(f"isolated camera dependency missing: {symbol}")
+        for symbol in CAMISP_ENABLE:
+            if f"CONFIG_{symbol}=y" not in config:
+                raise ValueError(f"isolated CAMISP dependency missing: {symbol}")
         for symbol in CAM_MAIN_REACHABLE:
             if not any(f"CONFIG_{symbol}={value}" in config for value in ("y", "m")):
                 raise ValueError(f"isolated CAM_MAIN dependency missing: {symbol}")
@@ -419,7 +458,7 @@ def main():
         if len(repeat_consumers) != 2:
             raise ValueError("repeat-capture variant requires both actual consumers")
         variant_objects = (video_objects + cam_main_objects + CAMERA_JOINT_OBJECTS +
-                           CAMERA_REPEAT_OBJECTS + repeat_consumers)
+                           CAMERA_REPEAT_OBJECTS + repeat_consumers + CAMISP_OBJECTS)
         run([kernel / "scripts/config", "--file", output / ".config", "-d", "KUNIT"])
         run([*make, "olddefconfig"])
         if any(line.startswith("CONFIG_KUNIT=")
@@ -448,6 +487,11 @@ def main():
             name: {**object_identity(output / name),
                    "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
             for name in (*CAMERA_REPEAT_OBJECTS, *repeat_consumers)
+        }
+        manifest["camisp_kunit_disabled_objects"] = {
+            name: {**object_identity(output / name),
+                   "sha256": hashlib.sha256((output / name).read_bytes()).hexdigest()}
+            for name in CAMISP_OBJECTS
         }
     manifest["status"] = "passed"
     manifest["object_identities"] = identities

@@ -1,0 +1,22 @@
+{
+  "sources": {
+    "patches/camera-camisp/camisp-dma.h": "include/soc/mediatek/camisp-dma.h",
+    "patches/camera-camisp/mt6878-camisp-dma.c": "drivers/media/platform/mediatek/tetris-camera-owner-smoke/mt6878-camisp-dma.c",
+    "patches/camera-camisp/mt6878-camisp-smi.inc": "drivers/memory/mt6878-camisp-smi.inc",
+    "patches/camera-camisp/camisp-smi-test.inc": "drivers/memory/camisp-smi-test.inc",
+    "patches/camera-camisp/mt6878-camisp-iommu.inc": "drivers/iommu/mt6878-camisp-iommu.inc"
+  },
+  "research_objects": [
+    "drivers/media/platform/mediatek/tetris-camera-owner-smoke/mt6878-camisp-dma.o"
+  ],
+  "provider_objects": [
+    "drivers/memory/mtk-smi.o",
+    "drivers/iommu/mtk_iommu.o"
+  ],
+  "consumer_source": "drivers/media/platform/mediatek/tetris-camera-owner-smoke/mt6878-camsv-vb2.c",
+  "provider_overlay": "patches/camera-camisp/provider.patch",
+  "consumer_overlay": "patches/camera-camisp/consumer-pm.patch",
+  "required_enabled": ["MTK_SMI", "MTK_IOMMU", "OF", "PM"],
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime_activation": "disabled; no parent Kbuild, Kconfig, package or DT wiring"
+}

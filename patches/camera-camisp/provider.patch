@@ -1,0 +1,206 @@
+--- a/drivers/memory/mtk-smi.c
++++ b/drivers/memory/mtk-smi.c
+@@ -141,7 +141,7 @@
+ struct mtk_smi {
+ 	struct device			*dev;
+ 	unsigned int			clk_num;
+-	struct clk_bulk_data		clks[MTK_SMI_CLK_NR_MAX];
++	struct clk_bulk_data		clks[7]; /* B4.1 camera subcommon clock list. */
+ 	struct clk			*clk_async; /*only needed by mt2701*/
+ 	union {
+ 		void __iomem		*smi_ao_base; /* only for gen1 */
+@@ -167,6 +167,8 @@
+ 	unsigned char			*bank;
+ };
+ 
++#include "mt6878-camisp-smi.inc"
++
+ static int
+ mtk_smi_larb_bind(struct device *dev, struct device *master, void *data)
+ {
+@@ -176,6 +178,8 @@
+ 
+ 	for (i = 0; i < MTK_LARB_NR_MAX; i++) {
+ 		if (dev == larb_mmu[i].dev) {
++			if (camisp_larb_id(dev) >= 0 && (unsigned int)camisp_larb_id(dev) != i)
++				return -EINVAL;
+ 			larb->larbid = i;
+ 			larb->mmu = &larb_mmu[i].mmu;
+ 			larb->bank = larb_mmu[i].bank;
+@@ -666,14 +670,21 @@
+ 	if (IS_ERR(larb->base))
+ 		return PTR_ERR(larb->base);
+ 
+-	ret = mtk_smi_dts_clk_init(dev, &larb->smi, mtk_smi_larb_clks,
++	ret = camisp_larb_prepare(pdev, larb);
++	if (!ret)
++		ret = mtk_smi_dts_clk_init(dev, &larb->smi, mtk_smi_larb_clks,
+ 				   MTK_SMI_LARB_REQ_CLK_NR, MTK_SMI_LARB_OPT_CLK_NR);
++	else if (ret > 0)
++		ret = 0;
+ 	if (ret)
+ 		return ret;
+ 
+ 	larb->smi.dev = dev;
+ 
+-	ret = mtk_smi_device_link_common(dev, &larb->smi_common_dev);
++	if (camisp_larb_id(dev) >= 0)
++		ret = camisp_larb_link_common(dev, &larb->smi_common_dev);
++	else
++		ret = mtk_smi_device_link_common(dev, &larb->smi_common_dev);
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -686,7 +697,10 @@
+ 
+ err_pm_disable:
+ 	pm_runtime_disable(dev);
+-	device_link_remove(dev, larb->smi_common_dev);
++	if (camisp_larb_id(dev) >= 0)
++		put_device(larb->smi_common_dev);
++	else
++		device_link_remove(dev, larb->smi_common_dev);
+ 	return ret;
+ }
+ 
+@@ -694,9 +708,12 @@
+ {
+ 	struct mtk_smi_larb *larb = platform_get_drvdata(pdev);
+ 
+-	device_link_remove(&pdev->dev, larb->smi_common_dev);
++	if (camisp_larb_id(&pdev->dev) < 0)
++		device_link_remove(&pdev->dev, larb->smi_common_dev);
+ 	pm_runtime_disable(&pdev->dev);
+ 	component_del(&pdev->dev, &mtk_smi_larb_component_ops);
++	if (camisp_larb_id(&pdev->dev) >= 0)
++		put_device(larb->smi_common_dev);
+ }
+ 
+ static int __maybe_unused mtk_smi_larb_resume(struct device *dev)
+@@ -712,6 +729,12 @@
+ 	if (MTK_SMI_CAPS(larb->larb_gen->flags_general, MTK_SMI_FLAG_SLEEP_CTL))
+ 		mtk_smi_larb_sleep_ctrl_disable(larb);
+ 
++	if (camisp_larb_id(dev) >= 0) {
++		ret = camisp_larb_resume(larb);
++		if (ret)
++			clk_bulk_disable_unprepare(larb->smi.clk_num, larb->smi.clks);
++		return ret;
++	}
+ 	/* Configure the basic setting for this larb */
+ 	return larb_gen->config_port(dev);
+ }
+@@ -720,6 +743,12 @@
+ {
+ 	struct mtk_smi_larb *larb = dev_get_drvdata(dev);
+ 	int ret;
++
++	if (camisp_larb_id(dev) >= 0) {
++		ret = camisp_larb_idle(larb);
++		if (ret)
++			return ret;
++	}
+ 
+ 	if (MTK_SMI_CAPS(larb->larb_gen->flags_general, MTK_SMI_FLAG_SLEEP_CTL)) {
+ 		ret = mtk_smi_larb_sleep_ctrl_enable(larb);
+@@ -733,7 +762,7 @@
+ 
+ static const struct dev_pm_ops smi_larb_pm_ops = {
+ 	SET_RUNTIME_PM_OPS(mtk_smi_larb_suspend, mtk_smi_larb_resume, NULL)
+-	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
++	SET_LATE_SYSTEM_SLEEP_PM_OPS(camisp_system_suspend,
+ 				     pm_runtime_force_resume)
+ };
+ 
+@@ -896,7 +925,11 @@
+ 		else if (common->plat->type == MTK_SMI_GEN2_SUB_COMM)
+ 			clk_required = MTK_SMI_SUB_COM_GALS_REQ_CLK_NR;
+ 	}
+-	ret = mtk_smi_dts_clk_init(dev, common, mtk_smi_common_clks, clk_required, 0);
++	ret = camisp_common_prepare(pdev, common);
++	if (!ret)
++		ret = mtk_smi_dts_clk_init(dev, common, mtk_smi_common_clks, clk_required, 0);
++	else if (ret > 0)
++		ret = 0;
+ 	if (ret)
+ 		return ret;
+ 
+@@ -952,6 +985,11 @@
+ 	if (ret)
+ 		return ret;
+ 
++	if (camisp_common_id(dev) >= 0) {
++		camisp_common_resume(common);
++		return 0;
++	}
++
+ 	if (common->plat->type != MTK_SMI_GEN2)
+ 		return 0;
+ 
+@@ -975,7 +1013,7 @@
+ 
+ static const struct dev_pm_ops smi_common_pm_ops = {
+ 	SET_RUNTIME_PM_OPS(mtk_smi_common_suspend, mtk_smi_common_resume, NULL)
+-	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
++	SET_LATE_SYSTEM_SLEEP_PM_OPS(camisp_system_suspend,
+ 				     pm_runtime_force_resume)
+ };
+ 
+--- a/drivers/iommu/mtk_iommu.c
++++ b/drivers/iommu/mtk_iommu.c
+@@ -1123,6 +1123,8 @@
+ 	.unbind		= mtk_iommu_unbind,
+ };
+ 
++#include "mt6878-camisp-iommu.inc"
++
+ static int mtk_iommu_mm_dts_parse(struct device *dev, struct component_match **match,
+ 				  struct mtk_iommu_data *data)
+ {
+@@ -1179,22 +1181,30 @@
+ 			goto err_larbdev_put;
+ 		}
+ 
+-		/* Get smi-(sub)-common dev from the last larb. */
+-		smi_subcomm_node = of_parse_phandle(larbnode, "mediatek,smi", 0);
+-		if (!smi_subcomm_node) {
+-			ret = -EINVAL;
+-			goto err_larbdev_put;
+-		}
+-
+-		/*
+-		 * It may have two level smi-common. the node is smi-sub-common if it
+-		 * has a new mediatek,smi property. otherwise it is smi-commmon.
+-		 */
+-		smicomm_node = of_parse_phandle(smi_subcomm_node, "mediatek,smi", 0);
+-		if (smicomm_node)
+-			of_node_put(smi_subcomm_node);
+-		else
+-			smicomm_node = smi_subcomm_node;
++		if (data->plat_data->m4u_plat == M4U_MT6878) {
++			smicomm_node = camisp_iommu_root(plarbdev->dev.of_node);
++			if (IS_ERR(smicomm_node)) {
++				ret = PTR_ERR(smicomm_node);
++				goto err_larbdev_put;
++			}
++		} else {
++			/* Get smi-(sub)-common dev from the last larb. */
++			smi_subcomm_node = of_parse_phandle(larbnode, "mediatek,smi", 0);
++			if (!smi_subcomm_node) {
++				ret = -EINVAL;
++				goto err_larbdev_put;
++			}
++
++			/*
++			 * It may have two level smi-common. the node is smi-sub-common if it
++			 * has a new mediatek,smi property. otherwise it is smi-commmon.
++			 */
++			smicomm_node = of_parse_phandle(smi_subcomm_node, "mediatek,smi", 0);
++			if (smicomm_node)
++				of_node_put(smi_subcomm_node);
++			else
++				smicomm_node = smi_subcomm_node;
++		}
+ 
+ 		/*
+ 		 * All the larbs that connect to one IOMMU must connect with the same

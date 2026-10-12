@@ -61,13 +61,27 @@ record supports the previous loader; zero-length, malformed, short/long or
 incompatible records fail visibly and clear the plan. The node reference is
 released on every path, and no DT pointer survives init. Cleanup erases both
 plan and evidence. This candidate is not installed/autoloaded and still contains
-no SMEM mapping/publication bodies. Native integration and linked-module CI for
-this additional consumer are pending; the earlier CI only compiled the decoder.
+no SMEM mapping/publication bodies.
+[CI 38222681473](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38222681473)
+passed actual generated-module integration at 4/64 KiB, including absent/empty,
+short/long, bad-scope, property-read, missing-node, incompatible-node and
+insufficient-range failures, balanced node references and copied-value lifetime.
+Actual ARM64 objects and strict linkage used the original r181 full-build config,
+exports and LLVM21.1.8. Module SHA256:
+`3d0143789a7b60d19569c8cec480a81c6ac259d24805be5ad4d94250bede71b9`.
 
 U-Boot `e2929baa549f54ce5518b2dd84952318ba857fda` passed
 [CI 38217024964](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38217024964)
 and was flashed only to `lk_a`. Linux physically received the 336-byte record:
 both reserved banks, endpoints, enables and profile matched the published DT.
-This field inspection did not execute the C decoder on the handset. The older
+The first field inspection did not execute the C decoder on the handset. The older
 AP-only module also passed import/plan on the new loader with USB/sensors active.
+The newly linked module subsequently passed one insmod at uptime110.04s on boot
+`65cc4f77-fd27-419c-8a13-e5a13fc0461d`: the real C decoder retained the boot
+evidence, with NC1204224/cache39190528 plan totals and virtual addresses NULL.
+USB/sensors/SensorProxy/SSH stayed active without new kernel faults or failed
+units; a complete 32 MiB transfer matched the expected SHA256. The user confirmed
+display/touch/rotation/auto-brightness remained normal. The module
+was left loaded; no unload/reload or START was attempted. Warm SCP EBUSY remains
+and required a separate commanded poweroff before the prepared test boot.
 No Linux NS access permission, modem START/READY or SIM operation is inferred.

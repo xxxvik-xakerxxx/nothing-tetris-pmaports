@@ -42,7 +42,7 @@ On boot `0b955ce0-a0d9-4442-b362-ac980d0d83fc`, the existing exact-r181 isolated
 module `ab2e570c5a7fdaa6e16e1f0742efb9bf1b5ea0e5f019703a6d7a67646e740426`
 passed one import/plan at uptime299.77s. USB, sensors, SensorProxy and SSH stayed
 active with no new kernel faults. No module unload/reload, firmware START or
-protected SMEM access was performed. Fresh visual confirmation remains pending.
+protected SMEM access was performed.
 The preceding warm start refused SCP with EBUSY; after commanded poweroff the
 phone booted again with automatic sensor initialization. This is not proof of
 a physical cold start or a fix for warm/poweroff lifecycle behavior.
@@ -50,10 +50,22 @@ a physical cold start or a fix for warm/poweroff lifecycle behavior.
 The pure Linux decoder and actual U-Boot producer/decoder round-trip passed
 [CI 38218370472](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38218370472),
 including sanitizer rejection cases and actual ARM64 objects. The isolated
-module candidate now connects that decoder to init and retains an optional
-validated snapshot bound to the same reservations and plan. This additional
-consumer still needs its own linked-module CI and hardware test. Neither the
-boot record nor its decoder grants Linux NS memory access or proves modem READY.
+module now connects that decoder to init and retains an optional validated
+snapshot bound to the same reservations and plan.
+[CI 38222681473](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38222681473)
+passed native integration/failure cases at 4/64 KiB, actual ARM64 compilation and
+strict linkage against r181 exports. Module SHA256:
+`3d0143789a7b60d19569c8cec480a81c6ac259d24805be5ad4d94250bede71b9`.
+On fresh boot `65cc4f77-fd27-419c-8a13-e5a13fc0461d`, one insmod at uptime110.04s
+returned0 and logged retained boot evidence plus the plan/import results. The
+actual C decoder ran on the handset; USB/sensors/SSH stayed active with no new
+kernel faults or failed units. The user confirmed normal display, touch, rotation
+and auto-brightness. A completed 32 MiB USB transfer matched SHA256
+`83ee47245398adee79bd9c0a8bc57b821e92aba10f5f9ade8a5d1fae4d8c4302`.
+The module is left loaded, not installed/autoloaded. Warm SCP
+EBUSY recurred before that test; commanded poweroff again led to a prepared boot,
+not a user-confirmed cold cycle. Neither the boot record nor its decoder grants
+Linux NS memory access or proves modem READY.
 
 ### First r181 observation: warm boot
 
@@ -301,6 +313,13 @@ completion, safe stop and actual capture remain. No Android HAL or proprietary
 composer is running. See [camera research](CAMERA_BRINGUP.md),
 [native direct path](../patches/camera-direct/DIRECT-CONTRACT.md) and
 [worker lifetime](../patches/camera-ccd-bus/NATIVE-WORKER.md).
+The new default-off [CAMISP DMA supplier](../patches/camera-camisp/SOURCE-CONTRACT.md)
+connects logical CQI/WDMA ports to real larb13/14, common16/19/31 and the existing
+display-common0/IOMMU providers. It adds source-backed clock/translation restore,
+busy-preserving suspend and CAMSV runtime-PM ordering. Forty-two source-only
+checks, the exact B4.1 topology trace and zero-fuzz isolated staging pass. Actual
+ARM64 compilation is pending CI; no DT activation, driver installation or frame
+capture occurred. Forced supplier withdrawal and lifecycle remain unproven.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -312,6 +331,13 @@ Real XML/crypto dependency builds and target links passed
 target execution is not established. Firmware/startup, native configuration and
 calibration/assistance services, exclusive RX, bounded shutdown and a position
 fix remain. Library loading is not navigation.
+Our startup controller now rejects a failed/completed host worker before
+registration and again before engine entry, preserving the dispatch failure and
+completion acknowledgement for cleanup. Native disconnected-socket regression,
+source rejection checks, Bionic ARM64 adapter and sealed-loader tests passed
+[CI 38223225507](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38223225507)
+at `9e68c3bd5d12d09c1629564fc468da6d8887aaea`. This closes an error-propagation
+defect, not configuration/AGPS admission or a physical position fix.
 See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Development Boundaries

@@ -118,9 +118,10 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 39)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 40)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
-            "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o"))
+            "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o",
+            "drivers/iommu/mtk_iommu.o"))
         self.assertEqual(provider.read_text(), "obj-$(CONFIG_MTK_SMI) += mtk-smi.o\n")
         self.assertTrue((self.package / smoke.RESEARCH_DIR / "Makefile").read_text().startswith("obj-y += "))
         for name in smoke.CAMERA_OBJECTS:
@@ -139,6 +140,18 @@ class SmokeInputs(unittest.TestCase):
         consumer = "\n".join(line[1:] for line in lines) + "\n"
         self.assertEqual(consumer, (root / "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text())
         self.assertIn("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m", (package / smoke.CONFIG).read_text())
+
+    def test_camisp_objects_and_config_are_isolated(self):
+        for name in smoke.CAMISP_OBJECTS:
+            self.assertIn(name, smoke.RESEARCH_OBJECTS + smoke.PROVIDER_OBJECTS)
+            self.assertNotIn(name, smoke.OBJECTS)
+        self.assertEqual(smoke.PROVIDER_OBJECTS.count("drivers/memory/mtk-smi.o"), 1)
+        options = smoke.config_options(Path("kernel"), Path("objects"), True)
+        for symbol in smoke.CAMISP_ENABLE:
+            self.assertIn(symbol, options)
+        source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
+        self.assertIn("repeat_consumers + CAMISP_OBJECTS", source)
+        self.assertIn('manifest["camisp_kunit_disabled_objects"]', source)
 
     def test_gpu_power_staging_matches_reviewed_manifests(self):
         root = Path(__file__).resolve().parents[1]
