@@ -9,7 +9,7 @@ if [ "$#" -eq 0 ]; then
     [ "$(uname -s)" = Linux ] || exit 2
     temporary=$(mktemp -d)
     trap 'rm -rf "$temporary"' EXIT HUP INT TERM
-    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -g -O1 -pthread \
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -g -O1 -D_FORTIFY_SOURCE=2 -pthread \
         -fsanitize=address,undefined -fno-omit-frame-pointer \
         "$directory/b41_agps_decode.c" "$directory/b41_agps_receiver.c" \
         "$directory/b41_agps_native.c" "$directory/test_receiver.c" \

@@ -9,6 +9,16 @@ from private_evidence import HERE, load, dynamic_symbols, relative_relocations
 
 
 class ReceiverEvidence(unittest.TestCase):
+
+    def test_terminal_ack_checks_write_without_owner_access_after_success(self):
+        source = (Path(__file__).parent / "b41_agps_receiver.c").read_text()
+        terminal = source.split("/* Last owner and native image access precedes completion publication. */", 1)[1].split("\n}", 1)[0]
+        self.assertEqual(terminal.strip(),
+            "ssize_t n = write(done, &one, sizeof(one));\n"
+            "    if (n != (ssize_t)sizeof(one)) fail(o, n < 0 ? -errno : -EIO);\n"
+            "    return NULL;")
+        self.assertIn("-D_FORTIFY_SOURCE=2", (Path(__file__).parent / "run_ci.sh").read_text())
+
     @classmethod
     def setUpClass(cls):
         cls.mnld, cls.lib = load(MNLD, LIB)

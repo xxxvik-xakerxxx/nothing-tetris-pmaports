@@ -143,7 +143,8 @@ static void *run(void *context)
         }
     }
     /* Last owner and native image access precedes completion publication. */
-    (void)write(done, &one, sizeof(one));
+    ssize_t n = write(done, &one, sizeof(one));
+    if (n != (ssize_t)sizeof(one)) fail(o, n < 0 ? -errno : -EIO);
     return NULL;
 }
 

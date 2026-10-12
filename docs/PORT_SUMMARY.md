@@ -26,6 +26,17 @@ remain required. No new SIM/call, GPS fix, accelerated rendering or camera frame
 is demonstrated by installing this image. The r182 config and kernel export
 tables are byte-identical to the original r181 ABI used below.
 
+After commanded poweroff, the phone booted again as
+`19e13ae5-995e-40a0-afda-daa2061bc524`: SCP state3/error0, BROM/EMI/import
+errors0, valid 21-tag descriptor, all three sensor/SSH services active and no
+failed units. The service reports 24 inventory entries and physical mask31.
+This was an automatic boot with USB attached, not a confirmed physical cold
+cycle. Visual checks remain pending. One explicit packaged GNSS transport start
+at uptime907.39s created both gpsdl nodes and preserved those services/USB;
+no link was opened, engine started or position fix attempted. The installed
+arch11.8 CSF firmware's decompressed hash matches the expected public payload:
+`98ef32f43f05d03711580fb78f44a5b24dcd1f8a2f3ab09a25410fb3d39d7e1d`.
+
 ### Previous installed checkpoint: r181
 
 Clean installation used [CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546),
@@ -409,6 +420,12 @@ inherited address-cell bounds, trigger-independent IRQ identity and exclusive
 resource overlap before private acquisition. Its native fault fixture and
 separate strict full-module build are wired into CI; no shipping DT activation
 or radio readiness is inferred.
+The resource fixture passed ASAN/UBSAN in the completed producer job of
+[CI38265540133](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38265540133)
+at `5e2c0b1`. Its artifact ZIP SHA256 is
+`a5194043fae4a27129b4ae2db00d07dd38802066e22e861ca32010d08ef96cb5`;
+reviewed overlay hash `8567e75c09cdb485ba19f52b65c67e2aaedf899ed21a843a98027e3699b5202f`.
+The ARM64 resource profile is still building.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -554,8 +571,10 @@ The new [native reverse AGPS receiver](../patches/gnss-navigation-audit/native-a
 binds the exact abstract endpoint, authenticates peer credentials, bounds nine
 source-proven message types and delivers through the same associated engine
 image. Pre-INIT preparation parks the worker; dispatch requires the actual
-engine record after successful INIT. Seven pinned source tests pass, with native
-sanitizer and Bionic link steps wired into CI. The forward assistance consumer
+engine record after successful INIT. Eight static tests pass (seven pinned);
+the AArch64 Bionic link passed CI38265545233. Its host compiler caught an ignored
+terminal acknowledgement write; error handling is corrected and fortified
+native sanitizer CI must be repeated. The forward assistance consumer
 and full session/control protocol remain missing; no receiver gate is cleared
 and no GPS fix is claimed.
 The common first constructor now keeps these three bytes unresolved until the

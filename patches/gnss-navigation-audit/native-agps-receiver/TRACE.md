@@ -1,11 +1,17 @@
 # Native AGPS Reverse Receiver
 
-Status: Partial, seven hash-pinned static checks passed; shell syntax, Python
+Status: Partial, eight static checks passed, including seven hash-pinned ones; shell syntax, Python
 syntax and whitespace checks passed. This implements a bounded reverse
 receiver and native delivery contract, not a complete assistance service.
 MISSING_AGPS_RECEIVER remains set. Native C11 sanitizer fixtures and Bionic
 compile checks are provided for parent CI; neither was run by this sidecar.
-No emulation, native compilation, CI dispatch, phone access or push occurred.
+CI38265545233 passed the AArch64 Bionic link but host compilation rejected the
+ignored terminal acknowledgement write under fortified libc. The write is now
+checked: failure latches the original errno without publishing completion;
+the parent still must retain ownership until its deadline/quarantine completes.
+Successful completion performs no subsequent owner access. The host fixture
+explicitly enables FORTIFY_SOURCE=2; repeat native CI remains pending.
+No local emulation or native compilation occurred.
 All additions are within this directory. No private binary/payload is included.
 
 ## Exact Inputs
