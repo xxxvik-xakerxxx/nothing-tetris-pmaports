@@ -252,7 +252,14 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 	ret = READ_ONCE(scope->first_error);
 	if (ret)
 		goto fault;
-	if (scope->dispatch_quiesced || scope->reset_written) {
+	/* A queued thread may outlive the mask in drain_irq(). Leave its pending
+	 * payload untouched; deliberate quiescence is not a firmware fault.
+	 */
+	if (scope->dispatch_quiesced) {
+		mutex_unlock(&scope->lock);
+		return IRQ_HANDLED;
+	}
+	if (scope->reset_written) {
 		ret = -ESHUTDOWN;
 		goto fault;
 	}

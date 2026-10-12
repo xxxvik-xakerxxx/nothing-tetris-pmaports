@@ -152,8 +152,10 @@ class Dispatcher(unittest.TestCase):
         thread = definition(self.reset, "static irqreturn_t mailbox_irq_thread(")
         self.assertIn("snapshot_mailbox, &snapshot", thread)
         self.assertLess(thread.index("mutex_lock(&scope->lock)"), thread.index("mt6878_gpueb_sram_read_transaction("))
-        self.assertLess(thread.index("mt6878_gpueb_sram_read_transaction("), thread.index("mutex_unlock(&scope->lock)"))
-        self.assertLess(thread.index("mutex_unlock(&scope->lock)"), thread.index("scope->channels[i].receive("))
+        copied = thread.index("mt6878_gpueb_sram_read_transaction(")
+        unlocked = thread.index("mutex_unlock(&scope->lock)", copied)
+        self.assertLess(copied, unlocked)
+        self.assertLess(unlocked, thread.index("scope->channels[i].receive("))
 
     def test_read_accessor_is_bounded_and_uses_only_sole_mapping(self):
         read = definition(self.sram, "int mt6878_gpueb_sram_reader_words(")
@@ -171,6 +173,13 @@ class Dispatcher(unittest.TestCase):
         self.assertIn("size > capacity - offset", bounds)
 
     def test_quiesce_masks_and_waits_outside_thread_mutex_before_reset(self):
+        thread = definition(self.reset, "static irqreturn_t mailbox_irq_thread(")
+        quiet = thread.split("if (scope->dispatch_quiesced) {", 1)[1].split("}", 1)[0]
+        self.assertIn("mutex_unlock(&scope->lock)", quiet)
+        self.assertIn("return IRQ_HANDLED", quiet)
+        for forbidden in ("contain_irq", "latch(", "writel(", ".receive("):
+            self.assertNotIn(forbidden, quiet)
+        self.assertLess(thread.index("if (ret)"), thread.index("if (scope->dispatch_quiesced)"))
         drain = definition(self.reset, "int mt6878_gpueb_reset_drain_irq(")
         self.assertLess(drain.index("scope->dispatch_quiesced = true"), drain.index("mask_irq_once(scope)"))
         self.assertLess(drain.index("mask_irq_once(scope)"), drain.index("mutex_unlock(&scope->lock)"))
@@ -196,7 +205,7 @@ class Dispatcher(unittest.TestCase):
         latch = definition(self.reset, "static int latch(")
         self.assertIn("if (!scope->first_error)", latch)
         thread = definition(self.reset, "static irqreturn_t mailbox_irq_thread(")
-        self.assertLess(thread.index("scope->dispatch_quiesced || scope->reset_written"),
+        self.assertLess(thread.index("if (scope->reset_written)"),
                         thread.index("mt6878_gpueb_sram_read_transaction("))
         fault = thread.split("fault:\n", 1)[1]
         self.assertNotIn(".receive(", fault)

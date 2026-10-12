@@ -101,6 +101,9 @@ jobs:
             /drivers/pmdomain/mediatek/ \
             /drivers/regulator/ \
             /drivers/soc/mediatek/ \
+            /drivers/base/power/runtime.c \
+            /kernel/irq/manage.c \
+            /include/linux/pm_runtime.h \
             /include/linux/regulator/mt6315-regulator.h
           git -C upstream/linux checkout --detach FETCH_HEAD
           test "$(git -C upstream/linux rev-parse HEAD)" = \
