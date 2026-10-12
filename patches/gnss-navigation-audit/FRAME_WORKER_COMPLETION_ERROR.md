@@ -1,7 +1,8 @@
 # Production frame-worker completion failure
 
-Status: Partial source correction; static validation passed. Native compilation,
-fixture execution, engine INIT and hardware lifecycle were not performed.
+Status: Partial lifecycle correction. Native sanitizer fixture execution and
+AArch64 Bionic linkage passed CI38287450780 at e73b771; all validation jobs
+succeeded. Engine INIT and hardware lifecycle remain unperformed.
 
 The reverse receiver's completion write was already checked in the snapshot
 validated by CI38274644174. Its implementation and LNA query wrapper are unchanged.
@@ -45,7 +46,7 @@ sh -n patches/gnss-navigation-audit/run_native_receiver_host_ci.sh
 git diff --check -- patches/gnss-navigation-audit
 ```
 
-Eight controller/lifecycle source tests passed, including mutations that ignore
+Nine controller/lifecycle source tests passed, including mutations that ignore
 the result, miss short writes, replace the original errno, or access the owner
 after successful publication. The eight existing reverse-receiver static tests
 also passed against their exact hash-pinned mnld/libmnl inputs, using the

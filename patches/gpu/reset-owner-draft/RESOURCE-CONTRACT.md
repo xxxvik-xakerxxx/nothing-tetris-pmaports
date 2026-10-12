@@ -1,6 +1,8 @@
 # GPUEB mailbox control ownership correction
 
-Status: disabled native resource-owner draft, statically checked only. No local
+Status: disabled native resource-owner draft, statically checked and ARM64
+object-compiled in CI38287440390 at e73b771. This is not native C execution,
+composite module linkage or hardware activation. No local
 native build, firmware execution, SSH, hardware operation, commit or push.
 This revises reset-owner-draft and its bound-parent caller under patches/gpu;
 shipping patches, DT, packages and shared integration remain unchanged.

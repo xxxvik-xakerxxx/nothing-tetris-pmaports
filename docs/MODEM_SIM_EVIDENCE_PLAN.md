@@ -32,10 +32,13 @@ binding IDs and topckgen parents but no IFR gate driver. The
 [native CCF candidate](../patches/modem/infra-clocks/README.md) supplies the exact
 five B4.1 SET/CLR/STA banks, including all six CCIF and three DPMAIF handles.
 Vendor parent names are mapped by clock ID/divider to the real native factors,
-not copied as orphan `top_` aliases. Source checks and isolated staging pass;
-ARM64 compilation is pending. Shipping config/DT and the running r182 are
-unchanged. Registering a CCF provider is not a hardware-free operation, nor does
-it close the modem genpd, secure handoff, IRQ/DMA or userspace control boundaries.
+not copied as orphan `top_` aliases. Source checks, isolated ARM64 compilation,
+strict real-ABI linkage and one live registration on r182 pass; exact artifacts
+and limits are in PORT_SUMMARY. Shipping config/DT are unchanged. The new
+temporary CCF module is retained on this boot without clock enables; cold
+initialization and OF consumer references still require integration. Registering
+a CCF provider is not a hardware-free operation, nor does it close the modem
+genpd, secure handoff, IRQ/DMA or userspace control boundaries.
 
 Read-only stored `vendor_boot_b`/`dtbo_b` snapshots agree with the B4.1 transport
 clock IDs. The AO provider is `syscon@10001000`; the legacy global

@@ -468,8 +468,22 @@ implements all thirteen B4.1 gates, including the nine CCIF/DPMAIF clocks missin
 from d84's provider set. Exact IDs, five register banks and native factor/mux
 names pass source checks; 33 isolated-staging checks preserve shipping Kbuild
 and DT. Its ARM64 object and genuine r181/r182 module link are selected for the
-modem workflow, not installed or bound on r182. Modem power, transport
-activation and calls remain unproven.
+modem workflow. Both jobs passed
+[CI38287440390](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38287440390)
+at `e73b77183101b74eb4af555cd3f7a7ab47293d44`. The downloaded ARM64 ZIP matches
+GitHub SHA256 `d86e66ccf054288c947330bb1f72e642c8cc986b3efe68b62cbcca7b351bb9ec`.
+The actual GPL AArch64 module, genuine imports/vermagic and source identity were
+verified; module SHA256
+`776edc6960618f7b0c1f65145be28833e92078a6729a5273ae0fd04c49931ef4`.
+One guarded load on r182 boot `19e13ae5` at uptime12495.39-12498.74s bound the
+existing `10001000.syscon` and registered all thirteen clocks. Every parent
+resolved to the expected native factor; all prepare/enable counts remained0.
+No enable was requested. Before/after kernel journals are identical; boot ID,
+USB, SSH and sensor services are unchanged, with no failed units. The module
+remains retained until reboot, not installed/autoloaded. The current IFR node
+still lacks `#clock-cells`: real OF consumer references and cold initialization
+require DT/package integration. This closes live registration, not physical
+gate switching, modem power, transport activation or calls.
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
 An earlier physical transform-only test authenticated 156,064 bytes, reported
@@ -523,7 +537,11 @@ now validates all eight real memory windows before MFG0 resume and claims the
 four mailbox control words outside the reset bank. Acquisition failures unwind
 only completed claims, in reverse order; retained faults still refuse teardown.
 Twenty-eight static checks pass, including the stored DTB comparison; one optional
-private-LK check is skipped. ARM64 compilation is pending. No mailbox access,
+private-LK check is skipped. The actual revised reset/control objects compiled
+in CI38287440390; the reset object hash is
+`5bc5cd2d426da177f637b46c5ca2518624ee18398172e1b5015a6cb9c729261f`.
+These are AArch64 LLVM objects, not a complete linked/loaded GPU driver or
+executed acquisition-fault fixture. No mailbox access,
 larger firmware upload, IRQ enable, GPUEB start or rendering is added.
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
@@ -584,8 +602,10 @@ The supplier constructor now accepts the actual owning device's explicit
 regulator supply ID instead of the nonexistent fixed `vmm` relationship. Pinned
 B4.1 describes `cam-vcore`; the stored slot uses `cam-main`, but its release is
 unverified. No alias guessing is added. Twenty supplier tests reject missing IDs,
-fallbacks and lost errors; changed C/H hashes are recorded. Fresh compilation
-and complete physical integration are still pending.
+fallbacks and lost errors; changed C/H hashes are recorded. Both actual ARM64
+KUnit configurations passed CI38287440390; the KUnit-disabled supplier object
+hash is `d1e45539cb23f2addf06b57bc9cc9ec4d2627cc836e68d59f4b05a592a0d575d`.
+Complete linkage, provider/consumer wiring and physical integration remain.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -668,9 +688,11 @@ See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_
 The separate production frame worker now retains terminal completion-write
 errors instead of obscuring them as a later timeout. Failed publication never
 creates an ACK or permits resource release; successful publication has no later
-owner access. Eight source checks pass and four injected failure cases are
-wired into fortified native CI and the AArch64 Bionic link. Fixture execution
-is pending. This is a lifecycle correction, not AGPS completeness or a GPS fix.
+owner access. Nine source checks pass and four injected failure cases are
+wired into fortified native CI and the AArch64 Bionic link. All validation jobs
+passed [CI38287450780](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38287450780)
+at `e73b771`, including actual ASAN/UBSAN failure fixtures, sealed lifecycle and
+Bionic linkage. This is a lifecycle correction, not AGPS completeness or a GPS fix.
 
 ## Development Boundaries
 

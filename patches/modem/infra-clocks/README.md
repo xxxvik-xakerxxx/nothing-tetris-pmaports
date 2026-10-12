@@ -28,9 +28,19 @@ CI stages and compiles this source in an isolated clock subdirectory, then links
 the real module against the unchanged, hash-checked r181/r182 config and kernel
 exports. Strict modpost is mandatory; genuine imports, AArch64 identity,
 vermagic, source hash and absence of external module dependencies are recorded.
-The linked module is preserved for a subsequent controlled device test. It is not
-selected in APKBUILD/Kconfig/DT, installed, bound or loaded on r182. Compilation
-does not establish hardware accessibility. Provider registration can read gate
+Both jobs of CI38287440390 passed at e73b771. ZIP SHA256:
+`d86e66ccf054288c947330bb1f72e642c8cc986b3efe68b62cbcca7b351bb9ec`;
+linked module SHA256:
+`776edc6960618f7b0c1f65145be28833e92078a6729a5273ae0fd04c49931ef4`.
+
+One guarded registration on r182 boot19e13ae5 at uptime12495.39-12498.74s bound
+the actual existing IFR device. All thirteen parents resolved and every kernel
+prepare/enable count remained zero; none was requested. Kernel journals before
+and after are identical, and USB/SSH/sensor services stayed healthy. The module
+is retained until reboot, not selected in APKBUILD/Kconfig/DT or installed for
+autoload. The existing node has no #clock-cells, so this does not establish OF
+consumer lookup or automatic cold initialization. No gate switch or modem start
+was tested. Provider registration can read gate
 state; consumer enable/disable and CCF unused-clock cleanup can write hardware.
 Before installation, verify the existing IFR regmap ownership, controlled
 registration, all parent/consumer references and the quiescent modem handoff.
