@@ -148,6 +148,40 @@ out:
 	return ret;
 }
 
+int mt6878_vmm_cam_ctl_set(struct mt6878_vmm_supplier *vmm,
+			   unsigned int domain, bool on)
+{
+	int ret;
+
+	if (!vmm || !vmm->initialized)
+		return -EINVAL;
+	if (domain != MT6878_POWER_DOMAIN_CAM_MAIN &&
+	    domain != MT6878_POWER_DOMAIN_CAM_VCORE)
+		return -EINVAL;
+
+	/* Hold the supplier lock through the leaf write and first-error handoff. */
+	mutex_lock(&vmm->lock);
+	ret = vmm->first_error;
+	if (ret)
+		goto out;
+	ret = vmm_check_rail(vmm, true);
+	if (ret)
+		goto fault;
+	ret = vmm_check_isolation(vmm, false);
+	if (ret)
+		goto fault;
+	ret = mt6878_cam_ctl_set(vmm->spm, domain, on);
+	if (ret)
+		goto fault;
+	goto out;
+fault:
+	/* Latch the actual leaf errno before genpd notifies/unwinds its parents. */
+	ret = vmm_fail(vmm, ret);
+out:
+	mutex_unlock(&vmm->lock);
+	return ret;
+}
+
 static int vmm_child_notify(struct notifier_block *nb,
 			    unsigned long event, void *data)
 {

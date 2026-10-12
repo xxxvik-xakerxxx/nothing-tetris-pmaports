@@ -1,0 +1,66 @@
+{
+  "scope": "Optional resource profile after the proven full OWNER+CONSUMER link; parent integration only",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "linux_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "baseline_commit": "e0c67c561ff7c1a0472da851edfafd5a0abb6cec",
+  "parent_reported_full_link": {"run": "38255895881", "commit": "5379657", "status": "passed; source candidate not included"},
+  "parent_reported_r182_read_equivalence": {
+    "run": "38248220709", "source_prefix": "75a", "artifact": "11750359310", "zip_sha256_prefix": "61a1a42d",
+    "config_sha256": "edcbdf45d3201aef8ab71157bb485c074bc5c3457f564f0341a7eb410b9382a2",
+    "kernel_symvers_sha256": "2e58e05288219f07094e88da49b9f12b1c06d2bf5875e87e1f557bc36c4e7cf3",
+    "scope": "parent read-verified byte identity to r181 on d84; installed-root ABI record pending; old r181 DT census only; no physical prepare proof"
+  },
+  "flags_all_vendor_translation_units": [
+    "-DCONFIG_MTK_ECCCI_TETRIS_OWNER=1",
+    "-DCONFIG_TETRIS_CCCI_SMEM_CONSUMER=1",
+    "-DCONFIG_TETRIS_CCCI_HIF_RESOURCES=1"
+  ],
+  "staging": [
+    "Fresh complete source tree from runtime-link-closure/link_full.py stage(); no object reuse",
+    "check_resources.build(vendor) must regenerate the exact reviewed overlay",
+    "Require before-source identity; git apply --check resources.overlay; git apply resources.overlay",
+    "Require after-source identity against every generated touched file",
+    "Reuse unchanged genuine r181 .config, Module.symvers, proven GPL provider and real backend",
+    "Keep original full eight-module composites; use the parent's optional profile, not a substitute Kbuild"
+  ],
+  "native_fixture": {
+    "command": "python3 -B patches/modem/drafts/runtime-hif-resources/run_native_ci.py --vendor /tmp/tetris-kernel-smoke/vendor-git-source --report /tmp/tetris-hif-native.json",
+    "gate": "CI=true AND GITHUB_ACTIONS=true; Ubuntu sanitizer job only",
+    "production": ["resources.h", "supplier.h", "consumer.h"],
+    "checks": [
+      "Every supplier acquisition failure unwinds claims, clock handles and OF/controller references",
+      "Absent/disabled/duplicate nodes, invalid/overlapping memory and duplicate IRQ descriptors fail",
+      "Power-domain/assigned-clock/IOMMU preflight fails before resource acquisition",
+      "Missing/unbound/wrong-profile suppliers, held locks and module-get errors fail",
+      "Action-registration failure balances module/device leases immediately",
+      "Second supplier failure leaves first lease for real driver-core devres unwind",
+      "Existing HIF publication is rejected before resource acquisition",
+      "Consumer creates only AUTOREMOVE_CONSUMER links without runtime-PM activation",
+      "OWNER, CONSUMER and MODULE incompatible native compile profiles are rejected"
+    ],
+    "limits": "Boundary mocks are not native driver-core behavior, actual FSM/port preparation, physical IRQ masking, ARM64 or hardware evidence",
+    "status": "pending; not run locally"
+  },
+  "strict_link": {
+    "modules": ["ccci_md_all", "ccci_auxadc", "ccci_ccif", "ccci_dpmaif", "ccci_cldma", "ccci_fsm_scp", "ccmni", "rps_perf"],
+    "extra_symvers": "Only genuine unchanged provider and freshly checked actual first-start backend tables",
+    "requirements": [
+      "KBUILD_MODPOST_WARN=; no unresolved symbols or fake symvers",
+      "AArch64, exact r181 vermagic/GPL and genuine single-owner export census",
+      "Same actual provider import mtk_ccci_owned_mapped_copy and real backend imports",
+      "No new supplier-export imports from md_all; no new circular module dependency",
+      "Module parameter private_prepare is present, default false, read-only",
+      "Constructor/feature-guard/relocation review agrees with INIT-PROBE-CENSUS.md",
+      "Record resource-driver names, source/profile flags and complete overlay/source/config/export/module hashes",
+      "Keep original parent profile artifacts separate from optional resource-profile artifacts"
+    ],
+    "status": "pending for this overlay"
+  },
+  "physical_gate": {
+    "owner": "parent only",
+    "load": "Actual ELF profile and boot FDT/platform-device inventory first; no enabled or manually-created matching automatic probe target",
+    "prepare": "Separate explicit private_prepare request only after actual DT/resource/clock/pericfg/PM relationships and this profile's CI are reviewed",
+    "still_disabled": ["IRQ mappings from these helpers", "IRQ handlers/wake/enable", "DMA", "MMIO mappings/access", "START/STOP", "modem/FSM/port/sysfs/monitor publication", "worker wake", "post-bind commit"],
+    "no_inferred_permissions": ["READY", "NS certificate", "physical OFF", "SIM/calls", "full-core safe unload"]
+  }
+}

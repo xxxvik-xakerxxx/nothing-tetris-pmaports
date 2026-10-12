@@ -333,10 +333,11 @@
           "target": 437404
         },
         {
-          "callee_window_present": false,
+          "callee_window_present": true,
           "caller_reachable": true,
           "site": 83404,
-          "target": 437480
+          "target": 437480,
+          "write_contract": "local_proofs.allocator_name_copy"
         },
         {
           "callee_window_present": false,
@@ -2375,6 +2376,42 @@
       "sha256": "93c30eca152109a73862c45339ad6e226bee65c49ab3e5f6d92faa040acf96d5",
       "start": 425692,
       "writers": []
+    },
+    {
+      "caller_reachable_instructions": 37,
+      "calls": [],
+      "decoded_instructions": 37,
+      "end_exclusive": 437628,
+      "exits": [],
+      "name": "allocator_name_copy",
+      "sha256": "e758321b01e31f7a7c9a73fca67e102960aeefc36096d6021f88b2dd797aed04",
+      "start": 437480,
+      "writers": [
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x0"
+          ],
+          "operation": "strb",
+          "site": 437492
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x11"
+          ],
+          "operation": "sturh",
+          "site": 437584
+        },
+        {
+          "alias_proof": "not established by census",
+          "bases": [
+            "x9"
+          ],
+          "operation": "strb",
+          "site": 437616
+        }
+      ]
     }
   ],
   "conclusion": {
@@ -2390,6 +2427,9 @@
   "coverage": {
     "assumptions": "normal AAPCS64 returns; callback receives selected RV33 header name",
     "cfg_scope": "caller may-return overapproximation; indirect jumps are explicit exits",
+    "closed_leaf_write_contract_calls": [
+      83404
+    ],
     "complete_decode_of_declared_windows": true,
     "indirect_storage_site": 425736,
     "resolved_indirect_mapper_sites": [
@@ -2406,6 +2446,41 @@
     "primary_sha256": "9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7"
   },
   "local_proofs": {
+    "allocator_name_copy": {
+      "call": 83404,
+      "callee_transitive_write_extent_proven": true,
+      "count": "unsigned x0 after 0x145b4, capped by 0x145b8/0x145bc",
+      "count_range_inclusive": [
+        0,
+        127
+      ],
+      "destination": "caller x27 (allocator record name field)",
+      "destination_nonalias_with_staging_proven": false,
+      "end_exclusive": 437628,
+      "entry": 437480,
+      "initializes_source_tail_proven": false,
+      "maximum_write_interval_relative_to_destination": [
+        0,
+        127
+      ],
+      "nested_calls": [],
+      "padding": "after first NUL k, zeroes [k, count); no extra terminator",
+      "preconditions": "valid nonwrapping buffers; normal AAPCS64 returns; no async writers",
+      "read_interval_relative_to_source": "[0, count); stops after first NUL",
+      "remaining_obligation": "allocator record destination must be proven disjoint from staging",
+      "return": "original destination x0; unchanged",
+      "source": "caller x19 (allocation name)",
+      "strlen_behavior_proven": false,
+      "system_effects": [],
+      "window_exits": [],
+      "write_interval_relative_to_destination": "[0, count)",
+      "writer_sites": [
+        437492,
+        437584,
+        437616
+      ],
+      "zero_count_writes": false
+    },
     "copy_words": 64686,
     "high_address_allocation_branch_excluded": true,
     "mapper_jump_tables": [
@@ -2610,13 +2685,6 @@
       "caller_reachable": true,
       "site": 83380,
       "target": 437404,
-      "window": "mblock"
-    },
-    {
-      "callee_window_present": false,
-      "caller_reachable": true,
-      "site": 83404,
-      "target": 437480,
       "window": "mblock"
     },
     {

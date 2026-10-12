@@ -71,6 +71,65 @@ class SharedSupplierTests(unittest.TestCase):
     def test_fault_retains_mm_infra_parent(self):
         self.reject("ret = pm_genpd_add_subdomain(mm_infra, &vmm->genpd);", "ret = 0;")
 
+    def reject_leaf(self, old, new):
+        start = self.code.index("int mt6878_vmm_cam_ctl_set(")
+        end = self.code.index("static int vmm_child_notify(", start)
+        leaf = self.code[start:end]
+        self.assertIn(old, leaf)
+        mutant = self.code[:start] + leaf.replace(old, new) + self.code[end:]
+        with self.assertRaises(ValueError):
+            check.source_contract(mutant, self.header)
+
+    def test_cam_control_validates_owner_and_domain_before_io(self):
+        for old, new in [("!vmm || !vmm->initialized", "!vmm"),
+                         ("domain != MT6878_POWER_DOMAIN_CAM_MAIN &&", "false &&"),
+                         ("domain != MT6878_POWER_DOMAIN_CAM_VCORE", "false")]:
+            with self.subTest(mutant=new):
+                self.reject_leaf(old, new)
+
+    def test_cam_control_checks_supplier_for_both_directions(self):
+        for old, new in [("if (ret)\n\t\tgoto out;", "if (false) goto out;"),
+                         ("ret = vmm_check_rail(vmm, true);", "ret = 0;"),
+                         ("ret = vmm_check_isolation(vmm, false);", "ret = 0;"),
+                         ("ret = vmm_check_rail(vmm, true);",
+                          "ret = on ? vmm_check_rail(vmm, true) : 0;")]:
+            with self.subTest(mutant=new):
+                self.reject_leaf(old, new)
+
+    def test_cam_control_uses_owned_spm_and_requested_transition(self):
+        for old, new in [("mt6878_cam_ctl_set(vmm->spm, domain, on)",
+                          "mt6878_cam_ctl_set(NULL, domain, on)"),
+                         ("mt6878_cam_ctl_set(vmm->spm, domain, on)",
+                          "mt6878_cam_ctl_set(vmm->spm, domain, !on)"),
+                         ("mt6878_cam_ctl_set(vmm->spm, domain, on)", "0")]:
+            with self.subTest(mutant=new):
+                self.reject_leaf(old, new)
+
+    def test_cam_control_latches_original_errno_before_unlock_and_return(self):
+        for old, new in [("if (ret)\n\t\tgoto fault;", "if (false) goto fault;"),
+                         ("ret = vmm_fail(vmm, ret);", "ret = vmm_fail(vmm, -EIO);"),
+                         ("ret = vmm_fail(vmm, ret);", "return ret;"),
+                         ("return ret;", "return 0;"),
+                         ("fault:\n\t/* Latch the actual leaf errno before genpd notifies/unwinds its parents. */\n"
+                          "\tret = vmm_fail(vmm, ret);\nout:\n\tmutex_unlock(&vmm->lock);",
+                          "fault:\n\tmutex_unlock(&vmm->lock);\n\treturn vmm_fail(vmm, ret);\n"
+                          "out:\n\tmutex_unlock(&vmm->lock);")]:
+            with self.subTest(mutant=new):
+                self.reject_leaf(old, new)
+
+    def test_cam_control_cannot_release_lock_before_leaf_io(self):
+        self.reject_leaf("ret = mt6878_cam_ctl_set(vmm->spm, domain, on);",
+                         "mutex_unlock(&vmm->lock);\n"
+                         "\tret = mt6878_cam_ctl_set(vmm->spm, domain, on);\n"
+                         "\tmutex_lock(&vmm->lock);")
+
+    def test_cam_control_declaration_required(self):
+        declaration = ("int mt6878_vmm_cam_ctl_set(struct mt6878_vmm_supplier *vmm,\n"
+                       "\t\t\t   unsigned int domain, bool on);")
+        self.assertIn(declaration, self.header)
+        with self.assertRaises(ValueError):
+            check.source_contract(self.code, self.header.replace(declaration, ""))
+
     def test_no_unsafe_unwind_or_invented_policy(self):
         for call in ("regulator_put(vmm->buck);", "regulator_set_voltage(vmm->buck, 1, 1);",
                      "vmm->first_error = 0;", "of_genpd_add_provider_simple(np, &vmm->genpd);"):

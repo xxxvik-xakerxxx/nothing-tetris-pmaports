@@ -6,7 +6,27 @@ Current development is in [pmOS main](https://github.com/xxxvik-xakerxxx/nothing
 and the maintainer's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot).
 The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
-## Latest installed checkpoint: r181
+## Latest installed checkpoint: r182
+
+Clean installation used [CI38248220709](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38248220709),
+source `75a510f072239825b9de7e620205a513568cce6e`. ZIP SHA256:
+`1ca7f7ca96d7a7290bdec94b19caeb5917b97508d640c49fa136617c4b130a3e`.
+All image hashes and 7,690 sparse chunks passed verification. `super` and all
+17 userdata transfers completed. First boot `6e6171cf-c626-4081-afd4-6c1f95335f2b`
+runs Linux `6.18.0 #183`, kernel package `7.2.1-r182`, device `8-r18` and
+SensorProxy `3.9-r2`. Root expanded automatically to 104.5 GiB on this FIRST
+installation boot. FIT readback matches CI:
+`a4e5cad84cc5815113c76ff1e96009bb556a005a30e00aeda3270845b45ee144`.
+
+U-Boot `8d2ccc12` and stock `lk_b` are unchanged; both readback hashes match
+the prior checkpoint. USB/NCM and SSH work, and DRM reports the display
+connected. The warm installation boot lacks prepared SCP handoff, so sensors
+fail explicitly rather than retrying. A physical power-off/on and visual check
+remain required. No new SIM/call, GPS fix, accelerated rendering or camera frame
+is demonstrated by installing this image. The r182 config and kernel export
+tables are byte-identical to the original r181 ABI used below.
+
+### Previous installed checkpoint: r181
 
 Clean installation used [CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546),
 source `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`.
@@ -122,8 +142,9 @@ checks and unforced resize checks, retaining exact extents 2,783,969,280 and
 the CI build-log artifact. New image archive SHA256:
 `2ecd345b25ab89f0723ff8fd1dd8d3308453b41d5e9652ee9f2190de1f2db842`.
 Clean-install expansion remains unverified until the new artifacts are tested.
-The installed phone is still the original r181; SIM/calls, navigation, GPU
-acceleration and camera capture are not newly demonstrated by these CI tests.
+That CI run was not installed; the later r182 installation above validates
+first-boot expansion. SIM/calls, navigation, GPU acceleration and camera capture
+are not demonstrated by these image checks.
 
 Later full CI38227409738 compiled the kernel and packages, then failed our image
 check with `gzip: invalid magic`. Upstream mkinitfs2.12.0 now defaults to zstd;
@@ -132,7 +153,8 @@ check now uses libarchive to read compressed CPIO and verifies the actual NCM
 module entry plus exact deviceinfo value. Five gzip/zstd/raw/corruption/missing
 entry fixtures pass locally, as does checking the original r181 initramfs.
 The FIT still passes the ramdisk unchanged (`compression=none`); no archive
-conversion or device behavior change is introduced. New image CI remains pending.
+conversion or device behavior change is introduced. Full r182 CI subsequently
+passed, and the verified images booted as recorded above.
 
 ### r181 restart and first AP-only import
 
@@ -372,8 +394,21 @@ This establishes the real provider/copy ABI boundary, not FSM/HIF preparation,
 post-bind publication, START or radio operation. The next
 [complete-module link](../patches/modem/drafts/runtime-link-closure/README.md)
 supplies the actual packaged first-start backend's missing exports and rebuilds
-all eight vendor modules against genuine r181/provider exports. It remains
-CI-pending and does not authorize activating the linked hardware operations.
+all eight vendor modules against genuine r181/provider exports. Strict ARM64
+link/modpost, genuine dependency census and all ten module hashes passed
+[CI38255895881](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38255895881)
+at `5379657`. The downloaded ZIP matches GitHub's digest
+`8a7e3cde7d1f6d47ecda031d2230b7ab5ec29cec96f62d1b3eeae41150ea0e0e`.
+The provider matches the already tested module; core SHA256 is
+`2f9280e0467c093ff5cfaf0f5c9385126b61af21b563d85eaf52358374e6140e`.
+These complete modules are not installed/loaded and do not authorize activating
+linked hardware operations. Resource-only HIF binding and actual private
+preparation are next; transport publication, START and radio remain denied.
+The optional resource profile now validates direct GIC descriptor capacity,
+inherited address-cell bounds, trigger-independent IRQ identity and exclusive
+resource overlap before private acquisition. Its native fault fixture and
+separate strict full-module build are wired into CI; no shipping DT activation
+or radio readiness is inferred.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -415,8 +450,10 @@ static tests against those exact private inputs. It verifies branch targets,
 cold caller dominance with explicitly conditional callee returns, BSS/stack
 fill bounds and the alternate full-SRAM reader. Vendor instructions remain
 opaque; the source-tail producer and whole-startup memory coverage are unresolved.
-The [LK tail audit](../patches/gpu/lk-tail/README.md) adds 18 passing source tests
-and a pinned 1,937-instruction census. It establishes the exact extra-copy bounds,
+The [LK tail audit](../patches/gpu/lk-tail/README.md) now passes 21 source tests
+and adds a bounded allocator-name leaf contract to the pinned instruction census.
+Its 37-instruction leaf writes at most the passed 127 bytes; staging aliasing
+remains unresolved, with 73 unexpanded calls. It establishes the exact extra-copy bounds,
 excludes cache maintenance as a zero-fill producer and resolves the mapper's
 branch tables. Its strict closure check still refuses activation: transitive
 writer/callee coverage is incomplete. No excess upload or zero-padding is enabled.
@@ -460,10 +497,17 @@ transitions. Ten new source mutation groups and exact pinned source checks pass.
 Its two source objects are now included once in the isolated ARM64 CI, with both
 KUnit configs; CI38254821266 exposed a missing cross-directory header include
 in the object harness before full CCCI linkage. The explicit compiler include
-closure is corrected with a regression test; target compilation remains pending.
+closure is corrected with a regression test. Both actual ARM64 KUnit variants
+passed CI38255895881; supplier object SHA256 with KUnit disabled is
+`54e9271c4630bb63db1a4a36a70b0d8f69469cb7588eb6af8778ee17df57f157`.
 A complete provider/link, verified
 voltage/rate policy, quiescent handoff and all-user migration are still required.
 No camera bus access or capture is enabled by the object-only candidate.
+The supplier now also owns the CAM_MAIN/CAM_VCORE control phase under its lock,
+validates shared rail/isolation before entry and latches the original leaf
+failure before genpd parent unwind. Sixteen supplier source tests pass. This
+new addition needs fresh ARM64 compilation and complete callback wiring;
+the prior object hashes do not validate the changed code.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -498,7 +542,7 @@ native policy inputs and startup configuration still need integration.
 The next pure [native quiet-policy builder](../patches/gnss-navigation-audit/b41_receiver_inputs.md)
 selects the proven host/NMEA path without an Android property service. Its
 1,024-vector native sanitizer fixture and ARM64 Bionic target link passed the
-prerequisite jobs in CI38248220709; full install images remain pending. It
+prerequisite jobs in CI38248220709; its full images passed and r182 is installed. It
 preserves all remaining receiver/stop/MPE/AGPS gates. A new
 [native satellite configuration](../patches/gnss-navigation-audit/native-config-completion/TRACE.md)
 implements the exact twelve-option AGPS mask and normal-start selector, replacing
@@ -506,6 +550,14 @@ three incorrect constant-zero receipts in the first block. Seven pinned binary
 source checks pass; the 4,096-vector native sanitizer fixture, related constructor/
 runtime/bundle regressions and ARM64 Bionic target link passed mandatory checks in
 [CI38254829662](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38254829662).
+The new [native reverse AGPS receiver](../patches/gnss-navigation-audit/native-agps-receiver/TRACE.md)
+binds the exact abstract endpoint, authenticates peer credentials, bounds nine
+source-proven message types and delivers through the same associated engine
+image. Pre-INIT preparation parks the worker; dispatch requires the actual
+engine record after successful INIT. Seven pinned source tests pass, with native
+sanitizer and Bionic link steps wired into CI. The forward assistance consumer
+and full session/control protocol remain missing; no receiver gate is cleared
+and no GPS fix is claimed.
 The common first constructor now keeps these three bytes unresolved until the
 explicit producers run; runtime/bundle fixtures preserve that gate. These are
 native configuration producers, not an AGPS receiver or successful INIT.

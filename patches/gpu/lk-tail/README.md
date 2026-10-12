@@ -5,7 +5,7 @@ The requested complete scratch/zero proof has not been established. This
 candidate closes specific local alternatives and records the remaining calls,
 stores, system effects and control-flow exits instead of declaring them safe.
 
-Only new files in this directory are owned by this work. No firmware bytes,
+Only files in this directory are owned by this work. No firmware bytes,
 private snapshot, native binary, packaging change or runtime code is included.
 All analysis is static ARM64 disassembly with Capstone 5.0.6; there is no
 emulation, native compilation, RV33 decoding, live operation, CI or push.
@@ -20,8 +20,8 @@ emulation, native compilation, RV33 decoding, live operation, CI or push.
   `9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7`.
   Authentication provenance comes from the existing transform/snapshot work.
   This tool verifies identity only and does not decode its instructions.
-- Sixteen complete contiguous LK windows are individually pinned. There are
-  1937 decoded ARM64 instructions and 150 store/system-effect census entries.
+- Seventeen complete contiguous LK windows are individually pinned. There are
+  1974 decoded ARM64 instructions and 153 store/system-effect census entries.
   These are bounded windows, not the entire executable or a complete call tree.
 
 ## Checked Findings
@@ -55,6 +55,32 @@ emulation, native compilation, RV33 decoding, live operation, CI or push.
    `0x1edfc` clear receives SRAM. Neither is a checked full-staging clear.
    In particular, this census does not assert that the page-table buffer is
    disjoint from staging without the missing allocator/alias proof.
+7. One transitive writer call is now expanded and its leaf write contract
+   closed: `0x145cc -> 0x6ace8`, the allocator record name copy. The complete
+   37-instruction window `[0x6ace8, 0x6ad7c)` has SHA256
+   `e758321b01e31f7a7c9a73fca67e102960aeefc36096d6021f88b2dd797aed04`.
+   Every instruction is checked independently of the window hash. There are
+   no nested calls, indirect exits, stack writes or system effects. All memory
+   stores use pointers derived from the entry destination.
+   The only stores are `0x6acf4` (byte copy), `0x6ad50` (halfword zero) and
+   `0x6ad70` (residual byte zero).
+
+   At the call, `x0=x27` (record name), `x1=x19` (allocation name), and `x2`
+   receives the unsigned result of the still-unexpanded `0x145b4` call.
+   `cmp x0, #0x7f; b.hi` limits this writer's count to `[0, 127]` regardless
+   of whether that result is the true string length. Checked incoming CFG
+   edges forbid entry after the compare, including from may-return error
+   paths. The later `0x145d4` length call and `0x145dc` terminator store are
+   outside this contract and retain their obligations.
+
+   For entry destination D and count n, the byte loop starts at offset zero
+   and writes only `[0, n)`. With no NUL it stops when its index reaches n.
+   With a first NUL at k, it has written `[0, k+1)` and pads `[k, n)`:
+   `r=n-k`, `p=r & ~1`, the halfword loop writes `[k, k+p)` in pairs, and
+   the residual loop writes `[k+p, n)` (at most one byte). Thus n=0 writes
+   nothing; positive n writes exactly n bytes, never an extra terminator.
+   x0 is unchanged. This establishes bounds for valid nonwrapping buffers,
+   not the record's nonalias with staging or any initialization of the tail.
 
 ## What Remains
 
@@ -63,7 +89,11 @@ store/system-effect sites, all CFG exits, and the unexpanded reachable call
 frontier. The graph includes possible callee returns even for error handlers;
 it overapproximates caller reachability rather than silently assuming a call
 cannot return. Only the checked constant selector and RV33 name branches are
-pruned. Window presence is **not** a transitive side-effect proof.
+pruned. Window presence is **not** a transitive side-effect proof. This change
+removes exactly the `0x145cc -> 0x6ace8` entry from the unexpanded frontier:
+74 calls become 73, with no new frontier calls. Its checked write contract is
+recorded in `local_proofs.allocator_name_copy` and linked from the caller
+census. The allocator record's staging-alias obligation remains open.
 
 The storage indirect dispatch at `0x67f08`, authentication/secure transform
 paths, mapper allocators, logging/formatting callbacks, and earlier or
@@ -111,7 +141,11 @@ and results only and are atomically written with mode 0600. Inputs reject final
 symlinks, nonregular files, oversize and nonprivate snapshots; output aliases
 of either input are rejected. This assumes trusted local parent directories.
 
-The 18 tests cover identities/framing, each window's mutation, independent
+The 21 source tests cover identities/framing, each window's mutation, independent
 semantic mutations, branch and signed-table resolution, decode budgets,
 unresolved indirect exits, tail arithmetic, private-input/alias rejection,
-atomic output and mandatory failure of the strict closure gate.
+atomic output and mandatory failure of the strict closure gate. The new tests
+check the single frontier removal, the bounded leaf's writer census, mutation
+of all 37 leaf instructions and seven argument/guard instructions, missing
+leaf instructions, and synthetic incoming edges bypassing the unsigned cap.
+All GPU hardware functionality remains untested by this static-only work.

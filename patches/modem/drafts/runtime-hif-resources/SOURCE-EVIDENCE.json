@@ -1,0 +1,484 @@
+{
+  "frozen_reviews": {
+    "runtime-ports": "24a41ffb807e226e6d7c2cc4b1b2f4f44ed9ef02b83aaac3e864337948ff91d2",
+    "runtime-prepare": "a01e8bfdb20e2bcefa0ea49c40009606b3a52d671e5874e97e98542c79e7b8e8",
+    "runtime-lifecycle": "54dbf505b48d0f841e037f54d73600310714862da77fdd2a30b91adcd3296f28"
+  },
+  "overlays_sha256": {
+    "owner": "45f49749b7cddcbac69fbd9454b3f6a2f49d24b83298705e5682d46ccda254e0",
+    "runtime-ports": "a0f0a1962852ac46a142c4f0b0ad4782a95c1d5740276ae7c274bd71c82c521f",
+    "runtime-prepare": "93e54604cead50f8ed24b99ee98301ce7f95587837680e3a2840fff5ed0e958f",
+    "runtime-lifecycle": "f93ff0ed07828a94cda1bc55a0d24682bfd3ddd7c9eae40dabe2b04efe6e7a16"
+  },
+  "consumer_review_sha256": "f8e2780ee0daef5ba279cb572fb7d2a37d6269993a21ffe8120047941f7893d4",
+  "package_sha256": "dd7688a578ce9c30935bce8209cb7487e27d85bf5a1a1bc293ada4c2e6cc0c75",
+  "vendor_prepare": [
+    "1000-vendor-connectivity-adapter-linux-6.18.patch.vendor",
+    "1101-vendor-audio-optional-calibration.patch.vendor",
+    "1102-vendor-audio-linux-6.18-api.patch.vendor",
+    "1103-vendor-audio-mt6685-clock.patch.vendor",
+    "1200-vendor-sensor-framework-linux-6.18.patch.vendor",
+    "0032-vendor-sensorhub-fail-closed-handoff-linux-6.18.patch.vendor",
+    "0045-vendor-sensorhub-runtime-inventory.patch.vendor",
+    "0036-vendor-scp-linux-6.18-api.patch.vendor",
+    "0037-vendor-tinysys-transport-linux-6.18-api.patch.vendor",
+    "0041-vendor-scp-fail-closed-dvfs-timeout.patch.vendor",
+    "0093-vendor-scp-validate-region-info.patch.vendor",
+    "0094-vendor-scp-validate-dram-recovery-span.patch.vendor",
+    "0100-vendor-scp-use-vfree-for-mailbox-tables.patch.vendor",
+    "0101-vendor-scp-bound-recovery-to-firmware-reservation.patch.vendor",
+    "0102-vendor-scp-bootstrap-resource-diagnostic.patch.vendor",
+    "0103-vendor-scp-share-infracfg-syscon.patch.vendor",
+    "0039-vendor-ccci-util-linux-6.18-api.patch.vendor",
+    "0173-vendor-ccci-smem-map-span.patch.vendor",
+    "0048-vendor-eccci-core-linux-6.18-api.patch.vendor",
+    "0053-vendor-eccci-ccif-linux-6.18-compile-only.patch.vendor",
+    "0089-vendor-eccci-modem-common-compile-only.patch.vendor",
+    "0095-vendor-eccci-fsm-port-dpmaif-compile-only.patch.vendor",
+    "0109-vendor-eccci-cldma-timer-api.patch.vendor",
+    "0001-ccmni-linux-6.18.patch.vendor",
+    "0002-rps-linux-6.18-headers.patch.vendor",
+    "0003-mdss-optional-mrdump.patch.vendor",
+    "0006-dpmaif-use-standard-allocation.patch.vendor"
+  ],
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "linux_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "baseline_commit": "e0c67c561ff7c1a0472da851edfafd5a0abb6cec",
+  "overlay_sha256": "8567e75c09cdb485ba19f52b65c67e2aaedf899ed21a843a98027e3699b5202f",
+  "base_init_census": {
+    "ccci_md_all": {
+      "source": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "source_sha256": "29f0c74d616395ff214838a37032b8a24c430b10be0ac6944afd3780174db316",
+      "module_init": "modem_cd_init",
+      "probe": "ccci_modem_probe",
+      "compatible": "mediatek,mddriver",
+      "init_body": "static int __init modem_cd_init(void)\n{\n\tint ret;\n\n\tret = platform_driver_register(&ccci_modem_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"modem platform driver register fail(%d)\\n\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "static int ccci_modem_probe(struct platform_device *plat_dev)\n{\n\tstruct ccci_dev_cfg dev_cfg;\n\tint ret;\n\tstruct md_hw_info *md_hw;\n\tunsigned long long time_total = sched_clock();\n\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\tret = tetris_ccci_dependencies(plat_dev);\n\tif (ret)\n\t\treturn ret;\n#endif\n\n\t/* Allocate modem hardware info structure memory */\n\tmd_hw = kzalloc(sizeof(struct md_hw_info), GFP_KERNEL);\n\tif (md_hw == NULL) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"%s:alloc md hw mem fail\\n\", __func__);\n\t\treturn -1;\n\t}\n\tret = md_cd_get_modem_hw_info(plat_dev, &dev_cfg, md_hw);\n\tif (ret != 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"%s:get hw info fail(%d)\\n\", __func__, ret);\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\t\ttetris_hw_abort(md_hw);\n\t\tkfree(md_hw);\n\t\treturn ret;\n#else\n\t\tkfree(md_hw);\n\t\treturn -1;\n#endif\n\t}\n#if defined(CCCI_KMODULE_ENABLE) && !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\tccci_init();\n#endif\n\tret = ccci_modem_init_common(plat_dev, &dev_cfg, md_hw);\n\tif (ret < 0) {\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\t\ttetris_hw_abort(md_hw);\n\t\t/* This path failed only unpublished resource preparation. */\n\t\tif (!ccci_tetris_registration_retained())\n#endif\n\t\t\tkfree(md_hw);\n\t}\n\ttime_total = sched_clock() - time_total;\n\tCCCI_NORMAL_LOG(-1, TAG, \"%s cost: %llu\\n\", __func__, time_total);\n\tccci_dump_write(CCCI_DUMP_MD_INIT,\n\t\tCCCI_DUMP_TIME_FLAG | CCCI_DUMP_ANDROID_TIME_FLAG,\n\t\t\"%s cost: %llu\\n\", __func__, time_total);\n\n\treturn ret;\n}"
+    },
+    "ccci_auxadc": {
+      "source": "drivers/misc/mediatek/eccci/ccci_auxadc.c",
+      "source_sha256": "58543d5205248fa9a192cdc00a50eafc8ed79859ff0faadcfc4e1810fd70d33f",
+      "module_init": "ccci_auxadc_init",
+      "probe": "get_auxadc_probe",
+      "compatible": "mediatek,md_auxadc",
+      "init_body": "static int __init ccci_auxadc_init(void)\n{\n\tint ret;\n\n\tret = platform_driver_register(&ccci_auxadc_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci auxadc driver init fail %d\", ret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int get_auxadc_probe(struct platform_device *pdev)\n{\n\tint ret;\n\n\tret = ccci_get_adc_info(&pdev->dev);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci get adc info fail\");\n\t\treturn ret;\n\t}\n\tmd_adc_pdev = &pdev->dev;\n\treturn 0;\n}"
+    },
+    "ccci_ccif": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c",
+      "source_sha256": "c5743846e79e2b13c1770d1ab1378a951a7665034765d7428f67044461819e30",
+      "module_init": "ccci_hif_ccif_init",
+      "probe": "ccci_hif_ccif_probe",
+      "compatible": "mediatek,ccci_ccif",
+      "init_body": "static int __init ccci_hif_ccif_init(void)\n{\n\tint ret;\n\n\tret = platform_driver_register(&ccci_hif_ccif_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci hif_ccif driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int ccci_hif_ccif_probe(struct platform_device *pdev)\n{\n\tint ret;\n\n\tret = ccci_ccif_hif_init(pdev, CCIF_HIF_ID);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci ccif init fail\");\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}"
+    },
+    "ccci_dpmaif": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c",
+      "source_sha256": "96b265d910e0a21516f9a8865648365e333b65d9ee31aa798c5af50aea5c4ff2",
+      "module_init": "ccci_dpmaif_init",
+      "probe": "dpmaif_probe",
+      "compatible": "mediatek,dpmaif",
+      "init_body": "static int __init ccci_dpmaif_init(void)\n{\n\tint ret;\n\n\tret = platform_driver_register(&g_dpmaif_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(0, TAG, \"ccci dpmaif driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "static int dpmaif_probe(struct platform_device *pdev)\n{\n\tif (of_property_read_u32(pdev->dev.of_node,\n\t\t\t\"mediatek,dpmaif-ver\", &g_dpmf_ver)) {\n\t\tCCCI_ERROR_LOG(0, TAG,\n\t\t\t\"[%s] error: not find mediatek,dpmaif-ver.\\n\", __func__);\n\t\tg_dpmf_ver = MAX_DPMAIF_VER;\n\t}\n\n\tif (g_dpmf_ver == 0 || g_dpmf_ver > MAX_DPMAIF_VER) {\n\t\tCCCI_ERROR_LOG(0, TAG,\n\t\t\t\"[%s] error: g_dpmf_ver(%d) is invalid.\\n\",\n\t\t\t__func__, g_dpmf_ver);\n\t\treturn -1;\n\t}\n\n\tif (of_property_read_u32(pdev->dev.of_node,\n\t\t\t\"mediatek,plat-info\", &g_plat_inf))\n\t\tg_plat_inf = DEFAULT_PLAT_INF;\n\n\tCCCI_NORMAL_LOG(0, TAG,\n\t\t\"[%s] g_dpmf_ver: %u; g_plat_inf: %u\\n\",\n\t\t__func__, g_dpmf_ver, g_plat_inf);\n\n\tif (dpmaif_init_com(&pdev->dev))\n\t\treturn -1;\n\n\treturn 0;\n}"
+    },
+    "ccci_cldma": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c",
+      "source_sha256": "7fff230e9bcc0009d3b0da1f710978e5b577fb6ca84ad5066fe054eb796156fc",
+      "module_init": "ccci_cldma_init",
+      "probe": "ccci_hif_cldma_probe",
+      "compatible": "mediatek,ccci_cldma",
+      "init_body": "static int __init ccci_cldma_init(void)\n{\n\tint ret;\n\n\tret = platform_driver_register(&ccci_cldma_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci hif_cldma driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int ccci_hif_cldma_probe(struct platform_device *pdev)\n{\n\tint ret;\n\n\tCCCI_ERROR_LOG(-1, TAG, \"[%s] start\", __func__);\n\n\tret = ccci_cldma_hif_init(pdev, CLDMA_HIF_ID);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci cldma init fail\");\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}"
+    },
+    "ccci_fsm_scp": {
+      "source": "drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c",
+      "source_sha256": "4a7da6a9dc3bc869d0b94cb430b2e507c525a30115003b0840f468b1ed79375c",
+      "module_init": "ccci_scp_init",
+      "probe": "ccci_scp_probe",
+      "compatible": "mediatek,ccci_md_scp",
+      "init_body": "static int __init ccci_scp_init(void)\n{\n\tint ret;\n\n\tCCCI_NORMAL_LOG(-1, FSM, \"ccci scp driver init start\\n\");\n\n\tret = platform_driver_register(&ccci_scp_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"ccci scp driver init fail %d\", ret);\n\t\treturn ret;\n\t}\n\tCCCI_NORMAL_LOG(-1, FSM, \"ccci scp driver init end\\n\");\n\treturn 0;\n}",
+      "probe_body": "int ccci_scp_probe(struct platform_device *pdev)\n{\n\tint ret;\n\n\tif (!get_modem_is_enabled()) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"%s:MD not exist,exit\\n\", __func__);\n\t\treturn -1;\n\t}\n\n\tret = fsm_scp_init(&ccci_scp_ctl, &pdev->dev);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"ccci get scp info fail\");\n\t\treturn ret;\n\t}\n\tret = ccci_register_md_state_receiver(KERN_MD_STAT_RCV_SCP,\n\t\tccci_scp_md_state_sync);\n\tif (ret)\n\t\tCCCI_ERROR_LOG(-1, FSM, \"register md status receiver fail: %d\", ret);\n\n\treturn ret;\n}",
+      "feature_input_source_sha256": "0206fcc8c4816bc08cf61539d4532d9d25d1a99ce07acdfae0dc76300c018857",
+      "feature_guard": "IS_ENABLED(CONFIG_MTK_TINYSYS_SCP_SUPPORT) -> FEATURE_SCP_CCCI_SUPPORT"
+    },
+    "ccmni": {
+      "source": "drivers/misc/mediatek/ccmni/ccmni.c",
+      "source_sha256": "be096a0714dbbb7588b54a09bce470e46a899a4009f9383d69a6311d810f38d1",
+      "module_init": null,
+      "probe": null,
+      "compatible": null
+    },
+    "rps_perf": {
+      "source": "drivers/misc/mediatek/rps/rps_perf.c",
+      "source_sha256": "07cda753cfcffd7431c72f9cbaa9db61303c8b7ba781a7519c3ee3aaaffda0b8",
+      "module_init": null,
+      "probe": null,
+      "compatible": null
+    },
+    "global_of_searches": {
+      "drivers/misc/mediatek/eccci/fsm/ccci_fsm_ioctl.c": [
+        {
+          "line": 183,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c": [
+        {
+          "line": 618,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg_ao_mem\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_drv_v3.c": [
+        {
+          "line": 1585,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_resv_mem.c": [
+        {
+          "line": 67,
+          "source": "rmem_node = of_find_compatible_node(NULL, NULL, \"mediatek,dpmaif-resv-cache-mem\");"
+        },
+        {
+          "line": 107,
+          "source": "rmem_node = of_find_compatible_node(NULL, NULL, \"mediatek,dpmaif-resv-nocache-mem\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c": [
+        {
+          "line": 1696,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mddriver\");"
+        },
+        {
+          "line": 1786,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg\");"
+        },
+        {
+          "line": 1802,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,md_ccif4\");"
+        },
+        {
+          "line": 1810,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,md_ccif5\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c": [
+        {
+          "line": 177,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        },
+        {
+          "line": 3075,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mdcldmamisc\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/md_spd_dvfs_method.c": [
+        {
+          "line": 263,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_kernel_interface.c": [
+        {
+          "line": 166,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mtk-slbc\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_proxy.c": [
+        {
+          "line": 1931,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_rpc.c": [
+        {
+          "line": 140,
+          "source": "struct device_node *node = of_find_compatible_node(NULL, NULL,"
+        },
+        {
+          "line": 368,
+          "source": "of_find_compatible_node(NULL, NULL, \"mediatek,md_attr_node\");"
+        },
+        {
+          "line": 957,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ]
+    }
+  },
+  "resource_init_census": {
+    "ccci_md_all": {
+      "source": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "source_sha256": "aded38f4e107d1929d949c151c0055a427a6142466f12a56bda344ec9f167b4f",
+      "module_init": "modem_cd_init",
+      "probe": "ccci_modem_probe",
+      "compatible": "mediatek,mddriver",
+      "init_body": "static int __init modem_cd_init(void)\n{\n\tint ret;\n\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\t/* Loading the full core does not request private preparation. */\n\tif (!tetris_private_prepare)\n\t\treturn 0;\n\tret = tetris_preflight_driver(\"mediatek,mddriver\");\n\tif (ret)\n\t\treturn ret;\n#endif\n\tret = platform_driver_register(&ccci_modem_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"modem platform driver register fail(%d)\\n\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "static int ccci_modem_probe(struct platform_device *plat_dev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\tif (!tetris_private_prepare)\n\t\treturn -EOPNOTSUPP;\n#endif\n\tstruct ccci_dev_cfg dev_cfg;\n\tint ret;\n\tstruct md_hw_info *md_hw;\n\tunsigned long long time_total = sched_clock();\n\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\tret = tetris_ccci_dependencies(plat_dev);\n\tif (ret)\n\t\treturn ret;\n#endif\n\n\t/* Allocate modem hardware info structure memory */\n\tmd_hw = kzalloc(sizeof(struct md_hw_info), GFP_KERNEL);\n\tif (md_hw == NULL) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"%s:alloc md hw mem fail\\n\", __func__);\n\t\treturn -1;\n\t}\n\tret = md_cd_get_modem_hw_info(plat_dev, &dev_cfg, md_hw);\n\tif (ret != 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG,\n\t\t\t\"%s:get hw info fail(%d)\\n\", __func__, ret);\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\t\ttetris_hw_abort(md_hw);\n\t\tkfree(md_hw);\n\t\treturn ret;\n#else\n\t\tkfree(md_hw);\n\t\treturn -1;\n#endif\n\t}\n#if defined(CCCI_KMODULE_ENABLE) && !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\tccci_init();\n#endif\n\tret = ccci_modem_init_common(plat_dev, &dev_cfg, md_hw);\n\tif (ret < 0) {\n#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)\n\t\ttetris_hw_abort(md_hw);\n\t\t/* This path failed only unpublished resource preparation. */\n\t\tif (!ccci_tetris_registration_retained())\n#endif\n\t\t\tkfree(md_hw);\n\t}\n\ttime_total = sched_clock() - time_total;\n\tCCCI_NORMAL_LOG(-1, TAG, \"%s cost: %llu\\n\", __func__, time_total);\n\tccci_dump_write(CCCI_DUMP_MD_INIT,\n\t\tCCCI_DUMP_TIME_FLAG | CCCI_DUMP_ANDROID_TIME_FLAG,\n\t\t\"%s cost: %llu\\n\", __func__, time_total);\n\n\treturn ret;\n}"
+    },
+    "ccci_auxadc": {
+      "source": "drivers/misc/mediatek/eccci/ccci_auxadc.c",
+      "source_sha256": "3b33aa53f015c3d73c6caa4d342298305a9abfe048b5489287dc3542da67fe8e",
+      "module_init": "ccci_auxadc_init",
+      "probe": "get_auxadc_probe",
+      "compatible": "mediatek,md_auxadc",
+      "init_body": "static int __init ccci_auxadc_init(void)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\t/* Export-only companion; do not register a physical driver. */\n\treturn 0;\n#endif\n\tint ret;\n\n\tret = platform_driver_register(&ccci_auxadc_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci auxadc driver init fail %d\", ret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int get_auxadc_probe(struct platform_device *pdev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\treturn -EOPNOTSUPP;\n#endif\n\tint ret;\n\n\tret = ccci_get_adc_info(&pdev->dev);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci get adc info fail\");\n\t\treturn ret;\n\t}\n\tmd_adc_pdev = &pdev->dev;\n\treturn 0;\n}"
+    },
+    "ccci_ccif": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c",
+      "source_sha256": "7a58335d196a7a935b199888f6a115308ee136ade03359715c07f65198761017",
+      "module_init": "ccci_hif_ccif_init",
+      "probe": "ccci_hif_ccif_probe",
+      "compatible": "mediatek,ccci_ccif",
+      "init_body": "static int __init ccci_hif_ccif_init(void)\n{\n\tint ret;\n\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\tret = tetris_preflight_driver(\"mediatek,ccci_ccif\");\n\tif (ret)\n\t\treturn ret;\n#endif\n\tret = platform_driver_register(&ccci_hif_ccif_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci hif_ccif driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int ccci_hif_ccif_probe(struct platform_device *pdev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\treturn tetris_hif_supplier_probe(pdev, CCIF_HIF_ID,\n\t\ttetris_hif_clocks, ARRAY_SIZE(tetris_hif_clocks), 2);\n#endif\n\tint ret;\n\n\tret = ccci_ccif_hif_init(pdev, CCIF_HIF_ID);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci ccif init fail\");\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}"
+    },
+    "ccci_dpmaif": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c",
+      "source_sha256": "7bf29dbc38e3a476830a0bd39526fd044f2890174cd67d09ec6b355fa37c6c79",
+      "module_init": "ccci_dpmaif_init",
+      "probe": "dpmaif_probe",
+      "compatible": "mediatek,dpmaif",
+      "init_body": "static int __init ccci_dpmaif_init(void)\n{\n\tint ret;\n\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\tret = tetris_preflight_driver(\"mediatek,dpmaif\");\n\tif (ret)\n\t\treturn ret;\n#endif\n\tret = platform_driver_register(&g_dpmaif_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(0, TAG, \"ccci dpmaif driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "static int dpmaif_probe(struct platform_device *pdev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\tu32 version, platform, capability;\n\tint error;\n\terror = of_property_read_u32(pdev->dev.of_node, \"mediatek,dpmaif-ver\", &version);\n\tif (error)\n\t\treturn error;\n\terror = of_property_read_u32(pdev->dev.of_node, \"mediatek,plat-info\", &platform);\n\tif (error)\n\t\treturn error;\n\terror = of_property_read_u32(pdev->dev.of_node, \"mediatek,dpmaif-cap\", &capability);\n\tif (error)\n\t\treturn error;\n\tif (version != 3 || platform != 6878)\n\t\treturn -EOPNOTSUPP;\n\treturn tetris_hif_supplier_probe(pdev, DPMAIF_HIF_ID,\n\t\ttetris_hif_clocks, ARRAY_SIZE(tetris_hif_clocks),\n\t\tcapability & (DPMAIF_CAP_LRO | DPMAIF_CAP_2RXQ) ? DPMAIF_RXQ_NUM : 1);\n#endif\n\tif (of_property_read_u32(pdev->dev.of_node,\n\t\t\t\"mediatek,dpmaif-ver\", &g_dpmf_ver)) {\n\t\tCCCI_ERROR_LOG(0, TAG,\n\t\t\t\"[%s] error: not find mediatek,dpmaif-ver.\\n\", __func__);\n\t\tg_dpmf_ver = MAX_DPMAIF_VER;\n\t}\n\n\tif (g_dpmf_ver == 0 || g_dpmf_ver > MAX_DPMAIF_VER) {\n\t\tCCCI_ERROR_LOG(0, TAG,\n\t\t\t\"[%s] error: g_dpmf_ver(%d) is invalid.\\n\",\n\t\t\t__func__, g_dpmf_ver);\n\t\treturn -1;\n\t}\n\n\tif (of_property_read_u32(pdev->dev.of_node,\n\t\t\t\"mediatek,plat-info\", &g_plat_inf))\n\t\tg_plat_inf = DEFAULT_PLAT_INF;\n\n\tCCCI_NORMAL_LOG(0, TAG,\n\t\t\"[%s] g_dpmf_ver: %u; g_plat_inf: %u\\n\",\n\t\t__func__, g_dpmf_ver, g_plat_inf);\n\n\tif (dpmaif_init_com(&pdev->dev))\n\t\treturn -1;\n\n\treturn 0;\n}"
+    },
+    "ccci_cldma": {
+      "source": "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c",
+      "source_sha256": "c7ae56fa92fd1bbe2d02370ef1469feb8be6f3e239d6a4217caf39cb09510d32",
+      "module_init": "ccci_cldma_init",
+      "probe": "ccci_hif_cldma_probe",
+      "compatible": "mediatek,ccci_cldma",
+      "init_body": "static int __init ccci_cldma_init(void)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\t/* Export-only companion; do not register a physical driver. */\n\treturn 0;\n#endif\n\tint ret;\n\n\tret = platform_driver_register(&ccci_cldma_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci hif_cldma driver init fail %d\",\n\t\t\tret);\n\t\treturn ret;\n\t}\n\treturn 0;\n}",
+      "probe_body": "int ccci_hif_cldma_probe(struct platform_device *pdev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\treturn -EOPNOTSUPP;\n#endif\n\tint ret;\n\n\tCCCI_ERROR_LOG(-1, TAG, \"[%s] start\", __func__);\n\n\tret = ccci_cldma_hif_init(pdev, CLDMA_HIF_ID);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, TAG, \"ccci cldma init fail\");\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}"
+    },
+    "ccci_fsm_scp": {
+      "source": "drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c",
+      "source_sha256": "944c8fe0c288ac361e26b592792c44caa1e4e9acc63d392aadc305090f987ec1",
+      "module_init": "ccci_scp_init",
+      "probe": "ccci_scp_probe",
+      "compatible": "mediatek,ccci_md_scp",
+      "init_body": "static int __init ccci_scp_init(void)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\t/* Export-only companion; do not register a physical driver. */\n\treturn 0;\n#endif\n\tint ret;\n\n\tCCCI_NORMAL_LOG(-1, FSM, \"ccci scp driver init start\\n\");\n\n\tret = platform_driver_register(&ccci_scp_driver);\n\tif (ret) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"ccci scp driver init fail %d\", ret);\n\t\treturn ret;\n\t}\n\tCCCI_NORMAL_LOG(-1, FSM, \"ccci scp driver init end\\n\");\n\treturn 0;\n}",
+      "probe_body": "int ccci_scp_probe(struct platform_device *pdev)\n{\n#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)\n\treturn -EOPNOTSUPP;\n#endif\n\tint ret;\n\n\tif (!get_modem_is_enabled()) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"%s:MD not exist,exit\\n\", __func__);\n\t\treturn -1;\n\t}\n\n\tret = fsm_scp_init(&ccci_scp_ctl, &pdev->dev);\n\tif (ret < 0) {\n\t\tCCCI_ERROR_LOG(-1, FSM, \"ccci get scp info fail\");\n\t\treturn ret;\n\t}\n\tret = ccci_register_md_state_receiver(KERN_MD_STAT_RCV_SCP,\n\t\tccci_scp_md_state_sync);\n\tif (ret)\n\t\tCCCI_ERROR_LOG(-1, FSM, \"register md status receiver fail: %d\", ret);\n\n\treturn ret;\n}",
+      "feature_input_source_sha256": "0206fcc8c4816bc08cf61539d4532d9d25d1a99ce07acdfae0dc76300c018857",
+      "feature_guard": "IS_ENABLED(CONFIG_MTK_TINYSYS_SCP_SUPPORT) -> FEATURE_SCP_CCCI_SUPPORT"
+    },
+    "ccmni": {
+      "source": "drivers/misc/mediatek/ccmni/ccmni.c",
+      "source_sha256": "be096a0714dbbb7588b54a09bce470e46a899a4009f9383d69a6311d810f38d1",
+      "module_init": null,
+      "probe": null,
+      "compatible": null
+    },
+    "rps_perf": {
+      "source": "drivers/misc/mediatek/rps/rps_perf.c",
+      "source_sha256": "07cda753cfcffd7431c72f9cbaa9db61303c8b7ba781a7519c3ee3aaaffda0b8",
+      "module_init": null,
+      "probe": null,
+      "compatible": null
+    },
+    "global_of_searches": {
+      "drivers/misc/mediatek/eccci/fsm/ccci_fsm_ioctl.c": [
+        {
+          "line": 183,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c": [
+        {
+          "line": 618,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg_ao_mem\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_drv_v3.c": [
+        {
+          "line": 1585,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_resv_mem.c": [
+        {
+          "line": 67,
+          "source": "rmem_node = of_find_compatible_node(NULL, NULL, \"mediatek,dpmaif-resv-cache-mem\");"
+        },
+        {
+          "line": 107,
+          "source": "rmem_node = of_find_compatible_node(NULL, NULL, \"mediatek,dpmaif-resv-nocache-mem\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c": [
+        {
+          "line": 1696,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mddriver\");"
+        },
+        {
+          "line": 1786,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,infracfg\");"
+        },
+        {
+          "line": 1802,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,md_ccif4\");"
+        },
+        {
+          "line": 1810,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,md_ccif5\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c": [
+        {
+          "line": 177,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        },
+        {
+          "line": 3075,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mdcldmamisc\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/hif/md_spd_dvfs_method.c": [
+        {
+          "line": 263,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_kernel_interface.c": [
+        {
+          "line": 166,
+          "source": "node = of_find_compatible_node(NULL, NULL, \"mediatek,mtk-slbc\");"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_proxy.c": [
+        {
+          "line": 1931,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ],
+      "drivers/misc/mediatek/eccci/port/port_rpc.c": [
+        {
+          "line": 140,
+          "source": "struct device_node *node = of_find_compatible_node(NULL, NULL,"
+        },
+        {
+          "line": 368,
+          "source": "of_find_compatible_node(NULL, NULL, \"mediatek,md_attr_node\");"
+        },
+        {
+          "line": 957,
+          "source": "node = of_find_compatible_node(NULL, NULL,"
+        }
+      ]
+    }
+  },
+  "touched_source_sha256": {
+    "drivers/misc/mediatek/eccci/ccci_auxadc.c": "3b33aa53f015c3d73c6caa4d342298305a9abfe048b5489287dc3542da67fe8e",
+    "drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c": "944c8fe0c288ac361e26b592792c44caa1e4e9acc63d392aadc305090f987ec1",
+    "drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h": "6389f20c73dd657878c2ef85cb81b292e9316cf4536a18f439956d3cf8dcb09a",
+    "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c": "aded38f4e107d1929d949c151c0055a427a6142466f12a56bda344ec9f167b4f",
+    "drivers/misc/mediatek/eccci/fsm/register_prepare.h": "11c0023c254b2ac0a6d8ee3f343c03d581b86eefca2ffbaf067d241112cebf4f",
+    "drivers/misc/mediatek/eccci/fsm/tetris_hif_consumer.h": "2ab5ef078f54ce9511e5e92395c5b443d7f7c51a151989de6044ece864b5a4f4",
+    "drivers/misc/mediatek/eccci/fsm/tetris_modem_resources.h": "b56ccc7f698604c1b2eb60035a18ceec8f534938c747ba70752306065303b5b1",
+    "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c": "7bf29dbc38e3a476830a0bd39526fd044f2890174cd67d09ec6b355fa37c6c79",
+    "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c": "7a58335d196a7a935b199888f6a115308ee136ade03359715c07f65198761017",
+    "drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c": "c7ae56fa92fd1bbe2d02370ef1469feb8be6f3e239d6a4217caf39cb09510d32",
+    "drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h": "bc8b40a85d72d940095295b4c61c4e06733e572c1134945a4a4623ec4b46f244",
+    "drivers/misc/mediatek/eccci/inc/tetris_hif_resources.h": "aaa2f9cbe490ef74ec32bc3c071031edf2fd3d976dd2da30b5403009f4dc97c3"
+  },
+  "dpmaif_clock_source_sha256": "8f9694998abb0a9199328008db984254ac93dfe2a0687db6f39eebc3512b3a64",
+  "vendor_dt": {
+    "source": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+    "source_sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b",
+    "nodes": {
+      "ccifdriver": "\n\t\t\tcompatible = \"mediatek,ccci_ccif\";\n\t\t\treg = <0 0x10209000 0 0x1000>, /*AP_CCIF_BASE*/\n\t\t\t\t<0 0x1020a000 0 0x1000>; /*MD_CCIF_BASE*/\n\t\t\tmediatek,sram-size = <512>;\n\t\t\t/* ccif hw reset version */\n\t\t\tmediatek,ccif-hw-reset-ver = <1>;\n\t\t\t/* ccif hw reset bit */\n\t\t\tmediatek,ccif-hw-reset-bit = <26>;\n\t\t\t/* DTS/GIC_ID: CCIF0 228/260; CCIF0 229/261 */\n\t\t\tinterrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH 0>,\n\t\t\t\t<GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH 0>;\n\t\t\tclocks = <&infra_ao_reg_clk CLK_IFRAO_CCIF_AP>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CCIF_MD>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CCIF1_AP>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CCIF1_MD>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CCIF4_MD>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CCIF5_MD>;\n\t\t\tclock-names = \"infra-ccif-ap\",\n\t\t\t\t\"infra-ccif-md\",\n\t\t\t\t\"infra-ccif1-ap\",\n\t\t\t\t\"infra-ccif1-md\",\n\t\t\t\t\"infra-ccif4-md\",\n\t\t\t\t\"infra-ccif5-md\";",
+      "dpmaif": "\n\t\t\tcompatible = \"mediatek,dpmaif\";\n\t\t\treg = <0 0x10014000 0 0x1000>, /*AO_UL*/\n\t\t\t\t<0 0x1022d000 0 0x1000>, /*PD_UL*/\n\t\t\t\t<0 0x1022c000 0 0x1000>, /*PD_MD_MISC*/\n\t\t\t\t<0 0x1022e000 0 0x1000>; /*SRAM*/\n\t\t\t/* rxq0 irq: 142 238 270 */\n\t\t\tinterrupts = <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH 0>,\n\t\t\t\t<GIC_SPI 259 IRQ_TYPE_LEVEL_HIGH 0>; /* rxq1 irq: 163 259 291 */\n\t\t\tmediatek,dpmaif-ver = <3>;\n\t\t\tmediatek,dpmaif-cap = <0x00000004>;\n\t\t\tmediatek,plat-info = <6878>;\n\t\t\tclocks = <&infra_ao_reg_clk CLK_IFRAO_DPMAIF_MAIN>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_CLDMA_BCLK>,\n\t\t\t\t<&infra_ao_reg_clk CLK_IFRAO_RG_MMW_DPMAIF26M>;\n\t\t\tclock-names = \"infra-dpmaif-clk\",\n\t\t\t\t    \"infra-dpmaif-blk-clk\",\n\t\t\t\t    \"infra-dpmaif-rg-mmw-clk\";\n\t\t\tinterconnects = <&dvfsrc MT6873_MASTER_NETSYS &dvfsrc MT6873_SLAVE_DDR_EMI>;\n\t\t\tinterconnect-names = \"icc-mdspd-bw\";\n\t\t\trequired-opps = <&dvfsrc_freq_opp0>,\n\t\t\t\t\t<&dvfsrc_freq_opp1>;\n\t\t\tnet-spd-ver = <5>;\n\t\t\thw-reset-ver = <1>;\n\t\t\tdpmaif-infracfg = <&infra_ao_reg_clk>;",
+      "mddriver": "\n\t\t\tcompatible = \"mediatek,mddriver\";\n\t\t\t/* bit0~3: CLDMA|CCIF|DPMAIF */\n\t\t\tmediatek,mdhif-type = <6>;\n\t\t\tmediatek,ap-plat-info = <6878>;\n\t\t\tmediatek,md-generation = <6299>;\n\t\t\t/* 0x64: epon offset;*/\n\t\t\t/* 0x06: once a value[1] exist, means in l2sram */\n\t\t\t/* value[1] not exist means in mddbgsys. the value(6) has no meaningful */\n\t\t\tmediatek,offset-epon-md1 = <0x64 0x06>;\n\t\t\tmediatek,cldma-capability = <14>;\n\t\t\tmediatek,boot-status-config = <0x1>;\n\t\t\treg = <0 0x0d180000 0 0x2000>; /* l2sram base address */\n\t\t\t/* DTS/GIC_ID: MDWDT 491/523/; CCIF0 228/260; CCIF0 229/261 */\n\t\t\tinterrupts = <GIC_SPI 491 IRQ_TYPE_LEVEL_HIGH  0>,\n\t\t\t\t\t<GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH  0>,\n\t\t\t\t\t<GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH  0>;\n\t\t\tpower-domains = <&scpsys MT6878_POWER_DOMAIN_MD>;\n\t\t\tccci-infracfg = <&infra_ao_reg_clk>;\n\t\t\tccci-topckgen = <&topckgen_clk>;"
+    }
+  },
+  "status": "source-only; native and ARM64/link pending; no hardware operations",
+  "linux_contract": {
+    "source_sha256": {
+      "drivers/base/platform.c": "b2330f57b496fbe0d7e29b2873303c6294b9c207b4212becc52638e6efe86f4d",
+      "drivers/base/dd.c": "d7635dbed29963ce89ca9754a0a7f87f24364cdfa20b199e4177dc16c9af16d3",
+      "drivers/of/platform.c": "800495cd0114062c056842d446e06e53c356416d92644028cec46113f0e5d8fe",
+      "drivers/of/irq.c": "109665983b128921bbc5b7289eeb92737b9fed1cedf593eb371360b6d67951ed",
+      "drivers/of/base.c": "fbdd9efad72652c38e6a89e6eb3fa458e219ea13a546b264d76a09be00963ef1",
+      "include/linux/platform_device.h": "0fb705cab3ce4beb598369f925b43aff89ed7ff5c7e0b01e5c56b063b30910d1"
+    },
+    "archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c",
+    "r181_dt": {
+      "dtb_sources": [
+        "mt6878-nothing-tetris.dts",
+        "mt6878-nothing-tetris-native.dts"
+      ],
+      "include_source_sha256": {
+        "mt6363.dtsi": "c08173550639f127574cc8e91e6307572360f02c018c957d2f9f8ad189a55b48",
+        "mt6369.dtsi": "cc03b2d2f41efb03d74189833dbcfcb9fd605d95bcb7080ee9c6ae79e3470f1b",
+        "mt6878-native-display-dma.dtsi": "d55c696a8b6e71401594ddf5a730e422925b7f885dfb7d4fca21967ab9bc2df4",
+        "mt6878-native-display-power.dtsi": "efc66a71c4bf4061fada90aa3b5cb1491e603d110a26dbf023651587eadda023",
+        "mt6878-nothing-tetris-native.dts": "c2c2c0408f9e8f4785db95d4036ab14ea7a76d306dcafdfa31b23facdfd2e615",
+        "mt6878-nothing-tetris.dts": "3be9594131352a7727d3b7089872fc1c72775715a3ad5c2e9b40ebdf12b0650a",
+        "mt6878-pinfunc.h": "5171af7b59e7da812208861fa4a0c29c453f66ea586b4a403f14a75be6219f7d",
+        "mt6878-scp-manual.dtsi": "e9e649a4f74a1bc944cd4da9c62d670885c653d77cee8197805fe9de97e8d740",
+        "mt6878-tetris-gpu-supplies.dtsi": "b50de764fc3c088904a010f82e119d5553176b285123559a4b80641c8b1f8794",
+        "mt6878.dtsi": "635ed50f71d76c99c7a23d53ce65e3ff3fa51c27bfc9b55fa05707c0dabb0540"
+      },
+      "applied_dt_patch_sha256": {
+        "0001-input-touchscreen-ft3519t-tetris.patch": "6c5b364b0247fe375bc3c76227c16c922b2d44d6c42756ef2fe7c6d1b27cb873",
+        "0002-mfd-mt6369-spmi-pmic.patch": "8359d590848544427eb62d3e88b8bd284a168bbf9edd931f57ab06c8ca4ed96a",
+        "0003-mfd-mt6363-keys-mt6375-telemetry.patch": "330beca71205759ad96087e74d04c8ba29ca71e1756edf2f1b9a458f9ccfc8d4",
+        "0004-arm64-dts-mt6878-tetris-disabled-peripherals.patch": "d120d1cef3953b6878800c9a0a10df075d608fe4698a2d062bc22ebc1deb1206",
+        "0005-drm-sysfb-tetris-framebuffer.patch": "dff00e7fe7b3dbecbc45dd37b1ab4f3952f7dc398674ea1888f6ecd57f54a8ca",
+        "0007-power-supply-mt6375-monitor.patch": "f7a37829b4b90709e5303aef3c7b45e577a9534c96f798663a7888eb42971344",
+        "0008-connectivity-mt6878-mt6631-connsys.patch": "02c72385dc0d08367299d0b55d7e50eecdc4145748c6af025243e44ab1dda32c",
+        "0009-clk-mediatek-mt6878-mfg.patch": "ebaf8dfa1aecfeed628084b388ab97f6347e88abeb970cdef944e9b861d80dab",
+        "0010-audio-mt6878-aw88261.patch": "998dd225dda66e12cb724034d6d3ee73b88e88c59f16a3d958dfc4162b02cfb6",
+        "0011-input-rt6010-haptics-tetris.patch": "e273a1aeff6663e0d34a39b3b5da3d547f8763951e2e13f825e027cbe2d62b82",
+        "0012-usb-typec-mt6375-tcpc-tetris.patch": "99ca634901571cae0b9e4899a623a275d2d50b30a7200c4b6566ac28aa87d8b3",
+        "0013-iio-nvmem-mt6369-calibration.patch": "9650d3f204f02a5c03ffc66c51f164d05909fd4737aca758b6c86ec87603530d",
+        "0014-mmc-mt6878-tetris-sdcard.patch": "6b3afe355380506b67486bbf857f473219e319c0db77495526c337e9d1027eb2",
+        "0015-leds-flash-lm3644-tetris.patch": "fb6bd956c8b08883e4dfa9ddd30f5aa0d915754ff94db52ed7853b13c7ba88e4",
+        "0016-usb-typec-hl5280-audio-switch.patch": "ada3494e5ea14ce56455d22ed00e3ef6713b1c4ee267340d4a3fcbe3e7e7e90f",
+        "0018-pmdomain-mediatek-mt6878-audio.patch": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed",
+        "0019-arm64-dts-mt6878-shallow-cpuidle.patch": "40d6a525bcd6541ba04d0d6654d0399870d974ede75f7b07797a48d45555ac85",
+        "0044-arm64-dts-mediatek-mt6878-cluster-cpuidle.patch": "a1b59860d04d7c80041cf1dfe0d1c74fdd57559124613dfcce6af40e1c1c9246",
+        "0020-arm64-dts-mt6878-gnss.patch": "e5e53ec50f229de421fe8be2d611db31ab73f474f3cfc19a0291a90b680f7326",
+        "0021-usb-mtu3-native-role-switch.patch": "b6aefb34a39bcef9a15d9491523ab3473b28e96f1345ba352331b555cd90d2ad",
+        "0022-thermal-mediatek-mt6878-lvts.patch": "71133ff8ab51e5060c950ea42decf01df17843d61571661ec205158414901a0c",
+        "0023-power-supply-mt6375-charger.patch": "43cf25525d99844b0cd1ac5af59f0bdab3a2836956c22c3ebc555ceb71021799",
+        "0025-iio-adc-mt6375-auxadc.patch": "db4a0d886929926f5a4abee970952b54301847134042c06215afa9e40cc66dfe",
+        "0026-power-supply-mt6375-gauge-monitor.patch": "81d631116508e36611d1c359d7e203dd732d3fa25e7f88f84274987e8bdffb78",
+        "0027-power-supply-nothing-tetris-charging-policy.patch": "b77f8994753142728642a697052c42a93d82122e37225680ab353c2fc175f152",
+        "0043-power-supply-nothing-tetris-source-current.patch": "e320bd25a0d08fed8d0a87cc8b3d037641e1399091aef69f2030a6da5b7c311e",
+        "0029-arm64-dts-mediatek-mt6878-enable-reboot-mode.patch": "0cd9bdb69565e76e4bdd85a203a4f389840e2339da2e6254ccc424a393fe9bb5",
+        "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": "f946261f57a28298d4b22d32ca08ef64ffb340efb16134b142378f627b6b5697",
+        "0038-arm64-dts-mediatek-tetris-stop-ignoring-unused-clocks.patch": "261b45c54bddef0bd584ddf2a7556be975eb499efb512c0f5be7d86a82eaaeba",
+        "0174-arm64-dts-mediatek-tetris-disabled-ccci-handoff.patch": "1ef1509931ddb990e9cf6333775564b5895e71dfdb058bbe310abef54b4286a4",
+        "0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch": "9662da5d38ba3d60fff991f4749f6e719c45e7177ad0de4422ddbb87cf08e0ea",
+        "0058-arm64-dts-mediatek-add-opt-in-MT6878-display-power.patch": "b610ecb6ffb4819426bbb4e8d1b9b7cd4b838cea1050918d32dc119353610b25",
+        "0071-arm64-dts-mediatek-add-MT6878-display-DMA.patch": "74c4f1b2c4bd7455dc31d81f7370af8296771fcab21363edab7a2ad17e50b37f",
+        "0072-arm64-dts-mediatek-add-Nothing-Tetris-native-display-DTB.patch": "08acf074e832ced9f5ce4bb731b6eb3db7eed1fa726bf9d4712c1e3d45efd663",
+        "0075-arm64-dts-mediatek-use-MT6878-DISP-onecell-domain.patch": "0249d0a1476ac333bc1eb777f1af6449a8cd5257b6e13389bfe1bfd841270074",
+        "0083-drm-mediatek-use-full-MT6878-OVL-chain.patch": "e2a38a27e50ac3e8b693899a17ea08e330ade204389cd77fce50b74f676124be",
+        "0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch": "47961f74420f9d972fafe081218ec47be8c4869147a81caef572a58c942b2d58",
+        "0099-arm64-dts-mediatek-add-manual-MT6878-SCP-contract.patch": "2ea9daf652ca085f23afbc48210373d84d9255c8a69ec04d4309de55245cb08e",
+        "0104-arm64-dts-mt6878-scp-infracfg.patch": "589aed060726a9949bac8f47752e45697b30a8a1ad965e61e0b71e5ca5266369",
+        "0112-arm64-dts-tetris-disabled-gpu-supplies.patch": "68aef080ce8919a7053f339b45829be62dc08f7a7ccc5547eceb713bd0058dcc",
+        "0114-regulator-mt6315-read-only-vgpu-observer.patch": "fec2a0401b502f1ad8fc9e64f54571cf4297e0f92b4e8e470a8f69b74a4ff365",
+        "0115-arm64-dts-tetris-vgpu-observer-diagnostic.patch": "5506c70ec0dfe3f4ed601e45e45c349ebbc638945f3946e71cfe027b7fe29ff0",
+        "0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch": "4f79fbce8e8a4e64b7c7b6a743ec71044a6e6e38c824239038cb5404e8da58fa",
+        "0116-arm64-dts-tetris-modem-preflight-diagnostic.patch": "e7eeafde02781c77a4efe7064f8032f72462fb50d6af495ab9c421ce25e3c843"
+      },
+      "compatible_occurrences": {
+        "ccci_md_all": 1,
+        "ccci_auxadc": 0,
+        "ccci_ccif": 0,
+        "ccci_dpmaif": 0,
+        "ccci_cldma": 0,
+        "ccci_fsm_scp": 0
+      },
+      "historical_dt_patch_policy": "r181 default_prepare patch policy; not the exact-context new resource overlay",
+      "historical_dt_patch_diagnostics": {},
+      "mddriver_body": "\n\t\tcompatible = \"mediatek,mddriver\";\n\t\tmediatek,ap-plat-info = <6878>;\n\t\tmediatek,md-generation = <6299>;\n\t\tstatus = \"disabled\";",
+      "scope": "source closure only; parent must census the actual boot FDT/platform devices"
+    }
+  }
+}

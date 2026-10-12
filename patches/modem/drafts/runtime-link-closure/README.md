@@ -1,6 +1,9 @@
 # Full OWNER + private SMEM consumer module link candidate
 
-Status: source checks passed; new full module linkage is CI-pending. Nothing
+Status: source checks and full strict ARM64 linkage passed CI38255895881 at
+5379657. Eight vendor modules, the real backend and existing provider have
+matching r181 ABI and genuine export/dependency closure. They were not loaded.
+Nothing
 in this directory installs, loads or starts a module, dispatches CI, changes
 DT/config, or edits the parent helper/workflow. Frozen drafts remain unchanged.
 
@@ -98,8 +101,12 @@ python3 -B patches/modem/drafts/runtime-link-closure/inspect_evidence.py \
 The second command needs pyelftools and only reads genuine ELF files/tables.
 It is optional and is not used by the CI linker. Source checks apply the entire
 shipping/frozen stack and extract the real r181 backend with `git apply`.
-No native compilation or emulation was run locally. A successful future link
-establishes an ABI/build boundary only. Private preparation still requires
+No native compilation or emulation was run locally. The successful full link
+establishes an ABI/build boundary only. A separate `--hif-resources` build
+applies the reviewed resource-only profile, checks its complete source output
+and validates the read-only `private_prepare` module parameter. Its output
+directory must differ from the baseline; neither build changes shipping DT.
+Private preparation still requires
 reviewed resource-only HIF suppliers, authenticated memory/access ownership and
 hardware lifecycle evidence; no READY, SIM, calls, safe unload or physical OFF
 claim follows from these artifacts.

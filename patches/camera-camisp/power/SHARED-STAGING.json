@@ -12,8 +12,8 @@
   "source_sha256": {
     "patches/camera-camisp/power/mt6878-cam-power.c": "98c2fb4c1516d47acea6427d30d274354030c0dad3ead0f45fb8e6bd2cf98ae4",
     "patches/camera-camisp/power/mt6878-cam-power.h": "ecb89cf46cd380930e856902dfb4cfac8be09a8a37874796a0304c1d86e01389",
-    "patches/camera-camisp/power/mt6878-vmm-supplier.c": "b17d909425ece42d4de69bda1d9c4aee8abc6f4e5957f027a813cdd49de5b76d",
-    "patches/camera-camisp/power/mt6878-vmm-supplier.h": "5504217f797a706505742bae923234408b92874a2a8889cbb0979e9120d73cd0",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.c": "23c4cdea6559703fffd09b8591d213b207d8a7fd1ac19afb5f435f99bb798f8b",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.h": "7cb842a8240d4587aacd77bc0ce8d6c6c7bafcf982e2ebcad0fb68c5ac451082",
     "patches/camera-camisp/power/Kbuild.shared": "32116fcf0a9de632b50de1a0fd2ca1e219f76b19358e44a083939d67447ccdff"
   },
   "research_objects": [

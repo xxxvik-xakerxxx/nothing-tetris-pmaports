@@ -41,6 +41,17 @@ int mt6878_vmm_check(struct mt6878_vmm_supplier *vmm);
 /* Leaf callbacks must latch their original errno BEFORE genpd supplier unwind. */
 int mt6878_vmm_fail_child(struct mt6878_vmm_supplier *vmm, int error);
 /*
+ * Checked CAM_MAIN/CAM_VCORE control phase for sleeping genpd callbacks.
+ * Caller holds the guarded graph's parent references and serializes the leaf.
+ * ON: basic/LP clocks ready; follow with subsystem clocks, SRAM, bus release.
+ * OFF: buses protected, SRAM off and subsystem clocks disabled beforehand.
+ * Uses this owner's SPM and lock; any I/O error is latched before returning.
+ * Stop the callback on failure, retaining dependencies; no cleanup or retry.
+ * Other callback phases must still report errors with mt6878_vmm_fail_child().
+ */
+int mt6878_vmm_cam_ctl_set(struct mt6878_vmm_supplier *vmm,
+			   unsigned int domain, bool on);
+/*
  * Call during quiescent provider construction, before publishing any children.
  * guard_dev must already be attached directly to child; both persist forever.
  * Every immediate child must use this function, including ISP and non-CAM users.

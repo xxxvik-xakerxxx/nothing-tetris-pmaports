@@ -280,6 +280,8 @@ jobs:
           sh patches/camera-ccd-bus/run-mapped-tests.sh
       - name: Validate native satellite configuration producers
         run: sh patches/gnss-navigation-audit/native-config-completion/run_ci.sh
+      - name: Validate native AGPS reverse receiver lifecycle
+        run: sh patches/gnss-navigation-audit/native-agps-receiver/run_ci.sh
       - name: Validate GNSS host services and second configuration
         id: gnss_host_candidate
         continue-on-error: true
@@ -370,6 +372,9 @@ jobs:
           BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
             sh patches/gnss-navigation-audit/native-config-completion/run_ci.sh \
               --bionic-compile out/b41-native-satellite-config-test
+          BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
+            sh patches/gnss-navigation-audit/native-agps-receiver/run_ci.sh \
+              --bionic-compile out/b41-native-agps-receiver-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
             patches/gnss-navigation-audit/b41_startup_adapter.c \
             patches/gnss-navigation-audit/test_b41_startup_adapter.c \

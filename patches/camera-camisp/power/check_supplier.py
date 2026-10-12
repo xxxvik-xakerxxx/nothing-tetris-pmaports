@@ -49,21 +49,37 @@ def source_contract(code, header):
                           "mt6878_vmm_iso_set(vmm->spm,true)", "regulator_disable(vmm->buck)",
                           "vmm_check_rail(vmm,false)"],
         "mt6878_vmm_check": ["vmm_check_rail(vmm,true)", "vmm_check_isolation(vmm,false)"],
+        "mt6878_vmm_cam_ctl_set": ["vmm_check_rail(vmm,true)",
+                                   "vmm_check_isolation(vmm,false)",
+                                   "mt6878_cam_ctl_set(vmm->spm,domain,on)"],
     }
     for name, calls in sequences.items():
         b = body(code, name)
-        actual = re.findall(r"ret=((?:vmm_check_\w+|regulator_\w+|mt6878_vmm_iso_set)\([^;]+\));", b)
+        actual = re.findall(r"ret=((?:vmm_check_\w+|regulator_\w+|mt6878_vmm_iso_set|mt6878_cam_ctl_set)\([^;]+\));", b)
         require(actual == calls, "ordered shared transaction: " + name)
         for call in calls:
             require("ret=" + call + ";if(ret)gotofault;" in b, "stop on first failure: " + call)
         require("fault:ret=vmm_fail(vmm,ret);out:mutex_unlock(&vmm->lock);returnret;" in b,
                 "fault latch, unlock, original errno: " + name)
         require(b.index("vmm->first_error") < b.index(calls[0]), "sticky fault before any I/O")
-        sticky = ("ret=vmm->first_error;if(ret)gotoout;" if name == "mt6878_vmm_check" else
+        sticky = ("ret=vmm->first_error;if(ret)gotoout;" if name in
+                  ("mt6878_vmm_check", "mt6878_vmm_cam_ctl_set") else
                   "if(vmm->first_error){ret=vmm->first_error;gotoout;}")
         require(sticky in b, "sticky fault must actually stop: " + name)
         require(b.count("mutex_lock(&vmm->lock)") == 1 and b.count("mutex_unlock(&vmm->lock)") == 1,
                 "serialized callback: " + name)
+    leaf = body(code, "mt6878_vmm_cam_ctl_set")
+    require(leaf ==
+            "intret;if(!vmm||!vmm->initialized)return-EINVAL;"
+            "if(domain!=MT6878_POWER_DOMAIN_CAM_MAIN&&domain!=MT6878_POWER_DOMAIN_CAM_VCORE)"
+            "return-EINVAL;mutex_lock(&vmm->lock);ret=vmm->first_error;if(ret)gotoout;"
+            "ret=vmm_check_rail(vmm,true);if(ret)gotofault;"
+            "ret=vmm_check_isolation(vmm,false);if(ret)gotofault;"
+            "ret=mt6878_cam_ctl_set(vmm->spm,domain,on);if(ret)gotofault;gotoout;"
+            "fault:ret=vmm_fail(vmm,ret);out:mutex_unlock(&vmm->lock);returnret;",
+            "owned CAM control phase: validate, check, transact and latch before unlocking")
+    require("intmt6878_vmm_cam_ctl_set(structmt6878_vmm_supplier*vmm,"
+            "unsignedintdomain,boolon);" in clean(header), "checked CAM control API")
     init = body(code, "mt6878_vmm_supplier_init")
     require('vmm->buck=regulator_get_exclusive(dev,"vmm");' in init, "exclusive real buck, no dummy")
     require("if(vmm->buck)returnvmm->first_error?vmm->first_error:-EBUSY;" in init,

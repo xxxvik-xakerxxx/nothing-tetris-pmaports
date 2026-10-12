@@ -86,7 +86,7 @@ def backend_sources():
     return sources
 
 
-def stage(vendor, destination, report):
+def stage(vendor, destination, report, hif_resources=False):
     staging = load('link_full_staging', HERE.parent / 'runtime-object-ci/check_objects.py')
     manifest, smoke, package = staging.plan()
     if manifest['vendor_commit'] != VENDOR or manifest['kernel']['kernel_commit'] != LINUX:
@@ -108,6 +108,27 @@ def stage(vendor, destination, report):
     for name, expected in bundles['consumer.overlay'][2].items():
         if (destination / name).read_text() != expected:
             raise ValueError('complete consumer source differs: ' + name)
+    if hif_resources:
+        directory = HERE.parent / 'runtime-hif-resources'
+        resources = load('full_link_hif_resources', directory / 'check_resources.py')
+        resources.review()
+        overlay, before, after, evidence = resources.build(vendor)
+        if overlay != (directory / 'resources.overlay').read_text():
+            raise ValueError('reviewed HIF resource overlay differs')
+        frozen = json.loads((directory / 'SOURCE-EVIDENCE.json').read_text())
+        if any(frozen.get(key) != value for key, value in evidence.items()):
+            raise ValueError('HIF source evidence differs')
+        for name, source in before.items():
+            if (destination / name).read_text() != source:
+                raise ValueError('HIF resource input differs: ' + name)
+        run(['git', 'apply', '--check', '-'], cwd=destination, input=overlay, text=True)
+        run(['git', 'apply', '-'], cwd=destination, input=overlay, text=True)
+        for name, source in after.items():
+            if (destination / name).read_text() != source:
+                raise ValueError('HIF resource output differs: ' + name)
+        report['hif_resources'] = dict(review_sha256=sha(directory / 'REVIEW.sha256'),
+            overlay_sha256=sha(directory / 'resources.overlay'), evidence=evidence,
+            scope='resource-only; default private_prepare=false; no IRQ mapping, MMIO, DMA or START')
     report['vendor_source_sha256'] = {
         str(path.relative_to(destination)): sha(path)
         for path in sorted(destination.rglob('*'))
@@ -191,7 +212,7 @@ def build_ci(args, report):
     if not report.get('destination_created') or not destination.is_dir():
         raise ValueError('missing owned failure-report destination')
     vendor = destination / 'vendor'
-    manifest, smoke = stage(args.vendor.resolve(), vendor, report)
+    manifest, smoke = stage(args.vendor.resolve(), vendor, report, args.hif_resources)
     if report['consumer_review_sha256'] != binding['review_sha256'] or \
             sha(vendor / PREFIX / 'include/mt-plat/tetris_ccci_smem.h') != binding['common_header_sha256']:
         raise ValueError('provider/consumer reviewed ABI differs')
@@ -219,6 +240,8 @@ def build_ci(args, report):
     flags = manifest['vendor_kcflags'] + ' -I' + str(vendor / 'include') + \
         ' -DCONFIG_MTK_ECCCI_TETRIS_OWNER=1 -DCONFIG_TETRIS_CCCI_SMEM_CONSUMER=1' \
         ' -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=int-conversion'
+    if args.hif_resources:
+        flags += ' -DCONFIG_TETRIS_CCCI_HIF_RESOURCES=1'
     command = [*make, 'M=' + str(link), 'KERNEL_SRC=' + str(kernel),
                'KERNEL_OUT=' + str(configured), 'DEVICE_MODULES_PATH=' + str(vendor),
                'CONFIG_ARM64=y', 'CONFIG_MTK_ECCCI_DRIVER=m', 'CONFIG_MTK_ECCCI_TETRIS_OWNER=y',
@@ -237,6 +260,12 @@ def build_ci(args, report):
     report['modules'] = modules
     report['full_symvers_sha256'] = sha(link / 'Module.symvers')
     core = link / 'eccci/ccci_md_all.ko'
+    if args.hif_resources:
+        parameters = output(['modinfo', '-F', 'parm', core]).splitlines()
+        if not any(line.startswith('private_prepare:') and line.endswith('(bool)')
+                   for line in parameters):
+            raise ValueError('resource core lacks explicit private preparation parameter')
+        report['hif_resources']['core_parameters'] = parameters
     imports = native_symbols(core, '--undefined-only')
     if not set((*BACKEND_EXPORTS, PROVIDER_EXPORT)) <= imports:
         raise ValueError('complete OWNER+CONSUMER native dependencies not retained')
@@ -282,6 +311,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--vendor', type=Path, required=True)
     parser.add_argument('--source-check', action='store_true')
+    parser.add_argument('--hif-resources', action='store_true')
     parser.add_argument('--work', type=Path, default=Path('/tmp/tetris-kernel-smoke'))
     parser.add_argument('--destination', type=Path, default=Path('/tmp/tetris-ccci-full-link'))
     args = parser.parse_args()
@@ -291,7 +321,7 @@ def main():
                   backend_kbuild_sha256=sha(HERE / 'backend.Kbuild'))
     if args.source_check:
         with tempfile.TemporaryDirectory(prefix='ccci-link-source-') as temp:
-            stage(args.vendor.resolve(), Path(temp) / 'vendor', report)
+            stage(args.vendor.resolve(), Path(temp) / 'vendor', report, args.hif_resources)
             backend_sources()
         print('Source-only complete stack and exact r181 backend PASS; full link remains CI-pending')
         return

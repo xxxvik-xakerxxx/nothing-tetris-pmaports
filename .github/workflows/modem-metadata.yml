@@ -73,6 +73,9 @@ jobs:
           python3 patches/modem/drafts/runtime-smem-consumer/run_native_ci.py \
             --vendor out/vendor \
             2>&1 | tee out/modem-smem-native/private-consumer.log
+          python3 -B patches/modem/drafts/runtime-hif-resources/run_native_ci.py \
+            --vendor out/vendor --report out/modem-smem-native/hif-resources.json \
+            2>&1 | tee out/modem-smem-native/hif-resources.log
       - name: Execute real SMEM boot-evidence producer and decoder
         env:
           CC: clang
@@ -128,6 +131,12 @@ jobs:
           python3 -B patches/modem/drafts/runtime-link-closure/link_full.py \
             --vendor /tmp/tetris-kernel-smoke/vendor-git-source \
             --destination /tmp/tetris-ccci-full-link
+      - name: Link resource-only CCCI profile without transport activation
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/modem/drafts/runtime-link-closure/link_full.py \
+            --vendor /tmp/tetris-kernel-smoke/vendor-git-source \
+            --hif-resources --destination /tmp/tetris-ccci-resource-link
       - name: Preserve complete CCCI link outcome
         if: always()
         run: |
@@ -135,6 +144,12 @@ jobs:
           for name in full-link.json backend-link.log full-link.log artifacts; do
             if test -e "/tmp/tetris-ccci-full-link/$name"; then
               cp -R "/tmp/tetris-ccci-full-link/$name" out/kernel-object-smoke/full-ccci-link/
+            fi
+          done
+          mkdir -p out/kernel-object-smoke/resource-ccci-link
+          for name in full-link.json backend-link.log full-link.log artifacts; do
+            if test -e "/tmp/tetris-ccci-resource-link/$name"; then
+              cp -R "/tmp/tetris-ccci-resource-link/$name" out/kernel-object-smoke/resource-ccci-link/
             fi
           done
       - uses: actions/upload-artifact@v7

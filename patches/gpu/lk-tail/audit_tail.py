@@ -46,6 +46,7 @@ WINDOWS = (
     ("memset", 0x6a98c, 0x6aaf8, "b9a5950864ab631a1874cceb62fbe869f43759eaa5aab1faf4949302b9d12e0a"),
     ("logger", 0x69c28, 0x69cf8, "fdd21e44465c449759253ead7a1894ec58bc747b4f68de3285d5fe3fe834f6c3"),
     ("byte_reader_dispatch", 0x67edc, 0x67f0c, "93c30eca152109a73862c45339ad6e226bee65c49ab3e5f6d92faa040acf96d5"),
+    ("allocator_name_copy", 0x6ace8, 0x6ad7c, "e758321b01e31f7a7c9a73fca67e102960aeefc36096d6021f88b2dd797aed04"),
 )
 
 
@@ -177,6 +178,87 @@ def mapper_tables(payload, code):
     return result
 
 
+def allocator_name_copy_contract(code):
+    """Close one leaf writer's bounds, without assuming its destination aliases.
+
+    This is a fixed instruction/CFG proof, not execution or emulation. At
+    entry let D=x0, S=x1, n=x2. The byte loop writes offsets 0 through n-1,
+    stopping at a first NUL k. Padding then covers [k, n): even pairs followed
+    by at most one residual byte. All stores derive from D; no stack stores,
+    calls or system effects exist. Valid nonwrapping buffers are a precondition.
+    """
+    start, end = 0x6ace8, 0x6ad7c
+    leaf = {pc: i for pc, i in code.items() if start <= pc < end}
+    require(set(leaf) == set(range(start, end, 4)), "incomplete name-copy leaf")
+    instructions = (
+        ("mov", "x8, xzr"), ("cbz", "x2, #0x6ad0c"),
+        ("ldrb", "w9, [x1, x8]"), ("strb", "w9, [x0, x8]"),
+        ("cbz", "w9, #0x6ad1c"), ("add", "x8, x8, #1"),
+        ("cmp", "x2, x8"), ("b.ne", "#0x6acf0"),
+        ("b", "#0x6ad78"), ("mov", "x11, x0"),
+        ("cmp", "x8, x2"), ("b.lo", "#0x6ad28"),
+        ("b", "#0x6ad78"), ("add", "x11, x0, x8"),
+        ("cmp", "x8, x2"), ("b.hs", "#0x6ad78"),
+        ("sub", "x10, x2, x8"), ("cmp", "x10, #2"),
+        ("b.hs", "#0x6ad3c"), ("mov", "x9, x11"),
+        ("b", "#0x6ad68"), ("and", "x12, x10, #0xfffffffffffffffe"),
+        ("add", "x8, x8, x12"), ("add", "x9, x11, x12"),
+        ("add", "x11, x11, #1"), ("mov", "x13, x12"),
+        ("sturh", "wzr, [x11, #-1]"), ("add", "x11, x11, #2"),
+        ("subs", "x13, x13, #2"), ("b.ne", "#0x6ad50"),
+        ("cmp", "x10, x12"), ("b.eq", "#0x6ad78"),
+        ("sub", "x8, x2, x8"), ("subs", "x8, x8, #1"),
+        ("strb", "wzr, [x9], #1"), ("b.ne", "#0x6ad6c"),
+        ("ret", ""),
+    )
+    require(len(instructions) == len(leaf), "name-copy proof coverage")
+    for offset, (mnemonic, operands) in enumerate(instructions):
+        expect(leaf, start + 4 * offset, mnemonic, operands)
+    for check in (
+        (0x145b4, "bl", "#0x6ac9c"), (0x145b8, "cmp", "x0, #0x7f"),
+        (0x145bc, "b.hi", "#0x14618"), (0x145c0, "mov", "x2, x0"),
+        (0x145c4, "mov", "x0, x27"), (0x145c8, "mov", "x1, x19"),
+        (0x145cc, "bl", "#0x6ace8"),
+    ):
+        expect(code, *check)
+    caller = {pc: i for pc, i in code.items() if 0x14190 <= pc < 0x148dc}
+    reached, edges, _ = cfg(caller, 0x14190)
+    require(0x145cc in reached, "name-copy call unreachable")
+    # Check every incoming edge to the argument block, including error paths
+    # whose callees may return. No path may enter after the unsigned cap.
+    for pc in range(0x145bc, 0x145d0, 4):
+        incoming = {source for source, targets in edges.items() if pc in targets}
+        require(incoming == {pc - 4}, "name-copy count guard bypass")
+    leaf_reached, _, exits = cfg(leaf, start)
+    require(leaf_reached == set(leaf) and not exits, "name-copy leaf CFG escapes")
+    require(not any(i.mnemonic in {"bl", "blr"} for i in leaf.values()),
+            "name-copy leaf has calls")
+    require([(w["site"], w["operation"], w["bases"]) for w in memory_writers(leaf)] ==
+            [(0x6acf4, "strb", ["x0"]), (0x6ad50, "sturh", ["x11"]),
+             (0x6ad70, "strb", ["x9"])], "name-copy writer set changed")
+    return {
+        "call": 0x145cc, "entry": start, "end_exclusive": end,
+        "callee_transitive_write_extent_proven": True,
+        "destination": "caller x27 (allocator record name field)",
+        "source": "caller x19 (allocation name)",
+        "count": "unsigned x0 after 0x145b4, capped by 0x145b8/0x145bc",
+        "count_range_inclusive": [0, 127],
+        "write_interval_relative_to_destination": "[0, count)",
+        "maximum_write_interval_relative_to_destination": [0, 127],
+        "read_interval_relative_to_source": "[0, count); stops after first NUL",
+        "return": "original destination x0; unchanged",
+        "zero_count_writes": False,
+        "padding": "after first NUL k, zeroes [k, count); no extra terminator",
+        "writer_sites": [0x6acf4, 0x6ad50, 0x6ad70],
+        "nested_calls": [], "system_effects": [], "window_exits": exits,
+        "preconditions": "valid nonwrapping buffers; normal AAPCS64 returns; no async writers",
+        "strlen_behavior_proven": False,
+        "destination_nonalias_with_staging_proven": False,
+        "initializes_source_tail_proven": False,
+        "remaining_obligation": "allocator record destination must be proven disjoint from staging",
+    }
+
+
 def local_proofs(code, payload):
     checks = (
         (0x16ec0, "mov", "w0, wzr"), (0x16ec4, "ret", ""),
@@ -282,6 +364,7 @@ def audit(primary, raw):
         all_code.update(code)
         windows[name] = code
     proofs = local_proofs(all_code, payload)
+    proofs["allocator_name_copy"] = allocator_name_copy_contract(all_code)
     tables = mapper_tables(payload, all_code)
     proofs["mapper_jump_tables"] = [
         {"site": site, "targets": targets, "index_bits": 2}
@@ -302,6 +385,8 @@ def audit(primary, raw):
             dest = target(i) if i.mnemonic == "bl" else None
             call = {"site": pc, "target": dest, "caller_reachable": pc in reached,
                     "callee_window_present": dest in entries}
+            if pc == proofs["allocator_name_copy"]["call"]:
+                call["write_contract"] = "local_proofs.allocator_name_copy"
             calls.append(call)
             if pc in reached and dest not in entries:
                 frontier.append({"window": name, **call})
@@ -320,6 +405,7 @@ def audit(primary, raw):
                      "cfg_scope": "caller may-return overapproximation; indirect jumps are explicit exits",
                      "assumptions": "normal AAPCS64 returns; callback receives selected RV33 header name",
                      "resolved_indirect_mapper_sites": [0x7048, 0x7078],
+                     "closed_leaf_write_contract_calls": [0x145cc],
                      "indirect_storage_site": 0x67f08},
         "unresolved_obligations": [
             "All unexpanded reachable callees and indirect exits need write/alias contracts.",

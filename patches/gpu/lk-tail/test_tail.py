@@ -12,7 +12,7 @@ import struct
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import audit_tail as audit
 
@@ -57,6 +57,58 @@ class TailTests(unittest.TestCase):
         self.assertEqual([(w["site"], w["operation"]) for w in cache["writers"]],
                          [(0x5e7c, "dc")])
         self.assertFalse(self.report["local_proofs"]["post_load_cache"]["fills_memory"])
+
+    def test_name_copy_closes_exactly_one_frontier_with_bounded_writes(self):
+        proof = self.report["local_proofs"]["allocator_name_copy"]
+        self.assertTrue(proof["callee_transitive_write_extent_proven"])
+        self.assertEqual((proof["call"], proof["entry"], proof["end_exclusive"]),
+                         (0x145cc, 0x6ace8, 0x6ad7c))
+        self.assertEqual(proof["count_range_inclusive"], [0, 127])
+        self.assertEqual(proof["maximum_write_interval_relative_to_destination"], [0, 127])
+        self.assertFalse(proof["zero_count_writes"])
+        self.assertFalse(proof["strlen_behavior_proven"])
+        self.assertFalse(proof["destination_nonalias_with_staging_proven"])
+        self.assertFalse(proof["initializes_source_tail_proven"])
+        self.assertEqual(proof["nested_calls"], [])
+        self.assertEqual(proof["system_effects"], [])
+        self.assertEqual(proof["window_exits"], [])
+        self.assertEqual(self.report["coverage"]["closed_leaf_write_contract_calls"],
+                         [0x145cc])
+        leaf = next(w for w in self.report["census"] if w["name"] == "allocator_name_copy")
+        self.assertEqual(leaf["decoded_instructions"], 37)
+        self.assertEqual(leaf["calls"], [])
+        self.assertEqual([w["site"] for w in leaf["writers"]], proof["writer_sites"])
+        frontier = self.report["unexpanded_call_frontier"]
+        self.assertEqual(len(frontier), 73)
+        self.assertNotIn(0x145cc, [c["site"] for c in frontier])
+        for unresolved_strlen in (0x145b4, 0x145d4):
+            self.assertIn(unresolved_strlen, [c["site"] for c in frontier])
+        caller = next(w for w in self.report["census"] if w["name"] == "mblock")
+        call = next(c for c in caller["calls"] if c["site"] == 0x145cc)
+        self.assertTrue(call["caller_reachable"])
+        self.assertEqual(call["write_contract"], "local_proofs.allocator_name_copy")
+
+    def test_name_copy_every_instruction_and_argument_guard_mutation_rejected(self):
+        # Exercise the semantic contract independently of all identity hashes.
+        for pc in (*range(0x6ace8, 0x6ad7c, 4), *range(0x145b4, 0x145d0, 4)):
+            with self.subTest(pc=hex(pc)):
+                changed = dict(self.code)
+                changed[pc] = self.code[0x16ec0 if pc == 0x6ad78 else 0x16ec4]
+                with self.assertRaisesRegex(ValueError, "instruction mismatch"):
+                    audit.allocator_name_copy_contract(changed)
+        changed = dict(self.code)
+        del changed[0x6ad50]
+        with self.assertRaisesRegex(ValueError, "incomplete name-copy leaf"):
+            audit.allocator_name_copy_contract(changed)
+
+    def test_name_copy_count_cap_cannot_be_bypassed(self):
+        for entry in (0x145bc, 0x145c0, 0x145c4, 0x145c8, 0x145cc):
+            with self.subTest(entry=hex(entry)):
+                changed = dict(self.code)
+                changed[0x14590] = Mock(mnemonic="b", operands=[
+                    Mock(type=audit.ARM64_OP_IMM, imm=entry)])
+                with self.assertRaisesRegex(ValueError, "name-copy count guard bypass"):
+                    audit.allocator_name_copy_contract(changed)
 
     def test_callback_excludes_actions_but_retains_frontiers(self):
         proof = self.report["local_proofs"]["post_load_callback"]

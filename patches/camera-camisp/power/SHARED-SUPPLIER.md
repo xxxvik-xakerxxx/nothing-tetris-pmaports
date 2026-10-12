@@ -3,8 +3,13 @@
 `mt6878-vmm-supplier.c` supplies executable native genpd callbacks, guarded
 subdomain attachment and an exclusive regulator owner. It is an uncalled
 integration library, with no initcall, OF provider, DT change or shipping link.
-The prior leaf object passed ARM64 CI38245658821 according to the user; this
-new supplier object has only source checks, not a compilation result.
+The prior leaf object passed ARM64 CI38245658821. Both real source objects now
+also passed ARM64 compilation with KUnit enabled and disabled in CI38255895881
+at 5379657. This is object-only: the composite/vmlinux link and hardware remain
+untested. The KUnit-disabled supplier object SHA256 is
+`54e9271c4630bb63db1a4a36a70b0d8f69469cb7588eb6af8778ee17df57f157`.
+That result predates the checked CAM control adapter below; the modified
+supplier source has source checks only and has not been compiled or linked.
 
 ## Ownership and graph
 
@@ -90,6 +95,40 @@ fallback. This applies to CAM_MAIN and other descendants as well as VCORE.
 Every bus-using consumer resume must call `mt6878_vmm_check()` after acquiring
 its PM leases and before access, including when its own domain is cached ON.
 A genpd callback guard alone cannot intercept that cached-ON resume path.
+
+### Checked CAM control phase
+
+`mt6878_vmm_cam_ctl_set()` now implements the supplier-owned control phase for
+CAM_VCORE and CAM_MAIN, including the descendant whose failure would otherwise
+reach the immediate VCORE guard without its original errno. It rejects an
+uninitialized owner or any other domain before I/O. For both ON and OFF, it
+holds the supplier mutex across the sticky-fault check, enabled-rail and
+de-isolated readback, and the existing `mt6878_cam_ctl_set()` transaction using
+the supplier's own SPM regmap. Any read, write or ACK failure reaches
+`vmm_fail()` under that same lock before the adapter returns. The original
+errno is therefore retained before genpd's opposite completion notification
+or parent unwind; the guard's fallback cannot replace it. There is no balancing
+disable or inverse leaf transition on failure.
+
+This is one control-phase adapter, still uncalled. A sleeping, guarded genpd
+callback must already own its parent references and serialize its leaf. For
+ON, basic/LP clocks precede the adapter, then subsystem clocks, SRAM and bus
+release follow it. For OFF, bus protection, SRAM shutdown and subsystem clock
+disable precede it. Errors in those surrounding phases still require
+`mt6878_vmm_fail_child()` before returning, and every error stops the callback
+without releasing dependencies. The adapter does not acquire PM references,
+install callbacks, migrate the direct supply descriptor or cover ISP controls.
+Consumer resume checks and provider construction remain activation gates.
+
+The sequence is grounded in the same frozen B4.1 device-module commit:
+`drivers/soc/mediatek/mtk-scpsys.c:604` (ON) and `:776` (OFF), with the CAM
+descriptors and CAM_VCORE -> CAM_MAIN edge in `mtk-scpsys-mt6878.c`.
+The SHA512-verified native `drivers/pmdomain/core.c:831` and `:1043` show the
+completion notification and parent unwind after a failed leaf callback.
+Focused negative source tests reject skipped preflight checks, wrong owner or
+domain, an inverted direction, dropped/replaced errno, early unlock and a
+missing public declaration. They inspect source only; runtime serialization,
+hardware retention and callback integration remain untested.
 
 MM_INFRA's normal acknowledgement and HWCCF policy remain with packaged
 0057/0074. A failure before VMM becomes ON may unwind MM_INFRA: no child leaf

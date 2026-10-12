@@ -1,0 +1,920 @@
+diff --git a/drivers/misc/mediatek/eccci/ccci_auxadc.c b/drivers/misc/mediatek/eccci/ccci_auxadc.c
+--- a/drivers/misc/mediatek/eccci/ccci_auxadc.c
++++ b/drivers/misc/mediatek/eccci/ccci_auxadc.c
+@@ -99,6 +99,9 @@
+ 
+ int get_auxadc_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return -EOPNOTSUPP;
++#endif
+ 	int ret;
+ 
+ 	ret = ccci_get_adc_info(&pdev->dev);
+@@ -129,6 +132,10 @@
+ 
+ static int __init ccci_auxadc_init(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	/* Export-only companion; do not register a physical driver. */
++	return 0;
++#endif
+ 	int ret;
+ 
+ 	ret = platform_driver_register(&ccci_auxadc_driver);
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c b/drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_fsm_scp_c.c
+@@ -545,6 +545,9 @@
+ 
+ int ccci_scp_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return -EOPNOTSUPP;
++#endif
+ 	int ret;
+ 
+ 	if (!get_modem_is_enabled()) {
+@@ -582,6 +585,10 @@
+ 
+ static int __init ccci_scp_init(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	/* Export-only companion; do not register a physical driver. */
++	return 0;
++#endif
+ 	int ret;
+ 
+ 	CCCI_NORMAL_LOG(-1, FSM, "ccci scp driver init start\n");
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_dependencies.h
+@@ -1,3 +1,6 @@
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++#include "tetris_hif_consumer.h"
++#endif
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ /* Private to md_sys1_platform.c; no firmware, MMIO or power operations. */
+ #include <linux/device.h>
+@@ -61,6 +64,9 @@
+ 
+ static int tetris_ccci_dependencies(struct platform_device *consumer)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return tetris_resource_dependencies(consumer);
++#endif
+ 	static const char * const compatibles[] = {
+ 		"mediatek,ccci_ccif", "mediatek,dpmaif",
+ 	};
+diff --git a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+--- a/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
++++ b/drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c
+@@ -1421,9 +1421,19 @@
+ 	.vcore_config = NULL,
+ };
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++#include "tetris_modem_resources.h"
++static bool tetris_private_prepare;
++module_param_named(private_prepare, tetris_private_prepare, bool, 0400);
++MODULE_PARM_DESC(private_prepare, "Opt in to checked private preparation; no hardware activation");
++#endif
++
+ static int md_cd_get_modem_hw_info(struct platform_device *dev_ptr,
+ 	struct ccci_dev_cfg *dev_cfg, struct md_hw_info *hw_info)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return tetris_modem_hw_resources(dev_ptr, dev_cfg, hw_info);
++#endif
+ 	int idx = 0;
+ 	int ret;
+ #ifdef USING_PM_RUNTIME
+@@ -1747,6 +1757,10 @@
+ 
+ static int ccci_modem_probe(struct platform_device *plat_dev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	if (!tetris_private_prepare)
++		return -EOPNOTSUPP;
++#endif
+ 	struct ccci_dev_cfg dev_cfg;
+ 	int ret;
+ 	struct md_hw_info *md_hw;
+@@ -1842,6 +1856,14 @@
+ {
+ 	int ret;
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	/* Loading the full core does not request private preparation. */
++	if (!tetris_private_prepare)
++		return 0;
++	ret = tetris_preflight_driver("mediatek,mddriver");
++	if (ret)
++		return ret;
++#endif
+ 	ret = platform_driver_register(&ccci_modem_driver);
+ 	if (ret) {
+ 		CCCI_ERROR_LOG(-1, TAG,
+@@ -1854,6 +1876,10 @@
+ 
+ static void __exit modem_cd_exit(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	if (tetris_private_prepare)
++		platform_driver_unregister(&ccci_modem_driver);
++#endif
+ }
+ 
+ module_init(modem_cd_init);
+diff --git a/drivers/misc/mediatek/eccci/fsm/register_prepare.h b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+--- a/drivers/misc/mediatek/eccci/fsm/register_prepare.h
++++ b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+@@ -9,8 +9,11 @@
+ static struct ccci_modem *tetris_prepared_md;
+ static int tetris_registration_error;
+ static DEFINE_MUTEX(tetris_registration_lock);
++#if !IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
+ static struct module *tetris_registration_hif_modules[2];
+-
++#endif
++
++#if !IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
+ static int tetris_pin_hif_modules(void)
+ {
+ 	static const unsigned int ids[] = { CCIF_HIF_ID, DPMAIF_HIF_ID };
+@@ -32,6 +35,7 @@
+ 	}
+ 	return 0;
+ }
++#endif
+ 
+ int ccci_tetris_registration_quarantine(int error)
+ {
+@@ -109,8 +113,10 @@
+ 	md->per_md_data.md_capability = cfg->capability;
+ 	md->hw_info = hw;
+ 	md->plat_dev = pdev;
++#if !IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
+ 	pdev->dev.dma_mask = &mddriver_dmamask;
+ 	pdev->dev.coherent_dma_mask = mddriver_dmamask;
++#endif
+ 	md->ops = &md_cd_ops;
+ 	md->md_wdt_irq_id = hw->md_wdt_irq_id;
+ 	atomic_set(&md->reset_on_going, 1);
+@@ -147,9 +153,11 @@
+ 	ret = md->ops->init(md);
+ 	if (ret)
+ 		goto abort_ports;
++#if !IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
+ 	ret = tetris_pin_hif_modules();
+ 	if (ret)
+ 		goto abort_ports;
++#endif
+ 	/* Empty vendor module exits cannot safely release published callbacks. */
+ 	__module_get(THIS_MODULE);
+ 	/* Successful probe means ONLY privately prepared resources. No publication.
+diff --git a/drivers/misc/mediatek/eccci/fsm/tetris_hif_consumer.h b/drivers/misc/mediatek/eccci/fsm/tetris_hif_consumer.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/fsm/tetris_hif_consumer.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include "tetris_hif_resources.h"
++#include "ccci_hif_internal.h"
++
++static int tetris_resource_dependencies(struct platform_device *consumer)
++{
++	static const char *const compatibles[] = { "mediatek,ccci_ccif", "mediatek,dpmaif" };
++	static const unsigned int ids[] = { CCIF_HIF_ID, DPMAIF_HIF_ID };
++	struct platform_device *supplier;
++	struct device_node *node;
++	struct device_link *link;
++	unsigned int i;
++	int ret;
++
++	ret = tetris_passive_node(consumer->dev.of_node);
++	if (ret)
++		return ret;
++	/* This profile must not coexist with any published hardware HIF object. */
++	for (i = 0; i < ARRAY_SIZE(ids); i++) {
++		if (READ_ONCE(ccci_hif[ids[i]]) || READ_ONCE(ccci_hif_op[ids[i]]))
++			return -EBUSY;
++	}
++	for (i = 0; i < ARRAY_SIZE(ids); i++) {
++		ret = tetris_unique_node(compatibles[i], &node);
++		if (ret)
++			return ret;
++		supplier = of_find_device_by_node(node);
++		of_node_put(node);
++		if (!supplier)
++			return -EPROBE_DEFER;
++		link = device_link_add(&consumer->dev, &supplier->dev, DL_FLAG_AUTOREMOVE_CONSUMER);
++		ret = link ? tetris_hif_acquire(&consumer->dev, supplier, ids[i]) : -ENOMEM;
++		put_device(&supplier->dev);
++		if (ret)
++			return ret;
++	}
++	/* Driver core unwinds leases/devres and managed links on probe failure. */
++	return 0;
++}
+diff --git a/drivers/misc/mediatek/eccci/fsm/tetris_modem_resources.h b/drivers/misc/mediatek/eccci/fsm/tetris_modem_resources.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/fsm/tetris_modem_resources.h
+@@ -0,0 +1,70 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include "tetris_hif_resources.h"
++
++static int tetris_modem_hw_resources(struct platform_device *pdev,
++		struct ccci_dev_cfg *cfg, struct md_hw_info *hw)
++{
++	struct resource *mem, *claim;
++	struct of_phandle_args *wdt;
++	u32 generation, platform, hif;
++	unsigned int i;
++	int ret;
++
++	ret = tetris_passive_node(pdev->dev.of_node);
++	if (ret)
++		return ret;
++	if (pdev->dev.pm_domain)
++		return -EOPNOTSUPP;
++	ret = of_property_read_u32(pdev->dev.of_node, "mediatek,md-generation", &generation);
++	if (ret)
++		return ret;
++	ret = of_property_read_u32(pdev->dev.of_node, "mediatek,ap-plat-info", &platform);
++	if (ret)
++		return ret;
++	ret = of_property_read_u32(pdev->dev.of_node, "mediatek,mdhif-type", &hif);
++	if (ret)
++		return ret;
++	if (generation != 6299 || platform != 6878 ||
++	    hif != (BIT(CCIF_HIF_ID) | BIT(DPMAIF_HIF_ID)))
++		return -EOPNOTSUPP;
++	memset(cfg, 0, sizeof(*cfg));
++	ret = of_property_read_u32(pdev->dev.of_node, "mediatek,cldma-capability", &cfg->capability);
++	if (ret)
++		return ret;
++	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	ret = tetris_resource_claim(&pdev->dev, mem, &claim);
++	if (ret)
++		return ret;
++	/* Sequencer is optional in the pinned MT6878 DT. Never use the vendor
++	 * literal fallback or synthesize a DT resource when index 1 is absent. */
++	mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
++	if (mem) {
++		ret = tetris_resource_claim(&pdev->dev, mem, &claim);
++		if (ret)
++			return ret;
++	}
++	wdt = devm_kzalloc(&pdev->dev, sizeof(*wdt), GFP_KERNEL);
++	if (!wdt)
++		return -ENOMEM;
++	ret = tetris_irq_descriptor(&pdev->dev, 0, wdt);
++	if (ret)
++		return ret;
++	/* md_wdt_irq_id remains zero: no Linux IRQ mapping/request exists here. */
++	for (i = 0; i < ARRAY_SIZE(clk_table); i++) {
++		clk_table[i].clk_ref = devm_clk_get(&pdev->dev, clk_table[i].clk_name);
++		if (IS_ERR(clk_table[i].clk_ref))
++			return PTR_ERR(clk_table[i].clk_ref);
++	}
++	ret = tetris_relation(&pdev->dev, "ccci-infracfg", NULL, false);
++	if (ret)
++		return ret;
++	ret = tetris_relation(&pdev->dev, "ccci-topckgen", NULL, false);
++	if (ret)
++		return ret;
++	/* Supply the actual vendor type needed by port-table selection. The physical
++	 * platform callback table stays NULL; private init only logs in pinned B4.1. */
++	md_cd_plat_val_ptr.md_gen = generation;
++	hw->plat_val = &md_cd_plat_val_ptr;
++	ap_plat_info = platform;
++	return 0;
++}
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+@@ -3151,6 +3151,9 @@
+ 
+ static int dpmaif_init_com(struct device *dev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return -EOPNOTSUPP;
++#endif
+ 	int ret;
+ 	struct dpmaif_ctrl *temp_dpmaif_ctl = NULL;
+ 
+@@ -3245,8 +3248,35 @@
+ 	return -1;
+ }
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++#include "tetris_hif_supplier.h"
++static const char *const tetris_hif_clocks[] = {
++	"infra-dpmaif-clk",
++	"infra-dpmaif-blk-clk",
++	"infra-dpmaif-rg-mmw-clk",
++};
++#endif
++
+ static int dpmaif_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	u32 version, platform, capability;
++	int error;
++	error = of_property_read_u32(pdev->dev.of_node, "mediatek,dpmaif-ver", &version);
++	if (error)
++		return error;
++	error = of_property_read_u32(pdev->dev.of_node, "mediatek,plat-info", &platform);
++	if (error)
++		return error;
++	error = of_property_read_u32(pdev->dev.of_node, "mediatek,dpmaif-cap", &capability);
++	if (error)
++		return error;
++	if (version != 3 || platform != 6878)
++		return -EOPNOTSUPP;
++	return tetris_hif_supplier_probe(pdev, DPMAIF_HIF_ID,
++		tetris_hif_clocks, ARRAY_SIZE(tetris_hif_clocks),
++		capability & (DPMAIF_CAP_LRO | DPMAIF_CAP_2RXQ) ? DPMAIF_RXQ_NUM : 1);
++#endif
+ 	if (of_property_read_u32(pdev->dev.of_node,
+ 			"mediatek,dpmaif-ver", &g_dpmf_ver)) {
+ 		CCCI_ERROR_LOG(0, TAG,
+@@ -3343,21 +3373,37 @@
+ 
+ static struct platform_driver g_dpmaif_driver = {
+ 	.driver = {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++		.name = "tetris_dpmaif_resources",
++#else
+ 		.name = "ccci_dpmaif_driver",
++#endif
+ #if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 		.suppress_bind_attrs = true,
+ #endif
+ 		.of_match_table = g_dpmaif_of_ids,
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++		.pm = NULL,
++#else
+ 		.pm = &g_dpmaif_pm_ops,
++#endif
+ 	},
+ 
+ 	.probe = dpmaif_probe,
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	.remove = tetris_hif_supplier_remove,
++#endif
+ };
+ 
+ static int __init ccci_dpmaif_init(void)
+ {
+ 	int ret;
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	ret = tetris_preflight_driver("mediatek,dpmaif");
++	if (ret)
++		return ret;
++#endif
+ 	ret = platform_driver_register(&g_dpmaif_driver);
+ 	if (ret) {
+ 		CCCI_ERROR_LOG(0, TAG, "ccci dpmaif driver init fail %d",
+@@ -3369,6 +3415,9 @@
+ 
+ static void __exit ccci_dpmaif_exit(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	platform_driver_unregister(&g_dpmaif_driver);
++#endif
+ }
+ 
+ module_init(ccci_dpmaif_init);
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+@@ -1828,6 +1828,9 @@
+ 
+ int ccci_ccif_hif_init(struct platform_device *pdev, unsigned char hif_id)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return -EOPNOTSUPP;
++#endif
+ 	int i, ret;
+ 	struct md_ccif_ctrl *ccif_ctrl;
+ 
+@@ -1878,8 +1881,24 @@
+ 	return 0;
+ }
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++#include "tetris_hif_supplier.h"
++static const char *const tetris_hif_clocks[] = {
++	"infra-ccif-ap",
++	"infra-ccif-md",
++	"infra-ccif1-ap",
++	"infra-ccif1-md",
++	"infra-ccif4-md",
++	"infra-ccif5-md",
++};
++#endif
++
+ int ccci_hif_ccif_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return tetris_hif_supplier_probe(pdev, CCIF_HIF_ID,
++		tetris_hif_clocks, ARRAY_SIZE(tetris_hif_clocks), 2);
++#endif
+ 	int ret;
+ 
+ 	ret = ccci_ccif_hif_init(pdev, CCIF_HIF_ID);
+@@ -1944,21 +1963,37 @@
+ static struct platform_driver ccci_hif_ccif_driver = {
+ 
+ 	.driver = {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++		.name = "tetris_ccif_resources",
++#else
+ 		.name = "ccci_hif_ccif",
++#endif
+ #if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
+ 		.suppress_bind_attrs = true,
+ #endif
+ 		.of_match_table = ccci_ccif_of_ids,
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++		.pm = NULL,
++#else
+ 		.pm = &ccif_pm_ops,
++#endif
+ 	},
+ 
+ 	.probe = ccci_hif_ccif_probe,
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	.remove = tetris_hif_supplier_remove,
++#endif
+ };
+ 
+ static int __init ccci_hif_ccif_init(void)
+ {
+ 	int ret;
+ 
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	ret = tetris_preflight_driver("mediatek,ccci_ccif");
++	if (ret)
++		return ret;
++#endif
+ 	ret = platform_driver_register(&ccci_hif_ccif_driver);
+ 	if (ret) {
+ 		CCCI_ERROR_LOG(-1, TAG, "ccci hif_ccif driver init fail %d",
+@@ -1970,6 +2005,9 @@
+ 
+ static void __exit ccci_hif_ccif_exit(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	platform_driver_unregister(&ccci_hif_ccif_driver);
++#endif
+ }
+ 
+ module_init(ccci_hif_ccif_init);
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_cldma.c
+@@ -3236,6 +3236,9 @@
+ 
+ int ccci_hif_cldma_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	return -EOPNOTSUPP;
++#endif
+ 	int ret;
+ 
+ 	CCCI_ERROR_LOG(-1, TAG, "[%s] start", __func__);
+@@ -3266,6 +3269,10 @@
+ 
+ static int __init ccci_cldma_init(void)
+ {
++#if IS_ENABLED(CONFIG_TETRIS_CCCI_HIF_RESOURCES)
++	/* Export-only companion; do not register a physical driver. */
++	return 0;
++#endif
+ 	int ret;
+ 
+ 	ret = platform_driver_register(&ccci_cldma_driver);
+diff --git a/drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h b/drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/hif/tetris_hif_supplier.h
+@@ -0,0 +1,84 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include "tetris_hif_resources.h"
++
++static int tetris_hif_supplier_probe(struct platform_device *pdev, unsigned int id,
++		const char *const *names, unsigned int nclk, unsigned int nirq)
++{
++	struct tetris_hif_resources *res;
++	struct resource *mem;
++	unsigned int i, j;
++	int ret;
++
++	ret = tetris_passive_node(pdev->dev.of_node);
++	if (ret)
++		return ret;
++	if (pdev->dev.pm_domain || platform_get_drvdata(pdev))
++		return -EOPNOTSUPP;
++	res = devm_kzalloc(&pdev->dev, sizeof(*res), GFP_KERNEL);
++	if (!res)
++		return -ENOMEM;
++	res->pdev = pdev;
++	res->owner = THIS_MODULE;
++	res->hif_id = id;
++	res->nmem = id == CCIF_HIF_ID ? 2 : 4;
++	res->nclk = nclk;
++	res->nirq = nirq;
++	if (nclk > ARRAY_SIZE(res->clk) || !nirq || nirq > ARRAY_SIZE(res->irq))
++		return -EINVAL;
++	for (i = 0; i < res->nmem; i++) {
++		mem = platform_get_resource(pdev, IORESOURCE_MEM, i);
++		ret = tetris_resource_range(mem);
++		if (ret)
++			return ret;
++		/* Reject aliasing windows before acquiring a conflicting claim. */
++		for (j = 0; j < i; j++) {
++			if (mem->start <= res->mem[j].end && res->mem[j].start <= mem->end)
++				return -EINVAL;
++		}
++		res->mem[i] = *mem;
++		ret = tetris_resource_claim(&pdev->dev, mem, &res->claim[i]);
++		if (ret)
++			return ret;
++	}
++	for (i = 0; i < nirq; i++) {
++		ret = tetris_irq_descriptor(&pdev->dev, i, &res->irq[i]);
++		if (ret)
++			return ret;
++		for (j = 0; j < i; j++) {
++			if (tetris_same_irq(&res->irq[i], &res->irq[j]))
++				return -EINVAL;
++		}
++	}
++	for (i = 0; i < nclk; i++) {
++		res->clk[i] = devm_clk_get(&pdev->dev, names[i]);
++		if (IS_ERR(res->clk[i]))
++			return PTR_ERR(res->clk[i]);
++	}
++	ret = tetris_relation(&pdev->dev, id == CCIF_HIF_ID ?
++		"ccif-pericfg" : "dpmaif-infracfg", NULL, false);
++	if (ret)
++		return ret;
++	/* The B4.1 reset implementation finds this compatible globally. Requiring
++	 * exactly one retains that relationship without its of_iomap side effect. */
++	ret = tetris_relation(&pdev->dev, NULL, "mediatek,infracfg", false);
++	if (ret)
++		return ret;
++	if (id == CCIF_HIF_ID) {
++		ret = tetris_relation(&pdev->dev, NULL, "mediatek,md_ccif4", true);
++		if (ret)
++			return ret;
++		ret = tetris_relation(&pdev->dev, NULL, "mediatek,md_ccif5", true);
++		if (ret)
++			return ret;
++	}
++	/* Publish only the completed device-owned resource record, never a HIF slot. */
++	platform_set_drvdata(pdev, res);
++	return 0;
++}
++
++static void tetris_hif_supplier_remove(struct platform_device *pdev)
++{
++	platform_set_drvdata(pdev, NULL);
++	/* Driver core releases claims/clocks/node refs and allocations via devres.
++	 * Parsed IRQ descriptors own node refs only, not domain mappings. */
++}
+diff --git a/drivers/misc/mediatek/eccci/inc/tetris_hif_resources.h b/drivers/misc/mediatek/eccci/inc/tetris_hif_resources.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/inc/tetris_hif_resources.h
+@@ -0,0 +1,325 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef TETRIS_HIF_RESOURCES_H
++#define TETRIS_HIF_RESOURCES_H
++#include <linux/clk.h>
++#include <linux/device.h>
++#include <linux/ioport.h>
++#include <linux/irq.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++#include "ccci_hif.h"
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER) || !IS_ENABLED(CONFIG_TETRIS_CCCI_SMEM_CONSUMER)
++#error "HIF resources require the private OWNER + SMEM consumer stack"
++#endif
++#ifndef MODULE
++#error "HIF resource lifetime requires real module ownership"
++#endif
++
++/* Only resource handles. No virtual register pointer, DMA address or HIF ops. */
++struct tetris_hif_resources {
++	struct platform_device *pdev;
++	struct module *owner;
++	unsigned int hif_id;
++	struct resource mem[4];
++	struct resource *claim[4];
++	struct clk *clk[6];
++	struct of_phandle_args irq[2];
++	unsigned int nmem, nclk, nirq;
++};
++
++struct tetris_hif_lease {
++	struct platform_device *pdev;
++	struct module *owner;
++};
++
++static inline int tetris_resource_range(const struct resource *res)
++{
++	if (!res || resource_type(res) != IORESOURCE_MEM ||
++	    res->end < res->start || res->end - res->start == (resource_size_t)~0)
++		return -EINVAL;
++	return 0;
++}
++
++static inline int tetris_resource_claim(struct device *dev,
++		const struct resource *res, struct resource **claim)
++{
++	int ret = tetris_resource_range(res);
++
++	if (ret)
++		return ret;
++	*claim = devm_request_mem_region(dev, res->start, resource_size(res), dev_name(dev));
++	return *claim ? 0 : -EBUSY;
++}
++
++static inline int tetris_unique_node(const char *compatible, struct device_node **out)
++{
++	struct device_node *node, *selected = NULL;
++
++	for_each_compatible_node(node, NULL, compatible) {
++		if (!of_device_is_available(node))
++			continue;
++		if (selected) {
++			of_node_put(selected);
++			of_node_put(node);
++			return -EINVAL;
++		}
++		selected = of_node_get(node);
++	}
++	if (!selected)
++		return -ENODEV;
++	*out = selected;
++	return 0;
++}
++
++static inline void tetris_node_put(void *data)
++{
++	of_node_put(data);
++}
++
++static inline bool tetris_irq_shape(const struct of_phandle_args *irq)
++{
++    return irq->np && of_device_is_compatible(irq->np, "arm,gic-v3") &&
++        (irq->args_count == 3 || irq->args_count == 4) &&
++        irq->args[0] == GIC_SPI &&
++        (irq->args[2] == IRQ_TYPE_EDGE_RISING || irq->args[2] == IRQ_TYPE_LEVEL_HIGH) &&
++        (irq->args_count == 3 || !irq->args[3]);
++}
++
++static inline int tetris_irq_address_shape(struct device_node *controller)
++{
++	struct device_node *node = of_node_get(controller);
++	u32 cells;
++	int ret;
++
++	/* Mirror the parser's inherited lookup without reading its address buffer. */
++	while (node) {
++		struct device_node *next;
++
++		if (of_find_property(node, "#address-cells", NULL)) {
++			ret = of_property_count_u32_elems(node, "#address-cells");
++			if (ret != 1) {
++				of_node_put(node);
++				return -EINVAL;
++			}
++			ret = of_property_read_u32(node, "#address-cells", &cells);
++			of_node_put(node);
++			if (ret)
++				return ret;
++			return cells <= 2 ? 0 : -EOPNOTSUPP;
++		}
++		next = of_get_parent(node);
++		of_node_put(node);
++		node = next;
++	}
++	/* The pinned parser defaults to two cells when no ancestor declares it. */
++	return 0;
++}
++
++static inline int tetris_irq_descriptor(struct device *dev, unsigned int index,
++        struct of_phandle_args *irq)
++{
++    struct of_phandle_args parsed = {0};
++    struct device_node *parent;
++    u32 cells;
++    int count, ret;
++
++    /* The pinned legacy parser copies cells before checking args[] capacity.
++     * B4.1 uses direct GIC SPI descriptions, not extended/nexus translation.
++     */
++    if (of_find_property(dev->of_node, "interrupts-extended", NULL))
++        return -EOPNOTSUPP;
++    parent = of_irq_find_parent(dev->of_node);
++    if (!parent)
++        return -EINVAL;
++    ret = of_property_read_u32(parent, "#interrupt-cells", &cells);
++    if (ret)
++        goto put_parent;
++    ret = -EOPNOTSUPP;
++    if (!of_device_is_compatible(parent, "arm,gic-v3") ||
++        !of_find_property(parent, "interrupt-controller", NULL) ||
++        of_find_property(parent, "interrupt-map", NULL) ||
++        cells > MAX_PHANDLE_ARGS || (cells != 3 && cells != 4))
++        goto put_parent;
++    count = of_property_count_u32_elems(dev->of_node, "interrupts");
++    ret = count < 0 ? count : -EINVAL;
++    if (count <= 0 || count % cells || index >= count / cells)
++        goto put_parent;
++    ret = tetris_irq_address_shape(parent);
++    if (ret)
++        goto put_parent;
++    ret = of_irq_parse_one(dev->of_node, index, &parsed);
++    if (ret)
++        goto put_parent;
++    if (parsed.np != parent || !tetris_irq_shape(&parsed)) {
++        of_node_put(parsed.np);
++        ret = -EINVAL;
++        goto put_parent;
++	}
++    ret = devm_add_action_or_reset(dev, tetris_node_put, parsed.np);
++    if (!ret)
++        *irq = parsed;
++put_parent:
++    of_node_put(parent);
++    return ret;
++}
++
++static inline bool tetris_same_irq(const struct of_phandle_args *a,
++		const struct of_phandle_args *b)
++{
++    return a->np == b->np && a->args[0] == b->args[0] && a->args[1] == b->args[1];
++}
++
++static inline int tetris_relation(struct device *dev, const char *property,
++		const char *compatible, bool exclusive)
++{
++	struct device_node *node;
++	struct resource res, *claim;
++	int ret;
++
++	if (property) {
++		node = of_parse_phandle(dev->of_node, property, 0);
++		if (!node)
++			return -ENODEV;
++		if (!of_device_is_available(node)) {
++			of_node_put(node);
++			return -ENODEV;
++		}
++	} else {
++		ret = tetris_unique_node(compatible, &node);
++		if (ret)
++			return ret;
++	}
++	ret = of_address_to_resource(node, 0, &res);
++	if (!ret)
++		ret = tetris_resource_range(&res);
++	if (!ret && exclusive)
++		ret = tetris_resource_claim(dev, &res, &claim);
++	if (ret) {
++		of_node_put(node);
++		return ret;
++	}
++	/* Shared syscon: retain the actual node, never map it or claim its owner. */
++	return devm_add_action_or_reset(dev, tetris_node_put, node);
++}
++
++/* platform_probe performs defaults/genpd before calling our probe. Check before
++ * driver registration, too. OF population/hot-add is outside this fixed-DT draft. */
++static inline int tetris_passive_node(struct device_node *node)
++{
++	struct device_node *parent;
++	bool unsafe;
++
++	if (!node || !of_device_is_available(node))
++		return -ENODEV;
++	if (of_find_property(node, "power-domains", NULL) ||
++	    of_find_property(node, "assigned-clocks", NULL) ||
++	    of_find_property(node, "assigned-clock-parents", NULL) ||
++	    of_find_property(node, "assigned-clock-rates", NULL) ||
++	    of_find_property(node, "iommus", NULL))
++		return -EOPNOTSUPP;
++	parent = of_get_parent(node);
++	while (parent) {
++		struct device_node *next;
++
++		unsafe = of_find_property(parent, "iommu-map", NULL) != NULL;
++		next = of_get_parent(parent);
++		of_node_put(parent);
++		if (unsafe) {
++			of_node_put(next);
++			return -EOPNOTSUPP;
++		}
++		parent = next;
++	}
++	return 0;
++}
++
++static inline int tetris_preflight_driver(const char *compatible)
++{
++	struct device_node *node;
++	int ret;
++
++	ret = tetris_unique_node(compatible, &node);
++	/* An absent/disabled target permits inert registration, not probe success. */
++	if (ret == -ENODEV)
++		return 0;
++	if (ret)
++		return ret;
++	ret = tetris_passive_node(node);
++	of_node_put(node);
++	return ret;
++}
++
++static inline void tetris_hif_release(void *data)
++{
++	struct tetris_hif_lease *lease = data;
++
++	module_put(lease->owner);
++	put_device(&lease->pdev->dev);
++}
++
++static inline int tetris_hif_acquire(struct device *consumer,
++		struct platform_device *supplier, unsigned int id)
++{
++	const char *name = id == CCIF_HIF_ID ? "tetris_ccif_resources" :
++		"tetris_dpmaif_resources";
++	struct tetris_hif_resources *res;
++	struct tetris_hif_lease *lease;
++	unsigned int i;
++	int ret = -EPROBE_DEFER;
++
++	if (id != CCIF_HIF_ID && id != DPMAIF_HIF_ID)
++		return -EINVAL;
++	lease = devm_kzalloc(consumer, sizeof(*lease), GFP_KERNEL);
++	if (!lease)
++		return -ENOMEM;
++	if (!device_trylock(&supplier->dev))
++		return -EPROBE_DEFER;
++	if (!device_is_bound(&supplier->dev))
++		goto out;
++	/* Legacy suppliers use platform_data; their drvdata is never interpreted. */
++	if (!supplier->dev.driver || strcmp(supplier->dev.driver->name, name)) {
++		ret = -EPROTOTYPE;
++		goto out;
++	}
++	res = platform_get_drvdata(supplier);
++	ret = -EPROTO;
++	if (!res || res->pdev != supplier || res->hif_id != id ||
++	    res->owner != supplier->dev.driver->owner || !res->owner ||
++	    res->nmem != (id == CCIF_HIF_ID ? 2U : 4U) ||
++	    res->nclk != (id == CCIF_HIF_ID ? 6U : 3U) ||
++	    !res->nirq || res->nirq > ARRAY_SIZE(res->irq))
++		goto out;
++	for (i = 0; i < res->nmem; i++) {
++		if (tetris_resource_range(&res->mem[i]) || !res->claim[i])
++			goto out;
++	}
++	for (i = 0; i < res->nclk; i++) {
++		if (IS_ERR_OR_NULL(res->clk[i]))
++			goto out;
++	}
++	for (i = 0; i < res->nirq; i++) {
++		if (!tetris_irq_shape(&res->irq[i]))
++			goto out;
++	}
++	if (!try_module_get(res->owner)) {
++		ret = -ENODEV;
++		goto out;
++	}
++	lease->owner = res->owner;
++	lease->pdev = supplier;
++	get_device(&supplier->dev);
++	ret = devm_add_action_or_reset(consumer, tetris_hif_release, lease);
++out:
++	device_unlock(&supplier->dev);
++	return ret;
++}
++#endif
