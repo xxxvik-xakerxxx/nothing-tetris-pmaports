@@ -109,7 +109,7 @@ jobs:
         with:
           name: tetris-b41-selected-stock-port-assets
           path: out/stock-port-assets/
-          retention-days: 1
+          retention-days: 14
           if-no-files-found: error
       - name: Verify GPS XML with native fault fixtures
         run: |

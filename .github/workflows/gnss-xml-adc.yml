@@ -17,7 +17,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  stock-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run-id: ${{ steps.select.outputs.run-id }}
+    steps:
+      - name: Select available verified stock cache
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=tetris-b41-selected-stock-port-assets&per_page=100" \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .workflow_run.id // empty')
+          if ! printf '%s' "$run_id" | grep -Eq '^[1-9][0-9]*$'; then
+            echo 'No stock cache remains. Complete stock-assets.yml, then repeat this workflow.' >&2
+            exit 1
+          fi
+          printf 'run-id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+
   lna-start-dataflow:
+    needs: stock-inputs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,7 +51,7 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: tetris-b41-selected-stock-port-assets
-          run-id: 38048111345
+          run-id: ${{ needs.stock-inputs.outputs.run-id }}
           github-token: ${{ github.token }}
           path: out/lna-stock
       - name: Fetch exact stock ioctl source
@@ -76,6 +97,7 @@ jobs:
           if-no-files-found: error
 
   native-backends:
+    needs: stock-inputs
     if: ${{ !inputs.lna_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -90,7 +112,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: tetris-b41-selected-stock-port-assets
-          run-id: 38048111345
+          run-id: ${{ needs.stock-inputs.outputs.run-id }}
           github-token: ${{ github.token }}
           path: out/selected-stock
       - name: Check runner admission
