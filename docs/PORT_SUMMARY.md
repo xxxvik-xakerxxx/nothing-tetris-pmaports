@@ -301,6 +301,12 @@ LK copies 258,744 bytes from the same destination; the extra 102,680 bytes have
 no proven initialization/firmware producer. Do not substitute guessed padding,
 BSS or debug xfile bytes. Complete SRAM layout, persistent authenticated
 handoff, power/reset/IRQ ownership and boot readiness remain.
+The pinned B4.1 storage callbacks and selected ATF cipher callback now have
+explicit byte-bound traces: block reads and cipher DMA retain the original
+count, and cache maintenance supplies no RAM contents. The unresolved source
+interval is payload-relative `[0x261a0, 0x3f2b8)`. Source checks also confirm
+our U-Boot authentication/transform path does not decrypt twice. No GPU loader
+behavior was changed or accelerated rendering claimed by this offline audit.
 See [GPU research](GPU_BRINGUP.md) and [exact LK copy boundary](../patches/gpu/uboot-segments/README.md).
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
@@ -317,9 +323,12 @@ The new default-off [CAMISP DMA supplier](../patches/camera-camisp/SOURCE-CONTRA
 connects logical CQI/WDMA ports to real larb13/14, common16/19/31 and the existing
 display-common0/IOMMU providers. It adds source-backed clock/translation restore,
 busy-preserving suspend and CAMSV runtime-PM ordering. Forty-two source-only
-checks, the exact B4.1 topology trace and zero-fuzz isolated staging pass. Actual
-ARM64 compilation is pending CI; no DT activation, driver installation or frame
-capture occurred. Forced supplier withdrawal and lifecycle remain unproven.
+checks, the exact B4.1 topology trace and zero-fuzz isolated staging pass.
+[CI 38225925800](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38225925800)
+at `b41ea66b5a94de59f93bf1dd0d02e76ebd7baac1` passed actual ARM64 CAMISP,
+SMI and IOMMU objects with KUnit enabled and disabled. No KUnit execution,
+linked-driver test, DT activation, installation or frame capture occurred.
+Forced supplier withdrawal and lifecycle remain unproven.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,

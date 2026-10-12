@@ -29,9 +29,15 @@ The MTK reader searches section names, takes payload size from header+4
 `0x67edc`, whose bounded block-device callback is at object+0x70; it does not
 declare a decompressed output size. The security-enabled path invokes
 certificate setup `0x7e338 -> 0x92b5c` before reading, and data authentication
-`0x7e344 -> 0x93068` after reading. Then image processing is
-`0x750c4 -> 0x7e348 -> 0x91f9c`. Unlike the earlier reference, B4.1's last
-target is **not** `0x920e4`. Authentication errors stop loader success.
+`0x7e344 -> 0x93068` after reading. On successful ciphertext digest comparison,
+`0x930e4` or `0x93148` branches to `0x931ac`; `0x931d0` calls `0x91fa0` with
+the original pointer/length. Its transform result is returned through w21.
+Success at `0x7508c` jumps to `0x750cc`, skipping the separate image-processing
+call. The no-authentication branch instead reaches
+`0x750c4 -> 0x7e348 -> 0x91f9c -> 0x91fa0`. Unlike the earlier reference,
+B4.1's target is **not** `0x920e4`. This corrects the previously linear account
+of authentication followed by the fallback transform; it does not add a
+second transform. Authentication/transform errors stop loader success.
 
 OID table base `0xd8df8`, entry 15 is `2.16.886.2454.2.9`. Its big-endian
 INTEGER parser extracts selector bits16:19 at `0x94ea4` and mode bits20:23
@@ -52,7 +58,8 @@ service readiness via `0xde80`, transforms wrapped material through `0x3c51c`
 (selector low byte1 -> key class3), then invokes `0x5a04` with the descriptor
 byte count, same input/output pointer and mode0. Its cipher-driver tail callback
 is indirect; this audit does not claim an expansion operation hidden there.
-There is no output-length parameter allowing LK to learn a larger result.
+The formerly indirect cipher callback is resolved below. There is no
+output-length parameter allowing LK to learn a larger result.
 The handler preserves its incoming selector in x1 and constructs its fixed
 16-byte cipher parameter from ATF's own static bytes before passing x0=stack
 to `0x2bff4`. LK supplies neither that parameter nor a plaintext key. No static
@@ -78,6 +85,56 @@ plaintext-format inspection. Record exact length, digest result and bounded
 structural metadata; do not publish plaintext. Establish whether the handset
 firmware and fixed-span LK belong to different revisions before implementing
 upload. A signed LK reference alone cannot resolve that mismatch.
+
+## Resolved Producer Bounds (2026-10-12)
+
+`producer_bounds()` in the existing audit verifies the pinned instructions and
+selected ATF callback pointer. It reads only cached signed LK and hash-pinned
+ATF; no emulation, native build, secure call or hardware operation is needed.
+
+Partition callback installation `0x68acc` selects `0x68b34`, which translates
+only the source offset and re-enters `0x67edc`. Parent installation `0x68088`
+selects `0x680c8`. Partial blocks use a separate allocation; copies at
+`0x68198..0x681a0` and `0x68324..0x68330` are bounded by remaining bytes.
+The direct full-block path floors the remaining count at `0x681e0`.
+UFS installation `0x3ad4c` selects `0x3afd4 -> 0x36114 -> 0x36478`
+(last callback installed at `0x367d8`). READ(10) carries the requested block
+count (`0x36528/0x3652c`), count <<12 transfer bytes (`0x364e0/0x364f0`),
+and destination (`0x36534`). No larger staging output is requested.
+
+ATF initialization `0x24d14/0x24d18` selects record 2 via `0x59d4`.
+Its pointer at `0x464f8` is VA `0x48837fec`. Dispatch `0x5a9c/0x5aa4`
+reaches `0x37fec -> 0x3801c -> 0x129c` in mode zero. The DMA command at
+`0x14b0..0x14c0` writes input PA, original count, output PA and output
+PA + count -1; the high-address extension uses the same count.
+`0x1590..0x1598` invalidates that extent. Cache helpers
+`0x27f8 -> 0x95ec` and `0x27fc -> 0xa1dc` do not initialize RAM.
+No expansion length or tail initialization is supplied. Actual DMA behavior
+is not measured by this static audit.
+
+Together with the reservation/mapping trace in `audit_gpueb_allocation.py`,
+the remaining missing producer is precisely payload-relative
+`[0x261a0, 0x3f2b8)`, 102680 bytes. Relative to the mapping's base (payload
+starts at +24), it is `[0x261b8, 0x3f2d0)`. LK's word-copy loop at
+`0x1ee08..0x1ee18` reads this interval without an authenticated size check.
+The SRAM clear at `0x1edfc` initializes the destination, then this copy
+overwrites it; it does not initialize the staging source. The larger staging
+reservation and cache maintenance likewise establish no contents for it.
+
+No identified writer in the audited control path produces that interval.
+This is a missing source-backed producer contract, not proof that the tail is
+zero, BSS, xfile, decompressed data, or a valid executable extension. No loader
+or SRAM-owner change is justified by these observations. GPU remains Broken;
+no render node or accelerated rendering is established.
+
+The stock success branch does **not** reveal a double transform in our
+U-Boot checkout `3ef74f1ade1a4d6b5eabc0216ae67b3b9d3a171e`.
+`tetris_scp_security.c:tetris_gpueb_authenticate` verifies signatures/header/
+ciphertext only; its hardware callbacks are SHA256 and local RSA-PSS.
+Both `tetris_gpueb_prepare.c` and `tetris_gpueb_flat.c` then invoke the single
+SMC in `tetris_scp_crypto.c:tetris_scp_crypto_decrypt`. Their diagnostic
+Kconfig options are mutually exclusive. `uboot-segments/test_draft.py` checks
+this actual source chain. No loader correction is warranted.
 
 ## Main Integration And Next Gate
 

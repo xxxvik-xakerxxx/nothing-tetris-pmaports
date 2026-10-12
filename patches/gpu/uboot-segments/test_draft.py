@@ -20,6 +20,31 @@ class Draft(unittest.TestCase):
     def test_actual_checkout_integration(self):
         check_sources(lambda path: (self.tree() / path).read_text())
 
+    def test_uboot_authentication_does_not_double_transform(self):
+        from prepare_native import definition
+        board = self.tree() / BOARD
+        security = (board / "tetris_scp_security.c").read_text()
+        for start in ("int tetris_gpueb_authenticate(", "static int verify_chain(",
+                      "static int verify_hw("):
+            function = definition(security, start)
+            self.assertNotIn("tetris_scp_crypto_decrypt(", function)
+            self.assertNotIn("smc(", function)
+        self.assertIn("rsa_verify_with_pkey(", definition(security, "static int verify_hw("))
+        self.assertIn(".verify = verify_hw", security)
+        for name in ("tetris_gpueb_prepare.c", "tetris_gpueb_flat.c"):
+            code = (board / name).read_text()
+            self.assertEqual(code.count("tetris_gpueb_authenticate("), 1)
+            self.assertEqual(code.count("tetris_scp_crypto_decrypt("), 1)
+            self.assertLess(code.index("tetris_gpueb_authenticate("),
+                            code.index("tetris_scp_crypto_decrypt("))
+        crypto = definition((board / "tetris_scp_crypto.c").read_text(),
+                            "int tetris_scp_crypto_decrypt(")
+        self.assertEqual(crypto.count("ops->smc(TETRIS_SCP_CRYPTO_DECRYPT, selector, 0)"), 1)
+        kconfig = (self.tree() / "arch/arm/mach-mediatek/Kconfig").read_text()
+        retention = kconfig.split("config TETRIS_GPUEB_FLAT_RETENTION_DIAGNOSTIC", 1)[1]
+        self.assertIn("depends on !TETRIS_GPUEB_TRANSFORM_DIAGNOSTIC",
+                      retention.split("\nconfig ", 1)[0])
+
     def test_pinned_fdb0ee29_integration(self):
         def read(path):
             return subprocess.run(["git", "show", f"{BASE}:{path.as_posix()}"],

@@ -50,6 +50,141 @@ def pinned_atf(raw):
     return code
 
 
+def producer_bounds(lk, atf):
+    """Resolve indirect byte-reader/cipher paths, without executing either."""
+    require(hashlib.sha256(lk).hexdigest() == LK_SHA and
+            hashlib.sha256(atf).hexdigest() == ATF_SHA, "binary identity mismatch")
+    for check in (
+        # Authentication success already transforms; do not infer a second call.
+        (0x7508c, "cbz", "w0, #0x750cc"),
+        (0x93090, "mov", "w19, w1"),
+        (0x93094, "mov", "x20, x0"),
+        (0x930c4, "bl", "#0x92354"),
+        (0x930e0, "bl", "#0x918f4"),
+        (0x930e4, "cbz", "w0, #0x931ac"),
+        (0x93144, "bl", "#0x918f4"),
+        (0x93148, "cbz", "w0, #0x931ac"),
+        (0x931c8, "mov", "x0, x20"),
+        (0x931cc, "mov", "w1, w19"),
+        (0x931d0, "bl", "#0x91fa0"),
+        (0x931d8, "mov", "w21, w0"),
+        (0x93190, "mov", "w0, w21"),
+        (0x91f9c, "b", "#0x91fa0"),
+        (0x92008, "stp", "x20, x20, [sp]"),
+        # Partition callback translates the source offset only.
+        (0x67f04, "ldr", "x4, [x0, #0x70]"),
+        (0x67f08, "br", "x4"),
+        (0x68ab4, "adr", "x9, #0x68b34"),
+        (0x68acc, "stp", "x9, x8, [x19, #0x70]"),
+        (0x68b3c, "ldr", "x0, [x0, #0xa8]"),
+        (0x68b40, "madd", "x2, x9, x8, x2"),
+        (0x68b44, "b", "#0x67edc"),
+        (0x6806c, "adr", "x8, #0x680c8"),
+        (0x68088, "stp", "x8, x9, [x21, #0x70]"),
+        (0x680ec, "mov", "x21, x1"),
+        (0x680f4, "mov", "x20, x3"),
+        # First/last partial blocks go through a separate one-block buffer.
+        (0x680fc, "mov", "x1, x26"),
+        (0x68100, "bl", "#0x69204"),
+        (0x68194, "cmp", "x9, x20"),
+        (0x68198, "csel", "x23, x9, x20, lo"),
+        (0x6819c, "mov", "x2, x23"),
+        (0x681a0, "bl", "#0x6a66c"),
+        (0x681e0, "lsr", "w27, w20, w8"),
+        (0x681f0, "csel", "w3, w8, w27, hi"),
+        (0x6820c, "mov", "x1, x21"),
+        (0x68214, "blr", "x8"),
+        (0x68234, "sub", "x20, x20, x25"),
+        (0x682a4, "mov", "x0, x21"),
+        (0x682a8, "mov", "x1, x19"),
+        (0x682ac, "bl", "#0x6a66c"),
+        (0x682c4, "sub", "x20, x20, x2"),
+        (0x68304, "mov", "x1, x19"),
+        (0x68324, "mov", "x0, x21"),
+        (0x68328, "mov", "x1, x19"),
+        (0x6832c, "mov", "x2, x20"),
+        (0x68330, "bl", "#0x6a66c"),
+        # UFS read callback and READ(10) use the requested whole-block count.
+        (0x3ad04, "mov", "w2, #0x1000"),
+        (0x3ad24, "bl", "#0x68008"),
+        (0x3ad2c, "adr", "x22, #0x3afd4"),
+        (0x3ad4c, "str", "x22, [x21, #0x78]"),
+        (0x3b028, "mov", "w3, w19"),
+        (0x3b02c, "mov", "x4, x21"),
+        (0x3b030, "bl", "#0x36114"),
+        (0x3615c, "csel", "w24, w20, w25, lo"),
+        (0x3616c, "mov", "w3, w24"),
+        (0x36174, "blr", "x8"),
+        (0x367c0, "adr", "x9, #0x36478"),
+        (0x367d8, "stp", "x9, x10, [x8, #0x1e8]"),
+        (0x364a0, "mov", "w21, w3"),
+        (0x364e0, "lsl", "w8, w21, #0xc"),
+        (0x364f0, "str", "w8, [sp, #0x28]"),
+        (0x36528, "strb", "w8, [sp, #0x1c]"),
+        (0x3652c, "strb", "w21, [sp, #0x1d]"),
+        (0x36534, "str", "x20, [sp, #0x30]"),
+        (0x36538, "bl", "#0x37ae8"),
+    ):
+        expect(lk, *check)
+    # Initialization selects entry 2 of three 24-byte cipher records.
+    require(struct.unpack_from("<Q", atf, 0x464c8 + 2 * 24)[0] == 0x48837fec,
+            "ATF selected cipher callback mismatch")
+    for check in (
+        (0x24d14, "mov", "w0, #2"),
+        (0x24d18, "bl", "#0x59d4"),
+        (0x59e4, "mov", "w8, #0x18"),
+        (0x59e8, "adrp", "x9, #0x46000"),
+        (0x59ec, "add", "x9, x9, #0x4c8"),
+        (0x59f0, "umaddl", "x8, w0, w8, x9"),
+        (0x59fc, "str", "x8, [x9, #0x2d0]"),
+        (0x5a5c, "ldr", "x8, [x8, #0x2d0]"),
+        (0x5a7c, "mov", "w1, w23"),
+        (0x5a9c, "ldr", "x6, [x8]"),
+        (0x5aa4, "br", "x6"),
+        (0x38000, "cbz", "w5, #0x38018"),
+        (0x38018, "b", "#0x3801c"),
+        (0x38054, "mov", "w23, w1"),
+        (0x3806c, "mov", "w3, w23"),
+        (0x38078, "mov", "x2, x22"),
+        (0x38084, "mov", "x6, x19"),
+        (0x3808c, "bl", "#0x129c"),
+        (0x12ac, "tst", "x3, #0xf"),
+        (0x1330, "mov", "x20, x3"),
+        (0x1334, "mov", "x24, x2"),
+        (0x1390, "bl", "#0x2ff4"),
+        (0x1398, "mov", "x0, x19"),
+        (0x139c, "bl", "#0x2ff4"),
+        (0x13a0, "mov", "x25, x0"),
+        # DMA command: input PA, unchanged count, output PA, output end - 1.
+        (0x14ac, "add", "x27, x25, x20"),
+        (0x14b0, "str", "w24, [x21, #0x104]"),
+        (0x14b4, "sub", "w8, w27, #1"),
+        (0x14b8, "str", "w20, [x21, #0x104]"),
+        (0x14bc, "str", "w25, [x21, #0x104]"),
+        (0x14c0, "str", "w8, [x21, #0x104]"),
+        (0x1590, "mov", "x0, x19"),
+        (0x1594, "mov", "x1, x20"),
+        (0x1598, "bl", "#0x27fc"),
+        (0x27f8, "b", "#0x95ec"),
+        (0x27fc, "b", "#0xa1dc"),
+        (0x960c, "dc", "cvac, x0"),
+        (0xa1fc, "dc", "ivac, x0"),
+    ):
+        expect(atf, *check)
+    return {
+        "authenticated_success_transform": "0x93068 -> 0x931d0 -> 0x91fa0",
+        "success_skips_fallback_transform": "0x7508c -> 0x750cc",
+        "partition_byte_callback": "0x68b34 -> 0x67edc -> 0x680c8",
+        "partial_block_destination": "separate block buffer; bounded memcpy into staging",
+        "ufs_read_callback": "0x3afd4 -> 0x36114 -> 0x36478; READ(10) bytes = blocks << 12",
+        "atf_cipher_callback": "entry 2 at 0x464f8 -> 0x37fec -> 0x3801c -> 0x129c",
+        "cipher_dma_extent": "original count; output PA + original count - 1",
+        "cipher_cache_operations": "clean/invalidate only; no RAM initialization",
+        "tail_initialization_producer": "unresolved in pinned stock control path",
+        "execution_permitted": False,
+    }
+
+
 def trace(lk, atf):
     require(hashlib.sha256(lk).hexdigest() == LK_SHA and
             hashlib.sha256(atf).hexdigest() == ATF_SHA, "binary identity mismatch")
@@ -176,6 +311,7 @@ def trace(lk, atf):
         "post_load_callback": {"entry": "0x7db00", "names": ["pvmfw", "atf", "tee"],
                                "rv33_selected": False},
         "rv33_decompression": "none in audited post-load callback; do not infer expansion",
+        "producer_bounds": producer_bounds(lk, atf),
         "stock_copy_bytes": 0x3f2b8, "stock_clear_bytes": 0x40000,
         "execution_permitted": False,
     }
@@ -203,6 +339,9 @@ def main():
                 "ciphertext_bytes": primary["payload_size"],
                 "authentication": "verified root/delegation/signatures/header/ciphertext",
                 "copy_size_matches_ciphertext": primary["payload_size"] == report["stock_copy_bytes"],
+                "uncovered_copy_interval": [min(primary["payload_size"], report["stock_copy_bytes"]),
+                                            report["stock_copy_bytes"]],
+                "uncovered_copy_bytes": max(0, report["stock_copy_bytes"] - primary["payload_size"]),
                 "plaintext_layout": "unobserved; transform-only review first",
             }
     except Exception as error:

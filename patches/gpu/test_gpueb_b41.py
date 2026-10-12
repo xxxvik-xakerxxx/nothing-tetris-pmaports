@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 import audit_gpueb_b41 as b41
 
@@ -41,6 +42,46 @@ class B41(unittest.TestCase):
         self.assertEqual(report["smc_arguments"], {"x1": 1, "x2_x3_x4_x5_x6_x7": 0})
         self.assertEqual(report["descriptor"]["image_bytes"], "+0x48/u32")
         self.assertEqual(report["descriptor"]["wrapped_bytes"], "+0x58/u32")
+
+    def test_resolved_producers_do_not_supply_an_expanded_extent(self):
+        report = b41.producer_bounds(self.lk, self.atf)
+        self.assertEqual(report["authenticated_success_transform"],
+                         "0x93068 -> 0x931d0 -> 0x91fa0")
+        self.assertEqual(report["success_skips_fallback_transform"],
+                         "0x7508c -> 0x750cc")
+        self.assertIn("0x680c8", report["partition_byte_callback"])
+        self.assertIn("bounded memcpy", report["partial_block_destination"])
+        self.assertIn("0x36478", report["ufs_read_callback"])
+        self.assertIn("0x37fec", report["atf_cipher_callback"])
+        self.assertEqual(report["cipher_dma_extent"],
+                         "original count; output PA + original count - 1")
+        self.assertEqual(report["tail_initialization_producer"],
+                         "unresolved in pinned stock control path")
+        self.assertFalse(report["execution_permitted"])
+
+    def test_producer_trace_rejects_wrong_identity(self):
+        with self.assertRaises(ValueError):
+            b41.producer_bounds(self.lk[:-1], self.atf)
+        with self.assertRaises(ValueError):
+            b41.producer_bounds(self.lk, self.atf[:-1])
+
+    def test_producer_instruction_and_callback_mutants_rejected(self):
+        cases = (("lk", (0x7508c, 0x931d0, 0x68acc, 0x68b40,
+                          0x68088, 0x68198, 0x681f0, 0x6832c,
+                          0x3ad4c, 0x367d8, 0x364e0)),
+                 ("atf", (0x24d14, 0x59f0, 0x464f8, 0x5a9c,
+                           0x3806c, 0x14ac, 0x14b8, 0x14c0, 0x1594)))
+        for name, offsets in cases:
+            for offset in offsets:
+                lk, atf = bytearray(self.lk), bytearray(self.atf)
+                changed = lk if name == "lk" else atf
+                changed[offset:offset + 4] = b"\0" * 4
+                # Bypass only the hash gate to exercise actual ABI assertions.
+                with self.subTest(binary=name, offset=hex(offset)), \
+                        patch.object(b41.hashlib, "sha256") as digest:
+                    digest.return_value.hexdigest.side_effect = (b41.LK_SHA, b41.ATF_SHA)
+                    with self.assertRaises(ValueError):
+                        b41.producer_bounds(bytes(lk), bytes(atf))
 
     def test_wrong_lk_and_truncations_rejected(self):
         for end in (0, 511, 512, 512 + len(self.lk)):

@@ -85,6 +85,13 @@ padding, cycles, signed OF-count comparisons and deterministic overlay generatio
 The established research runner stages exact new source bytes and overlays,
 compiles the real CAMISP DMA, SMI and IOMMU ARM64 objects, and records source/object
 hashes. All three are also rebuilt with KUnit disabled. The SMI TU includes five
-private KUnit cases when enabled. Native object compilation and KUnit compilation
-are pending CI; no KUnit fixture has been executed and no hardware was exercised.
+private KUnit cases when enabled.
+[CI 38225925800](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38225925800)
+passed at `b41ea66b5a94de59f93bf1dd0d02e76ebd7baac1`: actual CAMISP, SMI and
+IOMMU translation units compiled as AArch64 LLVM bitcode with KUnit enabled and
+disabled. Both configurations retain real MTK_SMI/MTK_IOMMU/PM providers.
+Artifact archive SHA256:
+`ab48bbb8cecc890a6b10010d7598c7b36c855b982d808a5bf2732830f402e262`.
+No KUnit fixture has been executed and no hardware was exercised. This is
+object compilation, not linked drivers, clean installation or a camera frame.
 No local native compilation or handset command is part of validation.
