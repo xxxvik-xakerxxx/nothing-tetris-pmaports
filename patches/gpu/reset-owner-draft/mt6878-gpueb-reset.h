@@ -4,6 +4,12 @@
 struct platform_device;
 struct mt6878_gpueb_sram;
 struct mt6878_gpueb_reset;
+/* Require an available mediatek,gpueb node and all eight ee2 memory resources
+ * without claiming or accessing them. No chip identity is inferred from the
+ * generic compatible alone: endpoints and attached MFG0 profile remain required.
+ * The bound parent calls this before its first runtime-PM resume.
+ */
+int mt6878_gpueb_reset_validate_resources(struct platform_device *parent);
 /* Parent has an attached domain and a real, in-use runtime-PM reference.
  * This helper never powers/resumes a supplier and never registers a provider.
  * Caller serializes prepare/use/destroy and keeps the SRAM owner alive.

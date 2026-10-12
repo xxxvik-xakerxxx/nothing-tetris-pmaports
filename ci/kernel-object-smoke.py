@@ -70,13 +70,16 @@ RESEARCH_SOURCES = {
 PROVIDER_PATCH = "patches/camera-smi-owner/provider.patch"
 # Use the existing provider Kbuild, never replace drivers/memory/Makefile.
 PROVIDER_OBJECTS = ("drivers/memory/mtk-smi.o",)
+INFRA_CLOCK_DIR = "drivers/clk/mediatek/tetris-infra-smoke"
+RESEARCH_SOURCES["patches/modem/infra-clocks/clk-mt6878-infra-ao.c"] = \
+    f"{INFRA_CLOCK_DIR}/clk-mt6878-infra-ao.c"
 RESEARCH_OBJECTS = tuple(f"{RESEARCH_DIR}/{name}.o" for name in (
     "mt6878-gpueb-sram", "mt6878-gpueb-sram-core",
     "mt6878-gpueb-reset", "mt6878-gpueb-reset-provider",
     "mt6878-gpueb-mfg0", "mt6878-gpueb-control",
     "mt6878_md_startup_scope", "mt6878_md_handoff_reservation",
     "mt6878_md_pss32",
-))
+)) + (f"{INFRA_CLOCK_DIR}/clk-mt6878-infra-ao.o",)
 CAMERA_MANIFEST = "patches/camera-pipeline-owner/STAGING.json"
 CAMERA_GRAPH = "drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.c"
 CAMERA_REVIEW_PATCHES = (
@@ -316,6 +319,8 @@ def stage_research_sources(kernel, root=Path(".")):
     for directory in sorted(directories):
         names = [Path(name).name for name in RESEARCH_OBJECTS if str(Path(name).parent) == directory]
         makefile = "obj-y += " + " ".join(names) + "\n"
+        if directory == INFRA_CLOCK_DIR:
+            makefile += "ccflags-y += -I$(srctree)/drivers/clk/mediatek\n"
         if directory == str(Path(CAMISP_POWER_OBJECTS[0]).parent):
             makefile += "ccflags-y += -I$(srctree)/" + CAMISP_POWER_PLAN["include_directory"] + "\n"
         if directory == CAMISP_SHARED_DIR:
@@ -327,6 +332,7 @@ def stage_research_sources(kernel, root=Path(".")):
 def research_compile_flags(kernel):
     # Direct object targets may bypass the isolated child Makefile.
     headers = (Path(next(iter(CAMERA_SOURCES.values()))).parent,
+               Path("drivers/clk/mediatek"),
                Path(CAMISP_RESOURCE_PLAN["include_directory"]),
                Path(CAMISP_POWER_OBJECTS[0]).parent)
     return "KCFLAGS=" + " ".join(f"-I{kernel / path}" for path in headers)

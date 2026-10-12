@@ -12,6 +12,54 @@
 
 static struct b41_native_control control;
 static struct b41_known_callbacks callbacks;
+static int publication_fd = -1, short_publication;
+static atomic_uint publication_attempts;
+
+ssize_t __real_write(int, const void *, size_t);
+ssize_t __wrap_write(int fd, const void *bytes, size_t size)
+{
+    if (fd != publication_fd) return __real_write(fd, bytes, size);
+    assert(size == sizeof(uint64_t));
+    atomic_fetch_add(&publication_attempts, 1);
+    if (short_publication) return (ssize_t)size - 1;
+    errno = EINTR;
+    return -1;
+}
+
+static void publication_failure_test(int short_write, int previous_error)
+{
+    struct b41_host_adapter adapter = {0};
+    struct b41_agps_owner ipc = {0};
+    struct b41_frame_worker worker = {0};
+    struct sockaddr_un peer = {0};
+    socklen_t length = sizeof(peer);
+    struct timespec until;
+    int pair[2];
+    assert(!socketpair(AF_UNIX, SOCK_DGRAM, 0, pair));
+    assert(!getpeername(pair[0], (struct sockaddr *)&peer, &length));
+    assert(!b41_agps_owner_init(&ipc));
+    assert(!b41_agps_owner_take(&ipc, &pair[0], &peer, length));
+    assert(!b41_host_adapter_init(&adapter));
+    assert(!b41_frame_worker_start(&worker, &adapter, &ipc, NULL, 0));
+    /* Idle queue: the worker cannot publish until this controller stops it. */
+    publication_fd = worker.done_fd;
+    short_publication = short_write;
+    atomic_store(&worker.failure, previous_error);
+    assert(!clock_gettime(CLOCK_MONOTONIC, &until));
+    ++until.tv_sec;
+    int expected = previous_error ? previous_error : short_write ? -EIO : -EINTR;
+    assert(b41_frame_worker_quiesce(&worker, &until) == expected);
+    assert(atomic_load(&worker.failure) == expected);
+    assert(atomic_load(&publication_attempts) == 1);
+    assert(worker.state == B41_WORKER_QUARANTINED);
+    struct pollfd done = {worker.done_fd, POLLIN, 0};
+    assert(poll(&done, 1, 0) == 0); /* Failure must not create a completion ACK. */
+    assert(b41_frame_worker_release_unused(&worker) == -EPERM);
+    assert(fcntl(worker.wake_fd, F_GETFD) >= 0);
+    assert(fcntl(worker.done_fd, F_GETFD) >= 0);
+    assert(fcntl(ipc.fd, F_GETFD) >= 0);
+    /* Process exit retains the only resource boundary after failed publication. */
+}
 
 static void failed_worker_test(void)
 {
@@ -180,6 +228,14 @@ int main(void)
     worker_admission_test();
     ack_test();
     supervisor_test();
+    for (int short_write = 0; short_write <= 1; ++short_write) {
+        for (int prior = 0; prior <= 1; ++prior) {
+            child = fork();
+            assert(child >= 0);
+            if (!child) { publication_failure_test(short_write, prior ? -EPIPE : 0); _exit(0); }
+            assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && !WEXITSTATUS(status));
+        }
+    }
     child = fork();
     assert(child >= 0);
     if (!child) { failed_worker_test(); _exit(0); }

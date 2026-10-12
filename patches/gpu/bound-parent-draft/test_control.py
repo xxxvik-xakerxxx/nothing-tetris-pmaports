@@ -23,12 +23,13 @@ class ControlTests(unittest.TestCase):
         node = source.split('compatible = "mediatek,gpueb"', 1)[1].split("};", 1)[0]
         for value in ("13c00000", "13c60000", "gpueb_base", "gpueb_reg_base", "mbox0"):
             self.assertIn(value, node.lower())
-        self.assertIn("GPUEB_SRAM_BASE + GPUEB_SRAM_SIZE - 1", self.body)
+        self.assertIn("mt6878_gpueb_reset_validate_resources(parent)", self.body)
         self.assertIn("IRQ_TYPE_LEVEL_HIGH", self.body)
 
     def test_owned_preflight_before_resume(self):
         resume = self.body.index("mt6878_gpueb_mfg0_resume(control->power)")
         for operation in ("mt6878_gpueb_mfg0_prepare(parent", "platform_get_resource_byname",
+                          "mt6878_gpueb_reset_validate_resources(parent)",
                           "of_property_read_u32", "platform_get_irq_byname", "irq_get_trigger_type",
                           "mt6878_gpueb_sram_create", "*result = control"):
             self.assertLess(self.body.index(operation), resume)

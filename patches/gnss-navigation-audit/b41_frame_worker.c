@@ -42,12 +42,14 @@ static void *run(void *context)
             }
         }
     }
-    /* Last access to owner occurs BEFORE publication. Detached thread does
-     * not touch w/adapter/ipc after this syscall, including during its epilogue.
-     * A failed publication is caught by controller's deadline/quarantine.
+    /* Successful publication is the detached worker's final owner operation:
+     * no w/adapter/ipc access follows it, including during its epilogue.
+     * On failed publication latch the error; controller still needs its
+     * deadline/quarantine because completion has not been acknowledged.
      */
     value = 1;
-    (void)write(done, &value, sizeof(value));
+    ssize_t written = write(done, &value, sizeof(value));
+    if (written != (ssize_t)sizeof(value)) fail(w, written < 0 ? -errno : -EIO);
     return NULL;
 }
 int b41_frame_worker_start(struct b41_frame_worker *w,

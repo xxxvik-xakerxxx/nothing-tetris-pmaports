@@ -8,6 +8,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include "mt6878-gpueb-sram.h"
+#include "mt6878-gpueb-reset.h"
 #include "mt6878-gpueb-reset-provider.h"
 #include "mt6878-gpueb-mfg0.h"
 #endif
@@ -36,7 +37,7 @@ int mt6878_gpueb_control_prepare(struct platform_device *parent,
 	struct mt6878_gpueb_control **result)
 {
 	struct mt6878_gpueb_control *control;
-	struct resource *sram, *registers;
+	struct resource *sram;
 	u32 cells;
 	int ret, irq, cleanup;
 
@@ -50,18 +51,14 @@ int mt6878_gpueb_control_prepare(struct platform_device *parent,
 	ret = mt6878_gpueb_mfg0_prepare(parent, &control->power);
 	if (ret)
 		goto free;
-	/* Preflight the exact ee2 DT bank/IRQ/profile while the bound parent is
-	 * locked. The frozen reset owner makes the single register/IRQ claim;
+	/* Preflight the exact ee2 DT resources/IRQ/profile while the bound parent is
+	 * locked. The reset owner claims the bank, mailbox controls and IRQ;
 	 * this caller must not create overlapping claims or IRQF_SHARED users.
 	 */
-	sram = platform_get_resource_byname(parent, IORESOURCE_MEM, "gpueb_base");
-	registers = platform_get_resource_byname(parent, IORESOURCE_MEM, "gpueb_reg_base");
-	if (!sram || sram->start != GPUEB_SRAM_BASE ||
-	    sram->end != GPUEB_SRAM_BASE + GPUEB_SRAM_SIZE - 1 ||
-	    !registers || registers->start != 0x13c60000 || registers->end != 0x13c61fff) {
-		ret = -ERANGE;
+	ret = mt6878_gpueb_reset_validate_resources(parent);
+	if (ret)
 		goto finish;
-	}
+	sram = platform_get_resource_byname(parent, IORESOURCE_MEM, "gpueb_base");
 	ret = of_property_read_u32(parent->dev.of_node, "#reset-cells", &cells);
 	if (ret || cells != 1) {
 		ret = ret ?: -EINVAL;

@@ -4,6 +4,9 @@ Default-off draft, no platform registration/DT/package activation. One new real
 kernel control caller connects the frozen SRAM/reset provider and revised MFG0
 producer. No firmware, rails, nested MFG-RPC, reset assertion/release or OFF
 claim. It does not replace unresolved boot dependencies with success flags.
+The reset-owner resource revision is described in
+../reset-owner-draft/RESOURCE-CONTRACT.md; revised reset C/H must be staged
+with this caller to provide the shared eight-resource validator export.
 
 ## Caller and ownership
 
@@ -18,14 +21,17 @@ alone do NOT prevent forced detach: main's parent must enforce that contract.
 
 1. Revised MFG0 prepare validates attached sole native MFG0, bound parent,
    PM enabled and suppressed bind attrs; pins parent/modules and locks device.
-2. Preflight exact ee2 full SRAM/control-bank resources, reset cells and owned
-   named level-high IRQ. No new register mapping or duplicate IRQ claim here.
+2. Preflight an available source-compatible mediatek,gpueb node and all eight
+   exact ee2 memory resources through the shared reset-owner validator, reset
+   cells and named level-high IRQ. No new register mapping or
+   duplicate IRQ claim here; preflight metadata alone grants no ownership.
 3. Claim/map full SRAM once using frozen sram_create before any PM transition.
 4. Publish the control handle BEFORE the real native genpd resume. MFG0 resume
    failure retains usage/modules/device but unlocks the task-owned mutex before
    returning. No worker exits holding that mutex; failed handle cannot resume.
 5. Existing reset provider borrows an independent active PM reference, claims
-   the disjoint register bank/disabled exclusive IRQ and typed GPR/mbox windows,
+   the disjoint register bank and four out-of-bank mailbox controls, the disabled
+   exclusive IRQ and typed GPR/mbox windows,
    then publishes reset controller. Registration does NOT assert reset.
 6. Finish only the synchronous MFG0 producer reference without idling. The
    provider's own PM/module/device/SRAM/IRQ ownership remains for this boot.
@@ -56,8 +62,10 @@ unsigned 102680-byte copy tail is never uploaded or zero-filled here.
 
 ## Review and CI
 
-Run test_control.py and revised mfg0-supplier-draft/test_supplier.py without C.
+Run test_control.py, reset-owner-draft/test_resources.py and revised
+mfg0-supplier-draft/test_supplier.py without C.
 Parent CI must run revised MFG0 strict sanitizer fixture, and stage both new
-control C/H and revised MFG0 C/H alongside existing SRAM/reset objects according
+control C/H, revised MFG0 C/H and revised reset-owner C/H alongside existing
+SRAM/reset-provider objects according
 to STAGING.json. Link/modpost needs all actual helpers, not mocked exports.
 No current object build proves running-phone ABI or physical power behavior.

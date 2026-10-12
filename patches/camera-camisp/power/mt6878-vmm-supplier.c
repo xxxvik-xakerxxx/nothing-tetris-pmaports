@@ -212,12 +212,14 @@ static int vmm_child_notify(struct notifier_block *nb,
 }
 
 int mt6878_vmm_supplier_init(struct mt6878_vmm_supplier *vmm,
-			     struct device *dev, struct regmap *spm,
+			     struct device *dev, const char *supply_id,
+			     struct regmap *spm,
 			     struct generic_pm_domain *mm_infra)
 {
 	int ret, enabled;
 
-	if (!vmm || !dev || IS_ERR_OR_NULL(spm) || !mm_infra)
+	if (!vmm || !dev || !supply_id || !*supply_id ||
+	    IS_ERR_OR_NULL(spm) || !mm_infra)
 		return -EINVAL;
 	if (mm_infra == &vmm->genpd || (mm_infra->flags & GENPD_FLAG_IRQ_SAFE))
 		return -EINVAL;
@@ -228,7 +230,7 @@ int mt6878_vmm_supplier_init(struct mt6878_vmm_supplier *vmm,
 	vmm->dev = dev;
 	vmm->spm = spm;
 	/* No dummy fallback; reject existing CAM, ISP, notifier or DVFS handles. */
-	vmm->buck = regulator_get_exclusive(dev, "vmm");
+	vmm->buck = regulator_get_exclusive(dev, supply_id);
 	if (IS_ERR(vmm->buck)) {
 		ret = PTR_ERR(vmm->buck);
 		vmm->buck = NULL;

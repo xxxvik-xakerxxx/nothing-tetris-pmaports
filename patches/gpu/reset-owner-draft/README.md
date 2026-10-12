@@ -5,6 +5,12 @@ unchanged. This is an actual Linux resource/MMIO adapter, not a full remoteproc
 provider or a power-on proof. No native C/kernel build or phone operation was
 performed locally.
 
+Resource ownership revision: see [RESOURCE-CONTRACT.md](RESOURCE-CONTRACT.md)
+and its exact-source/base-DTB pins. Prepare now validates all eight memory
+resources and reserves the four mailbox control words outside the reset bank.
+The bound-parent caller uses the same validator before MFG0 resume. No mailbox
+control access or firmware transport is implemented by this revision.
+
 ## Executable API and boundary
 
 `mt6878_gpueb_reset_prepare(parent, sram)` requires exactly one DT domain:
@@ -15,7 +21,8 @@ The helper does not establish supplies/clock/secure ownership by itself.
 
 It acquires BOTH real SRAM-owner window leases, preventing existing session
 and mailbox clients from coexisting, claims/maps the pinned separate register
-bank, and requests the real named mbox0 IRQ exclusively with NO_AUTOEN. Module,
+bank plus all four disjoint mailbox control words, and requests the real named
+mbox0 IRQ exclusively with NO_AUTOEN. Module,
 parent-device and PM references remain owned. Failure before MMIO releases only
 these newly acquired software resources, without a power-down operation.
 
@@ -97,7 +104,8 @@ unknown operations and supplies no such proof.
 
 ## CI and runtime gates
 
-Run test_reset.py with pinned vendor tree and optional TETRIS_B41_LK. In CI,
+Run test_resources.py (add --dtb for actual base-DTB verification) and
+test_reset.py with pinned vendor tree and optional TETRIS_B41_LK. In CI,
 invoke smoke-kernel-ci.sh with CI=true, prepared TETRIS_KERNEL_TREE and configured
 TETRIS_KERNEL_OUT. It compiles the actual adapter object against existing SRAM
 API and packaged MT6878 domain definitions. No shared CI/package edit is needed

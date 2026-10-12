@@ -81,7 +81,21 @@ def source_contract(code, header):
     require("intmt6878_vmm_cam_ctl_set(structmt6878_vmm_supplier*vmm,"
             "unsignedintdomain,boolon);" in clean(header), "checked CAM control API")
     init = body(code, "mt6878_vmm_supplier_init")
-    require('vmm->buck=regulator_get_exclusive(dev,"vmm");' in init, "exclusive real buck, no dummy")
+    signature = ("intmt6878_vmm_supplier_init(structmt6878_vmm_supplier*vmm,"
+                 "structdevice*dev,constchar*supply_id,structregmap*spm,"
+                 "structgeneric_pm_domain*mm_infra)")
+    require(signature + "{" in c and signature + ";" in clean(header),
+            "provider selects the actual consumer supply ID in the public API")
+    validation = ("if(!vmm||!dev||!supply_id||!*supply_id||"
+                  "IS_ERR_OR_NULL(spm)||!mm_infra)return-EINVAL;")
+    require(init.startswith("intret,enabled;" + validation),
+            "null/empty supply rejected before acquisition or owner mutation")
+    require(re.findall(r"regulator_(?:get\w*|\w+_get)\([^;]+\)", init) ==
+            ["regulator_get_exclusive(dev,supply_id)"],
+            "one exclusive acquisition of the selected supply, no alias fallback")
+    require("vmm->buck=regulator_get_exclusive(dev,supply_id);"
+            "if(IS_ERR(vmm->buck)){ret=PTR_ERR(vmm->buck);vmm->buck=NULL;returnret;}" in init,
+            "missing/unready/busy rail preserves acquisition errno without publication")
     require("if(vmm->buck)returnvmm->first_error?vmm->first_error:-EBUSY;" in init,
             "no reinitialization of a held/faulted owner")
     require("enabled=regulator_is_enabled(vmm->buck);if(enabled<0)returnvmm_fail(vmm,enabled);"

@@ -463,6 +463,14 @@ attempted. The artifact inspector now rejects a different header/overlay profile
 even when constructor source happens to match.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
+The next [native infrastructure CCF provider](../patches/modem/infra-clocks/README.md)
+implements all thirteen B4.1 gates, including the nine CCIF/DPMAIF clocks missing
+from d84's provider set. Exact IDs, five register banks and native factor/mux
+names pass source checks; 33 isolated-staging checks preserve shipping Kbuild
+and DT. Its ARM64 object and genuine r181/r182 module link are selected for the
+modem workflow, not installed or bound on r182. Modem power, transport
+activation and calls remain unproven.
+
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
 An earlier physical transform-only test authenticated 156,064 bytes, reported
 UNKNOWN segment format and erased the buffer without starting GPUEB. Matching
@@ -509,6 +517,14 @@ remains unresolved, with 73 unexpanded calls. It establishes the exact extra-cop
 excludes cache maintenance as a zero-fill producer and resolves the mapper's
 branch tables. Its strict closure check still refuses activation: transitive
 writer/callee coverage is incomplete. No excess upload or zero-padding is enabled.
+
+The [GPUEB resource owner](../patches/gpu/reset-owner-draft/RESOURCE-CONTRACT.md)
+now validates all eight real memory windows before MFG0 resume and claims the
+four mailbox control words outside the reset bank. Acquisition failures unwind
+only completed claims, in reverse order; retained faults still refuse teardown.
+Twenty-eight static checks pass, including the stored DTB comparison; one optional
+private-LK check is skipped. ARM64 compilation is pending. No mailbox access,
+larger firmware upload, IRQ enable, GPUEB start or rendering is added.
 
 **Cameras.** IMX882 V4L2 tables, SENINF/CAMSV, coherent CQ, native vb2 RAW/meta
 buffers, power/reset and repeated-frame ownership candidates exist. Actual
@@ -563,6 +579,13 @@ CI38265540133 at 5e2c0b1. The manifest matches changed source SHA256
 `23c4cdea6559703fffd09b8591d213b207d8a7fd1ac19afb5f435f99bb798f8b`.
 Complete callback/provider wiring and physical power/frame checks remain;
 the prior object hashes do not validate the changed code.
+
+The supplier constructor now accepts the actual owning device's explicit
+regulator supply ID instead of the nonexistent fixed `vmm` relationship. Pinned
+B4.1 describes `cam-vcore`; the stored slot uses `cam-main`, but its release is
+unverified. No alias guessing is added. Twenty supplier tests reject missing IDs,
+fallbacks and lost errors; changed C/H hashes are recorded. Fresh compilation
+and complete physical integration are still pending.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -641,6 +664,13 @@ probe returned0 at uptime427.85s and created gpsdl0/1 beside the retained SMEM
 owner; USB/sensors/SSH remained active. Neither link was opened and no navigation
 or position fix was attempted.
 See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
+
+The separate production frame worker now retains terminal completion-write
+errors instead of obscuring them as a later timeout. Failed publication never
+creates an ACK or permits resource release; successful publication has no later
+owner access. Eight source checks pass and four injected failure cases are
+wired into fortified native CI and the AArch64 Bionic link. Fixture execution
+is pending. This is a lifecycle correction, not AGPS completeness or a GPS fix.
 
 ## Development Boundaries
 

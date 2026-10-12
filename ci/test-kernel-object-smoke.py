@@ -120,7 +120,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 43)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 44)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o",
             "drivers/iommu/mtk_iommu.o"))
@@ -142,6 +142,25 @@ class SmokeInputs(unittest.TestCase):
         consumer = "\n".join(line[1:] for line in lines) + "\n"
         self.assertEqual(consumer, (root / "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text())
         self.assertIn("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m", (package / smoke.CONFIG).read_text())
+
+    def test_infra_clock_staging_does_not_replace_parent_kbuild_or_shipping_dt(self):
+        root = Path(__file__).resolve().parents[1]
+        parent = self.package / "drivers/clk/mediatek"
+        parent.mkdir(parents=True)
+        (parent / "Makefile").write_text("# original clock provider targets\n")
+        dt = self.package / "arch/arm64/boot/dts/mediatek/mt6878.dtsi"
+        dt.parent.mkdir(parents=True)
+        dt.write_text("// original shipping DT\n")
+        smoke.stage_research_sources(self.package, root)
+        directory = self.package / smoke.INFRA_CLOCK_DIR
+        self.assertEqual((parent / "Makefile").read_text(), "# original clock provider targets\n")
+        self.assertEqual((directory / "Makefile").read_text(),
+                         "obj-y += clk-mt6878-infra-ao.o\n"
+                         "ccflags-y += -I$(srctree)/drivers/clk/mediatek\n")
+        self.assertIn(smoke.INFRA_CLOCK_DIR + "/clk-mt6878-infra-ao.o", smoke.RESEARCH_OBJECTS)
+        self.assertNotIn(smoke.INFRA_CLOCK_DIR + "/clk-mt6878-infra-ao.o", smoke.OBJECTS)
+        self.assertIn("drivers/clk/mediatek", smoke.research_compile_flags(self.package))
+        self.assertEqual(dt.read_text(), "// original shipping DT\n")
 
     def test_camisp_objects_and_config_are_isolated(self):
         for name in smoke.CAMISP_OBJECTS:

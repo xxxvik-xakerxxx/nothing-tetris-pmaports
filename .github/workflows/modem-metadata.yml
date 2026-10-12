@@ -116,12 +116,17 @@ jobs:
           git -C out/uboot fetch --depth=1 https://github.com/MT6878-Mainline/u-boot.git 60cd9ade5b999732304f3b755c7dbe3d34307c13
           git fetch --no-tags --depth=1 origin 190ea155e1a8343dbdb4f0992f06b92848c9cdac
           git fetch --no-tags --depth=1 origin e0c67c561ff7c1a0472da851edfafd5a0abb6cec
+          git init out/infra-vendor
+          git -C out/infra-vendor fetch --depth=1 https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git ee2be53cb75670b548948636a0db1d1ff112bf12
       - name: Compile actual isolated ARM64 driver stack
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 ci/kernel-object-smoke.py --research-owners
+          python3 -B patches/modem/infra-clocks/check.py \
+            --vendor out/infra-vendor \
+            --linux-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz
           python3 patches/modem/drafts/runtime-object-ci/check_objects.py \
             --metadata --smem --uboot out/uboot
           python3 ci/packaged-smem-objects.py --link-r181 --gpueb-analysis --smem-consumer
@@ -152,6 +157,10 @@ jobs:
               cp -R "/tmp/tetris-ccci-resource-link/$name" out/kernel-object-smoke/resource-ccci-link/
             fi
           done
+      - name: Link native infrastructure clocks against genuine handset ABI
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/modem/infra-clocks/run_ci.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:

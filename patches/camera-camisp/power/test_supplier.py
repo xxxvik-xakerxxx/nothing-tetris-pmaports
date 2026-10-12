@@ -38,7 +38,42 @@ class SharedSupplierTests(unittest.TestCase):
                 self.reject(old, new)
 
     def test_shared_users_require_exclusive_owner(self):
-        self.reject('regulator_get_exclusive(dev, "vmm")', 'regulator_get(dev, "vmm")')
+        self.reject("regulator_get_exclusive(dev, supply_id)", "regulator_get(dev, supply_id)")
+
+    def test_supplier_uses_selected_binding_without_alias_fallback(self):
+        acquisition = "vmm->buck = regulator_get_exclusive(dev, supply_id);"
+        for replacement in ('vmm->buck = regulator_get_exclusive(dev, "vmm");',
+                            'vmm->buck = regulator_get_exclusive(dev, "cam-vcore");',
+                            'vmm->buck = regulator_get_exclusive(dev, "cam-main");',
+                            acquisition + '\n\tif (IS_ERR(vmm->buck))\n'
+                            '\t\tvmm->buck = regulator_get_exclusive(dev, "vmm");'):
+            with self.subTest(mutant=replacement):
+                self.reject(acquisition, replacement)
+
+    def test_invalid_supply_before_any_owner_mutation_or_acquisition(self):
+        for old, new in [("!supply_id || !*supply_id ||", "!supply_id ||"),
+                         ("!supply_id || !*supply_id ||", "!*supply_id ||"),
+                         ("!supply_id || !*supply_id ||", ""),
+                         ("int ret, enabled;\n\n\tif (!vmm", "int ret, enabled;\n\n"
+                          "\tvmm->buck = regulator_get_exclusive(dev, supply_id);\n\tif (!vmm")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_supply_acquisition_failure_keeps_original_errno(self):
+        for old, new in [("ret = PTR_ERR(vmm->buck);", "ret = -ENODEV;"),
+                         ("vmm->buck = NULL;\n\t\treturn ret;", "vmm->buck = NULL;"),
+                         ("vmm->buck = NULL;\n\t\treturn ret;",
+                          "vmm->buck = NULL;\n\t\treturn 0;")]:
+            with self.subTest(mutant=new):
+                self.reject(old, new)
+
+    def test_supply_selection_is_part_of_public_constructor(self):
+        declaration = ("struct device *dev, const char *supply_id,\n"
+                       "\t\t\t     struct regmap *spm,")
+        self.assertIn(declaration, self.header)
+        with self.assertRaises(ValueError):
+            check.source_contract(self.code, self.header.replace(declaration,
+                                  "struct device *dev, struct regmap *spm,"))
 
     def test_inherited_state_and_read_errors_fail_closed(self):
         for old, new in [("if (enabled < 0)", "if (false)"),

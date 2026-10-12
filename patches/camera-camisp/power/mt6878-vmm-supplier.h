@@ -33,8 +33,14 @@ struct mt6878_vmm_guard {
 	bool linked;
 };
 
+/*
+ * supply_id is the verified consumer supply name on dev, without "-supply".
+ * The provider owner must select it from matching board/release data and prove
+ * that all migrated CAM/ISP users share that rail. No default or alias probing.
+ */
 int mt6878_vmm_supplier_init(struct mt6878_vmm_supplier *vmm,
-			     struct device *dev, struct regmap *spm,
+			     struct device *dev, const char *supply_id,
+			     struct regmap *spm,
 			     struct generic_pm_domain *mm_infra);
 /* Check after acquiring a PM lease, even when genpd was already logically ON. */
 int mt6878_vmm_check(struct mt6878_vmm_supplier *vmm);

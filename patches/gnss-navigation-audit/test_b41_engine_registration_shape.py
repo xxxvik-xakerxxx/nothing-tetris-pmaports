@@ -21,6 +21,21 @@ def admission_barriers(source):
     assert registered < second < run, "worker failure must be rechecked before run"
 
 
+def terminal_publication(source):
+    source = re.sub(r'/\*.*?\*/|//[^\n]*', '', source, flags=re.S)
+    run = source[source.index("static void *run("):source.index("int b41_frame_worker_start(")]
+    tail = run[run.index("value = 1;"):]
+    expected = """
+        value = 1;
+        ssize_t written = write(done, &value, sizeof(value));
+        if (written != (ssize_t)sizeof(value)) fail(w, written < 0 ? -errno : -EIO);
+        return NULL;
+    }
+    """
+    assert re.sub(r'\s+', '', tail) == re.sub(r'\s+', '', expected), \
+        "check publication once; only failure may access the owner afterward"
+
+
 class WorkerAdmissionSourceTests(unittest.TestCase):
     def setUp(self):
         self.source = Path(__file__).with_name("b41_native_receiver_host.c").read_text()
@@ -45,6 +60,50 @@ class WorkerAdmissionSourceTests(unittest.TestCase):
         self.assertIn("status = w->dispatch(w->ipc, &event)", run)
         self.assertIn("if (status) { fail(w, status); break; }", run)
         self.assertNotIn("w->state =", run)
+
+    def test_frame_worker_terminal_publication_retains_original_error(self):
+        source = Path(__file__).with_name("b41_frame_worker.c").read_text()
+        terminal_publication(source)
+        fail = source[source.index("static void fail("):source.index("static void *run(")]
+        self.assertIn("atomic_compare_exchange_strong(&w->failure, &zero, error)", fail)
+        quiesce = source[source.index("int b41_frame_worker_quiesce("):
+                         source.index("int b41_frame_worker_release_unused(")]
+        self.assertIn("if (worker_error) status = worker_error;", quiesce)
+        self.assertIn("w->state = B41_WORKER_QUARANTINED;", quiesce)
+
+    def test_terminal_publication_mutations_are_rejected(self):
+        source = Path(__file__).with_name("b41_frame_worker.c").read_text()
+        for original, replacement in (
+            ("ssize_t written = write(done, &value, sizeof(value));", "(void)write(done, &value, sizeof(value));"),
+            ("written != (ssize_t)sizeof(value)", "written < 0"),
+            ("written < 0 ? -errno : -EIO", "-EIO"),
+            ("    return NULL;", "    atomic_store(&w->failure, 0);\n    return NULL;"),
+        ):
+            with self.subTest(replacement=replacement):
+                self.assertIn(original, source)
+                with self.assertRaises(AssertionError):
+                    terminal_publication(source.replace(original, replacement, 1))
+
+    def test_publication_failure_ci_fixture_is_connected(self):
+        runner = Path(__file__).with_name("run_native_receiver_host_ci.sh").read_text()
+        self.assertIn("-D_FORTIFY_SOURCE=2", runner)
+        self.assertIn("-O1", runner)
+        self.assertIn("-Wl,--wrap=write", runner)
+        fixture = Path(__file__).with_name("test_b41_native_receiver_host.c").read_text()
+        self.assertIn("publication_failure_test(short_write, prior ? -EPIPE : 0)", fixture)
+        self.assertIn("atomic_load(&publication_attempts) == 1", fixture)
+        self.assertIn("poll(&done, 1, 0) == 0", fixture)
+        self.assertIn("b41_frame_worker_release_unused(&worker) == -EPERM", fixture)
+
+    def test_bionic_fixture_links_the_same_write_failure_wrapper(self):
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+        source = workflow.read_text()
+        body = source.split("for fixture in native_receiver_host native_arguments; do", 1)[1].split(
+            "          done", 1)[0]
+        self.assertIn('if test "$fixture" = native_receiver_host; then', body)
+        self.assertIn("write_wrapper=()", body)
+        self.assertIn("write_wrapper=(-Wl,--wrap=write)", body)
+        self.assertIn('"${write_wrapper[@]}"', body)
 
     def test_missing_or_unchecked_barriers_are_rejected(self):
         barrier = "status = b41_native_worker_admission(worker);\n    if (status) return status;"

@@ -8,8 +8,9 @@ also passed ARM64 compilation with KUnit enabled and disabled in CI38255895881
 at 5379657. This is object-only: the composite/vmlinux link and hardware remain
 untested. The KUnit-disabled supplier object SHA256 is
 `54e9271c4630bb63db1a4a36a70b0d8f69469cb7588eb6af8778ee17df57f157`.
-That result predates the checked CAM control adapter below; the modified
-supplier source has source checks only and has not been compiled or linked.
+That result predates the checked CAM control adapter and explicit supply
+selection below; the modified supplier source has source checks only and has
+not been compiled or linked.
 
 ## Ownership and graph
 
@@ -21,15 +22,17 @@ prerequisites. VMM must itself retain MM_INFRA: independent sibling parents
 would let generic error unwind release MM_INFRA despite a pinned VMM fault.
 
 Native genpd counts active children and serializes supplier transitions. No
-private CAM/ISP user counter is added. The exclusive `vmm` regulator handle
-must resolve to the actual shared USID-6 VBUCK1 provider. Exclusive acquisition
+private CAM/ISP user counter is added. The exclusive regulator handle, selected
+by the provider's explicit consumer supply ID, must resolve to the actual shared
+USID-6 VBUCK1 provider. Exclusive acquisition
 rejects existing Linux handles and missing supplies without dummy fallback.
 All other Linux clients must move under this owner before activation, including
 the B4.1 VMM isolation notifier and MMDVFS debug consumer. Firmware ownership
 is not enforced by regulator exclusivity and remains a separate gate.
 
-`mt6878_vmm_supplier_init()` takes the existing SPM regmap and initialized
-MM_INFRA genpd. It checks the regulator enable indication and all isolation
+`mt6878_vmm_supplier_init()` takes the owning device, its verified consumer
+supply ID, the existing SPM regmap and initialized MM_INFRA genpd. It checks the
+regulator enable indication and all isolation
 bits before deriving the initial genpd state, then checks both genpd init and
 the MM_INFRA parent link. It accepts only an observed OFF buck with all three
 isolation bits set. Inherited ON, inconsistent isolation or read errors stop
@@ -42,6 +45,53 @@ The pinned exclusive-get implementation does not propagate its internal
 persistent failure; rejecting inherited ON avoids relying on a possibly
 unadopted ON reference after a transient failed internal read. Quiescent
 firmware ownership is still required: repeated reads cannot establish it.
+
+### Consumer supply selection
+
+The previous constructor requested `regulator_get_exclusive(dev, "vmm")`.
+There is no `vmm-supply` property on either of the examined SPM nodes. B4.1
+device-module commit `ee2be53cb75670b548948636a0db1d1ff112bf12`,
+`arch/arm64/boot/dts/mediatek/mt6878.dts:2930` and `:2931`, describes
+`isp-vcore-supply` and `cam-vcore-supply` on the real SPM owner; both reference
+`mt6319_6_vbuck1`. That commit's `mtk-scpsys.c:1677` acquires the consumer supply
+by the domain descriptor's name. A native owner reusing that device must request
+`cam-vcore`, without the `-supply` suffix. A fixed `vmm` request cannot resolve
+that DT binding and exclusive lookup has no dummy fallback on Linux
+`d84b264a54a37611f2f46bc19363cb9b41606205`.
+
+The constructor now requires a nonempty `supply_id` and passes it unchanged to
+its single exclusive regulator acquisition. Null or empty selection returns
+`-EINVAL` before changing the owner or acquiring anything. Acquisition failures
+retain the regulator core's exact errno, clear the error-pointer field, and
+return before genpd initialization. No aliases are tried and no new regulator
+handle is introduced. This changes the actual constructor acquisition path;
+provider construction and consumers remain uncalled.
+
+The read-only stock snapshot
+`/private/tmp/tetris-stock-vendor-boot-b-base.dtb`, SHA256
+`187c5b7e50842a33e24d3f7beb8b268bb24d8634c2adc04efebf9c547f2b3fd8`, has
+`cam-main-supply` and `isp-main-supply` on its SPM node, and `vmm-pmic-supply`
+on its VMM isolation node. All three local phandles resolve to the same
+USID-6 MT6319 VBUCK1 regulator via the DT's `mt6319_6_vbuck1` symbol. This is
+snapshot topology evidence only: the vendor slot's release is not proven, and
+these names must not override the B4.1 source or become a universal selector.
+The provider owner must choose the supply from matching board/release data and
+prove CAM/ISP share it before calling this API. There is no default ID, phandle,
+PMIC address or voltage policy embedded in the implementation.
+
+The camera consumer trace is pinned separately to modules
+`e96f60dc081ae3525ef43d4bcf0ee5ee97e53835`: the CAMISP DMA/larb contract is in
+`mtkcam/camsys/isp7sp/cam/mtk_cam-larb.c`, and `mtk_cam.c:1236` obtains a
+runtime-PM reference for the camera device. That is a consumer PM route, not
+evidence that this shared supplier is wired into its genpd. The existing
+`trace-b41.py` verifies that module pin and the B4.1 device-module topology.
+
+Negative static checks reject fixed `vmm`, `cam-vcore` or `cam-main` names,
+alias fallback, nonexclusive acquisition, missing validation, lost acquisition
+errors and a stale public constructor declaration. They do not execute the C
+code or establish physical rail ownership. Only the C/H source hashes in
+`SHARED-STAGING.json` change; its object/link plans, activation and dependency
+sets remain the same. The original `power/STAGING.json` is untouched.
 
 ## Checked transitions
 

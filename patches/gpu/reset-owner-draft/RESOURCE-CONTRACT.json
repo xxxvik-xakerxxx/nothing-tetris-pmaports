@@ -1,0 +1,47 @@
+{
+  "source": {
+    "repository": "https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git",
+    "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "declared_release": "CMF Phone 1 Nothing OS 4.1 Tetris-B4.1-260415-1709",
+    "files_sha256": {
+      "arch/arm64/boot/dts/mediatek/mt6878.dts": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b",
+      "drivers/soc/mediatek/mtk-mbox.c": "636032b98db9cef93dad9aef52d0c18f49cd9bac3d15938514d9167ad829c67a",
+      "drivers/gpu/mediatek/gpueb/gpueb_ipi.c": "cdc386eadc270b03af51ff0e8750e2b74fdc46a161e9dc7ca7dca50fb5c03341",
+      "drivers/gpu/mediatek/gpueb/gpueb_reserved_mem.c": "f525e39bcd7a7abc1883c2885e2f946bfe02dbbd4f3e7db507f8703f68b4b09f"
+    }
+  },
+  "dtb": {
+    "artifact": "tetris-stock-vendor-boot-b-base.dtb",
+    "sha256": "187c5b7e50842a33e24d3f7beb8b268bb24d8634c2adc04efebf9c547f2b3fd8",
+    "bytes": 338342,
+    "release_verified": false,
+    "scope": "read-only base DTB inspection; not the post-LK running tree or an authenticated release identity",
+    "node": "/soc/gpueb@13c00000",
+    "strings": {
+      "compatible": ["mediatek,gpueb"],
+      "reg-names": ["gpueb_base", "gpueb_gpr_base", "gpueb_reg_base", "mbox0_base", "mbox0_set", "mbox0_clr", "mbox0_send", "mbox0_recv"],
+      "interrupt-names": ["mbox0"],
+      "gpueb-mem-name-table": ["MEM_ID_GPUFREQ", "MEM_ID_LOG"],
+      "send-name-table": ["IPI_ID_FAST_DVFS_EVENT", "IPI_ID_GPUFREQ", "IPI_ID_SLEEP", "IPI_ID_TIMER", "IPI_ID_FHCTL", "IPI_ID_CCF", "IPI_ID_GPUMPU", "IPI_ID_FAST_DVFS", "CH_IPIR_C_MET", "CH_IPIS_C_MET", "IPI_ID_BRISKET"],
+      "recv-name-table": ["IPI_ID_FAST_DVFS_EVENT", "IPI_ID_GPUFREQ", "IPI_ID_SLEEP", "IPI_ID_TIMER", "IPI_ID_FHCTL", "IPI_ID_CCF", "IPI_ID_GPUMPU", "IPI_ID_FAST_DVFS", "CH_IPIR_C_MET", "CH_IPIS_C_MET", "IPI_ID_BRISKET"]
+    },
+    "cells": {
+      "reg": [0, 331350016, 0, 262144, 0, 331611420, 0, 100, 0, 331743232, 0, 8192, 0, 331611520, 0, 640, 0, 331751428, 0, 4, 0, 331751540, 0, 4, 0, 331751424, 0, 4, 0, 331751544, 0, 4],
+      "interrupts": [0, 273, 4, 0],
+      "gpueb-mem-table": [0, 16384, 1, 1572864],
+      "send-table": [0, 0, 4, 1, 0, 8, 2, 0, 3, 3, 0, 6, 4, 0, 9, 5, 0, 4, 6, 0, 6, 7, 0, 6, 8, 0, 1, 9, 0, 4, 10, 0, 3],
+      "recv-table": [0, 0, 4, 0, 0, 1, 0, 8, 1, 1, 2, 0, 1, 0, 1, 3, 0, 1, 0, 1, 4, 0, 1, 1, 1, 5, 0, 4, 1, 1, 6, 0, 1, 1, 1, 7, 0, 6, 1, 1, 8, 0, 4, 0, 1, 9, 0, 1, 1, 1, 10, 0, 3, 1, 1],
+      "mbox-count": [1],
+      "mbox-size": [160],
+      "slot-size": [4],
+      "ts-mbox": [0],
+      "gpueb-support": [1],
+      "gpueb-logger-support": [0],
+      "gpueb-diagnosis-mode": [0]
+    },
+    "absent_gpueb_properties": ["gpueb_mem_addr", "gpueb_mem_size", "memory-region", "power-domains", "#reset-cells"],
+    "reserved_memory_children": ["ccci-dpmaif-cache-memory", "ccci-dpmaif-nocache-memory", "ssmr-reserved-cma-memory"],
+    "irq_controller": {"node": "/interrupt-controller@c000000", "phandle": 1, "interrupt_cells": 4, "compatible": "arm,gic-v3"},
+    "mali_pwr_irq": [0, 273, 4, 0]
+  }
+}

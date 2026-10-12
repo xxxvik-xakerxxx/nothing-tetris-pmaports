@@ -5,6 +5,7 @@
 #include <linux/io.h>
 #include <linux/ioport.h>
 #include <linux/irq.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -16,16 +17,76 @@
 #include "mt6878-gpueb-sram.h"
 #include "mt6878-gpueb-reset.h"
 
+enum { GPUEB_MBOX_CONTROL_FIRST = 4, GPUEB_MBOX_CONTROL_COUNT = 4 };
+
+/* ee2be53 MT6878 DT. GPR/data are aliases inside the sole SRAM claim;
+ * the four mailbox control words are OUTSIDE the separate reset bank.
+ */
+static const struct {
+	const char *name;
+	resource_size_t start, size;
+} gpueb_resources[] = {
+	{ "gpueb_base", GPUEB_SRAM_BASE, GPUEB_SRAM_SIZE },
+	{ "gpueb_gpr_base", GPUEB_SRAM_BASE + GPUEB_GPR_OFFSET, GPUEB_GPR_SIZE },
+	{ "gpueb_reg_base", 0x13c60000, 0x2000 },
+	{ "mbox0_base", GPUEB_SRAM_BASE + GPUEB_MBOX_OFFSET, GPUEB_MBOX_SIZE },
+	{ "mbox0_set", 0x13c62004, 0x4 },
+	{ "mbox0_clr", 0x13c62074, 0x4 },
+	{ "mbox0_send", 0x13c62000, 0x4 },
+	{ "mbox0_recv", 0x13c62078, 0x4 },
+};
+
+int mt6878_gpueb_reset_validate_resources(struct platform_device *parent)
+{
+	struct resource *resource;
+	unsigned int i, count = 0;
+
+	if (!parent || !parent->dev.of_node)
+		return -EINVAL;
+	if (!of_device_is_available(parent->dev.of_node) ||
+	    !of_device_is_compatible(parent->dev.of_node, "mediatek,gpueb"))
+		return -ENODEV;
+	for (i = 0; i < parent->num_resources; i++)
+		if (resource_type(&parent->resource[i]) == IORESOURCE_MEM)
+			count++;
+	if (count != ARRAY_SIZE(gpueb_resources))
+		return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(gpueb_resources); i++) {
+		resource = platform_get_resource_byname(parent, IORESOURCE_MEM,
+						gpueb_resources[i].name);
+		/* Compare endpoints with a bounded static profile, avoiding size
+		 * arithmetic on possibly reversed or wrapping supplied resources.
+		 */
+		if (!resource || resource->start != gpueb_resources[i].start ||
+		    resource->end != gpueb_resources[i].start + gpueb_resources[i].size - 1)
+			return -ERANGE;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_validate_resources);
+
 struct mt6878_gpueb_reset {
 	struct device *parent;
 	struct mt6878_gpueb_sram *sram;
 	struct mt6878_gpueb_window *gpr, *mbox;
 	void __iomem *registers;
+	struct resource *mbox_control[GPUEB_MBOX_CONTROL_COUNT];
+	unsigned int mbox_claims;
 	struct mutex lock;
 	spinlock_t irq_lock;
 	int irq, first_error;
 	bool reset_written;
 };
+
+static void release_mailbox_resources(struct mt6878_gpueb_reset *scope)
+{
+	struct resource *resource;
+
+	while (scope->mbox_claims) {
+		resource = scope->mbox_control[--scope->mbox_claims];
+		release_mem_region(resource->start, resource_size(resource));
+	}
+}
 
 static int latch(struct mt6878_gpueb_reset *scope, int error)
 {
@@ -56,10 +117,14 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 	struct mt6878_gpueb_reset *scope;
 	struct resource *resource;
 	struct of_phandle_args supplier;
+	unsigned int i;
 	int ret, irq;
 
 	if (!parent || IS_ERR_OR_NULL(sram) || !parent->dev.pm_domain)
 		return ERR_PTR(-EINVAL);
+	ret = mt6878_gpueb_reset_validate_resources(parent);
+	if (ret)
+		return ERR_PTR(ret);
 	/* One actual attached MT6878 SPM MFG0 domain, not a caller permission
  * flag or a similarly named arbitrary runtime-PM device.
  */
@@ -77,9 +142,6 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 	if (!ret)
 		return ERR_PTR(-EINVAL);
 	resource = platform_get_resource_byname(parent, IORESOURCE_MEM, "gpueb_reg_base");
-	/* ee2be53 MT6878 DT register bank, disjoint from parent-owned SRAM. */
-	if (!resource || resource->start != 0x13c60000 || resource->end != 0x13c61fff)
-		return ERR_PTR(-ERANGE);
 	irq = platform_get_irq_byname(parent, "mbox0");
 	if (irq < 0)
 		return ERR_PTR(irq);
@@ -119,10 +181,24 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 		ret = -EBUSY;
 		goto put_mbox;
 	}
+	for (i = 0; i < GPUEB_MBOX_CONTROL_COUNT; i++) {
+		struct resource *mbox = platform_get_resource_byname(parent, IORESOURCE_MEM,
+				gpueb_resources[GPUEB_MBOX_CONTROL_FIRST + i].name);
+
+		if (!request_mem_region(mbox->start, resource_size(mbox), dev_name(scope->parent))) {
+			ret = -EBUSY;
+			goto release_mbox;
+		}
+		scope->mbox_control[i] = mbox;
+		scope->mbox_claims++;
+	}
+	/* Retain exclusive mailbox control claims, but do not map/read/ACK them.
+	 * A future IRQ dispatcher must use this owner rather than claim them again.
+	 */
 	scope->registers = ioremap(resource->start, resource_size(resource));
 	if (!scope->registers) {
 		ret = -ENOMEM;
-		goto release;
+		goto release_mbox;
 	}
 	ret = request_irq(irq, unexpected_irq, IRQF_NO_AUTOEN,
 			  dev_name(scope->parent), scope);
@@ -131,7 +207,8 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 	return scope;
 unmap:
 	iounmap(scope->registers);
-release:
+release_mbox:
+	release_mailbox_resources(scope);
 	release_mem_region(resource->start, resource_size(resource));
 put_mbox:
 	mt6878_gpueb_sram_put_window(scope->mbox);
@@ -215,6 +292,7 @@ int mt6878_gpueb_reset_destroy(struct mt6878_gpueb_reset *scope)
 	}
 	free_irq(scope->irq, scope);
 	iounmap(scope->registers);
+	release_mailbox_resources(scope);
 	release_mem_region(0x13c60000, 0x2000);
 	mt6878_gpueb_sram_put_window(scope->mbox);
 	mt6878_gpueb_sram_put_window(scope->gpr);

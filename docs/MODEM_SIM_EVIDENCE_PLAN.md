@@ -27,6 +27,22 @@ actual quiescent handoff and domain ownership before using that path, and retain
 the first failure and dependencies through activation/stop. No such PM operation
 was executed during the r182 default-off module-load check.
 
+The next concrete provider gap is infrastructure AO clocks: d84 has the thirteen
+binding IDs and topckgen parents but no IFR gate driver. The
+[native CCF candidate](../patches/modem/infra-clocks/README.md) supplies the exact
+five B4.1 SET/CLR/STA banks, including all six CCIF and three DPMAIF handles.
+Vendor parent names are mapped by clock ID/divider to the real native factors,
+not copied as orphan `top_` aliases. Source checks and isolated staging pass;
+ARM64 compilation is pending. Shipping config/DT and the running r182 are
+unchanged. Registering a CCF provider is not a hardware-free operation, nor does
+it close the modem genpd, secure handoff, IRQ/DMA or userspace control boundaries.
+
+Read-only stored `vendor_boot_b`/`dtbo_b` snapshots agree with the B4.1 transport
+clock IDs. The AO provider is `syscon@10001000`; the legacy global
+`mediatek,infracfg` reset window is instead `0x1020e000`. The snapshot's OS
+release is not established, so it cannot override the pinned B4.1 source.
+No NV/calibration partition or live register was accessed for this comparison.
+
 ## Source identity
 
 - Canonical port branch: `main`; current hardware status is recorded in
