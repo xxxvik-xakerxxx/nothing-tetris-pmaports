@@ -2,15 +2,15 @@ diff --git a/arch/arm64/boot/dts/mediatek/mt6878-camisp-resources-disabled.dtsi 
 new file mode 100644
 --- /dev/null
 +++ b/arch/arm64/boot/dts/mediatek/mt6878-camisp-resources-disabled.dtsi
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,124 @@
 +// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
-+/* Review fixture only; no board includes this file.
-+ * CAM_MAIN/CAM_VCORE power ownership and VMM ordering remain unproven.
-+ * Vendor power-domain names are retained in evidence.json, not mapped to a
-+ * fabricated native genpd. Every described device must remain disabled.
++/* Review fixture only; no shipping board includes this file.
++ * Native CAM/ISP graph is supplied by the paired disabled diagnostic fixture.
++ * Physical VMM ownership/policy remain unproven. Every device stays disabled.
 + */
 +#include <dt-bindings/clock/mediatek,mt6878-clock.h>
 +#include <dt-bindings/clock/mediatek,mt6878-camisp-clock.h>
++#include <dt-bindings/power/mediatek,mt6878-power.h>
 +
 +&soc {
 +	cam_main: clock-controller@1a000000 {
@@ -42,6 +42,7 @@ new file mode 100644
 +		clock-names = "apb";
 +		mediatek,smi = <&smi_disp_common>;
 +		mediatek,smi-supply = <&smi_disp_common>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_VCORE>;
 +		status = "disabled";
 +	};
 +
@@ -58,6 +59,7 @@ new file mode 100644
 +			 <&cam_mraw CLK_CAM_MR_LARBX>;
 +		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
 +		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 +		status = "disabled";
 +	};
 +
@@ -74,6 +76,7 @@ new file mode 100644
 +			 <&cam_mraw CLK_CAM_MR_LARBX>;
 +		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
 +		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 +		status = "disabled";
 +	};
 +
@@ -84,6 +87,7 @@ new file mode 100644
 +		clocks = <&cam_main CLK_CAM_MAIN_LARB13>;
 +		clock-names = "apb";
 +		mediatek,smi = <&smi_cam_4x1_sub_comm0>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 +		status = "disabled";
 +	};
 +
@@ -94,6 +98,7 @@ new file mode 100644
 +		clocks = <&cam_main CLK_CAM_MAIN_LARB14>;
 +		clock-names = "apb";
 +		mediatek,smi = <&smi_cam_4x1_sub_comm1>;
++		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 +		status = "disabled";
 +	};
 +
@@ -122,3 +127,88 @@ new file mode 100644
 +	mediatek,larbs = <&smi_larb0>, <&smi_larb13>, <&smi_larb14>;
 +	status = "disabled";
 +};
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-camisp-native-power-disabled.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-camisp-native-power-disabled.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-camisp-native-power-disabled.dtsi
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Include ONLY in the isolated diagnostic board, after native-display and
++ * GPU-supplies. Extend the existing controller/USID6, never duplicate them.
++ * Source bounds are not an operating point. No rail/clock request is enabled.
++ */
++#include <dt-bindings/spmi/spmi.h>
++#include <dt-bindings/power/mediatek,mt6878-power.h>
++
++&mt6319_gpu {
++	status = "disabled";
++	regulators {
++		mt6319_6_vbuck1: vbuck1 {
++			regulator-name = "6_vbuck1";
++			regulator-min-microvolt = <300000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <256>;
++			status = "disabled";
++		};
++		mt6319_6_vbuck4: vbuck4 {
++			regulator-name = "6_vbuck4";
++			regulator-min-microvolt = <300000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <256>;
++			regulator-always-on;
++			status = "disabled";
++		};
++	};
++};
++
++/* Supply pair is inert because THIS diagnostic board disables the real SPM.
++ * Never copy these properties into the active shipping controller.
++ */
++&spm {
++	cam-vcore-supply = <&mt6319_6_vbuck1>;
++	isp-vcore-supply = <&mt6319_6_vbuck1>;
++	status = "disabled";
++};
++
++&mm_infra {
++	status = "disabled";
++	cam_vcore_pd: power-domain@a {
++		reg = <MT6878_POWER_DOMAIN_CAM_VCORE>;
++		#power-domain-cells = <0>;
++		status = "disabled";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		cam_main_pd: power-domain@d {
++			reg = <MT6878_POWER_DOMAIN_CAM_MAIN>;
++			#power-domain-cells = <0>;
++			clocks = <&topckgen CLK_TOP_CAM_SEL>,
++				 <&cam_main CLK_CAM_MAIN_CAM2MM0_GALS>,
++				 <&cam_main CLK_CAM_MAIN_CAM2MM1_GALS>,
++				 <&cam_main CLK_CAM_MAIN_LARB13>,
++				 <&cam_main CLK_CAM_MAIN_LARB14>,
++				 <&cam_main CLK_CAM_MAIN_LARB29>,
++				 <&cam_main CLK_CAM_MAIN_CAM_MRAW>,
++				 <&cam_mraw CLK_CAM_MR_GALS>,
++				 <&cam_mraw CLK_CAM_MR_LARBX>;
++			clock-names = "cam", "cam_main-0", "cam_main-1", "cam_main-2", "cam_main-3", "cam_main-4", "cam_main-5", "cam_main-6", "cam_main-7";
++			status = "disabled";
++		};
++	};
++	isp_vcore_pd: power-domain@10 {
++		reg = <MT6878_POWER_DOMAIN_ISP_VCORE>;
++		#power-domain-cells = <0>;
++		status = "disabled";
++	};
++};
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-disabled.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-disabled.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-disabled.dts
+@@ -0,0 +1,7 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Compile-only diagnostic board: NOT a boot/install/activation artifact.
++ * Existing SPM/MM_INFRA are disabled, so this would break native display PM.
++ */
++#include "mt6878-nothing-tetris-native.dts"
++#include "mt6878-camisp-resources-disabled.dtsi"
++#include "mt6878-camisp-native-power-disabled.dtsi"

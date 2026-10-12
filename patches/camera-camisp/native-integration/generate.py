@@ -217,7 +217,8 @@ def payload(native, vendor, md_on_adoption=None):
                        "\t\tpd->genpd.power_on = scpsys_vmm_on;\n"
                        "\t} else\n#endif\n\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n\t\tpd->genpd.power_off")
     init_anchor = ("\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n"
-                   "\t\tret = pm_genpd_init(&pd->genpd, NULL, false);\n" if md_on_adoption is not None else
+                   "\t\tret = pm_genpd_init(&pd->genpd, NULL,\n"
+                   "\t\t\tpd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE);\n" if md_on_adoption is not None else
                    "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n")
     add = replace_once(add, init_anchor,
                        "#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)\n"
@@ -250,8 +251,10 @@ def payload(native, vendor, md_on_adoption=None):
     code = replace_once(code, "\tret = of_genpd_add_provider_onecell(np, &scpsys->pd_data);\n",
                          "\tret = scpsys_vmm_construct(scpsys);\n\tif (ret)\n\t\tgoto err_cleanup_domains;\n\n"
                          "\tret = of_genpd_add_provider_onecell(np, &scpsys->pd_data);\n")
-    code = replace_once(code, "err_cleanup_domains:\n\tscpsys_domain_cleanup(scpsys);\n",
-                         "err_cleanup_domains:\n\tif (scpsys_vmm_retain(scpsys, ret))\n\t\treturn 0;\n"
+    cleanup_prefix = ("err_cleanup_domains:\n\tmt6878_md_first_off_publication_fault(scpsys, ret);\n"
+                      if md_on_adoption is not None else "err_cleanup_domains:\n")
+    code = replace_once(code, cleanup_prefix + "\tscpsys_domain_cleanup(scpsys);\n",
+                         cleanup_prefix + "\tif (scpsys_vmm_retain(scpsys, ret))\n\t\treturn 0;\n"
                          "\tif (scpsys_vmm_unlink(scpsys)) {\n"
                          "\t\tscpsys_vmm_retain(scpsys, ret);\n\t\treturn 0;\n\t}\n"
                          "\tscpsys_domain_cleanup(scpsys);\n")

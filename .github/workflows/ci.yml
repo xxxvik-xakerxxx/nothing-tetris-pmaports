@@ -219,8 +219,10 @@ jobs:
           python3 patches/gpu/reset-owner-draft/test_resources.py
           python3 patches/gpu/reset-owner-draft/test_reset.py
           python3 patches/gpu/reset-owner-draft/test_dispatch.py
+          python3 patches/gpu/reset-owner-draft/test_tx.py
           python3 patches/gpu/reset-provider-draft/test_provider.py
           sh patches/gpu/mfg0-supplier-draft/run-native-ci.sh
+          sh patches/gpu/reset-owner-draft/run-native-ci.sh
       - name: Validate actual U-Boot GPUEB segment integration
         run: |
           export TETRIS_UBOOT_TREE="$PWD/upstream/modem-uboot"
@@ -292,6 +294,8 @@ jobs:
         run: sh patches/gnss-navigation-audit/native-config-completion/run_ci.sh
       - name: Validate native AGPS reverse receiver lifecycle
         run: sh patches/gnss-navigation-audit/native-agps-receiver/run_ci.sh
+      - name: Validate actual MVCD bootstrap framing and matching acknowledgements
+        run: sh patches/gnss-navigation-audit/dsp-download/run-ci.sh
       - name: Validate GNSS host services and second configuration
         id: gnss_host_candidate
         continue-on-error: true

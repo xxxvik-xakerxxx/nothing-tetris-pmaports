@@ -38,7 +38,8 @@ def config_values(lines):
             for line in lines if line.startswith("CONFIG_") and "=" in line}
 
 
-def main(md_on_adoption=False):
+def main(md_on_adoption=False, md_first_off=False):
+    md_on_adoption = md_on_adoption or md_first_off
     if os.environ.get("CI") != "true" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("native CAM/ISP build/link is GitHub CI-only")
     for key in ("KBUILD_MODPOST_WARN", "KBUILD_MODPOST_NOFINAL", "KBUILD_MODPOST_SKIP",
@@ -59,12 +60,16 @@ def main(md_on_adoption=False):
     result = dict(status="started", commit=os.environ["GITHUB_SHA"],
                   scope="real genpd provider vmlinux link; no installation, DT activation or hardware test",
                   patch_sha256=sha(DRAFT / "native-provider.patch"),
-                  md_on_adoption=md_on_adoption, variants={})
+                  md_on_adoption=md_on_adoption, md_first_off=md_first_off, variants={})
     try:
         run(["python3", DRAFT / "check.py"])
         if md_on_adoption:
             md = ROOT / "patches/modem/md-pm-integration"
             md_plan = json.loads((md / "STAGING.json").read_text())
+            md_required = dict(md_plan["ci"]["required_resolved_config"])
+            if md_first_off:
+                md_required.update(md_plan["first_off"]["required_resolved_config"])
+                result["first_off_config_sha256"] = sha(md / md_plan["first_off"]["config_fragment"])
             for field in ("patch", "canonical_helper"):
                 if sha(md / md_plan[field]["path"]) != md_plan[field]["sha256"]:
                     raise ValueError("reviewed MD staging input changed: " + field)
@@ -111,6 +116,10 @@ def main(md_on_adoption=False):
             if md_on_adoption:
                 for symbol in STATIC_DIAGNOSTIC_DISABLE:
                     config.extend(["-d", symbol])
+                for symbol, value in md_required.items():
+                    if value not in ("y", "n"):
+                        raise ValueError("unsupported native MD configuration value: " + symbol)
+                    config.extend(["-e" if value == "y" else "-d", symbol])
             config.extend(["-e" if unit == "y" else "-d", "KUNIT"])
             run(config)
             make = ["make", "-j4", "-C", kernel, "O=" + str(output), "ARCH=arm64", "LLVM=1",
@@ -131,7 +140,7 @@ def main(md_on_adoption=False):
             if any(resolved.get(symbol, "n") != "y" for symbol in plan["required_enabled"]):
                 raise ValueError("native genpd build dependency missing")
             if md_on_adoption:
-                for symbol, value in md_plan["ci"]["required_resolved_config"].items():
+                for symbol, value in md_required.items():
                     if resolved.get(symbol, "n") != value:
                         raise ValueError("MD static diagnostic config unresolved: " + symbol)
             run([*make, "-k", *plan["combined_objects"]])
@@ -173,4 +182,6 @@ def main(md_on_adoption=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--md-on-adoption", action="store_true")
-    main(parser.parse_args().md_on_adoption)
+    parser.add_argument("--md-first-off", action="store_true")
+    args = parser.parse_args()
+    main(args.md_on_adoption, args.md_first_off)

@@ -92,6 +92,34 @@ class SmokeInputs(unittest.TestCase):
             self.assertEqual(hashes[name], hashlib.sha256(name.encode()).hexdigest())
             self.assertEqual((report / "dtbs" / Path(name).name).read_bytes(), name.encode())
 
+    def test_camera_fixture_is_validated_and_never_a_boot_input(self):
+        output = self.package / "objects"
+        report = self.package / "evidence"
+        report.mkdir()
+        board = smoke.CAMISP_RESOURCE_PLAN["diagnostic_board"]
+        dtb = output / "arch/arm64/boot/dts" / board["target"]
+        dtb.parent.mkdir(parents=True)
+        dtb.write_bytes(b"synthetic fixture capture")
+        with patch.object(smoke, "run") as run:
+            outcome = smoke.compile_camisp_resource_dtb(["make"], output, report)
+        self.assertEqual(run.call_args_list[0].args[0], ["make", board["target"]])
+        self.assertEqual(run.call_args_list[1].args[0][-2:], ["--fixture", dtb])
+        self.assertFalse(outcome["install_allowed"])
+        self.assertFalse((report / "dtbs").exists())
+        self.assertEqual((report / "nonbootable-dtbs" / dtb.name).read_bytes(), dtb.read_bytes())
+
+    def test_camera_fixture_validation_failure_is_not_published(self):
+        output = self.package / "objects"
+        report = self.package / "evidence"
+        report.mkdir()
+        dtb = output / "arch/arm64/boot/dts" / smoke.CAMISP_RESOURCE_PLAN["diagnostic_board"]["target"]
+        dtb.parent.mkdir(parents=True)
+        dtb.write_bytes(b"synthetic rejected fixture")
+        with patch.object(smoke, "run", side_effect=[None, subprocess.CalledProcessError(1, "validator")]):
+            with self.assertRaises(subprocess.CalledProcessError):
+                smoke.compile_camisp_resource_dtb(["make"], output, report)
+        self.assertFalse((report / "nonbootable-dtbs").exists())
+
     def test_missing_dtb_stops_smoke(self):
         with patch.object(smoke, "run"):
             with self.assertRaisesRegex(ValueError, "missing compiled DTB"):

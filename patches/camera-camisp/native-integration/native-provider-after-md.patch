@@ -1293,19 +1293,19 @@ diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/media
 +	} else
 +#endif
  	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
- 		ret = pm_genpd_init(&pd->genpd, NULL, false);
- 		if (ret)
-@@ -900,6 +936,9 @@
- 
+ 		ret = pm_genpd_init(&pd->genpd, NULL,
+ 			pd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE);
+@@ -904,6 +940,9 @@
  	for_each_child_of_node(parent, child) {
  		u32 id;
-+
+ 
 +		if (scpsys->vmm && !of_device_is_available(child))
 +			continue;
- 
++
  		ret = of_property_read_u32(parent, "reg", &id);
  		if (ret) {
-@@ -960,6 +999,11 @@
+ 			dev_err(scpsys->dev, "%pOF: failed to get parent domain id\n", child);
+@@ -963,6 +1002,11 @@
  			"failed to remove domain '%s' : %d - state may be inconsistent\n",
  			pd->genpd.name, ret);
  	/* Removing an unpublished observation never shuts inherited MD down. */
@@ -1317,7 +1317,7 @@ diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/media
  	if (!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)) {
  		pd->genpd.power_off(&pd->genpd);
  	}
-@@ -1238,6 +1282,10 @@
+@@ -1241,6 +1285,10 @@
  	if (ret)
  		return ret;
  
@@ -1328,7 +1328,7 @@ diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/media
  	ret = -ENODEV;
  	for_each_available_child_of_node(np, node) {
  		struct generic_pm_domain *domain;
-@@ -1261,6 +1309,10 @@
+@@ -1264,6 +1312,10 @@
  		return ret;
  	}
  
@@ -1339,10 +1339,10 @@ diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/media
  	ret = of_genpd_add_provider_onecell(np, &scpsys->pd_data);
  	if (ret) {
  		dev_err(dev, "failed to add provider: %d\n", ret);
-@@ -1270,6 +1322,12 @@
- 	return 0;
+@@ -1274,6 +1326,12 @@
  
  err_cleanup_domains:
+ 	mt6878_md_first_off_publication_fault(scpsys, ret);
 +	if (scpsys_vmm_retain(scpsys, ret))
 +		return 0;
 +	if (scpsys_vmm_unlink(scpsys)) {

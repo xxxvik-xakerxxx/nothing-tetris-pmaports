@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef MT6878_GPUEB_RESET_H
 #define MT6878_GPUEB_RESET_H
+#ifdef GPUEB_RESET_HOST_TEST
+#include "mt6878-gpueb-sram-core.h"
+#else
 #include <linux/types.h>
+#endif
 struct device;
 struct platform_device;
 struct mt6878_gpueb_sram;
@@ -33,6 +37,17 @@ typedef void (*mt6878_gpueb_receive_t)(void *context, unsigned int channel,
 int mt6878_gpueb_reset_bind_channel(struct mt6878_gpueb_reset *scope,
 		struct device *client, unsigned int channel,
 		mt6878_gpueb_receive_t receive, void *context);
+/* Process context, one nonblocking full-slot submission by the pinned client.
+ * Zero means doorbell submitted, NOT firmware ACK/command completion. Reply
+ * channels remain in flight until an actual copied/ACKed RX callback returns.
+ * No timeout/retry or caller readiness flag. The current candidate has no owned
+ * IRQ activation transition: valid calls return -EOPNOTSUPP without MMIO.
+ * Caller serializes final destruction and supplies stable words for this call;
+ * callbacks must not send recursively or hold a lock a drain caller needs.
+ */
+int mt6878_gpueb_reset_trysend(struct mt6878_gpueb_reset *scope,
+		struct device *client, unsigned int channel,
+		const u32 *words, unsigned int count);
 /* Irreversibly closes dispatch and drains handlers/callbacks before reset.
  * Linux quiescence never establishes DMA idle or physical OFF.
  */

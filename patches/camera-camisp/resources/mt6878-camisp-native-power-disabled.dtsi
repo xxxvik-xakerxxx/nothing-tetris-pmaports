@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Include ONLY in the isolated diagnostic board, after native-display and
+ * GPU-supplies. Extend the existing controller/USID6, never duplicate them.
+ * Source bounds are not an operating point. No rail/clock request is enabled.
+ */
+#include <dt-bindings/spmi/spmi.h>
+#include <dt-bindings/power/mediatek,mt6878-power.h>
+
+&mt6319_gpu {
+	status = "disabled";
+	regulators {
+		mt6319_6_vbuck1: vbuck1 {
+			regulator-name = "6_vbuck1";
+			regulator-min-microvolt = <300000>;
+			regulator-max-microvolt = <1193750>;
+			regulator-enable-ramp-delay = <256>;
+			status = "disabled";
+		};
+		mt6319_6_vbuck4: vbuck4 {
+			regulator-name = "6_vbuck4";
+			regulator-min-microvolt = <300000>;
+			regulator-max-microvolt = <1193750>;
+			regulator-enable-ramp-delay = <256>;
+			regulator-always-on;
+			status = "disabled";
+		};
+	};
+};
+
+/* Supply pair is inert because THIS diagnostic board disables the real SPM.
+ * Never copy these properties into the active shipping controller.
+ */
+&spm {
+	cam-vcore-supply = <&mt6319_6_vbuck1>;
+	isp-vcore-supply = <&mt6319_6_vbuck1>;
+	status = "disabled";
+};
+
+&mm_infra {
+	status = "disabled";
+	cam_vcore_pd: power-domain@a {
+		reg = <MT6878_POWER_DOMAIN_CAM_VCORE>;
+		#power-domain-cells = <0>;
+		status = "disabled";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		cam_main_pd: power-domain@d {
+			reg = <MT6878_POWER_DOMAIN_CAM_MAIN>;
+			#power-domain-cells = <0>;
+			clocks = <&topckgen CLK_TOP_CAM_SEL>,
+				 <&cam_main CLK_CAM_MAIN_CAM2MM0_GALS>,
+				 <&cam_main CLK_CAM_MAIN_CAM2MM1_GALS>,
+				 <&cam_main CLK_CAM_MAIN_LARB13>,
+				 <&cam_main CLK_CAM_MAIN_LARB14>,
+				 <&cam_main CLK_CAM_MAIN_LARB29>,
+				 <&cam_main CLK_CAM_MAIN_CAM_MRAW>,
+				 <&cam_mraw CLK_CAM_MR_GALS>,
+				 <&cam_mraw CLK_CAM_MR_LARBX>;
+			clock-names = "cam", "cam_main-0", "cam_main-1", "cam_main-2", "cam_main-3", "cam_main-4", "cam_main-5", "cam_main-6", "cam_main-7";
+			status = "disabled";
+		};
+	};
+	isp_vcore_pd: power-domain@10 {
+		reg = <MT6878_POWER_DOMAIN_ISP_VCORE>;
+		#power-domain-cells = <0>;
+		status = "disabled";
+	};
+};

@@ -3,8 +3,11 @@
 Defensible starting contract: trust the installed bootloader's actual completed
 loader/BROM/EMI transaction, validate its immutable report/reservations, and
 observe physical ON through the existing native MD supplier. There is no new
-NS certificate requirement. This design has no physical transition and does not
-declare modem READY. First shutdown and inhibited restart remain unproved.
+NS certificate requirement. Default adoption has no physical transition and
+does not declare modem READY. The staged helper now also has an explicitly
+marked supplier-init first-OFF diagnostic; see STAGING-CONTRACT.md. Its physical
+validation and all restart support remain unproved. The historical read-only
+activation design below does not describe that separate first-OFF transaction.
 
 The concrete implementation is now `native-on-adoption.patch`, generated from
 `mt6878-modem-adopt.h`. `STAGING-CONTRACT.md` supersedes the activation design
@@ -77,8 +80,9 @@ handoff provenance, and slot42/43 AID241=RW supports bounded initial service
 access; neither proves that a running bootloader modem can be shut down or
 restarted with execution inhibited until POWER/0.
 
-Next executable step is the native observational attachment only, after final
-producer activation and real caller integration. Validate source patch application
-and target objects in parent CI, then request one controlled observation/probe
-experiment with USB invariants. Keep first SHUTDOWN as a separate unproved
-operation. The adoption patch is staged only; no physical experiment was performed here.
+In read-only mode the next step is native observational attachment after final
+producer activation and real caller integration. The separate first-OFF mode
+needs its new final marker and resolved no-idle/no-sleep/no-hotplug CI profile,
+not attachment. Validate actual native objects/link before a controlled first-OFF
+experiment. Its physical readback is untested; restart remains unsupported.
+The adoption patch is staged only; no physical experiment was performed here.

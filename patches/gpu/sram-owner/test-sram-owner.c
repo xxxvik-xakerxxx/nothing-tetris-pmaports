@@ -8,6 +8,12 @@
 static struct resource claimed;
 static int claim_active, fail_alloc, fail_map, claims, releases, maps, unmaps;
 
+static uint32_t readl(const void *mapping) { (void)mapping; abort(); }
+static void writel(uint32_t word, void *mapping)
+{
+	(void)word; (void)mapping; abort();
+}
+
 static void *kzalloc(size_t bytes, int flags)
 {
 	assert(flags == GFP_KERNEL);

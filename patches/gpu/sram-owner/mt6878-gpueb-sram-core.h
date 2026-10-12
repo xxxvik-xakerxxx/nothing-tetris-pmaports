@@ -36,4 +36,6 @@ int gpueb_sram_window_range(const struct gpueb_sram_core *core,
 		struct gpueb_sram_range *range);
 int gpueb_sram_quarantine(struct gpueb_sram_core *core);
 int gpueb_sram_close(struct gpueb_sram_core *core);
+/* Exact ee2 TX slot; no arbitrary-offset or short-message write capability. */
+int gpueb_sram_tx_slot(unsigned int channel, unsigned int count, u64 *offset);
 #endif

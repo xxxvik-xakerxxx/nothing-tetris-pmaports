@@ -16,7 +16,11 @@
 #define PTR_ERR(pointer) ((long)(intptr_t)(pointer))
 #define IS_ERR(pointer) ((uintptr_t)(pointer) >= (uintptr_t)-4095)
 #define IS_ERR_OR_NULL(pointer) (!(pointer) || IS_ERR(pointer))
-struct device { unsigned int refs; };
+struct module { unsigned int refs; };
+struct device_driver { struct module *owner; int suppress_bind_attrs; };
+struct device_node;
+struct device { unsigned int refs; struct device_driver *driver;
+	struct device_node *of_node; void *pm_domain; };
 struct resource { uint64_t start, end; unsigned long flags; };
 struct mutex { pthread_mutex_t value; };
 static inline void mutex_init(struct mutex *lock)
@@ -56,12 +60,7 @@ static struct resource *request_mem_region(uint64_t start, uint64_t size, const 
 static void release_mem_region(uint64_t start, uint64_t size);
 static void *ioremap(uint64_t start, uint64_t size);
 static void iounmap(void *mapping);
-/* Existing CI fixture does not perform hardware access. The new read path
- * must acquire dedicated mock-read coverage before that path is exercised.
- */
-static inline uint32_t readl(const void *mapping)
-{
-	(void)mapping;
-	abort();
-}
+/* Fixture-specific MMIO: old ownership tests abort; IPC tests record mocks. */
+static uint32_t readl(const void *mapping);
+static void writel(uint32_t word, void *mapping);
 #endif

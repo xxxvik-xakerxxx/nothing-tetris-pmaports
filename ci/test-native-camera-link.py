@@ -41,6 +41,10 @@ class NativeCameraLink(unittest.TestCase):
         self.assertIn('"--prepared-kernel", kernel, "--ci-apply"', source)
         self.assertIn('"--md-on-adoption"', source)
         self.assertIn('md_plan["ci"]["required_resolved_config"]', source)
+        self.assertIn('config.extend(["-e" if value == "y" else "-d", symbol])', source)
+        self.assertIn('if value not in ("y", "n"):', source)
+        self.assertIn('md_required.update(md_plan["first_off"]["required_resolved_config"])', source)
+        self.assertEqual(source.count('for symbol, value in md_required.items():'), 2)
         for symbol in ("OF_DYNAMIC", "OF_OVERLAY", "I2C_DEMUX_PINCTRL", "CHROMEOS_OF_HW_PROBER",
                        "VIDEO_QCOM_VENUS", "PCI_DYNAMIC_OF_NODES", "STM32_FIREWALL"):
             self.assertIn(symbol, LINK.STATIC_DIAGNOSTIC_DISABLE)

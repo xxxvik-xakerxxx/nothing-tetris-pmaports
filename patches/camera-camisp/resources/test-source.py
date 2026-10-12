@@ -17,7 +17,7 @@ spec.loader.exec_module(check)
 class ResourceTests(unittest.TestCase):
     def setUp(self):
         self.data = json.loads((HERE / "evidence.json").read_text())
-        self.inputs = [(HERE / name).read_text() for name in check.generate.DESTINATIONS]
+        self.inputs = [(HERE / name).read_text() for name in check.generate.RESOURCE_FILES]
         self.plan = json.loads((HERE / "STAGING.json").read_text())
 
     def reject(self, index, old, new):
@@ -129,7 +129,34 @@ class ResourceTests(unittest.TestCase):
         self.data["nodes"]["smi_larb13"]["reg"] = "<0 0x1a003000 0 0x1000>"
         regenerated = check.generate.outputs(self.data)
         with self.assertRaisesRegex(ValueError, "trace identity"):
-            check.source_contract(*(regenerated[name] for name in check.generate.DESTINATIONS), self.data)
+            check.source_contract(*(regenerated[name] for name in check.generate.RESOURCE_FILES), self.data)
+
+    def test_power_fixture_cannot_enable_graph_or_provider(self):
+        original = (HERE / "mt6878-camisp-native-power-disabled.dtsi").read_text()
+        board = (HERE / "mt6878-nothing-tetris-camisp-disabled.dts").read_text()
+        for match in re.finditer('status = "disabled";', original):
+            mutated = original[:match.start()] + 'status = "okay";' + original[match.end():]
+            with self.assertRaises(ValueError):
+                check.power_contract(mutated, board, self.data)
+
+    def test_power_fixture_rejects_reordered_clock_phandles(self):
+        original = (HERE / "mt6878-camisp-native-power-disabled.dtsi").read_text()
+        mutated = original.replace("CLK_CAM_MAIN_CAM2MM0_GALS", "CLK_CAM_MAIN_CAM2MM1_GALS", 1)
+        with self.assertRaisesRegex(ValueError, "ordered protection clocks"):
+            check.power_contract(mutated, check.generate.board_fixture(), self.data)
+
+    def test_power_fixture_preserves_disabled_always_on_buck4(self):
+        original = (HERE / "mt6878-camisp-native-power-disabled.dtsi").read_text()
+        with self.assertRaisesRegex(ValueError, "always-on"):
+            check.power_contract(original.replace("regulator-always-on;", ""),
+                                 check.generate.board_fixture(), self.data)
+
+    def test_power_fixture_cannot_duplicate_pmic_or_controller(self):
+        original = (HERE / "mt6878-camisp-native-power-disabled.dtsi").read_text()
+        for mutation in ('compatible = "mediatek,mt6315-regulator";', "domain-supply = <&dummy>;"):
+            with self.assertRaises(ValueError):
+                check.power_contract(original.replace("&spm {", "&spm {\n" + mutation),
+                                     check.generate.board_fixture(), self.data)
 
     def test_generation_does_not_mutate_frozen_evidence(self):
         original = copy.deepcopy(self.data)

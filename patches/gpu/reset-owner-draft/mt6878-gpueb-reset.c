@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
+#ifdef GPUEB_RESET_HOST_TEST
+#include "reset-host.h"
+#else
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/interrupt.h>
@@ -13,12 +16,15 @@
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/string.h>
 #include <dt-bindings/power/mediatek,mt6878-power.h>
+#endif
 #include "mt6878-gpueb-sram.h"
 #include "mt6878-gpueb-reset.h"
 
 enum { GPUEB_MBOX_CONTROL_FIRST = 4, GPUEB_MBOX_CONTROL_COUNT = 4,
-	GPUEB_MBOX_CHANNELS = 11, GPUEB_MBOX_MAX_RX_WORDS = 8 };
+	GPUEB_MBOX_CHANNELS = 11, GPUEB_MBOX_MAX_RX_WORDS = 8,
+	GPUEB_MBOX_MAX_TX_WORDS = 9 };
 enum { GPUEB_MBOX_SET, GPUEB_MBOX_CLR, GPUEB_MBOX_SEND, GPUEB_MBOX_RECV };
 
 /* ee2be53 send-table then recv-table, in four-byte slots. */
@@ -124,6 +130,7 @@ EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_validate_resources);
 
 struct mt6878_gpueb_reset {
 	struct device *parent;
+	struct device_driver *parent_driver;
 	struct mt6878_gpueb_sram *sram;
 	struct mt6878_gpueb_window *gpr, *mbox;
 	void __iomem *registers;
@@ -132,15 +139,20 @@ struct mt6878_gpueb_reset {
 	struct {
 		struct device *device;
 		struct module *module;
+		struct device_driver *driver;
 		mt6878_gpueb_receive_t receive;
 		void *context;
 	} channels[GPUEB_MBOX_CHANNELS];
-	u32 registered;
+	u32 registered, tx_inflight;
 	unsigned int mbox_claims;
 	struct mutex lock;
 	spinlock_t irq_lock;
 	int irq, first_error;
 	bool reset_written, dispatch_quiesced, irq_contained;
+	/* Private activation provenance, never a caller-supplied permission. No
+	 * production setter exists until cold-start/IRQ lifecycle is implemented.
+	 */
+	bool dispatch_active;
 };
 
 static void release_mailbox_resources(struct mt6878_gpueb_reset *scope)
@@ -193,6 +205,7 @@ struct gpueb_irq_snapshot {
 	struct mt6878_gpueb_reset *scope;
 	u32 payload[GPUEB_MBOX_CHANNELS][GPUEB_MBOX_MAX_RX_WORDS];
 	u32 pending;
+	u32 replies;
 };
 
 /* Runs with BOTH scope and whole-SRAM mutexes held, including the ACK. */
@@ -218,6 +231,13 @@ static int snapshot_mailbox(struct mt6878_gpueb_reader *reader, void *data)
 	/* Unregistered/unknown bits are never silently ACKed or discarded. */
 	if (pending & ~scope->registered)
 		return -EPROTO;
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++)
+		if ((pending & BIT(i)) && gpueb_channels[i].recv_opt) {
+			/* A stale/unowned reply is not a new command's ACK. */
+			if (!(scope->tx_inflight & BIT(i)))
+				return -EPROTO;
+			snapshot->replies |= BIT(i);
+		}
 	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++) {
 		if (!(pending & BIT(i)))
 			continue;
@@ -248,6 +268,7 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 	unsigned int i;
 	int ret;
 
+	(void)irq;
 	mutex_lock(&scope->lock);
 	ret = READ_ONCE(scope->first_error);
 	if (ret)
@@ -256,6 +277,14 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 	 * payload untouched; deliberate quiescence is not a firmware fault.
 	 */
 	if (scope->dispatch_quiesced) {
+		mutex_unlock(&scope->lock);
+		return IRQ_HANDLED;
+	}
+	if (!scope->dispatch_active) {
+		/* An unowned external line enable cannot authorize dispatch. Avoid a
+		 * level-triggered storm without reading/ACKing firmware state.
+		 */
+		mask_irq_once(scope);
 		mutex_unlock(&scope->lock);
 		return IRQ_HANDLED;
 	}
@@ -272,6 +301,12 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 		if (snapshot.pending & BIT(i))
 			scope->channels[i].receive(scope->channels[i].context, i,
 						snapshot.payload[i], gpueb_channels[i].recv_words);
+	/* Keep reply channels busy until the client consumes the local response.
+	 * drain_irq synchronizes the whole thread, including this retirement.
+	 */
+	mutex_lock(&scope->lock);
+	scope->tx_inflight &= ~snapshot.replies;
+	mutex_unlock(&scope->lock);
 	return snapshot.pending ? IRQ_HANDLED : IRQ_NONE;
 fault:
 	contain_irq(scope, ret);
@@ -309,6 +344,7 @@ int mt6878_gpueb_reset_bind_channel(struct mt6878_gpueb_reset *scope,
 	}
 	scope->channels[channel].device = get_device(client);
 	scope->channels[channel].module = module;
+	scope->channels[channel].driver = client->driver;
 	scope->channels[channel].receive = receive;
 	scope->channels[channel].context = context;
 	scope->registered |= BIT(channel);
@@ -317,6 +353,113 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_bind_channel);
+
+struct gpueb_tx {
+	struct mt6878_gpueb_reset *scope;
+	unsigned int channel;
+};
+
+static int tx_before(struct mt6878_gpueb_reader *reader, void *data)
+{
+	struct gpueb_tx *tx = data;
+	struct mt6878_gpueb_reset *scope = tx->scope;
+	u32 boot_word;
+	int ret;
+
+	ret = mt6878_gpueb_sram_reader_words(reader, GPUEB_WINDOW_GPR, 0x8, &boot_word, 1);
+	if (ret)
+		return ret;
+	if (boot_word != 0x55667788)
+		return -EHOSTDOWN;
+	if (readl(scope->mbox_maps[GPUEB_MBOX_SEND]) & BIT(tx->channel))
+		return -EBUSY;
+	/* Never consume a reply left over from an earlier owner/request. */
+	if (gpueb_channels[tx->channel].recv_opt &&
+	    (readl(scope->mbox_maps[GPUEB_MBOX_RECV]) & BIT(tx->channel)))
+		return -EPROTO;
+	return 0;
+}
+
+static int tx_commit(struct mt6878_gpueb_reader *reader, void *data)
+{
+	struct gpueb_tx *tx = data;
+	struct mt6878_gpueb_reset *scope = tx->scope;
+	u32 boot_word;
+	int ret;
+
+	ret = mt6878_gpueb_sram_reader_words(reader, GPUEB_WINDOW_GPR, 0x8, &boot_word, 1);
+	if (ret)
+		return ret;
+	if (boot_word != 0x55667788)
+		return -EHOSTDOWN;
+	/* ee2 mtk_mbox_send: full SRAM payload, mb(), then SET BIT(pin_index).
+	 * Do not require SEND to stay set: remote consumption may be immediate.
+	 */
+	mb();
+	if (gpueb_channels[tx->channel].recv_opt)
+		scope->tx_inflight |= BIT(tx->channel);
+	writel(BIT(tx->channel), scope->mbox_maps[GPUEB_MBOX_SET]);
+	readl(scope->mbox_maps[GPUEB_MBOX_SEND]);
+	return 0;
+}
+
+int mt6878_gpueb_reset_trysend(struct mt6878_gpueb_reset *scope,
+		struct device *client, unsigned int channel,
+		const u32 *words, unsigned int count)
+{
+	struct gpueb_tx tx = { .scope = scope, .channel = channel };
+	u32 payload[GPUEB_MBOX_MAX_TX_WORDS];
+	struct irq_data *irq_data;
+	int ret;
+
+	if (IS_ERR_OR_NULL(scope) || !client || !words || channel >= GPUEB_MBOX_CHANNELS ||
+	    count != gpueb_channels[channel].send_words)
+		return -EINVAL;
+	memcpy(payload, words, count * sizeof(*words));
+	mutex_lock(&scope->lock);
+	ret = READ_ONCE(scope->first_error);
+	if (ret)
+		goto out;
+	if (scope->dispatch_quiesced || scope->reset_written) {
+		ret = -ESHUTDOWN;
+		goto out;
+	}
+	if (!(scope->registered & BIT(channel)) || scope->channels[channel].device != client) {
+		ret = -ENODEV;
+		goto out;
+	}
+	if (!scope->parent_driver || scope->parent->driver != scope->parent_driver ||
+	    !scope->parent_driver->suppress_bind_attrs ||
+	    client->driver != scope->channels[channel].driver ||
+	    !client->driver->suppress_bind_attrs) {
+		ret = -ENODEV;
+		goto fault;
+	}
+	/* Descriptor state alone cannot authorize external/unowned enable_irq.
+	 * Both the private owned transition and the real line must be active.
+	 */
+	irq_data = irq_get_irq_data(scope->irq);
+	if (!scope->dispatch_active || !irq_data || irqd_irq_disabled(irq_data) ||
+	    scope->irq_contained) {
+		ret = -EOPNOTSUPP;
+		goto out;
+	}
+	if (scope->tx_inflight & BIT(channel)) {
+		ret = -EBUSY;
+		goto out;
+	}
+	ret = mt6878_gpueb_sram_send_transaction(scope->gpr, scope->mbox,
+			channel, payload, count, tx_before, tx_commit, &tx);
+	if (!ret || ret == -EBUSY)
+		goto out;
+fault:
+	contain_irq(scope, ret);
+	ret = READ_ONCE(scope->first_error);
+out:
+	mutex_unlock(&scope->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_trysend);
 
 struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 	struct platform_device *parent, struct mt6878_gpueb_sram *sram)
@@ -329,6 +472,9 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 
 	if (!parent || IS_ERR_OR_NULL(sram) || !parent->dev.pm_domain)
 		return ERR_PTR(-EINVAL);
+	ret = mt6878_gpueb_sram_check_parent(sram, &parent->dev);
+	if (ret)
+		return ERR_PTR(ret);
 	ret = mt6878_gpueb_reset_validate_resources(parent);
 	if (ret)
 		return ERR_PTR(ret);
@@ -374,6 +520,7 @@ struct mt6878_gpueb_reset *mt6878_gpueb_reset_prepare(
 		goto put_module;
 	}
 	scope->parent = get_device(&parent->dev);
+	scope->parent_driver = parent->dev.driver;
 	scope->gpr = mt6878_gpueb_sram_get_window(sram, GPUEB_WINDOW_GPR);
 	if (IS_ERR(scope->gpr)) {
 		ret = PTR_ERR(scope->gpr);
@@ -445,6 +592,7 @@ int mt6878_gpueb_reset_drain_irq(struct mt6878_gpueb_reset *scope)
 		return -EINVAL;
 	mutex_lock(&scope->lock);
 	scope->dispatch_quiesced = true;
+	scope->dispatch_active = false;
 	mask_irq_once(scope);
 	mutex_unlock(&scope->lock);
 	/* Never wait holding the threaded handler's mutex. NO_AUTOEN still has no

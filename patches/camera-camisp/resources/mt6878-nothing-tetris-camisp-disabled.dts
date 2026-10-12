@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Compile-only diagnostic board: NOT a boot/install/activation artifact.
+ * Existing SPM/MM_INFRA are disabled, so this would break native display PM.
+ */
+#include "mt6878-nothing-tetris-native.dts"
+#include "mt6878-camisp-resources-disabled.dtsi"
+#include "mt6878-camisp-native-power-disabled.dtsi"

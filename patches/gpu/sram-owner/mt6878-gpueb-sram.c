@@ -69,6 +69,20 @@ free:
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_create);
 
+int mt6878_gpueb_sram_check_parent(struct mt6878_gpueb_sram *sram, struct device *parent)
+{
+	int ret;
+
+	if (IS_ERR_OR_NULL(sram) || !parent)
+		return -EINVAL;
+	mutex_lock(&sram->lock);
+	ret = sram->core.phase != GPUEB_SRAM_OWNED ? -ESHUTDOWN :
+		sram->parent != parent ? -ENODEV : 0;
+	mutex_unlock(&sram->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_check_parent);
+
 struct mt6878_gpueb_window *mt6878_gpueb_sram_get_window(
 		struct mt6878_gpueb_sram *sram, enum gpueb_sram_window type)
 {
@@ -160,6 +174,45 @@ int mt6878_gpueb_sram_read_transaction(struct mt6878_gpueb_window *gpr,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_read_transaction);
+
+int mt6878_gpueb_sram_send_transaction(struct mt6878_gpueb_window *gpr,
+		struct mt6878_gpueb_window *mbox, unsigned int channel,
+		const u32 *words, unsigned int count,
+		int (*before)(struct mt6878_gpueb_reader *, void *),
+		int (*commit)(struct mt6878_gpueb_reader *, void *), void *context)
+{
+	struct mt6878_gpueb_reader reader;
+	struct gpueb_sram_range range;
+	u64 offset;
+	unsigned int i;
+	int ret;
+
+	if (IS_ERR_OR_NULL(gpr) || IS_ERR_OR_NULL(mbox) || !words || !before || !commit ||
+	    gpr->sram != mbox->sram || gpr->type != GPUEB_WINDOW_GPR ||
+	    mbox->type != GPUEB_WINDOW_MBOX)
+		return -EINVAL;
+	ret = gpueb_sram_tx_slot(channel, count, &offset);
+	if (ret)
+		return ret;
+	reader.sram = gpr->sram;
+	mutex_lock(&reader.sram->lock);
+	ret = gpueb_sram_window_range(&reader.sram->core, GPUEB_WINDOW_GPR,
+				     0, GPUEB_GPR_SIZE, &range);
+	if (!ret)
+		ret = gpueb_sram_window_range(&reader.sram->core, GPUEB_WINDOW_MBOX,
+					     offset, (u64)count * sizeof(*words), &range);
+	if (!ret)
+		ret = before(&reader, context);
+	if (!ret) {
+		for (i = 0; i < count; i++)
+			writel(words[i], reader.sram->mapping +
+				(range.start - reader.sram->core.whole.start) + i * sizeof(*words));
+		ret = commit(&reader, context);
+	}
+	mutex_unlock(&reader.sram->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_sram_send_transaction);
 
 void mt6878_gpueb_sram_put_window(struct mt6878_gpueb_window *window)
 {

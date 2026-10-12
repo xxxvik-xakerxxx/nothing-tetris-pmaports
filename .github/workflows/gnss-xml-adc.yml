@@ -82,6 +82,20 @@ jobs:
           python3 -B patches/gnss-navigation-audit/test_b41_agps_configuration_source.py \
             "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
             2>&1 | tee out/lna-start-evidence/configuration-static.log
+          dsp=patches/gnss-navigation-audit/dsp-download
+          python3 -B "$dsp/test_source.py" \
+            "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
+            pmaports/device/testing/firmware-nothing-tetris/connsys_gnss_mt6878_mt6631.bin \
+            2>&1 | tee out/lna-start-evidence/dsp-download-static.log
+          python3 -B "$dsp/test_wire_source.py" \
+            "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/dsp-wire-static.log
+          python3 -B "$dsp/test_clock_source.py" \
+            "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/dsp-clock-static.log
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
+            sh "$dsp/run-ci.sh" 2>&1 | tee out/lna-start-evidence/dsp-wire-native.log
+          sha256sum "$dsp"/* > out/lna-start-evidence/DSP-SOURCE-SHA256SUMS
           python3 -B "$draft/test_static.py" "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
             2>&1 | tee out/lna-start-evidence/static.log
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \

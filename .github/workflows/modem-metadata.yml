@@ -170,7 +170,7 @@ jobs:
 
   native-provider-link:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 95
     container:
       image: public.ecr.aws/docker/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
     steps:
@@ -194,7 +194,7 @@ jobs:
       - name: Compile and link one actual native modem and camera genpd provider
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
-          python3 -B ci/link-native-camera-vmm.py --md-on-adoption
+          python3 -B ci/link-native-camera-vmm.py --md-first-off
       - uses: actions/upload-artifact@v7
         if: always()
         with:

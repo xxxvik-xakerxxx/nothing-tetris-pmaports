@@ -40,12 +40,23 @@ class SramOwnerTests(unittest.TestCase):
         source = (CANDIDATE / "mt6878-gpueb-sram.c").read_text()
         self.assertEqual(source.count("request_mem_region("), 1)
         self.assertEqual(source.count("ioremap("), 1)
-        for forbidden in ("devm_", "writel(", "memset_io(", "memcpy_toio(",
+        for forbidden in ("devm_", "memset_io(", "memcpy_toio(",
                           "rproc_boot(", "platform_driver", "module_init", "regulator_", "clk_"):
             self.assertNotIn(forbidden, source)
         read = definition(source, "int mt6878_gpueb_sram_reader_words(")
         self.assertLess(read.index("gpueb_sram_window_range("), read.index("readl("))
         self.assertEqual(source.count("readl("), 1)
+        send = definition(source, "int mt6878_gpueb_sram_send_transaction(")
+        self.assertEqual(source.count("writel("), 1)
+        self.assertEqual(send.count("writel("), 1)
+        self.assertLess(send.index("gpueb_sram_tx_slot("), send.index("mutex_lock("))
+        self.assertLess(send.rindex("gpueb_sram_window_range("), send.index("before(&reader, context)"))
+        self.assertLess(send.index("before(&reader, context)"), send.index("writel(words[i]"))
+        self.assertLess(send.index("writel(words[i]"), send.index("commit(&reader, context)"))
+        self.assertLess(send.index("commit(&reader, context)"), send.index("mutex_unlock("))
+        header = (CANDIDATE / "mt6878-gpueb-sram.h").read_text()
+        api = header.split("int mt6878_gpueb_sram_send_transaction(", 1)[1].split(";", 1)[0]
+        self.assertNotIn("offset", api)
         destroy = definition(source, "int mt6878_gpueb_sram_destroy(")
         self.assertLess(destroy.index("gpueb_sram_close("), destroy.index("iounmap("))
         self.assertLess(destroy.index("return ret;"), destroy.index("iounmap("))

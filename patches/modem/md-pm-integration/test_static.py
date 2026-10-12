@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import unittest
 
+import audit
 import stage
 
 HERE = Path(__file__).resolve().parent
@@ -38,7 +39,13 @@ def check_source(source, native):
                  r"writel\w*|writew\w*|writeb\w*|iowrite\w*|ioremap\w*|memcpy_toio|"
                  r"regulator_\w+|clk_\w+|reset_control_\w+|pm_runtime_\w+|"
                  r"dev_pm_domain_attach\w*|of_genpd_add_provider\w*|platform_device_register\w*)\s*\(")
-    require(not re.search(forbidden, stripped), "hardware/activation mutation in observation helper")
+    transaction = body(stripped, "mt6878_md_first_off")
+    require(not re.search(forbidden, stripped.replace(transaction, "", 1)),
+            "hardware/activation mutation outside first-OFF transaction")
+    mutations = re.findall(r"\b(regmap_\w+)\s*\(", transaction)
+    require(mutations == ["regmap_write", "regmap_read_poll_timeout", "regmap_clear_bits",
+                          "regmap_read_poll_timeout", "regmap_set_bits"],
+            "unexpected first-OFF hardware operations")
     require("GENPD_FLAG_ALWAYS_ON" not in stripped and "md_owned" not in stripped,
             "fabricated permanent power or transition ownership")
     require("u8 brom[80], evidence[336], descriptor[32];" in source, "wire storage drift")
@@ -51,7 +58,7 @@ def check_source(source, native):
     require("dev->bus != &platform_bus_type" in attach and "dev->of_node != owner->modem" in attach,
             "non-real or foreign consumer admitted")
     require(attach.index("mutex_lock(&owner->lock)") < attach.index("owner->state !=") <
-            attach.index("mt6878_md_adopt_on(pd, now.on)") < attach.index("get_device(dev)"),
+            attach.index("mt6878_md_adopt_revalidate(pd, owner)") < attach.index("get_device(dev)"),
             "attachment publication before locked validation")
     require("owner->state != MT6878_MD_OBSERVED_ON" in attach, "duplicate/rebound consumer admitted")
     require("mt6878_md_adopt_fault(owner, ret)" in attach, "first attach fault not retained")
@@ -65,10 +72,47 @@ def check_source(source, native):
     require("pd->genpd.attach_dev = mt6878_md_adopt_attach;" in native and
             "pd->genpd.detach_dev = mt6878_md_adopt_detach;" in native,
             "adoption not wired to real provider")
-    require("ret = pm_genpd_init(&pd->genpd, NULL, false);" in native,
-            "native registration does not adopt software ON")
+    require("pd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE);" in native,
+            "native OFF registration not conditioned on actual first-OFF completion")
     require("mt6878_md_power_on" not in native and "mt6878_md_cleanup" not in native,
             "legacy MD write/cleanup route remains")
+
+
+def check_first_off(source):
+    transaction = body(source, "mt6878_md_first_off")
+    audit.ordered(transaction, "mutex_lock(&mt6878_md_first_off_lock)",
+                  "if (mt6878_md_first_off_owner)", "mt6878_md_first_off_profile(pd)",
+                  "mt6878_md_adopt_revalidate(pd, owner)", "owner->supplier = get_device",
+                  "owner->state = MT6878_MD_FIRST_OFF_TAKEOVER",
+                  "mt6878_md_first_off_owner = owner", "regmap_write(map, bp->bus_prot_set",
+                  "regmap_read_poll_timeout(map, bp->bus_prot_sta", "regmap_clear_bits",
+                  "!(value & (MT6878_MD_ACK | PWR_ON_BIT))", "regmap_set_bits",
+                  "usleep_range(4000, 5000)", "mt6878_md_first_off_readback(pd, owner->off)",
+                  "if (ret)", "goto fault", "owner->state = MT6878_MD_FIRST_OFF_COMPLETE",
+                  "fault:", "mt6878_md_adopt_fault(owner, ret)",
+                  "owner->state = MT6878_MD_FIRST_OFF_FAILED", "return ret;")
+    require("for (i = 0; i < 3; i++)" in transaction, "bus protection order changed")
+    require("if (ret)\n\t\t\tgoto fault;" in transaction, "write failure not retained")
+    require("regmap_clear_bits(base, MT6878_MD_CTL, PWR_ON_BIT)" in transaction and
+            "regmap_set_bits(base, MT6878_MD_ISO, MT6878_MD_ISO_MASK)" in transaction,
+            "first-OFF register masks changed")
+    for operation in re.finditer(r"ret = (?:regmap_\w+|mt6878_md_first_off_readback)\([^;]*\);", transaction):
+        require(re.match(r"\s*if \(ret\)\s*goto fault;", transaction[operation.end():]),
+                "first-OFF operation does not stop on its first errno")
+    profile = body(source, "mt6878_md_first_off_profile")
+    for config in ("CPU_IDLE", "PM_SLEEP", "SUSPEND", "HIBERNATION", "HOTPLUG_CPU",
+                   "MTK_DVFSRC", "ARM_PSCI_CHECKER", "KVM", "KEXEC_CORE"):
+        require("IS_ENABLED(CONFIG_" + config + ")" in profile, "missing exclusion: " + config)
+    require('"nothing,modem-first-off-diagnostic"' in profile and
+            '"tetris,modem-first-off-diagnostic"' in profile and
+            profile.count("mt6878_md_adopt_empty(") == 2,
+            "unpaired or nonempty first-OFF markers")
+    observe = body(source, "mt6878_md_first_off_readback")
+    require("values[0] & (MT6878_MD_ACK | PWR_ON_BIT)" in observe and
+            "(values[1] & MT6878_MD_ISO_MASK) != MT6878_MD_ISO_MASK" in observe and
+            "(values[i + 2] & bp->bus_prot_sta_mask) != bp->bus_prot_sta_mask" in observe,
+            "incomplete OFF observation")
+    require("return 0;" not in transaction, "first-OFF success bypasses recorded result")
 
 
 class StaticAdoption(unittest.TestCase):
@@ -87,8 +131,9 @@ class StaticAdoption(unittest.TestCase):
         self.assertEqual(json.loads((HERE / "STAGING.json").read_text()),
                          stage.contract(self.patch, self.before, self.after, self.inputs))
 
-    def test_real_native_domain_and_no_transitions(self):
+    def test_real_native_domain_and_no_callback_transitions(self):
         check_source(self.source, self.native)
+        check_first_off(self.source)
         self.assertIn(".num_domains = ARRAY_SIZE(mt6878_md_domains)", self.after[stage.DATA])
         self.assertIn("[0] = {", self.after[stage.DATA])
         self.assertIn("!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)", self.native)
@@ -176,8 +221,8 @@ class StaticAdoption(unittest.TestCase):
         with self.assertRaises(ValueError):
             check_source(self.source.replace("owner->first_error ? owner->first_error : -EOPNOTSUPP", "0"), self.native)
         with self.assertRaises(ValueError):
-            check_source(self.source, self.native.replace("ret = pm_genpd_init(&pd->genpd, NULL, false);",
-                                                         "ret = pm_genpd_init(&pd->genpd, NULL, true);"))
+            check_source(self.source, self.native.replace("pd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE);",
+                                                         "true);"))
 
     def test_mutant_consumer_and_wire_storage_rejected(self):
         with self.assertRaises(ValueError):
@@ -189,6 +234,96 @@ class StaticAdoption(unittest.TestCase):
         for path in HERE.glob("*.py"):
             ast.parse(path.read_text(), filename=str(path))
         self.assertNotIn("native_ci", (HERE / "stage.py").read_text())
+
+    def test_first_shutdown_runtime_error_is_not_physical_off(self):
+        core = (KERNEL / "drivers/pmdomain/core.c").read_text()
+        physical = body(core, "genpd_power_off")
+        runtime = body(core, "genpd_runtime_suspend")
+        self.assertRegex(core, r"static void genpd_power_off\(")
+        audit.ordered(physical, "if (_genpd_power_off(genpd, true))", "return;",
+                      "genpd->status = GENPD_STATE_OFF;")
+        audit.ordered(runtime, "genpd_lock(genpd);", "genpd_power_off(genpd, true, 0);",
+                      "genpd_unlock(genpd);", "return 0;")
+        evidence = json.loads((HERE / "SOURCE-EVIDENCE.json").read_text())["first_shutdown"]
+        self.assertIn("pm_runtime_put_sync success", evidence["not_substitutes"])
+        self.assertIn("first-error", " ".join(evidence["minimal_next_operation"]))
+
+    def test_first_shutdown_idle_exclusion_must_outlive_temporary_pause(self):
+        idle = (KERNEL / "drivers/cpuidle/cpuidle.c").read_text()
+        psci = (KERNEL / "drivers/cpuidle/cpuidle-psci.c").read_text()
+        audit.ordered(body(idle, "cpuidle_pause_and_lock"),
+                      "mutex_lock(&cpuidle_lock)", "cpuidle_uninstall_idle_handler()")
+        audit.ordered(body(idle, "cpuidle_resume_and_unlock"),
+                      "cpuidle_install_idle_handler()", "mutex_unlock(&cpuidle_lock)")
+        self.assertIn("psci_cpu_suspend_enter", body(psci, "psci_enter_idle_state"))
+        record = json.loads((HERE / "SOURCE-EVIDENCE.json").read_text())
+        for label, source in (("linux-cpuidle", idle), ("linux-psci-idle", psci)):
+            self.assertEqual(stage.digest(source.encode()), record["sources"][label]["sha256"])
+        boundary = record["first_shutdown"]
+        self.assertIn("shipping", boundary["status"])
+        self.assertIn("FLIGHT", boundary["not_substitutes"])
+        self.assertIn("CPU_IDLE", boundary["secure_idle_boundary"])
+        # This evidence closes source ordering only, not a runtime exclusion API.
+        self.assertIn("-EOPNOTSUPP", body(self.source, "mt6878_md_adopt_transition"))
+
+    def test_first_off_error_owner_survives_probe_failure(self):
+        init = body(self.source, "mt6878_md_adopt_init")
+        self.assertIn("first_off ? kzalloc(sizeof(*owner), GFP_KERNEL)", init)
+        self.assertIn("if (first_off && !owner->supplier)", init)
+        self.assertNotIn("devm_add_action", body(self.source, "mt6878_md_first_off"))
+        fault = body(self.source, "mt6878_md_adopt_fault")
+        self.assertIn("if (!owner->first_error)", fault)
+        self.assertIn("return owner->first_error", fault)
+        self.assertIn("mt6878_md_first_off_publication_fault(scpsys, ret);", self.native)
+        self.assertIn("owner->supplier == scpsys->dev && error < 0",
+                      body(self.source, "mt6878_md_first_off_publication_fault"))
+
+    def test_first_off_requires_persistent_compiled_profile(self):
+        fragment = (HERE / "first-off.config").read_text()
+        profile = json.loads((HERE / "STAGING.json").read_text())["first_off"]
+        for symbol, value in profile["required_resolved_config"].items():
+            self.assertEqual(value, "n")
+            self.assertIn("# CONFIG_" + symbol + " is not set", fragment)
+        manifest = json.loads((HERE / "STAGING.json").read_text())
+        observation = manifest["ci"]["required_resolved_config"]
+        self.assertNotIn("CPU_IDLE", observation)
+        self.assertNotIn("PM_SLEEP", observation)
+        self.assertFalse(set(observation) & set(profile["required_resolved_config"]))
+        for selector in ("SUSPEND", "HIBERNATION", "HIBERNATE_CALLBACKS", "PM_SLEEP_SMP",
+                         "KEXEC", "KEXEC_FILE", "KEXEC_CORE"):
+            self.assertEqual(profile["required_resolved_config"][selector], "n")
+        diagnostic = (HERE / "diagnostic.config").read_text()
+        for symbol, value in manifest["ci"]["required_resolved_config"].items():
+            expected = ("CONFIG_" + symbol + "=y" if value == "y" else
+                        "# CONFIG_" + symbol + " is not set")
+            self.assertIn(expected, diagnostic)
+        power = (KERNEL / "kernel/power/Kconfig").read_text()
+        self.assertIn("depends on SUSPEND || HIBERNATE_CALLBACKS", power)
+        self.assertRegex(power, r"config HIBERNATION\n[\s\S]*?select HIBERNATE_CALLBACKS")
+        self.assertRegex(power, r"config PM_SLEEP_SMP\n[\s\S]*?depends on PM_SLEEP\n\tselect HOTPLUG_CPU")
+        psci = (KERNEL / "drivers/firmware/psci/psci.c").read_text()
+        self.assertIn("#ifdef CONFIG_CPU_IDLE\nstatic noinstr int psci_suspend_finisher", psci)
+        self.assertIn("if (!IS_ENABLED(CONFIG_SUSPEND))\n\t\treturn;",
+                      body(psci, "psci_init_system_suspend"))
+        arm = (KERNEL / "arch/arm64/kernel/psci.c").read_text()
+        self.assertIn("#ifdef CONFIG_HOTPLUG_CPU\nstatic bool cpu_psci_cpu_can_disable", arm)
+        self.assertIn("psci_ops.cpu_off(state)", body(arm, "cpu_psci_cpu_die"))
+        main = (KERNEL / "init/main.c").read_text()
+        audit.ordered(body(main, "kernel_init_freeable"), "smp_init();", "do_basic_setup();")
+
+    def test_first_off_mutants_rejected(self):
+        for old, new in (("IS_ENABLED(CONFIG_CPU_IDLE)", "false"),
+                         ("IS_ENABLED(CONFIG_HOTPLUG_CPU)", "false"),
+                         ("!(value & (MT6878_MD_ACK | PWR_ON_BIT))", "true"),
+                         ("mt6878_md_adopt_revalidate(pd, owner)", "0"),
+                         ("ret = mt6878_md_first_off_readback(pd, owner->off);", "ret = 0;"),
+                         ("regmap_clear_bits(base, MT6878_MD_CTL, PWR_ON_BIT)",
+                          "regmap_clear_bits(base, MT6878_MD_CTL, PWR_RST_B_BIT)")):
+            with self.subTest(old=old), self.assertRaises(ValueError):
+                check_first_off(self.source.replace(old, new))
+        with self.assertRaises(ValueError):
+            check_first_off(self.source.replace("if (ret)\n\t\t\tgoto fault;",
+                                                "if (ret)\n\t\t\tret = 0;", 1))
 
 
 if __name__ == "__main__":

@@ -6,6 +6,15 @@ the SRAM read accessor, and parent/provider channel binding. This is an actual
 Linux resource/MMIO adapter, not a full remoteproc provider or a power-on proof.
 No native C/kernel build or phone operation was performed locally.
 
+The current bounded TX addition is documented in MAILBOX-DISPATCH.md. Its
+`mt6878_gpueb_reset_trysend()` uses this same scope and whole-SRAM owner, fixed
+full channel slots, actual GPR2 and hardware SEND checks, a source-backed SET
+doorbell and real RX in-flight retirement. There is still no owned activation
+transition: ordinary sends fail `-EOPNOTSUPP` without MMIO. Zero from a future
+activated submission will mean queued, not a successful command or ACK.
+`test_tx.py` is source-only; `run-native-ci.sh` is an additional CI-only fixture
+runner compiling the actual canonical reset/SRAM C files with mocked MMIO.
+
 Resource ownership revision: see [RESOURCE-CONTRACT.md](RESOURCE-CONTRACT.md)
 and its exact-source/base-DTB pins. Prepare now validates all eight memory
 resources and reserves the four mailbox control words outside the reset bank.

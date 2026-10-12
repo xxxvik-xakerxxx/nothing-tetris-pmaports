@@ -27,7 +27,8 @@ explicit allocation, not devm cleanup. Failed map unwinds the claim; a failed
 resource claim never maps. GPR/mailbox leases are typed, disjoint and limited
 to one client per type. A controller mutex serializes lease creation, metadata
 access, release, quarantine and close. Returned metadata has bounds/alignment
-checks; no raw mapping is exported and no hardware register is accessed.
+checks; no raw mapping is exported. The later read/fixed-slot TX transactions
+access only validated windows under the same owner mutex.
 
 Live leases prevent destroy. The caller must serialize final destroy against
 new calls using its parent lifecycle lock; a consumed raw controller handle
@@ -71,6 +72,24 @@ enable it together with this owner. A later reviewed integration must remove
 that duplicate claim and use parent-issued windows, then implement IRQ quiescence
 and bounded MMIO access under the ownership lock. The present metadata leases
 do not claim BOOTREADY or an active GPUFREQ transport.
+
+## Fixed-slot mailbox TX
+
+The current reset owner holds both exclusive GPR/mailbox leases and serializes
+RX and TX with its own scope mutex. `mt6878_gpueb_sram_send_transaction()` keeps
+the whole-SRAM mutex through preflight, fixed-slot payload writes and doorbell
+commit. It accepts only an ee2 channel and its exact full word count; the core
+derives the TX offset from widths `4,8,3,6,9,4,6,6,1,4,3`. No mapping, writable
+reader, arbitrary-offset write, short-tail padding or firmware upload API exists.
+Callbacks borrow only the existing read-only accessor. A failed commit is
+post-write: the reset owner latches/quarantines and never retries it.
+
+The reset owner's public send remains fail-closed because its private owned
+IRQ activation transition does not exist. The full contract and CI-only actual
+C TX/RX fault fixture are in `../reset-owner-draft/MAILBOX-DISPATCH.md` and
+`../reset-owner-draft/run-native-ci.sh`. The old SRAM fixture still deliberately
+aborts on MMIO, while the new fixture supplies explicit recorded MMIO mocks.
+Native CI and ARM64 compilation/link are pending, not claimed as passed.
 
 Next hardware gate remains blocked by 156064 authenticated bytes versus the LK
 258744-byte copy, absent authenticated persistent firmware handoff, real reset/

@@ -1,7 +1,9 @@
 # Native MD attachment decision
 
-Status: concrete read-only native ON adoption staging patch implemented; first
-shutdown/startup remains blocked. See `STAGING-CONTRACT.md` for exact producer
+Status: native ON adoption plus a concrete supplier-init first-OFF diagnostic
+are implemented in staging. First-OFF needs the new final-producer marker and
+resolved CI profile; native compilation and hardware validation are pending.
+Restart remains blocked. See `STAGING-CONTRACT.md` for exact producer
 markers, validation, source tests, CI object staging and the failed unbind-veto
 requirement. The EMI/trust follow-up corrects the earlier blanket NS-grant
 and independent-kernel-signature requirements: see `EMI-PERMISSIONS.md` and

@@ -1,5 +1,14 @@
 # Native inherited-ON staging contract
 
+The additional paired first-OFF final marker is implemented in personal U-Boot
+`322cf227f2ea26a7e319d20e3ce0321db8a38f15`; personal CI38314466282 passed,
+and it is not installed.
+It requires both empty chosen intents and rejects an inherited final marker.
+Linux first-OFF is an opt-in native MTCMOS transaction, not full vendor
+rail/TOP/FLIGHT shutdown or restart. Failure logs retain the first error and
+step:1 IFR9,2 IFR11,3 NEMI,4 PWR_ON clear,5 ACK-off,6 isolation,7 full readback.
+Success reports the actual five OFF register observations, not a READY flag.
+
 `native-on-adoption.patch` is a self-contained follow-up to the exact packaged
 0113 provider and the current packaged patch ordering. It changes only the real
 native MD domain branch. The canonical helper is `mt6878-modem-adopt.h`; run
@@ -58,9 +67,10 @@ No ROM, DSP, tags or SMEM physical memory is mapped, read, cleared or claimed.
 
 Only after this does the provider read existing native regmaps: PWR_ON+both
 ACKs must be set, EXTISO3 zero, and IFR9/IFR11/NEMI6:7 protection status zero.
-Five reads stop on the first failure. It registers true software ON through
-`pm_genpd_init(..., false)` and attaches no device itself. The staged MD data
-and callbacks contain no native transition/cleanup write sequence.
+Five reads stop on the first failure. By default it registers true software ON
+and attaches no device itself. A separately marked diagnostic first-OFF path
+can now perform the boot takeover below before domain registration. The physical
+genpd callbacks and error cleanup still contain no transition write sequence.
 
 `attach_dev` uses a supplier-owned mutex because core calls it before the genpd
 lock. It admits one real platform device matching the unique retained modem
@@ -97,8 +107,70 @@ With the agreed supplier-only producer contract, the modem remains disabled
 and cannot reach the attach callback through normal OF population. Actual
 consumer attachment/activation requires a separately reviewed future contract;
 this patch does not defeat the disabled-node/static-tree boundary to demonstrate
-attachment. First shutdown, inhibited restart, suspend/secure-idle ownership,
-current effective EMI policy and functional modem/SIM operation remain unproved.
+attachment. Diagnostic first-OFF is implemented below but not hardware-tested.
+Inhibited restart, shipping suspend/secure-idle ownership, current effective
+EMI policy and functional modem/SIM operation remain unproved.
+
+## One Boot First-OFF Transaction
+
+`mt6878_md_first_off()` now implements ON->OFF directly during real native
+supplier initialization, before genpd or OF publication. No attached consumer,
+runtime-PM put or arbitrary proof callback is used. In d84 `core.c:1018/1279`,
+the runtime wrapper can suppress a supplier errno; this direct call cannot.
+
+In addition to the existing genuine adoption handoff, require empty chosen
+`tetris,modem-first-off-diagnostic` and empty supplier
+`nothing,modem-first-off-diagnostic`. The latter must be absent in the input DT
+and added by U-Boot only in its successful, validated final handoff clone.
+Existing U-Boot has NOT implemented that new marker; this path remains dormant.
+These are operation selectors, not new authentication or readiness evidence.
+
+`diagnostic.config` is the observation base. The separate `first-off.config`
+supplement and `first_off.required_resolved_config` map exclude CPU_IDLE,
+PM_SLEEP, SUSPEND, HIBERNATION/HIBERNATE_CALLBACKS, HOTPLUG_CPU, MTK_DVFSRC,
+ARM_PSCI_CHECKER, KVM and KEXEC_CORE. Parent joint CI merges the observation
+`ci.required_resolved_config` with the first-OFF map before olddefconfig and
+asserts the resolved union for BOTH KUNIT=y/n builds. Observation-only settings
+can leave CPU_IDLE=y and optimize the guarded writers away; that is not a
+first-OFF build. Disabling just hidden
+PM_SLEEP is insufficient: SUSPEND and HIBERNATION must be disabled, removing
+PM_SLEEP_SMP's HOTPLUG_CPU selection. Shipping config is unchanged.
+
+The source-backed AP route exclusion is bounded, not a global firmware proof:
+d84 PSCI CPU_SUSPEND entry is compiled under CPU_IDLE; SYSTEM_SUSPEND registration
+returns early without SUSPEND. ARM64 PSCI CPU_OFF and its CPU operations are
+under HOTPLUG_CPU. Initial CPU_ON completes in `kernel_init_freeable()` before
+device initcalls. Disabling kexec prevents replacing this exclusion profile
+without clean reboot. Checker/KVM and DVFSRC INIT paths are also excluded.
+Ordinary WFI, unrelated firmware/hardware actors and a permanent secure-idle
+quiescence guarantee are NOT claimed. This experiment proves an OFF readback
+only; it provides no execution-inhibited restart permission.
+
+After revalidating complete handoff bytes, retained NOMAP geometry, native maps
+and physical ON, the supplier retains a non-devm boot takeover owner before any
+write. It performs checked IFR9, IFR11, NEMI6:7 SET/ACK operations; clears only
+PWR_ON; polls BOTH ACKs and PWR_ON clear; sets external isolation3; waits >=4ms
+(B4.1 gen6299 requirement); then reads all five registers to verify full OFF.
+Only then does state become FIRST_OFF_COMPLETE and `pm_genpd_init(..., true)`
+become possible. Native protection helper drops write errno, so this transaction
+uses the same native data/regmaps with individually checked regmap operations.
+No reset, secondary-power, SRAM, FLIGHT, TOP, regulator, firmware or EMI writes.
+The proved transition is only native MD **MTCMOS domain OFF** at readback. It
+does not establish full vendor shutdown, rails-off or clock-off: vendor's later
+TOP/FLIGHT and rail/clock handling are neither performed nor claimed here.
+
+Any post-write failure returns its first errno directly, withholds publication,
+and retains the non-devm record, device/node references, handoff/NOMAP geometry
+and native syscon handles through reboot. No corrective rollback or reattempt.
+Generic syscon mappings are boot-lifetime cached, non-devm objects in d84
+`syscon.c`; freeing a failed supplier's devres does not free these mappings or
+the retained record. Registration/publication errors are also retained. Generic
+MD unwind never invokes physical cleanup. Complete OFF blocks attachment;
+both physical callbacks remain -EOPNOTSUPP (or retained first errno).
+
+Parent must update its final producer marker and regenerate camera composition
+against the new MD hashes, then compile/link with the resolved diagnostic profile
+in CI. No native compilation, DT enablement, phone operation or push happened here.
 
 ## Local Checks And Targeted CI
 
@@ -111,9 +183,11 @@ python3 -B patches/modem/md-pm-integration/test_static.py
 
 Source checks passed: exact baseline reconstruction through six relevant
 packaged patches including frozen0113, deterministic staging patch, real
-`git apply --check`, exact Git context application and byte equality; 12 source/static
+`git apply --check`, exact Git context application and byte equality; 17 source/static
 tests, including rejected write/success/OFF/foreign-consumer/wire-width mutants.
-They do not execute the C helper or validate concurrency/hardware behavior.
+They include first-OFF operation ordering, no masked write errors, no premature
+OFF publication, persistent failure retention, paired selectors and Kconfig
+sleep/hotplug closure. They do not execute C or validate concurrency/hardware.
 
 Parent targeted CI can use its full, freshly prepared packaged kernel:
 

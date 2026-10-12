@@ -7,6 +7,21 @@
 #endif
 #include "mt6878-gpueb-sram-core.h"
 
+int gpueb_sram_tx_slot(unsigned int channel, unsigned int count, u64 *offset)
+{
+	static const unsigned int words[] = { 4, 8, 3, 6, 9, 4, 6, 6, 1, 4, 3 };
+	unsigned int i;
+	u64 start = 0;
+
+	if (!offset || channel >= sizeof(words) / sizeof(words[0]) ||
+	    count != words[channel])
+		return -EINVAL;
+	for (i = 0; i < channel; i++)
+		start += words[i] * sizeof(u32);
+	*offset = start;
+	return 0;
+}
+
 static int window_profile(enum gpueb_sram_window type, u64 *offset, u64 *size)
 {
 	switch (type) {

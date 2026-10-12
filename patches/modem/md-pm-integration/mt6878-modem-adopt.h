@@ -7,6 +7,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
+#include <linux/delay.h>
 #ifdef CONFIG_ARM64
 #include <asm/memory.h>
 #endif
@@ -14,6 +15,9 @@
 enum mt6878_md_adopt_state {
 	MT6878_MD_OBSERVED_ON,
 	MT6878_MD_ATTACHED_ON,
+	MT6878_MD_FIRST_OFF_TAKEOVER,
+	MT6878_MD_FIRST_OFF_COMPLETE,
+	MT6878_MD_FIRST_OFF_FAILED,
 	MT6878_MD_RETIRED,
 };
 
@@ -21,12 +25,20 @@ struct mt6878_md_adoption {
 	struct mutex lock;
 	struct device_node *modem;
 	struct device *attached;
+	struct device *supplier;
 	enum mt6878_md_adopt_state state;
 	int first_error;
+	unsigned int first_off_step;
 	u8 brom[80], evidence[336], descriptor[32];
 	struct resource reservations[4];
+	struct regmap *maps[4];
 	u32 on[5];
+	u32 off[5];
 };
+
+/* Keep the one attempted boot takeover, including failed-probe evidence. */
+static DEFINE_MUTEX(mt6878_md_first_off_lock);
+static struct mt6878_md_adoption *mt6878_md_first_off_owner;
 
 static int mt6878_md_adopt_fault(struct mt6878_md_adoption *owner, int error)
 {
@@ -430,6 +442,179 @@ static int mt6878_md_adopt_on(struct scpsys_domain *pd, u32 values[5])
 	return 0;
 }
 
+static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
+				     struct mt6878_md_adoption *owner)
+{
+	struct mt6878_md_adoption now = { 0 };
+	unsigned int i;
+	int ret;
+
+	ret = mt6878_md_adopt_reports(owner->modem, &now);
+	if (!ret)
+		ret = mt6878_md_adopt_reservations(&now);
+	if (!ret && (memcmp(now.brom, owner->brom, sizeof(now.brom)) ||
+	    memcmp(now.evidence, owner->evidence, sizeof(now.evidence)) ||
+	    memcmp(now.descriptor, owner->descriptor, sizeof(now.descriptor))))
+		ret = -ESTALE;
+	for (i = 0; !ret && i < ARRAY_SIZE(now.reservations); i++)
+		if (now.reservations[i].start != owner->reservations[i].start ||
+		    now.reservations[i].end != owner->reservations[i].end ||
+		    now.reservations[i].flags != owner->reservations[i].flags)
+			ret = -ESTALE;
+	if (!ret)
+		ret = mt6878_md_adopt_maps(pd);
+	if (!ret)
+		ret = mt6878_md_adopt_on(pd, now.on);
+	return ret;
+}
+
+static int mt6878_md_first_off_profile(struct scpsys_domain *pd)
+{
+	struct device_node *chosen;
+	int ret;
+
+	/* Compile-time exclusion persists after OFF; no temporary idle pause. */
+	if (IS_ENABLED(CONFIG_CPU_IDLE) || IS_ENABLED(CONFIG_PM_SLEEP) ||
+	    IS_ENABLED(CONFIG_SUSPEND) || IS_ENABLED(CONFIG_HIBERNATION) ||
+	    IS_ENABLED(CONFIG_HOTPLUG_CPU) || IS_ENABLED(CONFIG_MTK_DVFSRC) ||
+	    IS_ENABLED(CONFIG_ARM_PSCI_CHECKER) || IS_ENABLED(CONFIG_KVM) ||
+	    IS_ENABLED(CONFIG_KEXEC_CORE))
+		return -EOPNOTSUPP;
+	ret = mt6878_md_adopt_empty(pd->scpsys->dev->of_node,
+				  "nothing,modem-first-off-diagnostic");
+	if (ret)
+		return ret;
+	chosen = of_find_node_by_path("/chosen");
+	if (!chosen)
+		return -ENODATA;
+	ret = mt6878_md_adopt_empty(chosen, "tetris,modem-first-off-diagnostic");
+	of_node_put(chosen);
+	return ret;
+}
+
+static int mt6878_md_first_off_readback(struct scpsys_domain *pd, u32 values[5])
+{
+	unsigned int i;
+	int ret;
+
+	ret = regmap_read(pd->scpsys->base, MT6878_MD_CTL, &values[0]);
+	if (ret)
+		return ret;
+	if (values[0] & (MT6878_MD_ACK | PWR_ON_BIT))
+		return -EBUSY;
+	ret = regmap_read(pd->scpsys->base, MT6878_MD_ISO, &values[1]);
+	if (ret)
+		return ret;
+	if ((values[1] & MT6878_MD_ISO_MASK) != MT6878_MD_ISO_MASK)
+		return -EBUSY;
+	for (i = 0; i < 3; i++) {
+		const struct scpsys_bus_prot_data *bp = &pd->data->bp_cfg[i];
+		struct regmap *map = scpsys_bus_protect_get_regmap(pd, bp);
+
+		if (IS_ERR_OR_NULL(map))
+			return map ? PTR_ERR(map) : -ENODEV;
+		ret = regmap_read(map, bp->bus_prot_sta, &values[i + 2]);
+		if (ret)
+			return ret;
+		if ((values[i + 2] & bp->bus_prot_sta_mask) != bp->bus_prot_sta_mask)
+			return -EBUSY;
+	}
+	return 0;
+}
+
+static int mt6878_md_first_off(struct scpsys_domain *pd,
+			     struct mt6878_md_adoption *owner)
+{
+	struct regmap *base = pd->scpsys->base;
+	u32 value;
+	unsigned int i;
+	int ret;
+
+	mutex_lock(&mt6878_md_first_off_lock);
+	if (mt6878_md_first_off_owner) {
+		ret = mt6878_md_first_off_owner->first_error ?
+			mt6878_md_first_off_owner->first_error : -ESHUTDOWN;
+		goto out;
+	}
+	ret = mt6878_md_first_off_profile(pd);
+	if (!ret)
+		ret = mt6878_md_adopt_revalidate(pd, owner);
+	owner->maps[0] = base;
+	for (i = 0; !ret && i < 3; i++) {
+		owner->maps[i + 1] = scpsys_bus_protect_get_regmap(pd, &pd->data->bp_cfg[i]);
+		if (IS_ERR_OR_NULL(owner->maps[i + 1]))
+			ret = owner->maps[i + 1] ? PTR_ERR(owner->maps[i + 1]) : -ENODEV;
+	}
+	if (ret)
+		goto out;
+
+	/* Non-devm owner and references survive every failure after the first write. */
+	owner->supplier = get_device(pd->scpsys->dev);
+	owner->state = MT6878_MD_FIRST_OFF_TAKEOVER;
+	mt6878_md_first_off_owner = owner;
+	for (i = 0; i < 3; i++) {
+		const struct scpsys_bus_prot_data *bp = &pd->data->bp_cfg[i];
+		struct regmap *map = owner->maps[i + 1];
+		owner->first_off_step = i + 1; /* IFR9, IFR11, then NEMI. */
+		/* Native set helper ignores write errno: keep it here, before polling. */
+		ret = regmap_write(map, bp->bus_prot_set, bp->bus_prot_set_clr_mask);
+		if (ret)
+			goto fault;
+		ret = regmap_read_poll_timeout(map, bp->bus_prot_sta, value,
+			(value & bp->bus_prot_sta_mask) == bp->bus_prot_sta_mask,
+			MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
+		if (ret)
+			goto fault;
+	}
+	owner->first_off_step = 4;
+	ret = regmap_clear_bits(base, MT6878_MD_CTL, PWR_ON_BIT);
+	if (ret)
+		goto fault;
+	owner->first_off_step = 5;
+	ret = regmap_read_poll_timeout(base, MT6878_MD_CTL, value,
+		!(value & (MT6878_MD_ACK | PWR_ON_BIT)),
+		MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
+	if (ret)
+		goto fault;
+	owner->first_off_step = 6;
+	ret = regmap_set_bits(base, MT6878_MD_ISO, MT6878_MD_ISO_MASK);
+	if (ret)
+		goto fault;
+	/* B4.1 gen6299 specification: settle for at least 4ms after MTCMOS OFF. */
+	usleep_range(4000, 5000);
+	owner->first_off_step = 7;
+	ret = mt6878_md_first_off_readback(pd, owner->off);
+	if (ret)
+		goto fault;
+	owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
+	dev_info(pd->scpsys->dev,
+		 "MD first-OFF verified: ctl=%#x iso=%#x ifr9=%#x ifr11=%#x nemi=%#x; restart unsupported\n",
+		 owner->off[0], owner->off[1], owner->off[2], owner->off[3], owner->off[4]);
+	goto out;
+fault:
+	ret = mt6878_md_adopt_fault(owner, ret);
+	owner->state = MT6878_MD_FIRST_OFF_FAILED;
+	dev_err(pd->scpsys->dev, "MD first-OFF failed at step %u: %d; resources retained, reboot required\n",
+		owner->first_off_step, ret);
+out:
+	mutex_unlock(&mt6878_md_first_off_lock);
+	return ret;
+}
+
+static void mt6878_md_first_off_publication_fault(struct scpsys *scpsys, int error)
+{
+	struct mt6878_md_adoption *owner;
+
+	mutex_lock(&mt6878_md_first_off_lock);
+	owner = mt6878_md_first_off_owner;
+	if (owner && owner->supplier == scpsys->dev && error < 0) {
+		mutex_lock(&owner->lock);
+		mt6878_md_adopt_fault(owner, error);
+		mutex_unlock(&owner->lock);
+	}
+	mutex_unlock(&mt6878_md_first_off_lock);
+}
+
 static void mt6878_md_adopt_node_put(void *node)
 {
 	of_node_put(node);
@@ -440,6 +625,8 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 	struct device_node *modem = NULL, *node;
 	struct mt6878_md_adoption *owner;
 	char status[9];
+	bool first_off = of_property_present(pd->scpsys->dev->of_node,
+					    "nothing,modem-first-off-diagnostic");
 	unsigned int count = 0, suppliers = 0;
 	int ret;
 
@@ -451,6 +638,19 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 	    of_get_available_child_count(pd->scpsys->dev->of_node) != 1 ||
 	    mt6878_md_adopt_empty(pd->scpsys->dev->of_node, "nothing,modem-inherited-on-adoption"))
 		return -EOPNOTSUPP;
+	if (first_off) {
+		ret = mt6878_md_first_off_profile(pd);
+		if (ret)
+			return ret;
+		mutex_lock(&mt6878_md_first_off_lock);
+		if (mt6878_md_first_off_owner) {
+			ret = mt6878_md_first_off_owner->first_error ?
+				mt6878_md_first_off_owner->first_error : -ESHUTDOWN;
+			mutex_unlock(&mt6878_md_first_off_lock);
+			return ret;
+		}
+		mutex_unlock(&mt6878_md_first_off_lock);
+	}
 	for_each_compatible_node(node, NULL, "mediatek,mt6878-modem-power-controller")
 		suppliers++;
 	if (suppliers != 1)
@@ -469,16 +669,19 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 		of_node_put(modem);
 		return ret ? ret : -EBUSY;
 	}
-	owner = devm_kzalloc(pd->scpsys->dev, sizeof(*owner), GFP_KERNEL);
+	owner = first_off ? kzalloc(sizeof(*owner), GFP_KERNEL) :
+		devm_kzalloc(pd->scpsys->dev, sizeof(*owner), GFP_KERNEL);
 	if (!owner) {
 		of_node_put(modem);
 		return -ENOMEM;
 	}
 	owner->modem = modem;
 	mutex_init(&owner->lock);
-	ret = devm_add_action_or_reset(pd->scpsys->dev, mt6878_md_adopt_node_put, modem);
-	if (ret)
-		return ret;
+	if (!first_off) {
+		ret = devm_add_action_or_reset(pd->scpsys->dev, mt6878_md_adopt_node_put, modem);
+		if (ret)
+			return ret;
+	}
 	ret = mt6878_md_adopt_binding(pd, modem, false);
 	if (!ret)
 		ret = mt6878_md_adopt_reports(modem, owner);
@@ -491,9 +694,18 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 	/* Hardware observation follows all copied handoff and resource validation. */
 	if (!ret)
 		ret = mt6878_md_adopt_on(pd, owner->on);
-	if (ret)
+	if (!ret) {
+		owner->state = MT6878_MD_OBSERVED_ON;
+		if (first_off)
+			ret = mt6878_md_first_off(pd, owner);
+	}
+	if (ret) {
+		if (first_off && !owner->supplier) {
+			of_node_put(owner->modem);
+			kfree(owner);
+		}
 		return ret;
-	owner->state = MT6878_MD_OBSERVED_ON;
+	}
 	pd->md_adoption = owner;
 	return 0;
 }
@@ -502,7 +714,6 @@ static int mt6878_md_adopt_attach(struct generic_pm_domain *genpd, struct device
 {
 	struct scpsys_domain *pd = to_scpsys_domain(genpd);
 	struct mt6878_md_adoption *owner = pd->md_adoption;
-	struct mt6878_md_adoption now = { 0 };
 	int ret;
 
 	mutex_lock(&owner->lock);
@@ -518,26 +729,7 @@ static int mt6878_md_adopt_attach(struct generic_pm_domain *genpd, struct device
 	}
 	ret = mt6878_md_adopt_binding(pd, dev->of_node, true);
 	if (!ret)
-		ret = mt6878_md_adopt_reports(dev->of_node, &now);
-	if (!ret)
-		ret = mt6878_md_adopt_reservations(&now);
-	if (!ret && (memcmp(now.brom, owner->brom, sizeof(now.brom)) ||
-	    memcmp(now.evidence, owner->evidence, sizeof(now.evidence)) ||
-	    memcmp(now.descriptor, owner->descriptor, sizeof(now.descriptor))))
-		ret = -ESTALE;
-	if (!ret) {
-		unsigned int i;
-
-		for (i = 0; i < ARRAY_SIZE(now.reservations); i++)
-			if (now.reservations[i].start != owner->reservations[i].start ||
-			    now.reservations[i].end != owner->reservations[i].end ||
-			    now.reservations[i].flags != owner->reservations[i].flags) {
-				ret = -ESTALE;
-				break;
-			}
-	}
-	if (!ret)
-		ret = mt6878_md_adopt_on(pd, now.on);
+		ret = mt6878_md_adopt_revalidate(pd, owner);
 	if (ret) {
 		ret = mt6878_md_adopt_fault(owner, ret);
 		goto out;

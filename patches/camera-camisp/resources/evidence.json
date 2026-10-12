@@ -42,6 +42,36 @@
       "commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
       "path": "mtkcam/camsys/isp7sp/cam/mtk_cam-sv.c",
       "sha256": "18e1a14bd6a2f8f19cccca8e5916a85fb30ac1ea9ee29253ed40bacdc56619e6"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/dt-bindings/power/mt6878-power.h",
+      "sha256": "f702071f0abef184c313d569ad780bbd1892617324dccbeee1834ace8344fbbc"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "include/dt-bindings/clock/mediatek,mt6878-clock.h",
+      "sha256": "04ba5d74f7575a507e54e6b4b808d43fab6f3eb02f8ddd38eb49e14cfe385955"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "include/dt-bindings/spmi/spmi.h",
+      "sha256": "c2952b040e5c24726c423e52ba939d389141ff27eb2307fb3888657b455e2b9b"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml",
+      "sha256": "65dff43b8829eefa86bdca5ad9dae6cbe62059789614a032fbaa6a4a2a499fc1"
     }
   ],
   "banks": {
@@ -238,5 +268,134 @@
     "M4U_L14_P1_CAMSV_A0_WDMA": 449
   },
   "logical_dma_bits": 34,
-  "power_owner": "Unproven native CAM_MAIN/CAM_VCORE genpd and VMM ordering; no activation"
+  "power": {
+    "domains": {
+      "MM_INFRA": 7,
+      "CAM_VCORE": 10,
+      "CAM_MAIN": 13,
+      "ISP_VCORE": 16
+    },
+    "edges": [
+      [
+        "MM_INFRA",
+        "CAM_VCORE"
+      ],
+      [
+        "CAM_VCORE",
+        "CAM_MAIN"
+      ],
+      [
+        "MM_INFRA",
+        "ISP_VCORE"
+      ]
+    ],
+    "clocks": [
+      {
+        "name": "cam",
+        "owner": "topckgen",
+        "symbol": "CLK_TOP_CAM_SEL",
+        "native_id": 59
+      },
+      {
+        "name": "cam_main-0",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_CAM2MM0_GALS",
+        "native_id": 10
+      },
+      {
+        "name": "cam_main-1",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_CAM2MM1_GALS",
+        "native_id": 11
+      },
+      {
+        "name": "cam_main-2",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_LARB13",
+        "native_id": 0
+      },
+      {
+        "name": "cam_main-3",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_LARB14",
+        "native_id": 1
+      },
+      {
+        "name": "cam_main-4",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_LARB29",
+        "native_id": 2
+      },
+      {
+        "name": "cam_main-5",
+        "owner": "cam_main",
+        "symbol": "CLK_CAM_MAIN_CAM_MRAW",
+        "native_id": 6
+      },
+      {
+        "name": "cam_main-6",
+        "owner": "cam_mraw",
+        "symbol": "CLK_CAM_MR_GALS",
+        "native_id": 1
+      },
+      {
+        "name": "cam_main-7",
+        "owner": "cam_mraw",
+        "symbol": "CLK_CAM_MR_LARBX",
+        "native_id": 0
+      }
+    ],
+    "usid": 6,
+    "buck1_mode_mask": 1,
+    "rails": {
+      "1": {
+        "regulator-min-microvolt": 300000,
+        "regulator-max-microvolt": 1193750,
+        "regulator-enable-ramp-delay": 256,
+        "always_on": false
+      },
+      "2": {
+        "regulator-min-microvolt": 300000,
+        "regulator-max-microvolt": 1193750,
+        "regulator-enable-ramp-delay": 256,
+        "always_on": false
+      },
+      "4": {
+        "regulator-min-microvolt": 300000,
+        "regulator-max-microvolt": 1193750,
+        "regulator-enable-ramp-delay": 256,
+        "always_on": true
+      }
+    },
+    "other_vbuck1_users": [
+      "vmmspm",
+      "mmdvfs debug"
+    ],
+    "activation": "disabled; firmware/MMUP ownership, voltage/rate policy and cold lifecycle unresolved"
+  },
+  "native_clock_ids": {
+    "CLK_CAM_MAIN_CAM2MM0_GALS": 10,
+    "CLK_CAM_MAIN_CAM2MM1_GALS": 11,
+    "CLK_CAM_MAIN_CAM_MRAW": 6,
+    "CLK_CAM_MAIN_LARB13": 0,
+    "CLK_CAM_MAIN_LARB14": 1,
+    "CLK_CAM_MAIN_LARB29": 2,
+    "CLK_CAM_MR_GALS": 1,
+    "CLK_CAM_MR_LARBX": 0,
+    "CLK_CAM_VCORE_MM0_DCM_DIS": 1,
+    "CLK_TOP_CAM_SEL": 59
+  },
+  "parent_input_sha256": {
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0018-pmdomain-mediatek-mt6878-audio.patch": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0058-arm64-dts-mediatek-add-opt-in-MT6878-display-power.patch": "b610ecb6ffb4819426bbb4e8d1b9b7cd4b838cea1050918d32dc119353610b25",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0071-arm64-dts-mediatek-add-MT6878-display-DMA.patch": "74c4f1b2c4bd7455dc31d81f7370af8296771fcab21363edab7a2ad17e50b37f",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0092-clk-mediatek-mt6878-camera-main.patch": "8ee696a1b0465f53fa5c790367be10e74b791eb32c4998913a2cc282f4725086",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0108-regulator-mt6315-board-mode-mask.patch": "c957fd6ad453291805b0fcba89a58d198a73c6ddd04c1f47e3f0242f8cb750d5",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0110-regulator-mt6315-register-described-rails.patch": "551d10263f413615831aa6957bbcaf4ea1a50324efe114b20a4e549465b7905b",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0112-arm64-dts-tetris-disabled-gpu-supplies.patch": "68aef080ce8919a7053f339b45829be62dc08f7a7ccc5547eceb713bd0058dcc",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0113-regulator-mt6315-reject-unowned-phase-mask.patch": "dc112adca7f880f037699ea7ebbdd3e1d6272077a0e42ff41f592d9d6b48b74f",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0114-regulator-mt6315-read-only-vgpu-observer.patch": "fec2a0401b502f1ad8fc9e64f54571cf4297e0f92b4e8e470a8f69b74a4ff365",
+    "patches/camera-camisp/native-integration/mt6878-native-vmm.inc": "856182b13b38b75e435a63e5b1bc350e5fc7e10700b407fc5f5a065074494f27"
+  },
+  "power_owner": "Native provider graph described disabled; physical VMM ownership/policy unproven"
 }

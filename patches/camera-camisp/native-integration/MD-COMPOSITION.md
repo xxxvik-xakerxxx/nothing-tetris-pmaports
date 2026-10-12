@@ -2,10 +2,18 @@
 
 This profile applies the pinned MD adoption patch first, then the generated
 camera overlay, producing one actual `mtk-pm-domains.c`. It preserves MD's
-observed-ON initialization, real attach/detach hooks and power-transition veto,
+measured ON/OFF initialization, real attach/detach hooks and power-transition veto,
 plus camera's observed-OFF initialization, VMM construction, callbacks, resume
 guards and retention path. This is source/application evidence, not a link or
 hardware result. KUNIT y/n use the same provider source; neither is compiled here.
+
+OFF initialization is admitted only after the opt-in native MTCMOS first-OFF
+transaction's actual readback. Ordinary callbacks remain vetoed. First-OFF
+publication errors are latched before camera cleanup, and its hardware writes
+remain restricted to the reviewed one-boot method. It does not perform full
+vendor rail/TOP/FLIGHT shutdown. Joint CI uses the persistent first-OFF exclusion
+profile so these writers are compiled rather than optimized away by idle/sleep
+gates; shipping configuration is unchanged.
 
 `MD-ON-ADOPTION-PROFILE.json` pins the MD stage generator, helper, staging patch,
 six pre-MD files, seven post-MD files, three source commits and frozen canonical

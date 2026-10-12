@@ -7,11 +7,30 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 DEVICE_COMMIT = "ee2be53cb75670b548948636a0db1d1ff112bf12"
 CAMERA_COMMIT = "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835"
+KERNEL_COMMIT = "d84b264a54a37611f2f46bc19363cb9b41606205"
+PACKAGE = "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/"
+PARENT_INPUTS = tuple(PACKAGE + name for name in (
+    "0018-pmdomain-mediatek-mt6878-audio.patch",
+    "0058-arm64-dts-mediatek-add-opt-in-MT6878-display-power.patch",
+    "0071-arm64-dts-mediatek-add-MT6878-display-DMA.patch",
+    "0092-clk-mediatek-mt6878-camera-main.patch",
+    "0108-regulator-mt6315-board-mode-mask.patch",
+    "0110-regulator-mt6315-register-described-rails.patch",
+    "0112-arm64-dts-tetris-disabled-gpu-supplies.patch",
+    "0113-regulator-mt6315-reject-unowned-phase-mask.patch",
+    "0114-regulator-mt6315-read-only-vgpu-observer.patch",
+)) + ("patches/camera-camisp/native-integration/mt6878-native-vmm.inc",)
+NATIVE_INPUTS = (
+    "include/dt-bindings/clock/mediatek,mt6878-clock.h",
+    "include/dt-bindings/spmi/spmi.h",
+    "Documentation/devicetree/bindings/regulator/mt6315-regulator.yaml",
+)
 INPUTS = (
     ("android_kernel_device_modules_6.1_nothing_mt6878", DEVICE_COMMIT,
      "drivers/clk/mediatek/clk-mt6878-cam.c"),
@@ -27,6 +46,10 @@ INPUTS = (
      "mtkcam/camsys/isp7sp/cam/mtk_cam-larb.c"),
     ("android_kernel_modules_nothing_mt6878", CAMERA_COMMIT,
      "mtkcam/camsys/isp7sp/cam/mtk_cam-sv.c"),
+    ("android_kernel_device_modules_6.1_nothing_mt6878", DEVICE_COMMIT,
+     "drivers/soc/mediatek/mtk-scpsys-mt6878.c"),
+    ("android_kernel_device_modules_6.1_nothing_mt6878", DEVICE_COMMIT,
+     "include/dt-bindings/power/mt6878-power.h"),
 )
 NODE_NAMES = (
     "camsys_main_clk", "camsys_mraw_clk", "cam_vcore_clk",
@@ -41,7 +64,64 @@ DESTINATIONS = {
     "clk-mt6878-camisp-resources.c": "drivers/clk/mediatek/clk-mt6878-camisp-resources.c",
     "mediatek,mt6878-camisp-clock.h": "include/dt-bindings/clock/mediatek,mt6878-camisp-clock.h",
     "mt6878-camisp-resources-disabled.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-resources-disabled.dtsi",
+    "mt6878-camisp-native-power-disabled.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-native-power-disabled.dtsi",
+    "mt6878-nothing-tetris-camisp-disabled.dts": "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-disabled.dts",
 }
+RESOURCE_FILES = tuple(DESTINATIONS)[:3]
+
+
+def nested_body(source, marker):
+    if source.count(marker) != 1:
+        raise ValueError("absent/ambiguous nested source context: " + marker)
+    start = source.index("{", source.index(marker)) + 1
+    depth = 1
+    for end in range(start, len(source)):
+        depth += (source[end] == "{") - (source[end] == "}")
+        if depth == 0:
+            return source[start:end]
+    raise ValueError("unterminated source context: " + marker)
+
+
+def power_trace(dts, soc, header, native_clock):
+    controller = node_body(dts, "scpsys")
+    clocks = re.findall(r"<&(\w+) (CLK_\w+)>", controller.split("clock-names")[0])
+    names = re.findall(r'"([^"]+)"', one(r"clock-names = (.*?);", controller))
+    if len(clocks) != len(names) or len(names) != len(set(names)):
+        raise ValueError("ambiguous B4.1 power clock array")
+    selected = []
+    for name in ["cam"] + [f"cam_main-{i}" for i in range(8)]:
+        owner, symbol = clocks[names.index(name)]
+        native_owner = "topckgen" if owner == "topckgen_clk" else ALIASES[owner]
+        native_id = int(one(r"^#define " + symbol + r"\s+(\d+)\s*$", native_clock)) if native_owner != "cam_mraw" else None
+        selected.append({"name": name, "owner": native_owner, "symbol": symbol,
+                         "native_id": native_id})
+    domains = {name: int(one(r"^#define MT6878_POWER_DOMAIN_" + name + r"\s+(\d+)\s*$", header))
+               for name in ("MM_INFRA", "CAM_VCORE", "CAM_MAIN", "ISP_VCORE")}
+    edges = [["MM_INFRA", "CAM_VCORE"], ["CAM_VCORE", "CAM_MAIN"], ["MM_INFRA", "ISP_VCORE"]]
+    for parent, child in edges:
+        if f"{{MT6878_POWER_DOMAIN_{parent}, MT6878_POWER_DOMAIN_{child}}}" not in soc:
+            raise ValueError("B4.1 CAM/ISP domain edge changed")
+    pmic = nested_body(dts, "mt6319_6: mt6319@6")
+    regulator = nested_body(pmic, "mt6319_6_regulator: mt6319-6-regulator")
+    if "reg = <0x6 SPMI_USID>;" not in pmic or 'compatible = "mediatek,mt6315_6-regulator";' not in regulator:
+        raise ValueError("B4.1 USID6 provider identity changed")
+    rails = {}
+    for index in (1, 2, 4):
+        body = nested_body(regulator, f"mt6319_6_vbuck{index}: 6-vbuck{index}")
+        if f'regulator-compatible = "vbuck{index}";' not in body:
+            raise ValueError("B4.1 rail identity changed")
+        rails[str(index)] = {prop: int(one(re.escape(prop) + r" = <(\d+)>;", body))
+                             for prop in ("regulator-min-microvolt", "regulator-max-microvolt", "regulator-enable-ramp-delay")}
+        rails[str(index)]["always_on"] = "regulator-always-on;" in body
+    for prop in ("cam-vcore-supply", "isp-vcore-supply"):
+        if one(re.escape(prop) + r" = <&(\w+)>;", controller) != "mt6319_6_vbuck1":
+            raise ValueError("B4.1 paired rail changed")
+    if dts.count("vmm-pmic-supply = <&mt6319_6_vbuck1>;") != 2:
+        raise ValueError("B4.1 competing rail users changed")
+    return {"domains": domains, "edges": edges, "clocks": selected, "usid": 6,
+            "buck1_mode_mask": int(one(r"buck1-modeset-mask = <(0x[0-9a-f]+)>;", regulator), 16),
+            "rails": rails, "other_vbuck1_users": ["vmmspm", "mmdvfs debug"],
+            "activation": "disabled; firmware/MMUP ownership, voltage/rate policy and cold lifecycle unresolved"}
 
 
 def one(pattern, text):
@@ -67,7 +147,14 @@ def trace(upstream):
         sources.append(content.decode())
         provenance.append({"repository": repo, "commit": commit, "path": path,
                            "sha256": hashlib.sha256(content).hexdigest()})
-    clock, header, dts, memory, memory_api, larb, sv = sources
+    clock, header, dts, memory, memory_api, larb, sv, soc, power_header = sources
+    native = {}
+    with tarfile.open(upstream / ("linux-" + KERNEL_COMMIT + ".tar.gz")) as archive:
+        for path in NATIVE_INPUTS:
+            content = archive.extractfile("linux-" + KERNEL_COMMIT + "/" + path).read()
+            native[path] = content.decode()
+            provenance.append({"repository": "MT6878-mainline/linux", "commit": KERNEL_COMMIT,
+                               "path": path, "sha256": hashlib.sha256(content).hexdigest()})
     banks = {}
     for bank, macro, prefix, count in (("mraw", "CAM_MR", "CLK_CAM_MR", 9),
                                        ("vcore", "CAM_VCORE", "CLK_CAM_VCORE", 2)):
@@ -114,10 +201,24 @@ def trace(upstream):
                      "DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS"):
         if required not in sv:
             raise ValueError("camera module CAMSV contract changed")
+    power = power_trace(dts, soc, power_header, native[NATIVE_INPUTS[0]])
+    for row in power["clocks"]:
+        if row["owner"] == "cam_mraw":
+            row["native_id"] = int(one(r"^#define " + row["symbol"] + r"\s+(\d+)\s*$", header))
+    symbols = set(re.findall(r"CLK_\w+", " ".join(node.get("clocks", "") for node in nodes.values())))
+    symbols.update(row["symbol"] for row in power["clocks"])
+    clock_ids = {}
+    for symbol in sorted(symbols):
+        source = header if symbol.startswith(("CLK_CAM_MR_", "CLK_CAM_VCORE_")) else native[NATIVE_INPUTS[0]]
+        clock_ids[symbol] = int(one(r"^#define " + symbol + r"\s+(\d+)\s*$", source))
     return {"release": "Nothing OS B4.1", "provenance": provenance, "banks": banks,
             "nodes": nodes, "ports": ports,
             "logical_dma_bits": 34,
-            "power_owner": "Unproven native CAM_MAIN/CAM_VCORE genpd and VMM ordering; no activation"}
+            "power": power,
+            "native_clock_ids": clock_ids,
+            "parent_input_sha256": {path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+                                    for path in PARENT_INPUTS},
+            "power_owner": "Native provider graph described disabled; physical VMM ownership/policy unproven"}
 
 
 def provider(data):
@@ -189,13 +290,13 @@ def binding(data):
 
 def fragment(data):
     code = """// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
-/* Review fixture only; no board includes this file.
- * CAM_MAIN/CAM_VCORE power ownership and VMM ordering remain unproven.
- * Vendor power-domain names are retained in evidence.json, not mapped to a
- * fabricated native genpd. Every described device must remain disabled.
+/* Review fixture only; no shipping board includes this file.
+ * Native CAM/ISP graph is supplied by the paired disabled diagnostic fixture.
+ * Physical VMM ownership/policy remain unproven. Every device stays disabled.
  */
 #include <dt-bindings/clock/mediatek,mt6878-clock.h>
 #include <dt-bindings/clock/mediatek,mt6878-camisp-clock.h>
+#include <dt-bindings/power/mediatek,mt6878-power.h>
 
 &soc {
 """
@@ -235,6 +336,11 @@ def fragment(data):
                 values["mediatek,smi-supply"] = f"<&{supplier}>"
         if logical and set(values) != {"compatible", "mediatek,larb-id", "iommus"}:
             raise ValueError("logical CAMISP must never own physical resources")
+        if "power-domains" in props:
+            domain = one(r"<&scpsys MT6878_POWER_DOMAIN_(\w+)>", props["power-domains"])
+            if domain not in ("CAM_MAIN", "CAM_VCORE"):
+                raise ValueError("unsupported native camera domain")
+            values["power-domains"] = f"<&spm MT6878_POWER_DOMAIN_{domain}>"
         values["status"] = '"disabled"'
         code += f"\t{label}: {node} {{\n"
         for key, value in values.items():
@@ -255,10 +361,79 @@ def fragment(data):
     return code
 
 
+def power_fragment(data):
+    code = """// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Include ONLY in the isolated diagnostic board, after native-display and
+ * GPU-supplies. Extend the existing controller/USID6, never duplicate them.
+ * Source bounds are not an operating point. No rail/clock request is enabled.
+ */
+#include <dt-bindings/spmi/spmi.h>
+#include <dt-bindings/power/mediatek,mt6878-power.h>
+
+&mt6319_gpu {
+\tstatus = "disabled";
+\tregulators {
+"""
+    for index in (1, 4):
+        rail = data["power"]["rails"][str(index)]
+        code += f"\t\tmt6319_6_vbuck{index}: vbuck{index} {{\n"
+        code += f'\t\t\tregulator-name = "6_vbuck{index}";\n'
+        for prop, value in rail.items():
+            if prop != "always_on":
+                code += f"\t\t\t{prop} = <{value}>;\n"
+        if rail["always_on"]:
+            code += "\t\t\tregulator-always-on;\n"
+        code += '\t\t\tstatus = "disabled";\n\t\t};\n'
+    code += """\t};
+};
+
+/* Supply pair is inert because THIS diagnostic board disables the real SPM.
+ * Never copy these properties into the active shipping controller.
+ */
+&spm {
+\tcam-vcore-supply = <&mt6319_6_vbuck1>;
+\tisp-vcore-supply = <&mt6319_6_vbuck1>;
+\tstatus = "disabled";
+};
+
+&mm_infra {
+\tstatus = "disabled";
+"""
+    for name in ("CAM_VCORE", "ISP_VCORE"):
+        label = "cam_vcore_pd" if name == "CAM_VCORE" else "isp_vcore_pd"
+        code += f"\t{label}: power-domain@{data['power']['domains'][name]:x} {{\n"
+        code += f"\t\treg = <MT6878_POWER_DOMAIN_{name}>;\n"
+        code += '\t\t#power-domain-cells = <0>;\n\t\tstatus = "disabled";\n'
+        if name == "CAM_VCORE":
+            code += "\t\t#address-cells = <1>;\n\t\t#size-cells = <0>;\n"
+            code += f"\t\tcam_main_pd: power-domain@{data['power']['domains']['CAM_MAIN']:x} {{\n"
+            code += "\t\t\treg = <MT6878_POWER_DOMAIN_CAM_MAIN>;\n\t\t\t#power-domain-cells = <0>;\n"
+            refs = [f"<&{row['owner']} {row['symbol']}>" for row in data["power"]["clocks"]]
+            names = ['"' + row["name"] + '"' for row in data["power"]["clocks"]]
+            code += "\t\t\tclocks = " + ",\n\t\t\t\t ".join(refs) + ";\n"
+            code += "\t\t\tclock-names = " + ", ".join(names) + ";\n"
+            code += '\t\t\tstatus = "disabled";\n\t\t};\n'
+        code += "\t};\n"
+    return code + "};\n"
+
+
+def board_fixture():
+    return """// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Compile-only diagnostic board: NOT a boot/install/activation artifact.
+ * Existing SPM/MM_INFRA are disabled, so this would break native display PM.
+ */
+#include "mt6878-nothing-tetris-native.dts"
+#include "mt6878-camisp-resources-disabled.dtsi"
+#include "mt6878-camisp-native-power-disabled.dtsi"
+"""
+
+
 def outputs(data):
     files = {"clk-mt6878-camisp-resources.c": provider(data),
              "mediatek,mt6878-camisp-clock.h": binding(data),
-             "mt6878-camisp-resources-disabled.dtsi": fragment(data)}
+             "mt6878-camisp-resources-disabled.dtsi": fragment(data),
+             "mt6878-camisp-native-power-disabled.dtsi": power_fragment(data),
+             "mt6878-nothing-tetris-camisp-disabled.dts": board_fixture()}
     patches = {}
     for output, names in (("clock-providers.patch", tuple(files)[:2]),
                           ("disabled-description.patch", tuple(files)[2:])):

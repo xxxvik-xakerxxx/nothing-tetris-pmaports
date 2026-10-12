@@ -10,6 +10,27 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
 ### Current integration checkpoint
 
+The 2026-10-13 joint source candidate adds a one-boot native MD MTCMOS first-OFF
+transaction with direct error/readback retention, bounded GPUEB TX through the
+existing RX/SRAM owner, and an isolated disabled CAM/ISP DT graph using the real
+shared USID6 rail and ordered protection clocks. GNSS now has exact MVCD
+bootstrap framing/ACK decoding and source-derived clock synthesis. The actual
+board/profile/frequency inputs remain required; no synthetic bootstrap is sent.
+These are source changes awaiting joint native/ARM64/DT CI, **not installed
+hardware support**. The nonbootable camera fixture is excluded from FIT inputs.
+
+Personal U-Boot master `322cf227f2ea26a7e319d20e3ce0321db8a38f15` adds the
+paired fresh final first-OFF marker, without a new hardware operation. Its
+[CI38314466282](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38314466282)
+passed; installed `8d2ccc12` and stock `lk_b` remain unchanged. The separate
+first-OFF kernel profile excludes deep idle, sleep, hotplug and kexec for this
+experiment; it is not a shipping battery-optimization policy. It does not
+implement rail/TOP/FLIGHT shutdown, inhibited restart or SIM/call service.
+
+All mandatory validation, Bionic and sealed-loader checks for the preceding
+CI/configuration correction passed
+[CI38310658085](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38310658085).
+
 - A separate [CCIF/DPMAIF DT](../patches/modem/drafts/runtime-hif-dt/README.md)
   supplies the actual B4.1 registers, IRQs and CCF references. CI repackages
   only this checked DT into the original r182 kernel/initramfs; the shipping

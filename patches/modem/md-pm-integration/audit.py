@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only pinned-source census; never compiles or executes target code."""
+"""Pinned adoption/first-shutdown source contract; no target-code execution."""
 
 import argparse
 import hashlib
@@ -52,6 +52,71 @@ def ordered(text, *needles):
         cursor = index + len(needle)
 
 
+def function(text, name):
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    match = re.search(r"\b" + re.escape(name) + r"\([^;{}]*\)\s*\{", text)
+    if not match:
+        raise ValueError("missing first-shutdown function: " + name)
+    depth, index = 1, match.end()
+    start = index
+    while depth and index < len(text):
+        depth += (text[index] == "{") - (text[index] == "}")
+        index += 1
+    if depth:
+        raise ValueError("unterminated first-shutdown function: " + name)
+    return text[start:index - 1]
+
+
+def first_shutdown(vendor_md, vendor_pm, core, cpuidle, psci, config):
+    start = function(vendor_md, "md_start_platform")
+    off = function(vendor_md, "md_cd_power_off")
+    supplier = function(vendor_pm, "scpsys_md_power_off")
+    ordered(start, "MD_SETTING_FIRST_BOOT", "MD_CHECK_DONE", "MD_CHECK_FLAG",
+            "md_cd_power_off(md, 0);", "return ret;")
+    ordered(off, "ret = pm_runtime_put_sync(&md->plat_dev->dev);",
+            "ccci_ufs_io_operate(0);", "md_cd_plat_val_ptr.md_gen == 6299",
+            "mdelay(4);", "flight_mode_set_by_atf(md, true);",
+            "md_cd_topclkgen_off(md);", "return ret;")
+    ordered(supplier, "scpsys_bus_protect_enable(scpd)",
+            "val = readl(ctl_addr) & ~PWR_ON_BIT;", "writel(val, ctl_addr);",
+            "tmp == 0", "scpsys_extb_iso_up(scpd)", "MTK_SCPD_REMOVE_MD_RSTB")
+    physical = function(core, "genpd_power_off")
+    runtime = function(core, "genpd_runtime_suspend")
+    ordered(physical, "if (_genpd_power_off(genpd, true))", "return;",
+            "genpd->status = GENPD_STATE_OFF;")
+    ordered(runtime, "genpd_lock(genpd);", "genpd_power_off(genpd, true, 0);",
+            "genpd_unlock(genpd);", "return 0;")
+    ordered(function(cpuidle, "cpuidle_pause_and_lock"),
+            "mutex_lock(&cpuidle_lock)", "cpuidle_uninstall_idle_handler()")
+    ordered(function(cpuidle, "cpuidle_resume_and_unlock"),
+            "cpuidle_install_idle_handler()", "mutex_unlock(&cpuidle_lock)")
+    if "psci_cpu_suspend_enter" not in function(psci, "psci_enter_idle_state"):
+        raise ValueError("PSCI idle entry changed; reassess secure-idle boundary")
+    for symbol in ("CPU_IDLE", "ARM_PSCI_CPUIDLE", "SUSPEND", "HOTPLUG_CPU"):
+        if not re.search(r"^CONFIG_" + symbol + r"=y$", config, re.M):
+            raise ValueError("packaged PM profile changed: " + symbol)
+    if "# CONFIG_MTK_DVFSRC is not set" not in config:
+        raise ValueError("packaged DVFSRC owner changed")
+    return {
+        "status": "shipping-profile-blocked; first-OFF-diagnostic-implemented-source-only",
+        "trusted_handoff": "existing genuine loader/BROM/EMI reports suffice; no additional certificate",
+        "stock_order": ["matched LK-on runtime reference", "BROM POWER/3 then POWER/2",
+                        "native genpd bus protection then PWR_ON clear then ACK-off then external isolation",
+                        "UFS unblock", "gen6299 4ms delay", "FLIGHT", "TOP bits8/9 gate"],
+        "native_error_boundary": "genpd_power_off is void; failed supplier callback leaves software ON but genpd_runtime_suspend returns0; runtime-put success is not physical OFF",
+        "secure_idle_boundary": "shipping CPU_IDLE/PSCI and PM_SLEEP stay enabled; first-off.config permanently excludes these routes plus HOTPLUG_CPU CPU_OFF and kexec until clean reboot",
+        "minimal_next_operation": [
+            "parent implements the separate empty first-OFF final producer marker only after actual successful handoff",
+            "parent CI resolves diagnostic.config plus first-off.config and compiles/links the actual native supplier; do not ship this profile",
+            "validate one supplier-init takeover: actual IFR9/IFR11/NEMI6:7, PWR_ON, both ACKs, isolation, 4ms settle and complete OFF readback",
+            "preserve non-devm first-error/geometry/syscon-handle owner on failure; no runtime-put or consumer attachment used",
+            "keep power_on unsupported; OFF observation is not execution-inhibited restart permission",
+        ],
+        "not_substitutes": ["FLIGHT", "RC_SWITCH CLR/GET success", "AP modem mutex",
+                            "initial secure policy0x601", "pm_runtime_put_sync success"],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vendor", type=Path, default=UPSTREAM / "android_kernel_device_modules_6.1_nothing_mt6878")
@@ -66,6 +131,12 @@ def main():
     evidence = source("uboot-evidence", args.uboot, board + "tetris_modem_smem_evidence.c", UBOOT)
     platform = source("linux-platform", args.linux, "drivers/base/platform.c")
     core = source("linux-genpd", args.linux, "drivers/pmdomain/core.c")
+    cpuidle = source("linux-cpuidle", args.linux, "drivers/cpuidle/cpuidle.c")
+    psci = source("linux-psci-idle", args.linux, "drivers/cpuidle/cpuidle-psci.c")
+    psci_fw = source("linux-psci-firmware", args.linux, "drivers/firmware/psci/psci.c")
+    arm_psci = source("linux-arm64-psci", args.linux, "arch/arm64/kernel/psci.c")
+    init = source("linux-init", args.linux, "init/main.c")
+    syscon = source("linux-syscon", args.linux, "drivers/mfd/syscon.c")
     dvfsrc = source("linux-dvfsrc", args.linux, "drivers/soc/mediatek/mtk-dvfsrc.c")
     vendor_pm = source("vendor-pm", args.vendor, "drivers/soc/mediatek/mtk-scpsys.c", VENDOR)
     vendor_data = source("vendor-pm-data", args.vendor, "drivers/soc/mediatek/mtk-scpsys-mt6878.c", VENDOR)
@@ -103,6 +174,23 @@ def main():
     anchor("vendor-pm-data", vendor_data, "MTK_SCPD_BYPASS_INIT_ON | MTK_SCPD_REMOVE_MD_RSTB,", "vendor MD skips init-on and reset-bit handling")
     anchor("vendor-pm", vendor_pm, "if (MTK_SCPD_CAPS(scpd, MTK_SCPD_BYPASS_INIT_ON))", "vendor bypass seeds software OFF; does not adopt measured physical ON")
     anchor("vendor-md", vendor_md, "static int md_start_platform(struct ccci_modem *md)", "vendor first boot checks BROM then calls physical power-off")
+    anchor("vendor-md", vendor_md, "ret = pm_runtime_put_sync(&md->plat_dev->dev);", "first shutdown uses real consumer runtime PM, not a raw supplier callback")
+    anchor("vendor-md", vendor_md, "retval = pm_runtime_get_sync(&dev_ptr->dev); /* match lk on */", "real consumer probe holds the runtime reference paired by first shutdown")
+    anchor("vendor-md", vendor_md, "ccci_ufs_io_operate(0);", "UFS unblock follows MTCMOS OFF in the exact pinned B4.1 source")
+    anchor("vendor-md", vendor_md, "mdelay(4);", "gen6299 OFF must settle before flight/TOP gating")
+    anchor("vendor-pm", vendor_pm, "static int scpsys_md_power_off(struct generic_pm_domain *genpd)", "native supplier owns physical bus-protection/power/isolation ordering")
+    anchor("linux-genpd", core, "static void genpd_power_off(struct generic_pm_domain *genpd, bool one_dev_on,", "supplier errno is not propagated through this void runtime helper")
+    anchor("linux-genpd", core, "if (_genpd_power_off(genpd, true)) {", "supplier failure retains software ON and returns only from void helper")
+    anchor("linux-cpuidle", cpuidle, "void cpuidle_resume_and_unlock(void)", "resuming a temporary pause reenables cpuidle; no retained MD OFF exclusion")
+    anchor("linux-psci-idle", psci, "return CPU_PM_CPU_IDLE_ENTER_PARAM_RCU(psci_cpu_suspend_enter, idx, state[idx]);", "enabled PSCI idle reaches secure CPU_SUSPEND outside native MD genpd lock")
+    anchor("linux-psci-firmware", psci_fw, "#ifdef CONFIG_CPU_IDLE\nstatic noinstr int psci_suspend_finisher", "CPU_IDLE=n removes the actual CPU_SUSPEND entry implementation")
+    ordered(function(psci_fw, "psci_init_system_suspend"), "if (!IS_ENABLED(CONFIG_SUSPEND))", "return;", "suspend_set_ops")
+    anchor("linux-psci-firmware", psci_fw, "if (!IS_ENABLED(CONFIG_SUSPEND))", "SUSPEND=n prevents SYSTEM_SUSPEND handler registration; PM_SLEEP=n removes the sleep framework")
+    anchor("linux-arm64-psci", arm_psci, "#ifdef CONFIG_HOTPLUG_CPU\nstatic bool cpu_psci_cpu_can_disable", "HOTPLUG_CPU=n removes ordinary CPU_OFF invocation and its CPU operations")
+    ordered(function(init, "kernel_init_freeable"), "smp_init();", "do_basic_setup();")
+    anchor("linux-init", init, "\tsmp_init();", "initial secondary CPU_ON completes before native supplier device initcalls")
+    ordered(function(syscon, "of_syscon_register"), "regmap_init_mmio(NULL, base", "list_add_tail(&syscon->list, &syscon_list)")
+    anchor("linux-syscon", syscon, "regmap = regmap_init_mmio(NULL, base, &syscon_config);", "native generic syscon maps are non-devm and cached for boot lifetime, independent of failed supplier probe devres")
     anchor("native-start-patch", backend, "+\tSTEP(OFF, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_EXCLUSIVE_OFF_BOOT_INHIBITED));", "backend requires exclusive OFF/inhibit before binding or SMC")
     anchor("frozen-owner", owner, "if (runtime_dev == &md->plat_dev->dev || md->plat_dev->dev.pm_domain ||", "caller rejects normal platform-domain attachment and demands separate virtual genpd device")
     anchor("scope", scope, "dev = get_device(md_scope.supplier);", "scope requires a real completed scoped DVFSRC INIT supplier")
@@ -114,7 +202,7 @@ def main():
     anchor("linux-dvfsrc", dvfsrc, "static const struct of_device_id mtk_dvfsrc_of_match[] = {", "native match table lacks MT6878; existing wrapper cannot create a supplier")
 
     print(json.dumps({
-        "status": "readonly-adoption-design-prepared-first-shutdown-blocked",
+        "status": "native-adoption-and-first-OFF-diagnostic-staged-CI-hardware-pending",
         "method": "read-only source anchors and ordering; no target-code execution",
         "pins": {"vendor": VENDOR, "linux_base": LINUX, "uboot_installed_user_supplied": UBOOT},
         "linux_provenance": "local base files hashed; no independently measured running-kernel claim",
@@ -123,9 +211,10 @@ def main():
         "trust_correction": "independent Linux signature verification and a generic NS certificate are not imposed for ordinary trusted-loader adoption; see EMI-SOURCE-EVIDENCE.json",
         "installed_tag_names": tag_names, "native_dvfsrc_matches": matches,
         "sources": SOURCES, "causal_edges": EDGES,
+        "first_shutdown": first_shutdown(vendor_md, vendor_pm, core, cpuidle, psci, config),
         "blockers": [
             "Installed BROM hook requires provider disabled before loader and final handoff leaves it disabled",
-            "Managed first shutdown and secure SPM/PCM exclusion lifetime remain unproved",
+            "First-OFF diagnostic requires its new producer marker plus resolved native CI and hardware validation; shipping secure-idle lifecycle remains unproved",
             "No proven execution-inhibited state after inherited ON is cycled OFF then ON",
             "Frozen caller rejects normal attached MD; backend assumes OFF before first start",
             "Native DVFSRC disabled and no MT6878 match; frozen startup scope supplier absent (not a prerequisite for read-only ON observation)",

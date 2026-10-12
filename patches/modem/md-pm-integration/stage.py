@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate/check the observation-only patch against exact packaged MD sources."""
+"""Generate/check native adoption and opt-in first-OFF against packaged sources."""
 
 import argparse
 import difflib
@@ -96,13 +96,19 @@ def candidate(before):
                      "\t\tpd->genpd.detach_dev = mt6878_md_adopt_detach;")
     c = replace_once(c, "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n\t\tpm_genpd_init(&pd->genpd, NULL, true);",
                      "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n"
-                     "\t\tret = pm_genpd_init(&pd->genpd, NULL, false);\n"
-                     "\t\tif (ret)\n\t\t\tgoto err_put_subsys_clocks;\n"
+                     "\t\tret = pm_genpd_init(&pd->genpd, NULL,\n"
+                     "\t\t\tpd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE);\n"
+                     "\t\tif (ret) {\n"
+                     "\t\t\tmt6878_md_first_off_publication_fault(scpsys, ret);\n"
+                     "\t\t\tgoto err_put_subsys_clocks;\n\t\t}\n"
                      "\t} else if (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n"
                      "\t\tpm_genpd_init(&pd->genpd, NULL, true);")
     c = replace_once(c, "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n\t\tif (!ret)\n\t\t\tmt6878_md_cleanup(pd);\n\t} else if (scpsys_domain_is_on(pd)) {",
                      "\t/* Removing an unpublished observation never shuts inherited MD down. */\n"
                      "\tif (!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)) {")
+    c = replace_once(c, "err_cleanup_domains:\n\tscpsys_domain_cleanup(scpsys);",
+                     "err_cleanup_domains:\n\tmt6878_md_first_off_publication_fault(scpsys, ret);\n"
+                     "\tscpsys_domain_cleanup(scpsys);")
     after[CFILE] = c
     prefix = before[DATA].split("static int mt6878_md_check_off(", 1)
     if len(prefix) != 2:
@@ -114,8 +120,8 @@ def candidate(before):
 
 
 def diff(before, after):
-    text = "From: Tetris port maintainers\nSubject: [STAGING PATCH] native MT6878 MD: observe inherited ON without transitions\n\n"
-    text += "Not shipping. Requires guarded final-producer markers and the actual\ncompleted boot transaction. Consumer remains disabled. detach_dev is void:\nconsumer unbind cannot be vetoed; detach retires the observation only.\n\n"
+    text = "From: Tetris port maintainers\nSubject: [STAGING PATCH] native MT6878 MD: adopt ON or opt in to one boot first-OFF\n\n"
+    text += "Not shipping. Requires guarded final-producer markers and the actual\ncompleted boot transaction. Consumer remains disabled. First-OFF additionally\nrequires separate paired empty intent/final markers and persistent no-idle,\nno-sleep, no-hotplug and no-kexec kernel profile. No restart or callback\ntransition is enabled. Failed first-OFF retains its boot-lifetime owner.\n\n"
     for path in sorted(after):
         if before.get(path) == after[path]:
             continue
@@ -178,6 +184,31 @@ def contract(patch, before, after, inputs):
             "metadata": "actual successful BROM80, descriptor32 and evidence336; retained nonoverlapping NOMAP allocations",
             "physical_observation": "PWR_ON+ACK30+ACK31=ON, EXTISO3=0, IFR9/IFR11/NEMI6:7 status=0",
         },
+        "first_off": {
+            "scope": "supplier-init-only native MD MTCMOS OFF readback; not full vendor rail/TOP/FLIGHT shutdown; consumer disabled; callbacks veto",
+            "chosen_empty": "/chosen/tetris,modem-first-off-diagnostic",
+            "supplier_empty_final_only": "nothing,modem-first-off-diagnostic",
+            "producer_source": "322cf227f2ea26a7e319d20e3ce0321db8a38f15",
+            "producer_status": "personal U-Boot source reviewed; paired final marker implemented; CI evidence tracked separately; installation not assumed",
+            "base_config_fragment": "diagnostic.config",
+            "config_fragment": "first-off.config",
+            "required_resolved_config": dict.fromkeys(
+                ("CPU_IDLE", "ARM_PSCI_CPUIDLE", "ARM_PSCI_CPUIDLE_DOMAIN",
+                 "SUSPEND", "HIBERNATION", "HIBERNATE_CALLBACKS", "PM_SLEEP", "PM_SLEEP_SMP",
+                 "HOTPLUG_CPU", "MTK_DVFSRC", "ARM_PSCI_CHECKER", "KVM", "VIRTUALIZATION",
+                 "KEXEC", "KEXEC_FILE", "KEXEC_CORE"), "n"),
+            "ci_merge": "merge ci.required_resolved_config with this map before olddefconfig; assert resolved union in both joint KUNIT=y/n builds so first-OFF writers are compiled",
+            "order": ["revalidate actual handoff, NOMAP reservations, maps and complete ON",
+                      "retain one boot takeover owner before first write",
+                      "IFR9 protect/ACK", "IFR11 protect/ACK", "NEMI6:7 protect/ACK",
+                      "clear PWR_ON only", "poll both ACKs and PWR_ON off",
+                      "set external isolation3", "gen6299 settle >=4ms", "read all five OFF registers",
+                      "mark FIRST_OFF_COMPLETE then pm_genpd_init(true)"],
+            "failure": "first errno returned directly; no publication or rollback; NOMAP, persistent syscon handles and non-devm owner/device/node references retained; no reattempt before reboot",
+            "publication_failure": "same retained first-error record covers generic supplier probe publication unwind",
+            "runtime_put": "not used; no swallowed genpd callback errno",
+            "status": "implemented-source-only; CI/native/hardware untested",
+        },
         "ci": {
             "source_check": "python3 -B patches/modem/md-pm-integration/stage.py --kernel <pristine-d84>",
             "static_tests": "python3 -B patches/modem/md-pm-integration/test_static.py",
@@ -199,7 +230,8 @@ def contract(patch, before, after, inputs):
             "dynamic_supplier_removal": "existing suppress_bind_attrs only prevents userspace unbind; arbitrary in-kernel unregister unsupported",
             "present_packaged_config_runtime_adoption": "blocked by OF_DYNAMIC=y and MEMORY_HOTREMOVE=y; package unchanged",
         },
-        "remaining": ["consumer activation/attachment", "first shutdown", "inhibited restart",
+        "remaining": ["first-OFF final producer marker and resolved-profile CI/hardware validation",
+                      "consumer activation/attachment", "inhibited restart",
                       "suspend and secure-idle lifecycle", "current effective EMI permission lifetime", "SIM operation"],
         "hardware": "not-executed; no SMC/write/reset/activation",
     }

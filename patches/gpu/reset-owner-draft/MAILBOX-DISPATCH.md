@@ -42,7 +42,8 @@ payloads into the thread's local snapshot. It rechecks actual GPR2 before
 writing exactly the copied pending mask to mbox0_clr, then reads mbox0_recv to
 flush the posted write. The SRAM mutex spans this entire sequence, so SRAM
 quarantine cannot interleave between the snapshot and ACK. No raw SRAM
-mapping or SRAM write API is exported.
+mapping or arbitrary-offset SRAM write API is exported. The bounded TX extension
+below adds only a complete fixed channel slot transaction.
 
 Callbacks receive only copied words, outside both transaction mutexes, while
 the threaded IRQ remains in flight. A binding pins the fixed client's device
@@ -53,7 +54,7 @@ Callbacks synchronously consume the payload and must not call lifecycle/bind
 APIs on their own scope or retain the borrowed payload pointer. There is no
 separate worker whose completion could escape synchronize_irq.
 The native channel consumer performs the response completion; this candidate
-does not supply a GPUFREQ request/reply or TX session adapter. A callback must
+does not supply a GPUFREQ command/session adapter. A callback must
 not acquire any parent/client lock held by its lifecycle caller during drain.
 
 The target Linux kernel/irq/manage.c confirms that a NULL primary installs
@@ -76,12 +77,73 @@ an unconsumed bit. Reset assertion still does not prove physical OFF.
 
 ## Strict remaining blocker
 
-There is deliberately no IRQ-enable, firmware-upload, TX or reset-release API.
+There is deliberately no IRQ-enable, firmware-upload or reset-release API.
 Consequently ordinary preparation cannot run the dispatcher. The native
 receive implementation is wired to the actual IRQ request and common parent;
 an activated transport/session is not established. Static checks cannot prove
 runtime acquisition/unwind or IRQ scheduling, and the earlier object-only CI
 result does not validate these new cross-object symbols.
+
+## Bounded native TX extension
+
+`mt6878_gpueb_reset_trysend(scope, client, channel, words, count)` is a single
+nonblocking submission by the exact pinned channel client, not a command/reply
+completion. It rejects a missing/replaced parent or client driver, a quiesced or
+reset scope, the sticky first fault, an in-flight response channel, or inactive
+owned dispatch. Both internal activation provenance and the actual IRQ descriptor
+must be active. No caller boolean or externally enabled line can authorize TX.
+There is **no production setter** for `dispatch_active`: ordinary valid calls
+currently return `-EOPNOTSUPP` without MMIO. An externally forced IRQ is masked
+once without SRAM access/ACK while this owned gate is closed.
+
+The actual send code is ready for a later reviewed cold-start/IRQ activation
+transition. It copies at most nine words locally, takes the existing scope
+mutex, then uses both exclusive typed leases under the SRAM mutex. The SRAM
+owner's retained parent is checked against the actual platform parent during
+scope preparation, before taking its runtime-PM reference. The SRAM
+transaction accepts only a channel and its exact full word count; it returns
+neither a mapping nor an offset-writing accessor. TX byte offsets are
+`0,16,48,60,84,120,136,160,184,188,204`, derived cumulatively from the pinned
+eleven-channel send table. Short messages, extra words and channels beyond10
+are rejected, rather than leaving an implicit stale payload tail.
+
+Before any write, actual GPR2 must equal `0x55667788`, the channel's SEND bit
+must be clear, and a response channel must have no old pending RX bit. Then only
+the exact TX slot is written. Actual GPR2 is checked again, `mb()` orders SRAM
+stores, and `BIT(channel)` is written once to the owned SET word. A SEND read
+flushes that posted doorbell; a cleared bit is allowed because consumption can
+be immediate. The sequence follows ee2 `mtk_mbox_send`, `mtk_mbox_write`,
+`mtk_mbox_check_send_irq` and `mtk_mbox_trigger_irq`, not a guessed register ABI.
+The send and completion-layer source hashes are pinned in RESOURCE-CONTRACT.json.
+
+Zero means **submitted**, never received/BOOTREADY/command success. Only channels
+whose pinned `recv_opt == MBOX_RECV_ACK` acquire a software in-flight bit. These
+remain busy even if SEND clears. The real dispatcher rejects an unsolicited ACK,
+copies the actual bounded response, clears only its captured RX mask, invokes
+the real client outside both locks, then retires the in-flight bit under the
+scope mutex. No sender creates/completes an ACK. Message/event channels retain
+their independent RX semantics; SEND status prevents overwriting unconsumed TX.
+There is no invented ordering requirement between SEND clearing and RX arrival.
+The client must still validate command-specific response contents; retirement
+does not establish successful GPUFREQ command execution.
+
+Busy returns `-EBUSY` without writing or latching a firmware fault. A real GPR,
+lease/quarantine or protocol fault preserves the first errno, masks once,
+quarantines the whole SRAM, and keeps resource/client/PM/module pins. A GPR loss
+after slot writes is a post-write fault with no doorbell and no retry. Quiescence
+closes activation under the same mutex before masking/draining. No firmware
+upload/clear, core/reset release, power or SMC operation is added.
+
+`test_tx.py` adds exact-source/order/lifetime/failure/CI-guard checks.
+`run-native-ci.sh` is CI/GITHUB_ACTIONS-only; it compiles the canonical C adapters
+directly with ASan/UBSan and pthread mocks. `test-mailbox.c` covers all slots,
+inactive/externally enabled IRQ, driver identity, hardware/software busy,
+immediate consumption without a fabricated ACK, real mocked response retirement,
+lost GPR before/after payload writes, stale ACK, quarantine, drain and concurrent
+same-channel sends. Its private fixture activation is explicitly **not a
+production gate or hardware proof**. No native compilation/execution was run
+locally. Parent CI must invoke this new runner and compile/link the actual ARM64
+objects before use; existing canonical source copying needs no new kernel file.
 
 The next activation change must establish the authenticated cold-start upload
 layout/provenance and independently owned power/protection/start/OFF lifecycle

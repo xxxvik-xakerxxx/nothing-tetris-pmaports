@@ -49,7 +49,8 @@ class CompositeProvider(unittest.TestCase):
         self.assert_bad_native("if (scpsys_vmm_domain(scpsys, id)) {\n\t\tpd->genpd.power_off", "if (false) {\n\t\tpd->genpd.power_off")
 
     def test_md_init_and_cleanup_and_vmm_constructor_cannot_disappear(self):
-        self.assert_bad_native("ret = pm_genpd_init(&pd->genpd, NULL, false);", "ret = pm_genpd_init(&pd->genpd, NULL, true);")
+        self.assert_bad_native("pd->md_adoption->state == MT6878_MD_FIRST_OFF_COMPLETE", "true")
+        self.assert_bad_native("mt6878_md_first_off_publication_fault(scpsys, ret);", "ret = 0;")
         self.assert_bad_native("!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)", "scpsys_domain_is_on(pd)")
         self.assert_bad_native("ret = scpsys_vmm_construct(scpsys);", "ret = 0;")
         self.assert_bad_native("if (scpsys_vmm_retain(scpsys, ret))", "if (false)")

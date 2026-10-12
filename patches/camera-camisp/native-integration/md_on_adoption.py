@@ -117,9 +117,14 @@ def combined_contract(gen, files, md_after):
                   "pd->genpd.power_on=mt6878_md_adopt_transition;", "pd->genpd.power_off=mt6878_md_adopt_transition;",
                   "pd->genpd.attach_dev=mt6878_md_adopt_attach;", "pd->genpd.detach_dev=mt6878_md_adopt_detach;"):
         require(token in c, "MD adoption missing from combined native provider: " + token)
-    require("if(MTK_SCPD_CAPS(pd,MTK_SCPD_MT6878_MD)){ret=pm_genpd_init(&pd->genpd,NULL,false);"
-            "if(ret)gotoerr_put_subsys_clocks;}elseif(MTK_SCPD_CAPS(pd,MTK_SCPD_KEEP_DEFAULT_OFF))" in c,
-            "MD observed-ON genpd init/error chain must survive camera insertion")
+    require("if(MTK_SCPD_CAPS(pd,MTK_SCPD_MT6878_MD)){ret=pm_genpd_init(&pd->genpd,NULL,"
+            "pd->md_adoption->state==MT6878_MD_FIRST_OFF_COMPLETE);"
+            "if(ret){mt6878_md_first_off_publication_fault(scpsys,ret);gotoerr_put_subsys_clocks;}"
+            "}elseif(MTK_SCPD_CAPS(pd,MTK_SCPD_KEEP_DEFAULT_OFF))" in c,
+            "MD measured-state genpd init/error chain must survive camera insertion")
+    require("err_cleanup_domains:mt6878_md_first_off_publication_fault(scpsys,ret);"
+            "if(scpsys_vmm_retain(scpsys,ret))return0;" in c,
+            "retain the first MD publication error before camera cleanup")
     require("if(!MTK_SCPD_CAPS(pd,MTK_SCPD_MT6878_MD)&&scpsys_domain_is_on(pd))" in c,
             "combined cleanup must retain the MD shutdown veto")
     require("if(scpsys_vmm_domain(scpsys,id)){pd->genpd.power_off=scpsys_vmm_off;"
@@ -139,12 +144,25 @@ def combined_contract(gen, files, md_after):
             "mutex_unlock(&owner->lock);returnret;", "actual MD power transition veto must remain")
     attach = compact(gen.trace.body_after(helper, "static int mt6878_md_adopt_attach("))
     require("dev->bus!=&platform_bus_type" in attach and "dev->of_node!=owner->modem" in attach and
-            attach.index("mt6878_md_adopt_on(pd,now.on)") < attach.index("get_device(dev)"),
+            attach.index("mt6878_md_adopt_revalidate(pd,owner)") < attach.index("get_device(dev)"),
             "real MD attach validation must precede publication")
     require("mt6878_md_adopt_fault(owner,ret)" in attach, "MD attach must retain its original fault")
+    first_off = gen.function(helper, "static int mt6878_md_first_off(struct scpsys_domain *pd,\n"
+                                     "\t\t\t     struct mt6878_md_adoption *owner)\n")
+    remainder = compact(helper.replace(first_off, "", 1))
     require(not re.search(r"\b(?:regmap_(?:write|raw_write|bulk_write|update_bits\w*|set_bits|clear_bits)|"
-                          r"arm_smccc_\w+|writel\w*|iowrite\w*|regulator_\w+|clk_\w+)\s*\(", compact(helper)),
-            "MD helper must remain observation-only")
+                          r"arm_smccc_\w+|writel\w*|iowrite\w*|regulator_\w+|clk_\w+)\s*\(", remainder),
+            "MD writes must remain restricted to the explicit one-boot first-OFF transaction")
+    operation = compact(first_off)
+    require(not re.search(r"\b(?:regmap_(?:raw_write|bulk_write|update_bits\w*)|arm_smccc_\w+|"
+                          r"writel\w*|iowrite\w*|regulator_\w+|clk_\w+)\s*\(", operation),
+            "first-OFF may not gain secure, rail, clock or other write operations")
+    for call in ("regmap_write(", "regmap_clear_bits(", "regmap_set_bits("):
+        require(operation.count(call) == 1, "exact first-OFF write primitive count: " + call)
+    require(operation.index("mt6878_md_first_off_profile(pd)") < operation.index("regmap_write("),
+            "first-OFF profile must precede every mutation")
+    require(operation.index("mt6878_md_first_off_readback(pd,owner->off)") <
+            operation.index("owner->state=MT6878_MD_FIRST_OFF_COMPLETE"), "measured OFF must precede software OFF")
     for token in ("pd->genpd.power_on=scpsys_vmm_on;", "pd->genpd.power_off=scpsys_vmm_off;",
                   "pd->genpd.dev_ops.start=scpsys_vmm_start;", "pd->genpd.dev_ops.stop=scpsys_vmm_stop;",
                   "pd->genpd.domain.ops.runtime_resume=scpsys_vmm_resume;",

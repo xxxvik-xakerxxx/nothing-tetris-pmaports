@@ -9,12 +9,12 @@
   },
   "patch": {
     "path": "native-on-adoption.patch",
-    "sha256": "e1a198867271bf00ef8080a4c00ca26de2fa867dc79be92227cad21d520938e7"
+    "sha256": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a"
   },
   "canonical_helper": {
     "path": "mt6878-modem-adopt.h",
     "target": "drivers/pmdomain/mediatek/mt6878-modem-adopt.h",
-    "sha256": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f"
+    "sha256": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc"
   },
   "packaged_inputs": [
     {
@@ -48,9 +48,9 @@
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
   "staged_after_sha256": {
-    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
     "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
-    "drivers/pmdomain/mediatek/mtk-pm-domains.c": "4c6b9e3b158a9beb05055f7bf595e603db56864d4687cf174f840ebc5630e7df",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.c": "bdc881b5aea9cde730dc9803035e3e5290b496ced5246425f95aa8791105b197",
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
   "producer_requirements": {
@@ -60,6 +60,51 @@
     "consumer": "unique mediatek,mddriver remains exactly disabled; no consumer activation",
     "metadata": "actual successful BROM80, descriptor32 and evidence336; retained nonoverlapping NOMAP allocations",
     "physical_observation": "PWR_ON+ACK30+ACK31=ON, EXTISO3=0, IFR9/IFR11/NEMI6:7 status=0"
+  },
+  "first_off": {
+    "scope": "supplier-init-only native MD MTCMOS OFF readback; not full vendor rail/TOP/FLIGHT shutdown; consumer disabled; callbacks veto",
+    "chosen_empty": "/chosen/tetris,modem-first-off-diagnostic",
+    "supplier_empty_final_only": "nothing,modem-first-off-diagnostic",
+    "producer_source": "322cf227f2ea26a7e319d20e3ce0321db8a38f15",
+    "producer_status": "personal U-Boot source reviewed; paired final marker implemented; CI evidence tracked separately; installation not assumed",
+    "base_config_fragment": "diagnostic.config",
+    "config_fragment": "first-off.config",
+    "required_resolved_config": {
+      "CPU_IDLE": "n",
+      "ARM_PSCI_CPUIDLE": "n",
+      "ARM_PSCI_CPUIDLE_DOMAIN": "n",
+      "SUSPEND": "n",
+      "HIBERNATION": "n",
+      "HIBERNATE_CALLBACKS": "n",
+      "PM_SLEEP": "n",
+      "PM_SLEEP_SMP": "n",
+      "HOTPLUG_CPU": "n",
+      "MTK_DVFSRC": "n",
+      "ARM_PSCI_CHECKER": "n",
+      "KVM": "n",
+      "VIRTUALIZATION": "n",
+      "KEXEC": "n",
+      "KEXEC_FILE": "n",
+      "KEXEC_CORE": "n"
+    },
+    "ci_merge": "merge ci.required_resolved_config with this map before olddefconfig; assert resolved union in both joint KUNIT=y/n builds so first-OFF writers are compiled",
+    "order": [
+      "revalidate actual handoff, NOMAP reservations, maps and complete ON",
+      "retain one boot takeover owner before first write",
+      "IFR9 protect/ACK",
+      "IFR11 protect/ACK",
+      "NEMI6:7 protect/ACK",
+      "clear PWR_ON only",
+      "poll both ACKs and PWR_ON off",
+      "set external isolation3",
+      "gen6299 settle >=4ms",
+      "read all five OFF registers",
+      "mark FIRST_OFF_COMPLETE then pm_genpd_init(true)"
+    ],
+    "failure": "first errno returned directly; no publication or rollback; NOMAP, persistent syscon handles and non-devm owner/device/node references retained; no reattempt before reboot",
+    "publication_failure": "same retained first-error record covers generic supplier probe publication unwind",
+    "runtime_put": "not used; no swallowed genpd callback errno",
+    "status": "implemented-source-only; CI/native/hardware untested"
   },
   "ci": {
     "source_check": "python3 -B patches/modem/md-pm-integration/stage.py --kernel <pristine-d84>",
@@ -90,8 +135,8 @@
     "present_packaged_config_runtime_adoption": "blocked by OF_DYNAMIC=y and MEMORY_HOTREMOVE=y; package unchanged"
   },
   "remaining": [
+    "first-OFF final producer marker and resolved-profile CI/hardware validation",
     "consumer activation/attachment",
-    "first shutdown",
     "inhibited restart",
     "suspend and secure-idle lifecycle",
     "current effective EMI permission lifetime",

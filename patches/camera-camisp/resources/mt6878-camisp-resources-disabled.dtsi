@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
-/* Review fixture only; no board includes this file.
- * CAM_MAIN/CAM_VCORE power ownership and VMM ordering remain unproven.
- * Vendor power-domain names are retained in evidence.json, not mapped to a
- * fabricated native genpd. Every described device must remain disabled.
+/* Review fixture only; no shipping board includes this file.
+ * Native CAM/ISP graph is supplied by the paired disabled diagnostic fixture.
+ * Physical VMM ownership/policy remain unproven. Every device stays disabled.
  */
 #include <dt-bindings/clock/mediatek,mt6878-clock.h>
 #include <dt-bindings/clock/mediatek,mt6878-camisp-clock.h>
+#include <dt-bindings/power/mediatek,mt6878-power.h>
 
 &soc {
 	cam_main: clock-controller@1a000000 {
@@ -37,6 +37,7 @@
 		clock-names = "apb";
 		mediatek,smi = <&smi_disp_common>;
 		mediatek,smi-supply = <&smi_disp_common>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_VCORE>;
 		status = "disabled";
 	};
 
@@ -53,6 +54,7 @@
 			 <&cam_mraw CLK_CAM_MR_LARBX>;
 		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
 		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 		status = "disabled";
 	};
 
@@ -69,6 +71,7 @@
 			 <&cam_mraw CLK_CAM_MR_LARBX>;
 		clock-names = "apb", "smi", "gals0", "gals1", "gals2", "gals3", "gals4";
 		mediatek,smi = <&smi_cam_vcore_2x1_sub_comm0>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 		status = "disabled";
 	};
 
@@ -79,6 +82,7 @@
 		clocks = <&cam_main CLK_CAM_MAIN_LARB13>;
 		clock-names = "apb";
 		mediatek,smi = <&smi_cam_4x1_sub_comm0>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 		status = "disabled";
 	};
 
@@ -89,6 +93,7 @@
 		clocks = <&cam_main CLK_CAM_MAIN_LARB14>;
 		clock-names = "apb";
 		mediatek,smi = <&smi_cam_4x1_sub_comm1>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
 		status = "disabled";
 	};
 

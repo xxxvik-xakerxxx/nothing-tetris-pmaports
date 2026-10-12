@@ -14,7 +14,7 @@ ROOT = HERE.parents[2]
 spec = importlib.util.spec_from_file_location("camisp_resources_generate", HERE / "generate.py")
 generate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(generate)
-TRACE_SHA256 = "30d938c9ae942ceac24bc8f1e0c8c43b0a8d3c066b51cbe1bc1ba06bd0b96453"
+TRACE_SHA256 = "0c9a2524eb8e2bb0e641b84e7bb8cfcf2d827778f47084859d4c1e30e2dedaff"
 
 
 def require(condition, message):
@@ -23,8 +23,10 @@ def require(condition, message):
 
 
 def evidence_contract(data):
+    expected = list(generate.INPUTS) + [("MT6878-mainline/linux", generate.KERNEL_COMMIT, path)
+                                      for path in generate.NATIVE_INPUTS]
     require([(row["repository"], row["commit"], row["path"]) for row in data["provenance"]]
-            == list(generate.INPUTS), "pinned source provenance")
+            == expected, "pinned source provenance")
     require(all(re.fullmatch(r"[0-9a-f]{64}", row["sha256"]) for row in data["provenance"]),
             "source identity")
     for bank, count, regs, ops in (
@@ -48,6 +50,12 @@ def evidence_contract(data):
         require(data["nodes"][name]["power-domains"] == f"<&scpsys MT6878_POWER_DOMAIN_{domain}>",
                 "unresolved vendor power dependency")
     require(set(data["nodes"]) == set(generate.NODE_NAMES), "complete resource topology")
+    power = data["power"]
+    require(power["usid"] == 6 and power["buck1_mode_mask"] == 1, "native USID6 phase identity")
+    require(power["domains"] == {"MM_INFRA": 7, "CAM_VCORE": 10, "CAM_MAIN": 13, "ISP_VCORE": 16},
+            "native domain ABI")
+    require(power["rails"]["4"]["always_on"] and not power["rails"]["1"]["always_on"],
+            "preserve stock buck4; no forced camera rail")
     digest = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     require(digest == TRACE_SHA256, "frozen B4.1 trace identity")
 
@@ -69,7 +77,7 @@ def source_contract(code, header, fixture, data):
     for forbidden in ("writel(", "readl(", "ioremap", "pm_runtime", "genpd", "arm_smccc", "CLK_IS_CRITICAL"):
         require(forbidden not in code, "gate-only provider: " + forbidden)
     clean = re.sub(r"/\*.*?\*/|//[^\n]*", "", fixture, flags=re.S)
-    require("power-domains" not in clean and "resets" not in clean, "no invented power/reset owner")
+    require("resets" not in clean, "no invented reset owner")
     require('"okay"' not in clean and '"ok"' not in clean, "no resource activation")
     for name in generate.NODE_NAMES:
         label = generate.ALIASES.get(name, name)
@@ -79,6 +87,13 @@ def source_contract(code, header, fixture, data):
             require(set(re.findall(r"([#\w,\-]+)\s*=", body)) ==
                     {"compatible", "mediatek,larb-id", "iommus", "status"},
                     "logical port cannot own physical resources")
+        expected_domain = data["nodes"][name].get("power-domains")
+        if expected_domain:
+            domain = generate.one(r"MT6878_POWER_DOMAIN_(\w+)", expected_domain)
+            require(f"power-domains = <&spm MT6878_POWER_DOMAIN_{domain}>;" in body,
+                    "real native onecell domain: " + name)
+        else:
+            require("power-domains" not in body, "no invented clock-provider power attachment")
     for name, parent in (("smi_larb13", "smi_cam_4x1_sub_comm0"),
                          ("smi_larb14", "smi_cam_4x1_sub_comm1")):
         body = generate.node_body(clean, name)
@@ -102,6 +117,51 @@ def source_contract(code, header, fixture, data):
         require(contents == expected[name], "generated source drift: " + name)
 
 
+def power_contract(fragment, board, data):
+    clean = re.sub(r"/\*.*?\*/|//[^\n]*", "", fragment, flags=re.S)
+    require('"okay"' not in clean and '"ok"' not in clean, "no power activation")
+    for forbidden in ("compatible", "domain-supply", "assigned-clock", "regulator-init", "regulator-boot-on",
+                      "/delete-", "mediatek,hardware-voter", "regulator-allowed-modes"):
+        require(forbidden not in clean, "no duplicate provider or unproven policy: " + forbidden)
+    for reference in ("mt6319_gpu", "spm", "mm_infra"):
+        require(len(re.findall(r"&" + reference + r"\s*\{", clean)) == 1,
+                "extend exactly one existing owner: " + reference)
+    spm = generate.one(r"&spm\s*\{([^{}]*)\};", clean)
+    require('status = "disabled";' in spm and
+            "cam-vcore-supply = <&mt6319_6_vbuck1>;" in spm and
+            "isp-vcore-supply = <&mt6319_6_vbuck1>;" in spm, "disabled real controller supply pair")
+    pmic = generate.nested_body(clean, "&mt6319_gpu")
+    require('status = "disabled";' in pmic.split("regulators")[0], "existing PMIC remains disabled")
+    require("vbuck2" not in pmic and "vbuck3" not in pmic, "existing rails not replaced")
+    for index in (1, 4):
+        body = generate.nested_body(pmic, f"mt6319_6_vbuck{index}: vbuck{index}")
+        require('status = "disabled";' in body, "new rail remains disabled")
+        require(("regulator-always-on;" in body) == data["power"]["rails"][str(index)]["always_on"],
+                "source always-on policy preserved")
+    mm = generate.nested_body(clean, "&mm_infra")
+    cam = generate.nested_body(mm, "cam_vcore_pd:")
+    main = generate.nested_body(cam, "cam_main_pd:")
+    isp = generate.nested_body(mm, "isp_vcore_pd:")
+    for body in (mm.split("cam_vcore_pd:")[0], cam.split("cam_main_pd:")[0], main, isp):
+        require('status = "disabled";' in body, "all graph nodes remain disabled")
+    require("clocks" not in cam.split("cam_main_pd:")[0] and "clocks" not in isp,
+            "VCORE descriptors have no clocks")
+    refs = re.findall(r"<&(\w+) (CLK_\w+)>", main)
+    require(refs == [(row["owner"], row["symbol"]) for row in data["power"]["clocks"]],
+            "CAM_MAIN basic and eight ordered protection clocks")
+    require(re.findall(r'"([^"]+)"', generate.one(r"clock-names = (.*?);", main)) ==
+            [row["name"] for row in data["power"]["clocks"]], "CAM_MAIN ordered names")
+    require(fragment == generate.power_fragment(data) and board == generate.board_fixture(),
+            "generated isolated power/board drift")
+
+
+def parent_contract(root, data):
+    require(set(data["parent_input_sha256"]) == set(generate.PARENT_INPUTS), "parent input closure")
+    for path, digest in data["parent_input_sha256"].items():
+        require(hashlib.sha256((root / path).read_bytes()).hexdigest() == digest,
+                "parent contract drift; review before regenerating: " + path)
+
+
 def staging_contract(plan):
     directory = "drivers/clk/mediatek/tetris-camisp-resource-smoke"
     prefix = "patches/camera-camisp/resources/"
@@ -116,12 +176,22 @@ def staging_contract(plan):
             "native clock dependencies")
     require(plan["config_variants"] == [{"KUNIT": "y"}, {"KUNIT": "n"}] and
             plan["runtime_activation"] == "disabled", "disabled dual-config scope")
+    require(plan["diagnostic_board"] == {
+        "target": "mediatek/mt6878-nothing-tetris-camisp-disabled.dtb",
+        "base": "mt6878-nothing-tetris-native.dts",
+        "compile_only": True,
+        "validator": "patches/camera-camisp/resources/check-dt.py",
+        "activation": "forbidden; disables existing SPM/MM_INFRA",
+    }, "diagnostic board scope")
 
 
 def check(root=ROOT, staged=None, kernel=None):
     here = root / "patches/camera-camisp/resources"
     data = json.loads((here / "evidence.json").read_text())
-    source_contract(*( (here / name).read_text() for name in generate.DESTINATIONS), data)
+    source_contract(*((here / name).read_text() for name in generate.RESOURCE_FILES), data)
+    power_contract((here / "mt6878-camisp-native-power-disabled.dtsi").read_text(),
+                   (here / "mt6878-nothing-tetris-camisp-disabled.dts").read_text(), data)
+    parent_contract(root, data)
     plan = json.loads((here / "STAGING.json").read_text())
     staging_contract(plan)
     outputs = generate.outputs(data)
@@ -148,6 +218,16 @@ def check(root=ROOT, staged=None, kernel=None):
                     "native mux parent missing: " + parent)
         for operation in ("mtk_clk_gate_ops_setclr", "mtk_clk_gate_ops_no_setclr_inv"):
             require(operation in (clocks / "clk-gate.h").read_text(), "native gate API")
+        native_header = (kernel / generate.NATIVE_INPUTS[0]).read_text()
+        resource_header = (here / "mediatek,mt6878-camisp-clock.h").read_text()
+        for symbol, value in data["native_clock_ids"].items():
+            header = resource_header if symbol.startswith(("CLK_CAM_MR_", "CLK_CAM_VCORE_")) else native_header
+            require(int(generate.one(r"^#define " + symbol + r"\s+(\d+)\s*$", header)) == value,
+                    "native clock ABI: " + symbol)
+        power_header = (kernel / "include/dt-bindings/power/mediatek,mt6878-power.h").read_text()
+        for name, value in data["power"]["domains"].items():
+            require(int(generate.one(r"^#define MT6878_POWER_DOMAIN_" + name + r"\s+(\d+)\s*$", power_header)) == value,
+                    "native power ABI: " + name)
     print("CAMISP resources/source/patch/isolation PASS; no C/dtc compilation or hardware access")
 
 

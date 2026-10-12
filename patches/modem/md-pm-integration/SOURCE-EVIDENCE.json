@@ -1,5 +1,5 @@
 {
-  "status": "readonly-adoption-design-prepared-first-shutdown-blocked",
+  "status": "native-adoption-and-first-OFF-diagnostic-staged-CI-hardware-pending",
   "method": "read-only source anchors and ordering; no target-code execution",
   "pins": {
     "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
@@ -73,6 +73,36 @@
       "path": "drivers/pmdomain/core.c",
       "revision": null,
       "sha256": "aa2162e66ff41a9fa2a50339dfc8ed2900ee814ed9f52af75c62b4b54dcfb8d9"
+    },
+    "linux-cpuidle": {
+      "path": "drivers/cpuidle/cpuidle.c",
+      "revision": null,
+      "sha256": "ee4fe339a4f68ee9bd688e4352bbd229c66faa2129194ef73cfb23ca280f07a0"
+    },
+    "linux-psci-idle": {
+      "path": "drivers/cpuidle/cpuidle-psci.c",
+      "revision": null,
+      "sha256": "5d943a58125d567b42645a1c6ba471db24a1162a3411678c9cfc53c6e4f133bd"
+    },
+    "linux-psci-firmware": {
+      "path": "drivers/firmware/psci/psci.c",
+      "revision": null,
+      "sha256": "16a39d92534b77654135e0a3281f75e53228d297d38b9262e69080515e1a633a"
+    },
+    "linux-arm64-psci": {
+      "path": "arch/arm64/kernel/psci.c",
+      "revision": null,
+      "sha256": "634062ea1c0034439a07d48abafd03081ee81466d88658f80354b24f2acf9e4d"
+    },
+    "linux-init": {
+      "path": "init/main.c",
+      "revision": null,
+      "sha256": "64a6b91514fb324ce41e874d7cc8312de9489c6df763873a09168bb222efa91d"
+    },
+    "linux-syscon": {
+      "path": "drivers/mfd/syscon.c",
+      "revision": null,
+      "sha256": "78b656e67537bd2bcc232bb289d44d85d956af90c48af8a59af9da9b7c42e030"
     },
     "linux-dvfsrc": {
       "path": "drivers/soc/mediatek/mtk-dvfsrc.c",
@@ -217,6 +247,90 @@
       "meaning": "vendor first boot checks BROM then calls physical power-off"
     },
     {
+      "source": "vendor-md",
+      "line": 905,
+      "anchor": "ret = pm_runtime_put_sync(&md->plat_dev->dev);",
+      "meaning": "first shutdown uses real consumer runtime PM, not a raw supplier callback"
+    },
+    {
+      "source": "vendor-md",
+      "line": 1640,
+      "anchor": "retval = pm_runtime_get_sync(&dev_ptr->dev); /* match lk on */",
+      "meaning": "real consumer probe holds the runtime reference paired by first shutdown"
+    },
+    {
+      "source": "vendor-md",
+      "line": 916,
+      "anchor": "ccci_ufs_io_operate(0);",
+      "meaning": "UFS unblock follows MTCMOS OFF in the exact pinned B4.1 source"
+    },
+    {
+      "source": "vendor-md",
+      "line": 919,
+      "anchor": "mdelay(4);",
+      "meaning": "gen6299 OFF must settle before flight/TOP gating"
+    },
+    {
+      "source": "vendor-pm",
+      "line": 989,
+      "anchor": "static int scpsys_md_power_off(struct generic_pm_domain *genpd)",
+      "meaning": "native supplier owns physical bus-protection/power/isolation ordering"
+    },
+    {
+      "source": "linux-genpd",
+      "line": 956,
+      "anchor": "static void genpd_power_off(struct generic_pm_domain *genpd, bool one_dev_on,",
+      "meaning": "supplier errno is not propagated through this void runtime helper"
+    },
+    {
+      "source": "linux-genpd",
+      "line": 1018,
+      "anchor": "if (_genpd_power_off(genpd, true)) {",
+      "meaning": "supplier failure retains software ON and returns only from void helper"
+    },
+    {
+      "source": "linux-cpuidle",
+      "line": 504,
+      "anchor": "void cpuidle_resume_and_unlock(void)",
+      "meaning": "resuming a temporary pause reenables cpuidle; no retained MD OFF exclusion"
+    },
+    {
+      "source": "linux-psci-idle",
+      "line": 219,
+      "anchor": "return CPU_PM_CPU_IDLE_ENTER_PARAM_RCU(psci_cpu_suspend_enter, idx, state[idx]);",
+      "meaning": "enabled PSCI idle reaches secure CPU_SUSPEND outside native MD genpd lock"
+    },
+    {
+      "source": "linux-psci-firmware",
+      "line": 490,
+      "anchor": "#ifdef CONFIG_CPU_IDLE\nstatic noinstr int psci_suspend_finisher",
+      "meaning": "CPU_IDLE=n removes the actual CPU_SUSPEND entry implementation"
+    },
+    {
+      "source": "linux-psci-firmware",
+      "line": 576,
+      "anchor": "if (!IS_ENABLED(CONFIG_SUSPEND))",
+      "meaning": "SUSPEND=n prevents SYSTEM_SUSPEND handler registration; PM_SLEEP=n removes the sleep framework"
+    },
+    {
+      "source": "linux-arm64-psci",
+      "line": 49,
+      "anchor": "#ifdef CONFIG_HOTPLUG_CPU\nstatic bool cpu_psci_cpu_can_disable",
+      "meaning": "HOTPLUG_CPU=n removes ordinary CPU_OFF invocation and its CPU operations"
+    },
+    {
+      "source": "linux-init",
+      "line": 1585,
+      "anchor": "\tsmp_init();",
+      "meaning": "initial secondary CPU_ON completes before native supplier device initcalls"
+    },
+    {
+      "source": "linux-syscon",
+      "line": 117,
+      "anchor": "regmap = regmap_init_mmio(NULL, base, &syscon_config);",
+      "meaning": "native generic syscon maps are non-devm and cached for boot lifetime, independent of failed supplier probe devres"
+    },
+    {
       "source": "native-start-patch",
       "line": 341,
       "anchor": "+\tSTEP(OFF, s->callbacks.verify(s->dev, s->owner, MT6878_CCCI_EXCLUSIVE_OFF_BOOT_INHIBITED));",
@@ -253,9 +367,38 @@
       "meaning": "native match table lacks MT6878; existing wrapper cannot create a supplier"
     }
   ],
+  "first_shutdown": {
+    "status": "shipping-profile-blocked; first-OFF-diagnostic-implemented-source-only",
+    "trusted_handoff": "existing genuine loader/BROM/EMI reports suffice; no additional certificate",
+    "stock_order": [
+      "matched LK-on runtime reference",
+      "BROM POWER/3 then POWER/2",
+      "native genpd bus protection then PWR_ON clear then ACK-off then external isolation",
+      "UFS unblock",
+      "gen6299 4ms delay",
+      "FLIGHT",
+      "TOP bits8/9 gate"
+    ],
+    "native_error_boundary": "genpd_power_off is void; failed supplier callback leaves software ON but genpd_runtime_suspend returns0; runtime-put success is not physical OFF",
+    "secure_idle_boundary": "shipping CPU_IDLE/PSCI and PM_SLEEP stay enabled; first-off.config permanently excludes these routes plus HOTPLUG_CPU CPU_OFF and kexec until clean reboot",
+    "minimal_next_operation": [
+      "parent implements the separate empty first-OFF final producer marker only after actual successful handoff",
+      "parent CI resolves diagnostic.config plus first-off.config and compiles/links the actual native supplier; do not ship this profile",
+      "validate one supplier-init takeover: actual IFR9/IFR11/NEMI6:7, PWR_ON, both ACKs, isolation, 4ms settle and complete OFF readback",
+      "preserve non-devm first-error/geometry/syscon-handle owner on failure; no runtime-put or consumer attachment used",
+      "keep power_on unsupported; OFF observation is not execution-inhibited restart permission"
+    ],
+    "not_substitutes": [
+      "FLIGHT",
+      "RC_SWITCH CLR/GET success",
+      "AP modem mutex",
+      "initial secure policy0x601",
+      "pm_runtime_put_sync success"
+    ]
+  },
   "blockers": [
     "Installed BROM hook requires provider disabled before loader and final handoff leaves it disabled",
-    "Managed first shutdown and secure SPM/PCM exclusion lifetime remain unproved",
+    "First-OFF diagnostic requires its new producer marker plus resolved native CI and hardware validation; shipping secure-idle lifecycle remains unproved",
     "No proven execution-inhibited state after inherited ON is cycled OFF then ON",
     "Frozen caller rejects normal attached MD; backend assumes OFF before first start",
     "Native DVFSRC disabled and no MT6878 match; frozen startup scope supplier absent (not a prerequisite for read-only ON observation)"

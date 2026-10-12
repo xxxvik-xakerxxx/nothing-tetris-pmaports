@@ -7,7 +7,9 @@
       "arch/arm64/boot/dts/mediatek/mt6878.dts": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b",
       "drivers/soc/mediatek/mtk-mbox.c": "636032b98db9cef93dad9aef52d0c18f49cd9bac3d15938514d9167ad829c67a",
       "drivers/gpu/mediatek/gpueb/gpueb_ipi.c": "cdc386eadc270b03af51ff0e8750e2b74fdc46a161e9dc7ca7dca50fb5c03341",
-      "drivers/gpu/mediatek/gpueb/gpueb_reserved_mem.c": "f525e39bcd7a7abc1883c2885e2f946bfe02dbbd4f3e7db507f8703f68b4b09f"
+      "drivers/gpu/mediatek/gpueb/gpueb_reserved_mem.c": "f525e39bcd7a7abc1883c2885e2f946bfe02dbbd4f3e7db507f8703f68b4b09f",
+      "drivers/rpmsg/mtk_rpmsg_mbox.c": "557089af2c471cef8a61e417a7106ab87e177cf6359bb1f384c1a2b3cbc288a0",
+      "drivers/soc/mediatek/mtk_tinysys_ipi.c": "6e2dafc6e7759fefeca1f9f91ca5304685bef8c0047003c30e0fd0a3646a0e36"
     }
   },
   "dtb": {
