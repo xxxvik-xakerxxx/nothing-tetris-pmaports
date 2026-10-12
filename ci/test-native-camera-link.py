@@ -33,7 +33,7 @@ class NativeCameraLink(unittest.TestCase):
         self.assertIn('"llvm-nm", "--defined-only", supplier', source)
         self.assertNotIn('"llvm-nm", "--defined-only", output / "vmlinux"', source)
         self.assertIn('for unit in ("y", "n"):', source)
-        self.assertIn('if expected_unit not in text:', source)
+        self.assertIn('if resolved.get("KUNIT", "n") != unit:', source)
         self.assertLess(source.index('output.mkdir(exist_ok=False)'), source.index('for unit in ("y", "n")'))
 
     def test_combined_md_uses_real_source_and_resolved_static_config(self):
@@ -47,6 +47,13 @@ class NativeCameraLink(unittest.TestCase):
         fragment = (ROOT / "patches/modem/md-pm-integration/diagnostic.config").read_text().splitlines()
         for symbol in LINK.STATIC_DIAGNOSTIC_DISABLE:
             self.assertIn("# CONFIG_" + symbol + " is not set", fragment)
+
+    def test_hidden_false_symbols_and_positive_requirements(self):
+        for lines in ([], ["# CONFIG_OF_DYNAMIC is not set"]):
+            self.assertEqual(LINK.config_values(lines).get("OF_DYNAMIC", "n"), "n")
+        for value in ("y", "m"):
+            self.assertNotEqual(LINK.config_values(["CONFIG_OF_DYNAMIC=" + value]).get("OF_DYNAMIC", "n"), "n")
+        self.assertNotEqual(LINK.config_values([]).get("OF", "n"), "y")
 
 
 if __name__ == "__main__":

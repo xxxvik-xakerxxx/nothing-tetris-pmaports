@@ -32,6 +32,12 @@ def sha(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def config_values(lines):
+    # Hidden false Kconfig symbols can be omitted entirely from .config.
+    return {line[7:].split("=", 1)[0]: line.split("=", 1)[1]
+            for line in lines if line.startswith("CONFIG_") and "=" in line}
+
+
 def main(md_on_adoption=False):
     if os.environ.get("CI") != "true" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("native CAM/ISP build/link is GitHub CI-only")
@@ -111,15 +117,17 @@ def main(md_on_adoption=False):
                     "KBUILD_MODPOST_WARN=", "KBUILD_MODPOST_NOFINAL=", "KBUILD_MODPOST_SKIP="]
             run([*make, "olddefconfig"])
             text = (output / ".config").read_text().splitlines()
-            expected_unit = "CONFIG_KUNIT=y" if unit == "y" else "# CONFIG_KUNIT is not set"
-            if expected_unit not in text:
+            variant = report / ("kunit-" + unit)
+            variant.mkdir()
+            shutil.copyfile(output / ".config", variant / "config")
+            resolved = config_values(text)
+            if resolved.get("KUNIT", "n") != unit:
                 raise ValueError("KUNIT variant did not resolve: " + unit)
-            if any("CONFIG_" + symbol + "=y" not in text for symbol in plan["required_enabled"]):
+            if any(resolved.get(symbol, "n") != "y" for symbol in plan["required_enabled"]):
                 raise ValueError("native genpd build dependency missing")
             if md_on_adoption:
                 for symbol, value in md_plan["ci"]["required_resolved_config"].items():
-                    expected = "CONFIG_" + symbol + "=y" if value == "y" else "# CONFIG_" + symbol + " is not set"
-                    if expected not in text:
+                    if resolved.get(symbol, "n") != value:
                         raise ValueError("MD static diagnostic config unresolved: " + symbol)
             run([*make, "-k", *plan["combined_objects"]])
             supplier = output / "drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.o"
@@ -133,9 +141,6 @@ def main(md_on_adoption=False):
                 elf = binary.read(20)
             if elf[:6] != b"\x7fELF\x02\x01" or int.from_bytes(elf[18:20], "little") != 183:
                 raise ValueError("not the genuine ARM64 vmlinux")
-            variant = report / ("kunit-" + unit)
-            variant.mkdir()
-            shutil.copyfile(output / ".config", variant / "config")
             result["variants"][unit] = {
                 "vmlinux_sha256": sha(output / "vmlinux"),
                 "objects": {name: {**smoke.object_identity(output / name),
