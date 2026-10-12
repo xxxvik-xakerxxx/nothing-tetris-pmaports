@@ -58,17 +58,18 @@ def main(md_on_adoption=False):
                     raise ValueError("reviewed MD staging input changed: " + field)
             archive = kernel.parent / ("linux-postmarketos-mediatek-mt6878-" + plan["kernel_commit"] + ".tar.gz")
             pristine = kernel.parent / "md-native-pristine"
-            pristine.mkdir(exist_ok=False)
+            if not pristine.is_dir():
+                raise ValueError("early native provider source check did not run")
             members = ["drivers/pmdomain/mediatek/mtk-pm-domains.c",
                        "drivers/pmdomain/mediatek/mtk-pm-domains.h"]
             with tarfile.open(archive, "r:gz") as source:
                 for name in members:
                     target = pristine / name
-                    target.parent.mkdir(parents=True, exist_ok=True)
                     member = source.getmember("linux-" + plan["kernel_commit"] + "/" + name)
                     if not member.isfile():
                         raise ValueError("not a pristine provider source")
-                    target.write_bytes(source.extractfile(member).read())
+                    if target.read_bytes() != source.extractfile(member).read():
+                        raise ValueError("early pristine provider differs from pinned archive")
             run(["python3", md / "stage.py", "--kernel", pristine,
                  "--prepared-kernel", kernel, "--ci-apply"])
             run(["python3", DRAFT / "generate.py", "--md-on-adoption",

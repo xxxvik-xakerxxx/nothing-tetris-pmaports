@@ -525,6 +525,15 @@ def main():
     with tarfile.open(archive) as tar:
         tar.extractall(args.work, filter="data")
     kernel = args.work / f'linux-{manifest["kernel_commit"]}'
+    md_pristine = args.work / "md-native-pristine"
+    if args.research_owners:
+        md_pristine.mkdir()
+        for name in ("drivers/pmdomain/mediatek/mtk-pm-domains.c",
+                     "drivers/pmdomain/mediatek/mtk-pm-domains.h"):
+            target = md_pristine / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(kernel / name, target)
+        run(["python3", "patches/modem/md-pm-integration/stage.py", "--kernel", md_pristine])
     if args.research_owners:
         run(["python3", "patches/camera-camisp/generate-overlays.py",
              "--check", "--kernel-tree", kernel])
@@ -538,6 +547,13 @@ def main():
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
         run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
+    if args.research_owners:
+        source_report = report / "native-provider-inputs"
+        source_report.mkdir()
+        for name in ("mtk-pm-domains.c", "mtk-pm-domains.h", "mt6878-modem-pm.h"):
+            shutil.copyfile(kernel / "drivers/pmdomain/mediatek" / name, source_report / name)
+        run(["python3", "patches/modem/md-pm-integration/stage.py", "--kernel", md_pristine,
+             "--prepared-kernel", kernel])
     if args.dt_only:
         manifest = compile_dt_only(kernel, package, args.work, report, manifest)
         manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")

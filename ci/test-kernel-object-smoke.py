@@ -480,5 +480,15 @@ class SmokeInputs(unittest.TestCase):
                 smoke.object_identity(target)
 
 
+class NativeProviderOrdering(unittest.TestCase):
+    def test_exact_prepared_source_is_checked_before_native_objects(self):
+        source = Path(smoke.__file__).read_text()
+        checked = source.index('"--prepared-kernel", kernel])')
+        objects = source.index('output = args.work / "objects"')
+        self.assertLess(checked, objects)
+        self.assertIn('source_report = report / "native-provider-inputs"', source[:checked])
+        self.assertIn('shutil.copyfile(kernel / name, target)', source[:checked])
+
+
 if __name__ == "__main__":
     unittest.main()

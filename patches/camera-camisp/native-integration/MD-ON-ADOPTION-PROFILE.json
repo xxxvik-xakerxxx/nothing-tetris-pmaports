@@ -9,7 +9,7 @@
   },
   "md_source_sha256": {
     "patches/modem/md-pm-integration/native-on-adoption.patch": "e1a198867271bf00ef8080a4c00ca26de2fa867dc79be92227cad21d520938e7",
-    "patches/modem/md-pm-integration/stage.py": "b64937dcdca939a356972292ed5514b3ac5b211ab9c83c72640ad2ed7a3f753e",
+    "patches/modem/md-pm-integration/stage.py": "c39b95b3eeab74fc4ba0f0bc885b02ef77c110109e44210f1ade10b7a85d85a0",
     "patches/modem/md-pm-integration/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f"
   },
   "pre_md_input_sha256": {

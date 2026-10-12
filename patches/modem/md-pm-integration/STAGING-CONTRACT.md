@@ -111,7 +111,7 @@ python3 -B patches/modem/md-pm-integration/test_static.py
 
 Source checks passed: exact baseline reconstruction through six relevant
 packaged patches including frozen0113, deterministic staging patch, real
-`git apply --check`, GNU zero-fuzz application and byte equality; 12 source/static
+`git apply --check`, exact Git context application and byte equality; 12 source/static
 tests, including rejected write/success/OFF/foreign-consumer/wire-width mutants.
 They do not execute the C helper or validate concurrency/hardware behavior.
 

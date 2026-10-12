@@ -37,7 +37,11 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
   The next forward configuration hook copies native selector7's exact 668-byte
   snapshot into the existing worker queue and sends stock message160, without
   retaining a callback pointer. Source checks pass; its new native delivery
-  fixtures and Bionic regression build are pending CI. Quiet logging does not
+  fixtures and Bionic regression build passed
+  [CI38304276532](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38304276532);
+  exact B4.1 producer checks passed
+  [CI38304286142](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38304286142).
+  Quiet logging does not
   remove the actual AGPS-agent initialization dependency; no startup gate is
   cleared by this change.
 

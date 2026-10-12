@@ -39,7 +39,7 @@
   "md_source_sha256": {
     "patches/modem/md-pm-integration/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f",
     "patches/modem/md-pm-integration/native-on-adoption.patch": "e1a198867271bf00ef8080a4c00ca26de2fa867dc79be92227cad21d520938e7",
-    "patches/modem/md-pm-integration/stage.py": "b64937dcdca939a356972292ed5514b3ac5b211ab9c83c72640ad2ed7a3f753e"
+    "patches/modem/md-pm-integration/stage.py": "c39b95b3eeab74fc4ba0f0bc885b02ef77c110109e44210f1ade10b7a85d85a0"
   },
   "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "native_provider_sha256": "aa1adbc1b1318a6a5b0f2347ba9b37df831bd4ea975ccfd24c39f34cf0d19963",
@@ -71,8 +71,8 @@
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
   "profile": "md-on-adoption-v1",
-  "profile_sha256": "90244bf02dfb6d6e9079f5b0b7a92b6aea1730944dfb7462e01d264edd315ac4",
-  "report_sha256": "d6dc6eab1e8454a59242fd4107c04b5f34fa06aa89eb71e44b76feee99d38423",
+  "profile_sha256": "f8543542949acc3d65ac397bee36f63dd89376836af644e8bb3128eeebc4b9ef",
+  "report_sha256": "dc0beb21a451a030ca8275b71723257e7ee47e68a2ffcd9c5ee5e72935b6177a",
   "validation": "actual exact MD application then camera application; shared-provider source checks only",
   "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12"
 }

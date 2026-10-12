@@ -42,10 +42,18 @@ def replace_once(text, old, new):
 
 
 def apply(root, text):
-    result = subprocess.run(["patch", "--batch", "--fuzz=0", "--no-backup-if-mismatch", "-p1"],
-                            input=text, cwd=root, text=True, capture_output=True)
+    # Use the same context matcher on macOS and Linux. The legacy packaged
+    # hunks are hash-pinned; their existing whitespace must be preserved.
+    result = subprocess.run(["git", "apply", "--verbose", "--whitespace=nowarn", "-"],
+                            input=text, cwd=root, text=True, capture_output=True,
+                            env={**os.environ, "GIT_CEILING_DIRECTORIES": str(HERE)})
     if result.returncode:
         raise ValueError(result.stdout + result.stderr)
+    if "Skipped patch" in result.stderr:
+        raise ValueError("source application skipped a file: " + result.stderr)
+    for path in re.findall(r"^\+\+\+ b/(\S+)$", text, re.M):
+        if "Checking patch " + path not in result.stderr:
+            raise ValueError("source application did not check: " + path)
 
 
 def packaged(kernel, output):
@@ -230,7 +238,7 @@ def main():
     elif args.emit_contract:
         print(json.dumps(contract(patch, before, after, inputs), indent=2))
     else:
-        print("PASS: exact packaged MD stack, deterministic adoption patch, git apply check and zero-fuzz application")
+        print("PASS: exact packaged MD stack, deterministic adoption patch and exact Git context application")
         print("inputs=" + str(len(inputs)) + "; patch_sha256=" + digest(patch.encode()))
 
 
