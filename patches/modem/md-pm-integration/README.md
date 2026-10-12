@@ -1,11 +1,14 @@
 # Native MD attachment decision
 
-Status: read-only native ON adoption design prepared; first shutdown/startup
-remains blocked. The EMI/trust follow-up corrects the earlier blanket NS-grant
+Status: concrete read-only native ON adoption staging patch implemented; first
+shutdown/startup remains blocked. See `STAGING-CONTRACT.md` for exact producer
+markers, validation, source tests, CI object staging and the failed unbind-veto
+requirement. The EMI/trust follow-up corrects the earlier blanket NS-grant
 and independent-kernel-signature requirements: see `EMI-PERMISSIONS.md` and
 `ON-ADOPTION.md`. Ordinary trusted-bootloader handoff is a valid starting model.
-Source analysis only. No transition/start callback returning operational success
-is added. No target C compilation, dtc, firmware/instruction execution,
+Source/patch checks only. The staged physical callbacks veto every transition;
+they never return fabricated power-off/start success. No target C compilation,
+dtc, firmware/instruction execution,
 emulation, JIT, SSH, commit, push or shared-file change was performed.
 
 Inputs are vendor device modules

@@ -118,6 +118,8 @@ jobs:
           git fetch --no-tags --depth=1 origin e0c67c561ff7c1a0472da851edfafd5a0abb6cec
           git init out/infra-vendor
           git -C out/infra-vendor fetch --depth=1 https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git ee2be53cb75670b548948636a0db1d1ff112bf12
+          git init out/camera-modules
+          git -C out/camera-modules fetch --depth=1 --filter=blob:none https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
       - name: Compile actual isolated ARM64 driver stack
         env:
           GH_TOKEN: ${{ github.token }}
@@ -161,10 +163,10 @@ jobs:
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B patches/modem/infra-clocks/run_ci.py
-      - name: Link actual native camera genpd provider with shared VMM ownership
+      - name: Link one actual native modem and camera genpd provider
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
-          python3 -B ci/link-native-camera-vmm.py
+          python3 -B ci/link-native-camera-vmm.py --md-on-adoption
       - uses: actions/upload-artifact@v7
         if: always()
         with:

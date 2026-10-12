@@ -1,0 +1,1420 @@
+diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_CAM_POWER_H
++#define _MT6878_CAM_POWER_H
++
++#include <dt-bindings/power/mediatek,mt6878-power.h>
++#include <linux/regmap.h>
++
++#include "mtk-pm-domains.h"
++
++/* Sparse Linux descriptors for review, not a registered genpd provider. */
++extern const struct scpsys_domain_data
++mt6878_cam_domain_data[MT6878_POWER_DOMAIN_NR];
++
++/*
++ * Local transactions only; caller must own the shared SPM regmap and serialize
++ * them. Supplies, parent genpd, clocks, SRAM and bus protection are external.
++ * Failure can leave partial hardware state: retain suppliers and stop access.
++ */
++int mt6878_cam_ctl_set(struct regmap *spm, unsigned int domain, bool on);
++int mt6878_vmm_iso_set(struct regmap *spm, bool isolate);
++
++#endif
+diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.h b/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.h
+@@ -0,0 +1,71 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_VMM_SUPPLIER_H
++#define _MT6878_VMM_SUPPLIER_H
++
++#include <linux/mutex.h>
++#include <linux/pm_domain.h>
++#include <linux/regulator/consumer.h>
++
++#include "mt6878-cam-power.h"
++
++/*
++ * Research integration API, not a platform driver. Zero-initialize once.
++ * Caller owns permanent storage, device and SPM lifetime, including on failure
++ * after exclusive acquisition. No devm cleanup, unbind or retry is safe there.
++ * Establish voltage/rate policy and exclusive firmware ownership BEFORE init.
++ */
++struct mt6878_vmm_supplier {
++	struct generic_pm_domain genpd;
++	struct mutex lock;
++	struct device *dev;
++	struct regulator *buck;
++	struct regmap *spm;
++	int first_error;
++	bool initialized;
++};
++
++struct mt6878_vmm_guard {
++	struct notifier_block nb;
++	struct mt6878_vmm_supplier *supplier;
++	unsigned long pending;
++	bool transitioning;
++	bool registered;
++	bool linked;
++};
++
++/*
++ * supply_id is the verified consumer supply name on dev, without "-supply".
++ * The provider owner must select it from matching board/release data and prove
++ * that all migrated CAM/ISP users share that rail. No default or alias probing.
++ */
++int mt6878_vmm_supplier_init(struct mt6878_vmm_supplier *vmm,
++			     struct device *dev, const char *supply_id,
++			     struct regmap *spm,
++			     struct generic_pm_domain *mm_infra);
++/* Check after acquiring a PM lease, even when genpd was already logically ON. */
++int mt6878_vmm_check(struct mt6878_vmm_supplier *vmm);
++/* Leaf callbacks must latch their original errno BEFORE genpd supplier unwind. */
++int mt6878_vmm_fail_child(struct mt6878_vmm_supplier *vmm, int error);
++/*
++ * Checked CAM_MAIN/CAM_VCORE control phase for sleeping genpd callbacks.
++ * Caller holds the guarded graph's parent references and serializes the leaf.
++ * ON: basic/LP clocks ready; follow with subsystem clocks, SRAM, bus release.
++ * OFF: buses protected, SRAM off and subsystem clocks disabled beforehand.
++ * Uses this owner's SPM and lock; any I/O error is latched before returning.
++ * Stop the callback on failure, retaining dependencies; no cleanup or retry.
++ * Other callback phases must still report errors with mt6878_vmm_fail_child().
++ */
++int mt6878_vmm_cam_ctl_set(struct mt6878_vmm_supplier *vmm,
++			   unsigned int domain, bool on);
++/*
++ * Call during quiescent provider construction, before publishing any children.
++ * guard_dev must already be attached directly to child; both persist forever.
++ * Every immediate child must use this function, including ISP and non-CAM users.
++ * MM_INFRA parents VMM; existing direct MM_INFRA edges may remain. Children OFF.
++ * Partial attach is retained on failure: inspect registered/linked; do not free.
++ */
++int mt6878_vmm_add_child(struct mt6878_vmm_supplier *vmm,
++			 struct generic_pm_domain *child, struct device *guard_dev,
++			 struct mt6878_vmm_guard *guard);
++
++#endif
+diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.c b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.c
+@@ -0,0 +1,206 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* B4.1 MT6878 leaf transactions; no probe, genpd registration or activation. */
++#include <linux/bits.h>
++#include <linux/delay.h>
++#include <linux/errno.h>
++#include <linux/iopoll.h>
++
++#include "mt6878-cam-power.h"
++
++#define CAM_PWR_RST_B		BIT(0)
++#define CAM_PWR_ISO		BIT(1)
++#define CAM_PWR_ON		BIT(2)
++#define CAM_PWR_ON_2ND		BIT(3)
++#define CAM_PWR_CLK_DIS		BIT(4)
++#define CAM_PWR_ACK		BIT(30)
++#define CAM_PWR_ACK_2ND		BIT(31)
++#define CAM_POLL_DELAY_US		10
++#define CAM_POLL_TIMEOUT_US	1000000
++
++#define VMM_ISO_STA		0x0f28
++#define VMM_ISO_SET		0x0f2c
++#define VMM_ISO_CLR		0x0f30
++#define VMM_EXT_BUCK_ISO		BIT(24)
++#define VMM_SRAM_ISO_DIN		BIT(25)
++#define VMM_SRAM_LATCH_ENB	BIT(26)
++#define VMM_ISO_MASK		GENMASK(26, 24)
++
++const struct scpsys_domain_data
++mt6878_cam_domain_data[MT6878_POWER_DOMAIN_NR] = {
++	[MT6878_POWER_DOMAIN_CAM_VCORE] = {
++		.name = "cam-vcore",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e5c,
++		.pwr_sta_offs = 0x0e5c,
++		.pwr_sta2nd_offs = 0x0e5c,
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(31),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(9) | BIT(10),
++					0x0c24, 0x0c28, 0x0c2c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL | MTK_SCPD_DOMAIN_SUPPLY,
++	},
++	[MT6878_POWER_DOMAIN_CAM_MAIN] = {
++		.name = "cam-main",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e48,
++		.pwr_sta_offs = 0x0e48,
++		.pwr_sta2nd_offs = 0x0e48,
++		.sram_pdn_bits = BIT(8),
++		.sram_pdn_ack_bits = BIT(12),
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(29),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(30),
++				0x0c14, 0x0c18, 0x0c1c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
++};
++
++static int mt6878_cam_ack(struct regmap *spm, unsigned int offset,
++			  u32 mask, bool on)
++{
++	u32 val;
++
++	return regmap_read_poll_timeout(spm, offset, val,
++					(val & mask) == (on ? mask : 0),
++					CAM_POLL_DELAY_US, CAM_POLL_TIMEOUT_US);
++}
++
++static int mt6878_cam_switch(struct regmap *spm, unsigned int offset,
++			     u32 control, u32 ack, bool on)
++{
++	int ret;
++
++	ret = regmap_update_bits(spm, offset, control, on ? control : 0);
++	if (ret)
++		return ret;
++
++	return mt6878_cam_ack(spm, offset, ack, on);
++}
++
++int mt6878_cam_ctl_set(struct regmap *spm, unsigned int domain, bool on)
++{
++	unsigned int offset;
++	int ret;
++
++	if (!spm)
++		return -EINVAL;
++	if (domain != MT6878_POWER_DOMAIN_CAM_MAIN &&
++	    domain != MT6878_POWER_DOMAIN_CAM_VCORE)
++		return -EINVAL;
++	offset = mt6878_cam_domain_data[domain].ctl_offs;
++
++	if (on) {
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, true);
++		if (ret)
++			return ret;
++		udelay(50);
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++					CAM_PWR_ACK_2ND, true);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_CLK_DIS);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_ISO);
++		if (ret)
++			return ret;
++		return regmap_set_bits(spm, offset, CAM_PWR_RST_B);
++	}
++
++	/* Caller has already protected buses, disabled SRAM and subsystem clocks. */
++	ret = regmap_set_bits(spm, offset, CAM_PWR_ISO);
++	if (ret)
++		return ret;
++	ret = regmap_clear_bits(spm, offset, CAM_PWR_RST_B);
++	if (ret)
++		return ret;
++	ret = regmap_set_bits(spm, offset, CAM_PWR_CLK_DIS);
++	if (ret)
++		return ret;
++	ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, false);
++	if (ret)
++		return ret;
++	return mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++				  CAM_PWR_ACK_2ND, false);
++}
++
++int mt6878_vmm_iso_set(struct regmap *spm, bool isolate)
++{
++	u32 status, offset = isolate ? VMM_ISO_SET : VMM_ISO_CLR;
++	int ret;
++
++	if (!spm)
++		return -EINVAL;
++
++	/* MT6878 uses W1S/W1C aliases, with the reverse order for isolation ON. */
++	ret = regmap_write(spm, offset,
++			   isolate ? VMM_SRAM_LATCH_ENB : VMM_EXT_BUCK_ISO);
++	if (ret)
++		return ret;
++	ret = regmap_write(spm, offset, VMM_SRAM_ISO_DIN);
++	if (ret)
++		return ret;
++	ret = regmap_write(spm, offset,
++			   isolate ? VMM_EXT_BUCK_ISO : VMM_SRAM_LATCH_ENB);
++	if (ret)
++		return ret;
++	ret = regmap_read(spm, VMM_ISO_STA, &status);
++	if (ret)
++		return ret;
++	if ((status & VMM_ISO_MASK) != (isolate ? VMM_ISO_MASK : 0))
++		return -EIO;
++
++	return 0;
++}
++
++#include "mt6878-native-vmm.h"
++
++int mt6878_isp_vcore_ctl_set(struct regmap *spm, unsigned int domain, bool on)
++{
++	unsigned int offset;
++	int ret;
++
++	if (!spm)
++		return -EINVAL;
++	if (domain != MT6878_POWER_DOMAIN_ISP_VCORE)
++		return -EINVAL;
++	offset = 0x0e34;
++
++	if (on) {
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, true);
++		if (ret)
++			return ret;
++		udelay(50);
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++					CAM_PWR_ACK_2ND, true);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_CLK_DIS);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_ISO);
++		if (ret)
++			return ret;
++		return regmap_set_bits(spm, offset, CAM_PWR_RST_B);
++	}
++
++	/* Caller has already protected buses, disabled SRAM and subsystem clocks. */
++	ret = regmap_set_bits(spm, offset, CAM_PWR_ISO);
++	if (ret)
++		return ret;
++	ret = regmap_clear_bits(spm, offset, CAM_PWR_RST_B);
++	if (ret)
++		return ret;
++	ret = regmap_set_bits(spm, offset, CAM_PWR_CLK_DIS);
++	if (ret)
++		return ret;
++	ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, false);
++	if (ret)
++		return ret;
++	return mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++				  CAM_PWR_ACK_2ND, false);
++}
+diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.c b/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.c
+@@ -0,0 +1,328 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Shared VMM genpd supplier; deliberately not registered by any initcall. */
++#include <linux/bits.h>
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/errno.h>
++#include <linux/kernel.h>
++#include <linux/notifier.h>
++
++#include "mt6878-vmm-supplier.h"
++
++#define VMM_ISO_STATUS 0x0f28
++#define VMM_ISO_BITS GENMASK(26, 24)
++
++static int vmm_fail(struct mt6878_vmm_supplier *vmm, int ret)
++{
++	if (!vmm->first_error) {
++		vmm->first_error = ret;
++		dev_err(vmm->dev, "VMM first fault: %d; recovery required\n", ret);
++	}
++	return vmm->first_error;
++}
++
++static int vmm_check_isolation(struct mt6878_vmm_supplier *vmm, bool isolated)
++{
++	u32 value;
++	int ret;
++
++	ret = regmap_read(vmm->spm, VMM_ISO_STATUS, &value);
++	if (ret)
++		return ret;
++	return (value & VMM_ISO_BITS) == (isolated ? VMM_ISO_BITS : 0) ? 0 : -EIO;
++}
++
++static int vmm_check_rail(struct mt6878_vmm_supplier *vmm, bool on)
++{
++	int ret = regulator_is_enabled(vmm->buck);
++
++	if (ret < 0)
++		return ret;
++	return !!ret == on ? 0 : -EIO;
++}
++
++static int vmm_power_on(struct generic_pm_domain *genpd)
++{
++	struct mt6878_vmm_supplier *vmm =
++		container_of(genpd, struct mt6878_vmm_supplier, genpd);
++	int ret;
++
++	mutex_lock(&vmm->lock);
++	if (vmm->first_error) {
++		ret = vmm->first_error;
++		goto out;
++	}
++	ret = vmm_check_rail(vmm, false);
++	if (ret)
++		goto fault;
++	ret = vmm_check_isolation(vmm, true);
++	if (ret)
++		goto fault;
++	ret = regulator_enable(vmm->buck);
++	if (ret)
++		goto fault;
++	ret = vmm_check_rail(vmm, true);
++	if (ret)
++		goto fault;
++	ret = mt6878_vmm_iso_set(vmm->spm, false);
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	/* No disable unwind: a failed write may have changed hardware already. */
++	ret = vmm_fail(vmm, ret);
++out:
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
++
++static int vmm_power_off(struct generic_pm_domain *genpd)
++{
++	struct mt6878_vmm_supplier *vmm =
++		container_of(genpd, struct mt6878_vmm_supplier, genpd);
++	int ret;
++
++	mutex_lock(&vmm->lock);
++	if (vmm->first_error) {
++		ret = vmm->first_error;
++		goto out;
++	}
++	ret = vmm_check_rail(vmm, true);
++	if (ret)
++		goto fault;
++	ret = vmm_check_isolation(vmm, false);
++	if (ret)
++		goto fault;
++	ret = mt6878_vmm_iso_set(vmm->spm, true);
++	if (ret)
++		goto fault;
++	ret = regulator_disable(vmm->buck);
++	if (ret)
++		goto fault;
++	/* always-on constraints must not masquerade as physical power-off. */
++	ret = vmm_check_rail(vmm, false);
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	/* Do not de-isolate on ABORT_DISABLE or presume the buck stayed enabled. */
++	ret = vmm_fail(vmm, ret);
++out:
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
++
++int mt6878_vmm_fail_child(struct mt6878_vmm_supplier *vmm, int error)
++{
++	int ret;
++
++	if (!vmm || !vmm->initialized || error >= 0)
++		return -EINVAL;
++	mutex_lock(&vmm->lock);
++	ret = vmm_fail(vmm, error);
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
++
++int mt6878_vmm_check(struct mt6878_vmm_supplier *vmm)
++{
++	int ret;
++
++	if (!vmm || !vmm->initialized)
++		return -EINVAL;
++	mutex_lock(&vmm->lock);
++	ret = vmm->first_error;
++	if (ret)
++		goto out;
++	ret = vmm_check_rail(vmm, true);
++	if (ret)
++		goto fault;
++	ret = vmm_check_isolation(vmm, false);
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	ret = vmm_fail(vmm, ret);
++out:
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
++
++int mt6878_vmm_cam_ctl_set(struct mt6878_vmm_supplier *vmm,
++			   unsigned int domain, bool on)
++{
++	int ret;
++
++	if (!vmm || !vmm->initialized)
++		return -EINVAL;
++	if (domain != MT6878_POWER_DOMAIN_CAM_MAIN &&
++	    domain != MT6878_POWER_DOMAIN_CAM_VCORE)
++		return -EINVAL;
++
++	/* Hold the supplier lock through the leaf write and first-error handoff. */
++	mutex_lock(&vmm->lock);
++	ret = vmm->first_error;
++	if (ret)
++		goto out;
++	ret = vmm_check_rail(vmm, true);
++	if (ret)
++		goto fault;
++	ret = vmm_check_isolation(vmm, false);
++	if (ret)
++		goto fault;
++	ret = mt6878_cam_ctl_set(vmm->spm, domain, on);
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	/* Latch the actual leaf errno before genpd notifies/unwinds its parents. */
++	ret = vmm_fail(vmm, ret);
++out:
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
++
++static int vmm_child_notify(struct notifier_block *nb,
++			    unsigned long event, void *data)
++{
++	struct mt6878_vmm_guard *guard =
++		container_of(nb, struct mt6878_vmm_guard, nb);
++	int ret;
++
++	/* A failed supplier OFF leaves genpd logically ON and skips power_on. */
++	if (event == GENPD_NOTIFY_PRE_ON || event == GENPD_NOTIFY_PRE_OFF) {
++		ret = mt6878_vmm_check(guard->supplier);
++		if (!ret) {
++			guard->pending = event;
++			guard->transitioning = true;
++		}
++		return notifier_from_errno(ret);
++	}
++
++	/* Robust notifier rollback also reaches here; block retries conservatively. */
++	if (event != GENPD_NOTIFY_ON && event != GENPD_NOTIFY_OFF)
++		return NOTIFY_DONE;
++	ret = 0;
++	if (guard->transitioning &&
++	    ((event == GENPD_NOTIFY_OFF && guard->pending == GENPD_NOTIFY_PRE_ON) ||
++	     (event == GENPD_NOTIFY_ON && guard->pending == GENPD_NOTIFY_PRE_OFF)))
++		ret = mt6878_vmm_fail_child(guard->supplier, -EIO);
++	guard->transitioning = false;
++	return notifier_from_errno(ret);
++}
++
++int mt6878_vmm_supplier_init(struct mt6878_vmm_supplier *vmm,
++			     struct device *dev, const char *supply_id,
++			     struct regmap *spm,
++			     struct generic_pm_domain *mm_infra)
++{
++	int ret, enabled;
++
++	if (!vmm || !dev || !supply_id || !*supply_id ||
++	    IS_ERR_OR_NULL(spm) || !mm_infra)
++		return -EINVAL;
++	if (mm_infra == &vmm->genpd || (mm_infra->flags & GENPD_FLAG_IRQ_SAFE))
++		return -EINVAL;
++	if (vmm->buck)
++		return vmm->first_error ? vmm->first_error : -EBUSY;
++
++	mutex_init(&vmm->lock);
++	vmm->dev = dev;
++	vmm->spm = spm;
++	/* No dummy fallback; reject existing CAM, ISP, notifier or DVFS handles. */
++	vmm->buck = regulator_get_exclusive(dev, supply_id);
++	if (IS_ERR(vmm->buck)) {
++		ret = PTR_ERR(vmm->buck);
++		vmm->buck = NULL;
++		return ret;
++	}
++	/*
++	 * Exclusive get can adopt an inherited enable reference. Do not guess
++	 * which inherited CAM/ISP users own it, or disable it during failed init.
++	 */
++	enabled = regulator_is_enabled(vmm->buck);
++	if (enabled < 0)
++		return vmm_fail(vmm, enabled);
++	if (enabled)
++		return vmm_fail(vmm, -EBUSY);
++	ret = vmm_check_isolation(vmm, true);
++	if (ret)
++		return vmm_fail(vmm, ret);
++
++	vmm->genpd.name = "mt6878-vmm";
++	vmm->genpd.power_on = vmm_power_on;
++	vmm->genpd.power_off = vmm_power_off;
++	ret = pm_genpd_init(&vmm->genpd, NULL, !enabled);
++	if (ret)
++		return vmm_fail(vmm, ret);
++	/* A faulted ON VMM must retain MM_INFRA during child failure unwind. */
++	ret = pm_genpd_add_subdomain(mm_infra, &vmm->genpd);
++	if (ret)
++		return vmm_fail(vmm, ret);
++	vmm->initialized = true;
++	return 0;
++}
++
++int mt6878_vmm_add_child(struct mt6878_vmm_supplier *vmm,
++			 struct generic_pm_domain *child, struct device *guard_dev,
++			 struct mt6878_vmm_guard *guard)
++{
++	int ret;
++
++	if (!vmm || !child || !guard_dev || !guard || !vmm->initialized)
++		return -EINVAL;
++	if (vmm->first_error)
++		return vmm->first_error;
++	if (guard->registered || guard->linked)
++		return -EBUSY;
++	if (child == &vmm->genpd || guard_dev->pm_domain != &child->domain ||
++	    child->status != GENPD_STATE_OFF || (child->flags & GENPD_FLAG_IRQ_SAFE))
++		return -EINVAL;
++
++	guard->supplier = vmm;
++	guard->nb.notifier_call = vmm_child_notify;
++	ret = dev_pm_genpd_add_notifier(guard_dev, &guard->nb);
++	if (ret)
++		return ret;
++	guard->registered = true;
++	ret = pm_genpd_add_subdomain(&vmm->genpd, child);
++	if (ret)
++		return vmm_fail(vmm, ret);
++	guard->linked = true;
++	return 0;
++}
++
++#include "mt6878-native-vmm.h"
++
++int mt6878_vmm_isp_vcore_ctl_set(struct mt6878_vmm_supplier *vmm,
++			   unsigned int domain, bool on)
++{
++	int ret;
++
++	if (!vmm || !vmm->initialized)
++		return -EINVAL;
++	if (domain != MT6878_POWER_DOMAIN_ISP_VCORE)
++		return -EINVAL;
++
++	/* Hold the supplier lock through the leaf write and first-error handoff. */
++	mutex_lock(&vmm->lock);
++	ret = vmm->first_error;
++	if (ret)
++		goto out;
++	ret = vmm_check_rail(vmm, true);
++	if (ret)
++		goto fault;
++	ret = vmm_check_isolation(vmm, false);
++	if (ret)
++		goto fault;
++	ret = mt6878_isp_vcore_ctl_set(vmm->spm, domain, on);
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	/* Latch the actual leaf errno before genpd notifies/unwinds its parents. */
++	ret = vmm_fail(vmm, ret);
++out:
++	mutex_unlock(&vmm->lock);
++	return ret;
++}
+diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-native-vmm.h b/drivers/pmdomain/mediatek/native-vmm/mt6878-native-vmm.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-native-vmm.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_NATIVE_VMM_H
++#define _MT6878_NATIVE_VMM_H
++
++#include "mt6878-vmm-supplier.h"
++
++int mt6878_isp_vcore_ctl_set(struct regmap *spm, unsigned int domain, bool on);
++int mt6878_vmm_isp_vcore_ctl_set(struct mt6878_vmm_supplier *vmm,
++			       unsigned int domain, bool on);
++
++#endif
+diff --git a/drivers/pmdomain/mediatek/native-vmm/Makefile b/drivers/pmdomain/mediatek/native-vmm/Makefile
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-vmm/Makefile
+@@ -0,0 +1,3 @@
++# SPDX-License-Identifier: GPL-2.0-only
++ccflags-y += -I$(srctree)/drivers/pmdomain/mediatek
++obj-y += mt6878-cam-power.o mt6878-vmm-supplier.o
+diff --git a/drivers/pmdomain/mediatek/mt6878-native-vmm.inc b/drivers/pmdomain/mediatek/mt6878-native-vmm.inc
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-native-vmm.inc
+@@ -0,0 +1,519 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included after the native bus helpers; shares their real provider handles. */
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++#include <dt-bindings/spmi/spmi.h>
++#include <linux/kernel.h>
++#include <linux/slab.h>
++#include "native-vmm/mt6878-native-vmm.h"
++
++static const struct scpsys_domain_data
++scpsys_vmm_data[MT6878_POWER_DOMAIN_NR] = {
++	[MT6878_POWER_DOMAIN_CAM_VCORE] = {
++		.name = "cam-vcore",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e5c,
++		.pwr_sta_offs = 0x0e5c,
++		.pwr_sta2nd_offs = 0x0e5c,
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(31),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(9) | BIT(10),
++					0x0c24, 0x0c28, 0x0c2c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
++	[MT6878_POWER_DOMAIN_CAM_MAIN] = {
++		.name = "cam-main",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e48,
++		.pwr_sta_offs = 0x0e48,
++		.pwr_sta2nd_offs = 0x0e48,
++		.sram_pdn_bits = BIT(8),
++		.sram_pdn_ack_bits = BIT(12),
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(29),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(30),
++				0x0c14, 0x0c18, 0x0c1c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
++	[MT6878_POWER_DOMAIN_ISP_VCORE] = {
++		.name = "isp-vcore",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e34,
++		.pwr_sta_offs = 0x0e34,
++		.pwr_sta2nd_offs = 0x0e34,
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, (BIT(8)),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, (BIT(7) | BIT(8)),
++					0x0c24, 0x0c28, 0x0c2c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
++};
++
++
++struct scpsys_vmm {
++	struct mt6878_vmm_supplier supplier;
++	struct device guard_dev[2];
++	struct mt6878_vmm_guard guard[2];
++	int first_error;
++	bool retained;
++};
++
++static const unsigned int scpsys_vmm_ids[] = {
++	MT6878_POWER_DOMAIN_CAM_VCORE,
++	MT6878_POWER_DOMAIN_CAM_MAIN,
++	MT6878_POWER_DOMAIN_ISP_VCORE,
++};
++
++static bool scpsys_vmm_domain(struct scpsys *scpsys, unsigned int id)
++{
++	if (!scpsys->vmm)
++		return false;
++	for (int i = 0; i < ARRAY_SIZE(scpsys_vmm_ids); i++)
++		if (scpsys_vmm_ids[i] == id)
++			return true;
++	return false;
++}
++
++static int scpsys_vmm_fault(struct scpsys_domain *pd, int ret)
++{
++	return mt6878_vmm_fail_child(&pd->scpsys->vmm->supplier, ret);
++}
++
++static int scpsys_vmm_start(struct device *dev)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(pd_to_genpd(dev->pm_domain));
++
++	/* genpd calls start even for cached-ON domains, before driver resume. */
++	return mt6878_vmm_check(&pd->scpsys->vmm->supplier);
++}
++
++static int scpsys_vmm_stop(struct device *dev)
++{
++	/* Pair start/stop so genpd also guards system resume before driver access. */
++	return scpsys_vmm_start(dev);
++}
++
++static int scpsys_vmm_resume(struct device *dev)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(pd_to_genpd(dev->pm_domain));
++	struct mt6878_vmm_supplier *vmm = &pd->scpsys->vmm->supplier;
++	int ret;
++
++	if (READ_ONCE(vmm->first_error))
++		return mt6878_vmm_check(vmm);
++	ret = pd->native_runtime_resume(dev);
++	/* Native genpd reduces a start failure to -1; expose our latched errno. */
++	if (READ_ONCE(vmm->first_error))
++		return mt6878_vmm_check(vmm);
++	return ret;
++}
++
++static int scpsys_vmm_bus(struct scpsys_domain *pd, bool protect)
++{
++	for (int n = 0; n < SPM_MAX_BUS_PROT_DATA; n++) {
++		int i = protect ? n : SPM_MAX_BUS_PROT_DATA - 1 - n;
++		const struct scpsys_bus_prot_data *bpd = &pd->data->bp_cfg[i];
++		struct regmap *map, *sta;
++		u32 value;
++		int ret;
++
++		if (!bpd->bus_prot_set_clr_mask)
++			continue;
++		/* These three B4.1 descriptors use only W1S/W1C, ignored CLR ACK. */
++		if (bpd->flags != BUS_PROT_IGNORE_CLR_ACK)
++			return -EINVAL;
++		map = scpsys_bus_protect_get_regmap(pd, bpd);
++		sta = scpsys_bus_protect_get_sta_regmap(pd, bpd);
++		ret = regmap_write(map, protect ? bpd->bus_prot_set : bpd->bus_prot_clr,
++				   bpd->bus_prot_set_clr_mask);
++		if (ret)
++			return ret;
++		if (!protect)
++			continue;
++		ret = regmap_read_poll_timeout(sta, bpd->bus_prot_sta, value,
++				(value & bpd->bus_prot_sta_mask) == bpd->bus_prot_sta_mask,
++				MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
++		if (ret)
++			return ret;
++	}
++	return 0;
++}
++
++static int scpsys_vmm_sram(struct scpsys_domain *pd, bool on)
++{
++	u32 value, mask = pd->data->sram_pdn_bits;
++	u32 ack = pd->data->sram_pdn_ack_bits;
++	int ret;
++
++	if (!mask)
++		return 0;
++	ret = regmap_update_bits(pd->scpsys->base, pd->data->ctl_offs,
++				 mask, on ? 0 : mask);
++	if (ret)
++		return ret;
++	return regmap_read_poll_timeout(pd->scpsys->base, pd->data->ctl_offs,
++			value, (value & ack) == (on ? 0 : ack),
++			MTK_POLL_DELAY_US, MTK_POLL_TIMEOUT);
++}
++
++static int scpsys_vmm_ctl(struct scpsys_domain *pd, bool on)
++{
++	struct mt6878_vmm_supplier *vmm = &pd->scpsys->vmm->supplier;
++
++	if (pd->vmm_id == MT6878_POWER_DOMAIN_ISP_VCORE)
++		return mt6878_vmm_isp_vcore_ctl_set(vmm, pd->vmm_id, on);
++	return mt6878_vmm_cam_ctl_set(vmm, pd->vmm_id, on);
++}
++
++static int scpsys_vmm_on(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	int ret;
++
++	ret = mt6878_vmm_check(&pd->scpsys->vmm->supplier);
++	if (ret)
++		return ret;
++	ret = clk_bulk_prepare_enable(pd->num_clks, pd->clks);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	ret = scpsys_vmm_ctl(pd, true);
++	if (ret)
++		return ret;
++	ret = clk_bulk_prepare_enable(pd->num_subsys_clks, pd->subsys_clks);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	ret = scpsys_vmm_sram(pd, true);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	ret = scpsys_vmm_bus(pd, false);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	return 0;
++}
++
++static int scpsys_vmm_off(struct generic_pm_domain *genpd)
++{
++	struct scpsys_domain *pd = to_scpsys_domain(genpd);
++	int ret;
++
++	ret = mt6878_vmm_check(&pd->scpsys->vmm->supplier);
++	if (ret)
++		return ret;
++	ret = scpsys_vmm_bus(pd, true);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	ret = scpsys_vmm_sram(pd, false);
++	if (ret)
++		return scpsys_vmm_fault(pd, ret);
++	clk_bulk_disable_unprepare(pd->num_subsys_clks, pd->subsys_clks);
++	ret = scpsys_vmm_ctl(pd, false);
++	if (ret)
++		return ret;
++	clk_bulk_disable_unprepare(pd->num_clks, pd->clks);
++	return 0;
++}
++
++static int scpsys_vmm_observe_off(struct scpsys_domain *pd)
++{
++	u32 value;
++	int ret;
++
++	ret = regmap_read(pd->scpsys->base, pd->data->ctl_offs, &value);
++	if (ret)
++		return ret;
++	/* Reject inherited requests, either ACK, active SRAM and unsafe isolation. */
++	if (value & (GENMASK(31, 30) | PWR_ON_BIT | PWR_ON_2ND_BIT | PWR_RST_B_BIT))
++		return -EBUSY;
++	if ((value & (PWR_ISO_BIT | PWR_CLK_DIS_BIT)) !=
++	    (PWR_ISO_BIT | PWR_CLK_DIS_BIT))
++		return -EIO;
++	if ((value & pd->data->sram_pdn_bits) != pd->data->sram_pdn_bits ||
++	    (value & pd->data->sram_pdn_ack_bits) != pd->data->sram_pdn_ack_bits)
++		return -EIO;
++	for (int i = 0; i < SPM_MAX_BUS_PROT_DATA; i++) {
++		const struct scpsys_bus_prot_data *bpd = &pd->data->bp_cfg[i];
++
++		if (!bpd->bus_prot_set_clr_mask)
++			continue;
++		ret = regmap_read(scpsys_bus_protect_get_sta_regmap(pd, bpd),
++				  bpd->bus_prot_sta, &value);
++		if (ret)
++			return ret;
++		if ((value & bpd->bus_prot_sta_mask) != bpd->bus_prot_sta_mask)
++			return -EIO;
++	}
++	return 0;
++}
++
++static int scpsys_vmm_clocks(struct device_node *node, unsigned int id)
++{
++	const char *name;
++	int count = of_clk_get_parent_count(node);
++
++	if (id != MT6878_POWER_DOMAIN_CAM_MAIN)
++		return count == 0 && !of_property_present(node, "clock-names") ? 0 : -EINVAL;
++	if (count != 9 || of_property_count_strings(node, "clock-names") != 9)
++		return -EINVAL;
++	for (int i = 0; i < 9; i++) {
++		char expected[16];
++		int ret = of_property_read_string_index(node, "clock-names", i, &name);
++
++		if (ret)
++			return ret;
++		if (i)
++			snprintf(expected, sizeof(expected), "cam_main-%d", i - 1);
++		else
++			strscpy(expected, "cam", sizeof(expected));
++		if (strcmp(name, expected))
++			return -EINVAL;
++	}
++	return 0;
++}
++
++static int scpsys_vmm_topology(struct device_node *parent, unsigned int parent_id,
++			       unsigned int *seen)
++{
++	struct device_node *child;
++	int ret;
++
++	for_each_available_child_of_node(parent, child) {
++		u32 id;
++
++		ret = of_property_read_u32(child, "reg", &id);
++		if (ret)
++			goto error;
++		for (int i = 0; i < ARRAY_SIZE(scpsys_vmm_ids); i++) {
++			if (id != scpsys_vmm_ids[i])
++				continue;
++			ret = -EINVAL;
++			if (*seen & BIT(i))
++				goto error;
++			if (parent_id != (id == MT6878_POWER_DOMAIN_CAM_MAIN ?
++				MT6878_POWER_DOMAIN_CAM_VCORE : MT6878_POWER_DOMAIN_MM_INFRA))
++				goto error;
++			if (of_property_present(child, "domain-supply"))
++				goto error;
++			ret = scpsys_vmm_clocks(child, id);
++			if (ret)
++				goto error;
++			*seen |= BIT(i);
++		}
++		/* No uncovered sibling/descendant may acquire the common rail. */
++		if ((parent_id == MT6878_POWER_DOMAIN_CAM_VCORE &&
++		     id != MT6878_POWER_DOMAIN_CAM_MAIN) ||
++		    parent_id == MT6878_POWER_DOMAIN_CAM_MAIN ||
++		    parent_id == MT6878_POWER_DOMAIN_ISP_VCORE) {
++			ret = -EOPNOTSUPP;
++			goto error;
++		}
++		ret = scpsys_vmm_topology(child, id, seen);
++		if (ret)
++			goto error;
++	}
++	return 0;
++error:
++	of_node_put(child);
++	return ret;
++}
++
++static int scpsys_vmm_rail_identity(struct device_node *rail)
++{
++	struct device_node *regulators = of_get_parent(rail);
++	struct device_node *pmic = of_get_parent(regulators);
++	u32 address[2], mask;
++	int ret = -EINVAL;
++
++	/* Native direct SPMI binding for B4.1 USID-6 VBUCK1, not vendor MFD nesting. */
++	if (!of_node_name_eq(rail, "vbuck1") || !of_node_name_eq(regulators, "regulators") ||
++	    !of_device_is_compatible(pmic, "mediatek,mt6315-regulator"))
++		goto out;
++	if (!of_device_is_available(rail) || !of_device_is_available(regulators) ||
++	    !of_device_is_available(pmic)) {
++		ret = -ENODEV;
++		goto out;
++	}
++	ret = of_property_read_u32_array(pmic, "reg", address, ARRAY_SIZE(address));
++	if (ret)
++		goto out;
++	if (address[0] != 6 || address[1] != SPMI_USID) {
++		ret = -EINVAL;
++		goto out;
++	}
++	ret = of_property_read_u32(pmic, "mediatek,buck1-mode-mask", &mask);
++	if (ret)
++		goto out;
++	if (mask != BIT(0))
++		ret = -EINVAL;
++out:
++	of_node_put(pmic);
++	of_node_put(regulators);
++	return ret;
++}
++
++static int scpsys_vmm_prepare(struct scpsys *scpsys)
++{
++	struct device_node *np = scpsys->dev->of_node;
++	struct device_node *cam, *isp, *node;
++	unsigned int seen = 0;
++	int ret;
++
++	if (!IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM) ||
++	    scpsys->soc_data != &mt6878_scpsys_data)
++		return 0;
++	if (!of_property_present(np, "cam-vcore-supply") &&
++	    !of_property_present(np, "isp-vcore-supply"))
++		return 0;
++	cam = of_parse_phandle(np, "cam-vcore-supply", 0);
++	isp = of_parse_phandle(np, "isp-vcore-supply", 0);
++	ret = -EINVAL;
++	if (!cam || !isp || cam != isp)
++		goto put_rails;
++	ret = scpsys_vmm_rail_identity(cam);
++	if (ret)
++		goto put_rails;
++	/* Reject described independent owners, including B4.1 VMM/MMDVFS. */
++	for_each_of_allnodes(node) {
++		struct property *prop;
++
++		if (!of_device_is_available(node))
++			continue;
++		for_each_property_of_node(node, prop) {
++			struct device_node *rail;
++			size_t len = strlen(prop->name);
++			bool shared;
++
++			if (len < 7 || strcmp(prop->name + len - 7, "-supply"))
++				continue;
++			if (node == np && (!strcmp(prop->name, "cam-vcore-supply") ||
++					   !strcmp(prop->name, "isp-vcore-supply")))
++				continue;
++			rail = of_parse_phandle(node, prop->name, 0);
++			shared = rail == cam;
++			of_node_put(rail);
++			if (shared) {
++				dev_err(scpsys->dev, "%pOF:%s still owns the VMM rail\n",
++					node, prop->name);
++				of_node_put(node);
++				ret = -EBUSY;
++				goto put_rails;
++			}
++		}
++	}
++	ret = scpsys_vmm_topology(np, U32_MAX, &seen);
++	if (ret)
++		goto put_rails;
++	if (seen != GENMASK(2, 0)) {
++		ret = -EINVAL;
++		goto put_rails;
++	}
++	scpsys->vmm = devm_kzalloc(scpsys->dev, sizeof(*scpsys->vmm), GFP_KERNEL);
++	ret = scpsys->vmm ? 0 : -ENOMEM;
++put_rails:
++	of_node_put(cam);
++	of_node_put(isp);
++	return ret;
++}
++
++static void scpsys_vmm_guard_release(struct device *dev)
++{
++	/* Embedded guard storage belongs to the permanently bound provider. */
++}
++
++static int scpsys_vmm_construct(struct scpsys *scpsys)
++{
++	struct scpsys_vmm *owner = scpsys->vmm;
++	const unsigned int roots[] = {
++		MT6878_POWER_DOMAIN_CAM_VCORE, MT6878_POWER_DOMAIN_ISP_VCORE,
++	};
++	struct generic_pm_domain *mm;
++	int ret;
++
++	if (!owner)
++		return 0;
++	mm = scpsys->domains[MT6878_POWER_DOMAIN_MM_INFRA];
++	if (!mm)
++		return -ENODEV;
++	for (int i = 0; i < ARRAY_SIZE(scpsys_vmm_ids); i++) {
++		struct generic_pm_domain *gpd = scpsys->domains[scpsys_vmm_ids[i]];
++
++		if (!gpd || gpd->status != GENPD_STATE_OFF)
++			return -EBUSY;
++	}
++	/* The validated B4.1 pair selects one exclusive handle on this device. */
++	ret = mt6878_vmm_supplier_init(&owner->supplier, scpsys->dev, "cam-vcore",
++				     scpsys->base, mm);
++	if (ret)
++		return ret;
++	for (int i = 0; i < ARRAY_SIZE(roots); i++) {
++		struct generic_pm_domain *gpd = scpsys->domains[roots[i]];
++		struct device *dev = &owner->guard_dev[i];
++
++		device_initialize(dev);
++		dev->parent = scpsys->dev;
++		dev->release = scpsys_vmm_guard_release;
++		ret = dev_set_name(dev, "mt6878-vmm-guard-%u", roots[i]);
++		if (ret)
++			goto fault;
++		ret = pm_genpd_add_device(gpd, dev);
++		if (ret)
++			goto fault;
++		ret = mt6878_vmm_add_child(&owner->supplier, gpd, dev, &owner->guard[i]);
++		if (ret)
++			goto fault;
++	}
++	return 0;
++fault:
++	return mt6878_vmm_fail_child(&owner->supplier, ret);
++}
++
++static bool scpsys_vmm_retain(struct scpsys *scpsys, int ret)
++{
++	struct scpsys_vmm *owner = scpsys->vmm;
++
++	if (!owner || (!owner->supplier.buck && !owner->retained))
++		return false;
++	if (!owner->first_error)
++		owner->first_error = ret;
++	if (owner->supplier.initialized)
++		mt6878_vmm_fail_child(&owner->supplier, ret);
++	/* Bind without publishing on partial ownership: devres and guards persist. */
++	dev_err(scpsys->dev, "VMM provider withheld: %d; retained until recovery\n",
++		owner->first_error);
++	return true;
++}
++
++static int scpsys_vmm_unlink(struct scpsys *scpsys)
++{
++	int ret;
++
++	if (!scpsys->vmm)
++		return 0;
++	/* Before exclusive get there are no guards; remove edges before domains. */
++	for (int i = 0; i < scpsys->pd_data.num_domains; i++) {
++		struct generic_pm_domain *gpd = scpsys->domains[i];
++		struct gpd_link *link, *next;
++
++		if (!gpd)
++			continue;
++		list_for_each_entry_safe(link, next, &gpd->parent_links, parent_node) {
++			ret = pm_genpd_remove_subdomain(gpd, link->child);
++			if (ret) {
++				scpsys->vmm->retained = true;
++				return ret;
++			}
++		}
++	}
++	return 0;
++}
++
++#else
++static int scpsys_vmm_prepare(struct scpsys *scpsys) { return 0; }
++static int scpsys_vmm_construct(struct scpsys *scpsys) { return 0; }
++static bool scpsys_vmm_retain(struct scpsys *scpsys, int ret) { return false; }
++static int scpsys_vmm_unlink(struct scpsys *scpsys) { return 0; }
++#endif
+diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -53,6 +53,8 @@
+ 
+ struct mt6878_md_adoption;
+ 
++struct scpsys_vmm;
++
+ struct scpsys_domain {
+ 	struct generic_pm_domain genpd;
+ 	const struct scpsys_domain_data *data;
+@@ -63,6 +65,8 @@
+ 	struct clk_bulk_data *subsys_clks;
+ 	struct regulator *supply;
+ 	struct regmap *hwv;
++	unsigned int vmm_id;
++	int (*native_runtime_resume)(struct device *dev);
+ 	struct mt6878_md_adoption *md_adoption;
+ };
+ 
+@@ -73,6 +77,7 @@
+ 	u8 bus_prot_index[BUS_PROT_BLOCK_COUNT];
+ 	struct regmap **bus_prot;
+ 	struct genpd_onecell_data pd_data;
++	struct scpsys_vmm *vmm;
+ 	spinlock_t hwv_lock;
+ 	unsigned int infra_req_count;
+ 	struct generic_pm_domain *domains[];
+@@ -709,6 +714,8 @@
+ #include "mt6878-modem-pm.h"
+ #include "mt6878-modem-preflight.h"
+ 
++#include "mt6878-native-vmm.inc"
++
+ static struct
+ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_node *node)
+ {
+@@ -734,6 +741,10 @@
+ 	}
+ 
+ 	domain_data = &scpsys->soc_data->domains_data[id];
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++	if (scpsys_vmm_domain(scpsys, id))
++		domain_data = &scpsys_vmm_data[id];
++#endif
+ 	if (!domain_data->sta_mask &&
+ 	    !(domain_data->caps & MTK_SCPD_HWV_OPS)) {
+ 		dev_err(scpsys->dev, "%pOF: undefined domain id %d\n", node, id);
+@@ -746,6 +757,7 @@
+ 
+ 	pd->data = domain_data;
+ 	pd->scpsys = scpsys;
++	pd->vmm_id = id;
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_HWV_OPS)) {
+ 		pd->hwv = syscon_regmap_lookup_by_phandle(node, "mediatek,hardware-voter");
+ 		if (IS_ERR(pd->hwv))
+@@ -817,6 +829,13 @@
+ 	 * software.  The unused domains will be switched off during
+ 	 * late_init time.
+ 	 */
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++	if (scpsys_vmm_domain(scpsys, id)) {
++		ret = scpsys_vmm_observe_off(pd);
++		if (ret)
++			goto err_put_subsys_clocks;
++	} else
++#endif
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
+ 		if (pd->num_clks || pd->num_subsys_clks ||
+ 		    of_property_present(node, "domain-supply")) {
+@@ -856,6 +875,12 @@
+ 	else
+ 		pd->genpd.name = pd->data->name;
+ 
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++	if (scpsys_vmm_domain(scpsys, id)) {
++		pd->genpd.power_off = scpsys_vmm_off;
++		pd->genpd.power_on = scpsys_vmm_on;
++	} else
++#endif
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
+ 		pd->genpd.power_off = mt6878_md_adopt_transition;
+ 		pd->genpd.power_on = mt6878_md_adopt_transition;
+@@ -872,6 +897,17 @@
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_ACTIVE_WAKEUP))
+ 		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
+ 
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++	if (scpsys_vmm_domain(scpsys, id)) {
++		ret = pm_genpd_init(&pd->genpd, NULL, true);
++		if (ret)
++			goto err_put_subsys_clocks;
++		pd->native_runtime_resume = pd->genpd.domain.ops.runtime_resume;
++		pd->genpd.domain.ops.runtime_resume = scpsys_vmm_resume;
++		pd->genpd.dev_ops.start = scpsys_vmm_start;
++		pd->genpd.dev_ops.stop = scpsys_vmm_stop;
++	} else
++#endif
+ 	if (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {
+ 		ret = pm_genpd_init(&pd->genpd, NULL, false);
+ 		if (ret)
+@@ -900,6 +936,9 @@
+ 
+ 	for_each_child_of_node(parent, child) {
+ 		u32 id;
++
++		if (scpsys->vmm && !of_device_is_available(child))
++			continue;
+ 
+ 		ret = of_property_read_u32(parent, "reg", &id);
+ 		if (ret) {
+@@ -960,6 +999,11 @@
+ 			"failed to remove domain '%s' : %d - state may be inconsistent\n",
+ 			pd->genpd.name, ret);
+ 	/* Removing an unpublished observation never shuts inherited MD down. */
++#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)
++	if (scpsys_vmm_domain(pd->scpsys, pd->vmm_id)) {
++		/* Observed OFF; never force a camera domain OFF in cleanup. */
++	} else
++#endif
+ 	if (!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)) {
+ 		pd->genpd.power_off(&pd->genpd);
+ 	}
+@@ -1238,6 +1282,10 @@
+ 	if (ret)
+ 		return ret;
+ 
++	ret = scpsys_vmm_prepare(scpsys);
++	if (ret)
++		return ret;
++
+ 	ret = -ENODEV;
+ 	for_each_available_child_of_node(np, node) {
+ 		struct generic_pm_domain *domain;
+@@ -1261,6 +1309,10 @@
+ 		return ret;
+ 	}
+ 
++	ret = scpsys_vmm_construct(scpsys);
++	if (ret)
++		goto err_cleanup_domains;
++
+ 	ret = of_genpd_add_provider_onecell(np, &scpsys->pd_data);
+ 	if (ret) {
+ 		dev_err(dev, "failed to add provider: %d\n", ret);
+@@ -1270,6 +1322,12 @@
+ 	return 0;
+ 
+ err_cleanup_domains:
++	if (scpsys_vmm_retain(scpsys, ret))
++		return 0;
++	if (scpsys_vmm_unlink(scpsys)) {
++		scpsys_vmm_retain(scpsys, ret);
++		return 0;
++	}
+ 	scpsys_domain_cleanup(scpsys);
+ 	return ret;
+ }
+diff --git a/drivers/pmdomain/mediatek/Makefile b/drivers/pmdomain/mediatek/Makefile
+--- a/drivers/pmdomain/mediatek/Makefile
++++ b/drivers/pmdomain/mediatek/Makefile
+@@ -10,3 +10,5 @@
+ # hooks are inserted via the -pg switch.
+ CFLAGS_REMOVE_airoha-cpu-pmdomain.o += $(CC_FLAGS_FTRACE)
+ endif
++
++obj-$(CONFIG_MTK_MT6878_NATIVE_VMM) += native-vmm/
+diff --git a/drivers/pmdomain/mediatek/Kconfig b/drivers/pmdomain/mediatek/Kconfig
+--- a/drivers/pmdomain/mediatek/Kconfig
++++ b/drivers/pmdomain/mediatek/Kconfig
+@@ -50,4 +50,15 @@
+ 	  CPU frequency and power is controlled by ATF with SMC command to
+ 	  set performance states.
+ 
++config MTK_MT6878_NATIVE_VMM
++	bool "MT6878 native shared VMM integration candidate"
++	depends on MTK_SCPSYS_PM_DOMAINS && REGULATOR && OF
++	default n
++	help
++	  Construct shared VMM under the existing MM_INFRA domain for CAM_VCORE,
++	  CAM_MAIN and ISP_VCORE. Requires matching board supplies and clocks,
++	  quiescent firmware ownership and voltage policy. Inherited ON or any
++	  independent rail consumer is rejected. No board nodes are enabled.
++	  Do not also link the standalone camera research objects.
++
+ endmenu
+diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
++++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml
+@@ -55,6 +55,16 @@
+       For example, this may hold phandles to INFRACFG and SMI.
+     minItems: 1
+     maxItems: 3
++
++  cam-vcore-supply:
++    description:
++      Shared CAM/ISP VMM rail. Must reference the same regulator as
++      isp-vcore-supply; both VCORE domains use one exclusive shared owner.
++
++  isp-vcore-supply:
++    description:
++      Shared CAM/ISP VMM rail. Must reference the same regulator as
++      cam-vcore-supply; per-domain supply ownership must be migrated together.
+ 
+ patternProperties:
+   "^power-domain@[0-9a-f]+$":
+@@ -161,6 +171,17 @@
+ 
+ allOf:
+   - if:
++      anyOf:
++        - required: [cam-vcore-supply]
++        - required: [isp-vcore-supply]
++    then:
++      properties:
++        compatible:
++          const: mediatek,mt6878-power-controller
++      required:
++        - cam-vcore-supply
++        - isp-vcore-supply
++  - if:
+       properties:
+         compatible:
+           const: mediatek,mt6878-modem-power-controller

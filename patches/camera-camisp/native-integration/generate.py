@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 
@@ -42,8 +43,8 @@ def native_path(name):
     return name if name == BINDING else DEST + name
 
 
-def native_inputs():
-    archive = ROOT.parent / ("linux-" + KERNEL + ".tar.gz")
+def native_inputs(archive=None, *, include_md=False):
+    archive = Path(archive) if archive is not None else ROOT.parent / ("linux-" + KERNEL + ".tar.gz")
     apk = (PACKAGE / "APKBUILD").read_text()
     expected = trace.one(r"^([0-9a-f]{128})  linux-postmarketos-mediatek-mt6878-" +
                          KERNEL + r"\.tar\.gz$", apk)
@@ -82,13 +83,16 @@ def native_inputs():
                 str(PACKAGE / name)], cwd=tree, capture_output=True)
             if applied.returncode:
                 raise ValueError(name + ": " + applied.stderr.decode())
-        native = {n: (tree / native_path(n)).read_text()
-                  for n in ("mtk-pm-domains.c", "mtk-pm-domains.h", "Makefile", "Kconfig", BINDING)}
+        names = ["mtk-pm-domains.c", "mtk-pm-domains.h", "Makefile", "Kconfig", BINDING]
+        if include_md:
+            names.append("mt6878-modem-pm.h")
+        native = {n: (tree / native_path(n)).read_text() for n in names}
     return native, {n: hashlib.sha256((PACKAGE / n).read_bytes()).hexdigest() for n in patches}
 
 
-def vendor_inputs():
-    repo = ROOT.parent / trace.VENDOR_REPO
+def vendor_inputs(vendor_repo=None, modules_repo=None):
+    repo = Path(vendor_repo) if vendor_repo is not None else ROOT.parent / trace.VENDOR_REPO
+    modules = Path(modules_repo) if modules_repo is not None else ROOT.parent / "android_kernel_modules_nothing_mt6878"
     files = {}
     for path in ("drivers/soc/mediatek/mtk-scpsys-mt6878.c",
                  "drivers/soc/mediatek/mtk-scpsys.c", "arch/arm64/boot/dts/mediatek/mt6878.dts",
@@ -99,7 +103,7 @@ def vendor_inputs():
     for path in ("mtkcam/camsys/isp7sp/cam/mtk_cam.c",
                  "mtkcam/camsys/isp7sp/cam/mtk_cam-larb.c"):
         files["modules:" + path] = subprocess.check_output([
-            "git", "-C", str(ROOT.parent / "android_kernel_modules_nothing_mt6878"),
+            "git", "-C", str(modules),
             "show", MODULES + ":" + path])
     return files
 
@@ -123,7 +127,11 @@ def verify_vendor_contract(files):
         raise ValueError("pinned camera consumer runtime-PM route drift")
 
 
-def payload(native, vendor):
+def payload(native, vendor, md_on_adoption=None):
+    if md_on_adoption is not None:
+        actual = {native_path(n): hashlib.sha256(c.encode()).hexdigest() for n, c in native.items()}
+        if actual != md_on_adoption["post_md_input_sha256"]:
+            raise ValueError("MD-on-adoption payload requires the exact MD-applied input profile")
     leaf = (POWER / "mt6878-cam-power.c").read_text()
     supplier = (POWER / "mt6878-vmm-supplier.c").read_text()
     leaf_sig = "int mt6878_cam_ctl_set(struct regmap *spm, unsigned int domain, bool on)\n"
@@ -208,7 +216,10 @@ def payload(native, vendor):
                        "\t\tpd->genpd.power_off = scpsys_vmm_off;\n"
                        "\t\tpd->genpd.power_on = scpsys_vmm_on;\n"
                        "\t} else\n#endif\n\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n\t\tpd->genpd.power_off")
-    add = replace_once(add, "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n",
+    init_anchor = ("\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n"
+                   "\t\tret = pm_genpd_init(&pd->genpd, NULL, false);\n" if md_on_adoption is not None else
+                   "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n")
+    add = replace_once(add, init_anchor,
                        "#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)\n"
                        "\tif (scpsys_vmm_domain(scpsys, id)) {\n"
                        "\t\tret = pm_genpd_init(&pd->genpd, NULL, true);\n"
@@ -217,7 +228,7 @@ def payload(native, vendor):
                        "\t\tpd->genpd.domain.ops.runtime_resume = scpsys_vmm_resume;\n"
                        "\t\tpd->genpd.dev_ops.start = scpsys_vmm_start;\n"
                        "\t\tpd->genpd.dev_ops.stop = scpsys_vmm_stop;\n"
-                       "\t} else\n#endif\n\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_KEEP_DEFAULT_OFF))\n")
+                       "\t} else\n#endif\n" + init_anchor)
     code = code[:start] + add + code[end:]
     code = replace_once(code, "\tfor_each_child_of_node(parent, child) {\n\t\tu32 id;\n",
                          "\tfor_each_child_of_node(parent, child) {\n\t\tu32 id;\n\n"
@@ -225,11 +236,13 @@ def payload(native, vendor):
     start = code.index("static void scpsys_remove_one_domain")
     end = code.index("static void scpsys_domain_cleanup", start)
     cleanup = code[start:end]
-    cleanup = replace_once(cleanup, "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n",
+    cleanup_anchor = ("\tif (!MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD) && scpsys_domain_is_on(pd)) {\n"
+                      if md_on_adoption is not None else "\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n")
+    cleanup = replace_once(cleanup, cleanup_anchor,
                            "#if IS_ENABLED(CONFIG_MTK_MT6878_NATIVE_VMM)\n"
                            "\tif (scpsys_vmm_domain(pd->scpsys, pd->vmm_id)) {\n"
                            "\t\t/* Observed OFF; never force a camera domain OFF in cleanup. */\n"
-                           "\t} else\n#endif\n\tif (MTK_SCPD_CAPS(pd, MTK_SCPD_MT6878_MD)) {\n")
+                           "\t} else\n#endif\n" + cleanup_anchor)
     code = code[:start] + cleanup + code[end:]
     code = replace_once(code, "\tret = -ENODEV;\n\tfor_each_available_child_of_node(np, node) {\n",
                          "\tret = scpsys_vmm_prepare(scpsys);\n\tif (ret)\n\t\treturn ret;\n\n"
@@ -302,9 +315,23 @@ def patch_text(native, files):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
+    parser.add_argument("--md-on-adoption", action="store_true")
+    parser.add_argument("--kernel-archive", type=Path)
+    parser.add_argument("--vendor-repo", type=Path)
+    parser.add_argument("--modules-repo", type=Path)
+    parser.add_argument("--prepared-kernel", type=Path)
+    parser.add_argument("--ci-apply", action="store_true")
     args = parser.parse_args()
-    native, patches = native_inputs()
-    vendor = vendor_inputs()
+    if args.md_on_adoption:
+        spec = importlib.util.spec_from_file_location("camera_md_composite", HERE / "md_on_adoption.py")
+        composite = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(composite)
+        composite.run(args, generator=sys.modules[__name__])
+        return
+    if args.prepared_kernel or args.ci_apply:
+        parser.error("prepared-tree operations require --md-on-adoption")
+    native, patches = native_inputs(args.kernel_archive)
+    vendor = vendor_inputs(args.vendor_repo, args.modules_repo)
     verify_vendor_contract(vendor)
     files = payload(native, vendor)
     binding = yaml.safe_load(files[BINDING])

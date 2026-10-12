@@ -1,0 +1,78 @@
+{
+  "activation": "none; camera selector still default n",
+  "application_order": [
+    "patches/modem/md-pm-integration/native-on-adoption.patch",
+    "patches/camera-camisp/native-integration/native-provider-after-md.patch"
+  ],
+  "camera_overlay_sha256": "cf73a97e99767de93409e82c89ff30044b55adfcbce32d0f8fb5580e2728f903",
+  "canonical_camera_sha256": {
+    "evidence.json": "d87c61a89d3590820de993ac3e2bd1a9dc3ea038199614bb808503de40fc49cb",
+    "native-provider.patch": "dd9160d13f690a655c7386e1c317cb7bf26c2146b3ef2a1377a8231de1e061fc"
+  },
+  "combined_payload_sha256": {
+    "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml": "b61eb73e51a3bb021d8163d3827f2b20399398cab7ab06123b862364d43e2544",
+    "drivers/pmdomain/mediatek/Kconfig": "41c428f0c0fb116c6614798bc4dbf775940e24080c424fb1d8a620722c7d06e5",
+    "drivers/pmdomain/mediatek/Makefile": "4f4774660de8d1b336d7f7901d17246883f1999a89e2d0e980bef4acdf1a57a9",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f",
+    "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
+    "drivers/pmdomain/mediatek/mt6878-native-vmm.inc": "aaf5726542e04b72d2546d6bbede9053081deb7d63eb5e16f4c1ae373ecde61a",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.c": "aa1adbc1b1318a6a5b0f2347ba9b37df831bd4ea975ccfd24c39f34cf0d19963",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6",
+    "drivers/pmdomain/mediatek/native-vmm/Makefile": "2a67641d9879861f74bb024131736290f6d657162f78b37ab0ddb28417a431ae",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.c": "976b24e09c5fe1b47b3af38783a8e42ea52f1d1e2f762d580f450e89be75ead0",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h": "ecb89cf46cd380930e856902dfb4cfac8be09a8a37874796a0304c1d86e01389",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-native-vmm.h": "226a819c2cd6f528b4b6d9e8992833c1e35bcc1bce736c5078dae59e4c29daeb",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.c": "506a352affd6650a09786ffd3a622a0d7acd55f83d65898792fc8c287552db93",
+    "drivers/pmdomain/mediatek/native-vmm/mt6878-vmm-supplier.h": "6d9674494f6adbeecc70c90d8f446ccbefa2b6a873bf5f324760ad10dd333c6d"
+  },
+  "compiled": false,
+  "config_variants": [
+    {
+      "KUNIT": "y"
+    },
+    {
+      "KUNIT": "n"
+    }
+  ],
+  "hardware_tested": false,
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "md_source_sha256": {
+    "patches/modem/md-pm-integration/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f",
+    "patches/modem/md-pm-integration/native-on-adoption.patch": "e1a198867271bf00ef8080a4c00ca26de2fa867dc79be92227cad21d520938e7",
+    "patches/modem/md-pm-integration/stage.py": "b64937dcdca939a356972292ed5514b3ac5b211ab9c83c72640ad2ed7a3f753e"
+  },
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "native_provider_sha256": "aa1adbc1b1318a6a5b0f2347ba9b37df831bd4ea975ccfd24c39f34cf0d19963",
+  "package_patch_sha256": {
+    "0018-pmdomain-mediatek-mt6878-audio.patch": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed",
+    "0035-pmdomain-mediatek-mt6878-mfg0-data.patch": "c2144c276786f77b2fb7c7a107b44ab2e182518f8ce169b9f900ebceda9dbb1d",
+    "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": "f946261f57a28298d4b22d32ca08ef64ffb340efb16134b142378f627b6b5697",
+    "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch": "21952394dca440fe7b8cf70914c09ccf77c78a2c26d9d0aa2dcf84b4d76cf3be",
+    "0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch": "7b6d3c56bbe2f38b53df115e8a553972729e544456f859d414ef82f2193460c1",
+    "0113-pmdomain-mediatek-mt6878-modem-power.patch": "03924af715632607de8329d18a7ccdff3f6d403ff4315863fe6b5d3418d90cac",
+    "0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch": "4f79fbce8e8a4e64b7c7b6a743ec71044a6e6e38c824239038cb5404e8da58fa",
+    "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch": "11419eeb163b750da899978028726252d49692372d42530d3d60c8c7a1428980"
+  },
+  "post_md_input_sha256": {
+    "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml": "790265b49c4b7a223c62744abdea00e8f247080857e63f05d262cccb149496d2",
+    "drivers/pmdomain/mediatek/Kconfig": "847465b69664f6dee85ae97dd88ced5a51c0eba29ad244bba64c15593b72f7dd",
+    "drivers/pmdomain/mediatek/Makefile": "a7fec4c02cbe6ac10ce043d242a0b2b893dc8b7882c59da1842f25204fb57828",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "499a3ed2d3702d65e285d445b428059d78c3d67ec486777345798d63447ffe2f",
+    "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.c": "4c6b9e3b158a9beb05055f7bf595e603db56864d4687cf174f840ebc5630e7df",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
+  },
+  "pre_md_input_sha256": {
+    "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml": "790265b49c4b7a223c62744abdea00e8f247080857e63f05d262cccb149496d2",
+    "drivers/pmdomain/mediatek/Kconfig": "847465b69664f6dee85ae97dd88ced5a51c0eba29ad244bba64c15593b72f7dd",
+    "drivers/pmdomain/mediatek/Makefile": "a7fec4c02cbe6ac10ce043d242a0b2b893dc8b7882c59da1842f25204fb57828",
+    "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "8c71d45c72cc8cf11403dbd5dfa55942afb9f908df719755848a2967847763d9",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.c": "4f6ad65a63adcc0589c1172e0541bbbdaf10ff9cf32006f03c89d45f13514e28",
+    "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
+  },
+  "profile": "md-on-adoption-v1",
+  "profile_sha256": "90244bf02dfb6d6e9079f5b0b7a92b6aea1730944dfb7462e01d264edd315ac4",
+  "report_sha256": "d6dc6eab1e8454a59242fd4107c04b5f34fa06aa89eb71e44b76feee99d38423",
+  "validation": "actual exact MD application then camera application; shared-provider source checks only",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12"
+}

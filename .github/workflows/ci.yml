@@ -54,6 +54,7 @@ jobs:
       - name: Validate isolated kernel object inputs
         run: |
           python3 ci/test-kernel-object-smoke.py
+          python3 -B ci/test-native-camera-link.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Static wiring/error gates, with in-memory negative source checks only."""
+import argparse
 import hashlib
 import importlib.util
 import json
@@ -110,6 +111,18 @@ def contract(code, native_patch):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--md-on-adoption", action="store_true")
+    parser.add_argument("--write", action="store_true", help="write composite artifacts only, requires MD profile")
+    parser.add_argument("--kernel-archive", type=Path)
+    parser.add_argument("--vendor-repo", type=Path)
+    parser.add_argument("--modules-repo", type=Path)
+    parser.add_argument("--prepared-kernel", type=Path)
+    parser.add_argument("--ci-apply", action="store_true")
+    args = parser.parse_args()
+    if not args.md_on_adoption and any((args.write, args.kernel_archive, args.vendor_repo,
+                                       args.modules_repo, args.prepared_kernel, args.ci_apply)):
+        parser.error("composite options require --md-on-adoption")
     code = (HERE / "mt6878-native-vmm.inc").read_text()
     patch = (HERE / "native-provider.patch").read_text()
     evidence = json.loads((HERE / "evidence.json").read_text())
@@ -138,6 +151,11 @@ def main():
             continue
         raise ValueError("unsafe source mutation escaped: " + str(n))
     print(f"Native provider wiring/error gates passed; {len(mutants)} unsafe source mutations rejected; no C execution")
+    if args.md_on_adoption:
+        spec = importlib.util.spec_from_file_location("camera_md_composite", HERE / "md_on_adoption.py")
+        composite = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(composite)
+        composite.run(args, generator=gen)
 
 
 if __name__ == "__main__":

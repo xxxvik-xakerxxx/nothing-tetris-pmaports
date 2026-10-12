@@ -1,0 +1,578 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Included after native scpsys types and modem-only domain data. */
+#include <linux/mutex.h>
+#include <linux/ioport.h>
+#include <linux/mm.h>
+#include <linux/of_address.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/overflow.h>
+#include <linux/unaligned.h>
+#ifdef CONFIG_ARM64
+#include <asm/memory.h>
+#endif
+
+enum mt6878_md_adopt_state {
+	MT6878_MD_OBSERVED_ON,
+	MT6878_MD_ATTACHED_ON,
+	MT6878_MD_RETIRED,
+};
+
+struct mt6878_md_adoption {
+	struct mutex lock;
+	struct device_node *modem;
+	struct device *attached;
+	enum mt6878_md_adopt_state state;
+	int first_error;
+	u8 brom[80], evidence[336], descriptor[32];
+	struct resource reservations[4];
+	u32 on[5];
+};
+
+static int mt6878_md_adopt_fault(struct mt6878_md_adoption *owner, int error)
+{
+	if (!owner->first_error)
+		owner->first_error = error < 0 ? error : -EPROTO;
+	return owner->first_error;
+}
+
+static int mt6878_md_adopt_property(struct device_node *node, const char *name,
+				   void *out, size_t size)
+{
+	const void *value;
+	int length;
+
+	value = of_get_property(node, name, &length);
+	if (!value)
+		return -ENODATA;
+	if (length < 0 || (size_t)length != size)
+		return -EMSGSIZE;
+	memcpy(out, value, size);
+	return 0;
+}
+
+static int mt6878_md_adopt_scalar(struct device_node *node, const char *name,
+				 u32 expected)
+{
+	u32 value;
+	int ret;
+
+	if (of_property_count_u32_elems(node, name) != 1)
+		return -EBADMSG;
+	ret = of_property_read_u32(node, name, &value);
+	return ret ? ret : value == expected ? 0 : -EBADMSG;
+}
+
+static int mt6878_md_adopt_empty(struct device_node *node, const char *name)
+{
+	int length;
+
+	return of_find_property(node, name, &length) && !length ? 0 : -EBADMSG;
+}
+
+static int mt6878_md_adopt_reports(struct device_node *modem,
+				  struct mt6878_md_adoption *owner)
+{
+	static const struct { const char *name; u32 value; } scalars[] = {
+		{ "nothing,modem-brom-preflight-stage", 16 },
+		{ "nothing,modem-brom-preflight-status", 1 },
+		{ "nothing,modem-brom-preflight-error", 0 },
+		{ "nothing,modem-brom-loader-entered", 1 },
+		{ "nothing,modem-brom-publication-error", 0 },
+	};
+	static const unsigned int errors[] = { 4, 8, 16, 24, 32 };
+	struct device_node *chosen;
+	unsigned int i;
+	int ret;
+
+	chosen = of_find_node_by_path("/chosen");
+	if (!chosen)
+		return -ENODATA;
+	ret = mt6878_md_adopt_empty(chosen, "tetris,modem-native-on-adoption-diagnostic");
+	if (!ret)
+		ret = mt6878_md_adopt_property(chosen, "nothing,modem-brom-report",
+				       owner->brom, sizeof(owner->brom));
+	for (i = 0; !ret && i < ARRAY_SIZE(scalars); i++)
+		ret = mt6878_md_adopt_scalar(chosen, scalars[i].name, scalars[i].value);
+	of_node_put(chosen);
+	if (ret)
+		return ret;
+	for (i = 0; i < ARRAY_SIZE(errors); i++) {
+		s32 error = (s32)get_unaligned_le32(owner->brom + errors[i]);
+
+		if (error)
+			return error < 0 ? error : -EBADMSG;
+	}
+	if (get_unaligned_le32(owner->brom) != 1 ||
+	    get_unaligned_le32(owner->brom + 12) != 11 ||
+	    get_unaligned_le32(owner->brom + 20) != 15 ||
+	    get_unaligned_le32(owner->brom + 28) ||
+	    get_unaligned_le64(owner->brom + 48) ||
+	    get_unaligned_le64(owner->brom + 64) != 0x100000001ULL ||
+	    get_unaligned_le64(owner->brom + 72) != 0x100000001ULL)
+		return -EBADMSG;
+	if (of_property_present(modem, "ccci,modem_info"))
+		return -EPROTONOSUPPORT;
+	ret = mt6878_md_adopt_property(modem, "ccci,modem_info_v2",
+				       owner->descriptor, sizeof(owner->descriptor));
+	if (ret)
+		return ret;
+	ret = mt6878_md_adopt_property(modem, "nothing,modem-smem-boot-evidence",
+				       owner->evidence, sizeof(owner->evidence));
+	if (ret)
+		return ret;
+	return 0;
+}
+
+static bool mt6878_md_adopt_overlap(u64 base, u64 size,
+				    const struct resource *resource)
+{
+	return base <= resource->end && resource->start < base + size;
+}
+
+struct mt6878_md_nomap_cover {
+	u64 cursor, end;
+};
+
+static int mt6878_md_adopt_nomap_resource(struct resource *r, void *context)
+{
+	struct mt6878_md_nomap_cover *cover = context;
+
+	if (r->parent != &iomem_resource || r->flags != IORESOURCE_MEM ||
+	    r->start > cover->cursor || r->end < cover->cursor || r->end == U64_MAX)
+		return -EBADMSG;
+	cover->cursor = r->end + 1;
+	return 0;
+}
+
+static int mt6878_md_adopt_nomap(const struct resource *r)
+{
+#ifdef CONFIG_ARM64
+	struct mt6878_md_nomap_cover cover = { r->start, r->end + 1 };
+	u64 address;
+	int ret;
+
+	if ((r->start | resource_size(r)) & (PAGE_SIZE - 1))
+		return -EBADMSG;
+	ret = walk_iomem_res_desc(IORES_DESC_NONE, IORESOURCE_MEM, r->start,
+				 r->end, &cover, mt6878_md_adopt_nomap_resource);
+	if (ret || cover.cursor != cover.end)
+		return ret ? ret : -EBADMSG;
+	/* Positive NOMAP coverage first: a negative PFN query also accepts holes. */
+	for (address = r->start; address < cover.end; address += PAGE_SIZE) {
+		unsigned long pfn = address >> PAGE_SHIFT;
+
+		if ((u64)pfn != address >> PAGE_SHIFT || pfn_is_map_memory(pfn))
+			return -EBADMSG;
+	}
+	return 0;
+#else
+	return -EOPNOTSUPP;
+#endif
+}
+
+static int mt6878_md_adopt_reservations(struct mt6878_md_adoption *owner)
+{
+	static const char * const paths[] = {
+		"/reserved-memory/tetris-modem-diagnostic",
+		"/reserved-memory/tetris-modem-boot-nc",
+		"/reserved-memory/tetris-modem-boot-cache",
+		"/reserved-memory/tetris-modem-linux-tags",
+	};
+	static const u64 sizes[] = { 0x20000000, 0x8000000, 0x8000000, 65536 };
+	struct device_node *nodes[4] = { NULL }, *parent, *child = NULL;
+	struct device_node *memory = NULL, *root;
+	struct device_node *sib;
+	struct reserved_mem *reserved;
+	const u8 *raw;
+	u64 base, size;
+	unsigned int i, j, within, seen = 0;
+	int length, offset, ret = -EBADMSG;
+
+	root = of_find_node_by_path("/");
+	parent = of_find_node_by_path("/reserved-memory");
+	sib = of_find_node_by_path("/reserved-memory/tetris-modem-boot-sib");
+	if (sib) {
+		of_node_put(sib);
+		goto out;
+	}
+	if (!root || !parent ||
+	    mt6878_md_adopt_scalar(parent, "#address-cells", 2) ||
+	    mt6878_md_adopt_scalar(parent, "#size-cells", 2) ||
+	    !of_find_property(parent, "ranges", &length) || length ||
+	    mt6878_md_adopt_scalar(root, "#address-cells", 2) ||
+	    mt6878_md_adopt_scalar(root, "#size-cells", 2))
+		goto out;
+	for (i = 0; i < ARRAY_SIZE(nodes); i++) {
+		struct resource *r = &owner->reservations[i];
+		u64 alignment = i == 3 ? 65536 : 0x2000000;
+
+		nodes[i] = of_find_node_by_path(paths[i]);
+		if (!nodes[i] || !of_device_is_available(nodes[i]) ||
+		    !of_find_property(nodes[i], "no-map", &length) || length ||
+		    of_property_present(nodes[i], "compatible") ||
+		    of_property_present(nodes[i], "reusable") ||
+		    of_property_count_u32_elems(nodes[i], "reg") != 4)
+			goto out;
+		ret = of_address_to_resource(nodes[i], 0, r);
+		if (ret)
+			goto out;
+		ret = -EBADMSG;
+		if (!(r->flags & IORESOURCE_MEM) || r->end < r->start || r->end == U64_MAX || !r->start ||
+		    (r->start & (alignment - 1)) || resource_size(r) != sizes[i] ||
+		    (i < 3 && r->end >= BIT_ULL(35)))
+			goto out;
+		reserved = of_reserved_mem_lookup(nodes[i]);
+		if (!reserved || reserved->ops || reserved->base != r->start ||
+		    reserved->size != sizes[i])
+			goto out;
+		ret = mt6878_md_adopt_nomap(r);
+		if (ret)
+			goto out;
+		ret = -EBADMSG;
+	}
+	/* Include full unused tails and every static sibling, not only services. */
+	for_each_child_of_node(parent, child) {
+		raw = of_get_property(child, "reg", &length);
+		if (!raw) {
+			if (of_property_present(child, "reg"))
+				goto out;
+			continue;
+		}
+		if (length <= 0 || length % 16)
+			goto out;
+		for (offset = 0; offset < length; offset += 16) {
+			base = get_unaligned_be64(raw + offset);
+			size = get_unaligned_be64(raw + offset + 8);
+			if (!size || base > U64_MAX - size)
+				goto out;
+			for (j = 0; j < ARRAY_SIZE(nodes); j++)
+				if (child != nodes[j] &&
+				    mt6878_md_adopt_overlap(base, size, &owner->reservations[j]))
+					goto out;
+		}
+	}
+	for_each_node_by_type(memory, "memory") {
+		raw = of_get_property(memory, "reg", &length);
+		if (!raw || length <= 0 || length % 16)
+			goto out;
+		for (offset = 0; offset < length; offset += 16) {
+			base = get_unaligned_be64(raw + offset);
+			size = get_unaligned_be64(raw + offset + 8);
+			if (!size || base > U64_MAX - size)
+				goto out;
+			within = 0;
+			for (j = 0; j < ARRAY_SIZE(nodes); j++) {
+				const struct resource *r = &owner->reservations[j];
+
+				if (r->start >= base && r->end < base + size)
+					within |= BIT(j);
+			}
+			if ((within & 7) == 7)
+				seen |= 7;
+			seen |= within & 8;
+		}
+	}
+	ret = seen == 15 ? 0 : -EBADMSG;
+out:
+	of_node_put(memory);
+	of_node_put(child);
+	for (i = 0; i < ARRAY_SIZE(nodes); i++)
+		of_node_put(nodes[i]);
+	of_node_put(parent);
+	of_node_put(root);
+	return ret;
+}
+
+static int mt6878_md_adopt_evidence(struct mt6878_md_adoption *owner)
+{
+	static const u64 policies[2][8] = {
+		{ 0, 0xcff0f0c0ULL, 0, 0, 0, 0, 0, 0xc00000000ULL },
+		{ 0, 0xc00300c0ULL, 0, 0, 0, 0, 0, 0xc00000000ULL },
+	};
+	static const u8 preloader[32] =
+		"\x5d\x2b\xed\xd0\x00\x49\xfc\xed\x98\x3d\x3a\xe5\x39\x89\x61\x6c"
+		"\x5c\x9f\x46\xc4\xed\xdd\x32\xa0\x1a\x1a\xd4\x6f\xf8\xd2\xc5\x0f";
+	const u8 *p = owner->evidence, *d = owner->descriptor;
+	u64 base, size, end;
+	unsigned int bank, group;
+
+	if (get_unaligned_le32(p) != 1 || get_unaligned_le32(p + 4) != 336 ||
+	    get_unaligned_le32(p + 8) != 1 || get_unaligned_le32(p + 12) != 2 ||
+	    get_unaligned_le32(p + 16) != 6878 || get_unaligned_le32(p + 20) != 6299 ||
+	    get_unaligned_le32(p + 24) != 11 || get_unaligned_le32(p + 28) != 15 ||
+	    get_unaligned_le32(p + 32) || get_unaligned_le32(p + 36) ||
+	    get_unaligned_le32(p + 40) || get_unaligned_le32(p + 44) ||
+	    memcmp(p + 48, preloader, sizeof(preloader)))
+		return -EBADMSG;
+	if (get_unaligned_le64(d) != owner->reservations[3].start ||
+	    get_unaligned_le32(d + 8) < 21 * 76 || get_unaligned_le32(d + 8) > 65536 ||
+	    get_unaligned_le32(d + 12) || get_unaligned_le32(d + 16) != 2 ||
+	    get_unaligned_le32(d + 20) != 21 || get_unaligned_le32(d + 24) ||
+	    get_unaligned_le32(d + 28))
+		return -EBADMSG;
+	for (bank = 0; bank < 2; bank++) {
+		const struct resource *r = &owner->reservations[bank + 1];
+
+		p = owner->evidence + 80 + bank * 128;
+		base = get_unaligned_le64(p + 24);
+		size = get_unaligned_le64(p + 32);
+		if (get_unaligned_le32(p) != bank || get_unaligned_le32(p + 4) != 42 + bank ||
+		    get_unaligned_le64(p + 8) != r->start ||
+		    get_unaligned_le64(p + 16) != resource_size(r) || base != r->start ||
+		    !size || ((base | size) & 4095) || size > resource_size(r) ||
+		    check_add_overflow(base, size, &end) || base < 0x40000000ULL ||
+		    end >= 0x840000000ULL || get_unaligned_le64(p + 40) != base ||
+		    (get_unaligned_le64(p + 48) & ~BIT_ULL(43)) != end ||
+		    get_unaligned_le64(p + 56) != 1)
+			return -EBADMSG;
+		/* Exact initial policy, including NS CPU241=RW at group7 bits35:34. */
+		for (group = 0; group < 8; group++)
+			if (get_unaligned_le64(p + 64 + group * 8) != policies[bank][group])
+				return -EBADMSG;
+	}
+	return 0;
+}
+
+static int mt6878_md_adopt_binding(struct scpsys_domain *pd,
+				 struct device_node *modem, bool attaching)
+{
+	struct of_phandle_args args;
+	int ret;
+
+	if (mt6878_md_adopt_scalar(modem, "mediatek,ap-plat-info", 6878) ||
+	    mt6878_md_adopt_scalar(modem, "mediatek,md-generation", 6299) ||
+	    of_property_present(modem, "assigned-clocks") ||
+	    of_property_present(modem, "assigned-clock-rates") ||
+	    of_property_present(modem, "assigned-clock-parents"))
+		return -EINVAL;
+	/* Supplier-only publication preserves the existing disabled metadata anchor. */
+	if (!attaching && !of_property_present(modem, "power-domains"))
+		return 0;
+	if (of_count_phandle_with_args(modem, "power-domains", "#power-domain-cells") != 1)
+		return -EINVAL;
+	ret = of_parse_phandle_with_args(modem, "power-domains", "#power-domain-cells", 0, &args);
+	if (ret)
+		return ret;
+	ret = args.np == pd->scpsys->dev->of_node && args.args_count == 1 &&
+		!args.args[0] ? 0 : -EINVAL;
+	of_node_put(args.np);
+	return ret;
+}
+
+static int mt6878_md_adopt_map_node(struct device_node *node,
+				  const char *compatible, u64 start)
+{
+	struct resource resource;
+	int address_cells, size_cells;
+
+	address_cells = node ? of_n_addr_cells(node) : 0;
+	size_cells = node ? of_n_size_cells(node) : 0;
+	if (!node || !of_device_is_compatible(node, compatible) ||
+	    !of_device_is_compatible(node, "syscon") ||
+	    address_cells < 1 || address_cells > 2 || size_cells < 1 || size_cells > 2 ||
+	    of_property_count_u32_elems(node, "reg") != address_cells + size_cells ||
+	    of_property_present(node, "clocks") || of_property_present(node, "resets") ||
+	    of_property_present(node, "hwlocks") ||
+	    of_address_to_resource(node, 0, &resource) || resource.start != start ||
+	    resource_size(&resource) != 0x1000)
+		return -EINVAL;
+	return 0;
+}
+
+static int mt6878_md_adopt_maps(struct scpsys_domain *pd)
+{
+	struct device_node *np = pd->scpsys->dev->of_node, *parent, *ifr, *nemi;
+	int ret;
+
+	if (of_count_phandle_with_args(np, "access-controllers", NULL) != 2)
+		return -EINVAL;
+	parent = of_get_parent(np);
+	ifr = of_parse_phandle(np, "access-controllers", 0);
+	nemi = of_parse_phandle(np, "access-controllers", 1);
+	ret = mt6878_md_adopt_map_node(parent, "mediatek,mt6878-scpsys", 0x1c001000);
+	if (!ret)
+		ret = mt6878_md_adopt_map_node(ifr, "mediatek,mt6878-infracfg-ao", 0x10001000);
+	if (!ret)
+		ret = mt6878_md_adopt_map_node(nemi, "mediatek,mt6878-nemicfg_ao_mem_reg_bus", 0x10270000);
+	of_node_put(nemi);
+	of_node_put(ifr);
+	of_node_put(parent);
+	return ret;
+}
+
+static int mt6878_md_adopt_on(struct scpsys_domain *pd, u32 values[5])
+{
+	unsigned int i;
+	int ret;
+
+	ret = regmap_read(pd->scpsys->base, MT6878_MD_CTL, &values[0]);
+	if (ret)
+		return ret;
+	if ((values[0] & (MT6878_MD_ACK | PWR_ON_BIT)) != (MT6878_MD_ACK | PWR_ON_BIT))
+		return -EBUSY;
+	ret = regmap_read(pd->scpsys->base, MT6878_MD_ISO, &values[1]);
+	if (ret)
+		return ret;
+	if (values[1] & MT6878_MD_ISO_MASK)
+		return -EBUSY;
+	for (i = 0; i < 3; i++) {
+		const struct scpsys_bus_prot_data *bp = &pd->data->bp_cfg[i];
+		struct regmap *map = scpsys_bus_protect_get_regmap(pd, bp);
+
+		if (IS_ERR_OR_NULL(map))
+			return map ? PTR_ERR(map) : -ENODEV;
+		ret = regmap_read(map, bp->bus_prot_sta, &values[i + 2]);
+		if (ret)
+			return ret;
+		if (values[i + 2] & bp->bus_prot_sta_mask)
+			return -EBUSY;
+	}
+	return 0;
+}
+
+static void mt6878_md_adopt_node_put(void *node)
+{
+	of_node_put(node);
+}
+
+static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *domain)
+{
+	struct device_node *modem = NULL, *node;
+	struct mt6878_md_adoption *owner;
+	char status[9];
+	unsigned int count = 0, suppliers = 0;
+	int ret;
+
+	if (!of_machine_is_compatible("nothing,tetris") || IS_ENABLED(CONFIG_OF_DYNAMIC) ||
+	    IS_ENABLED(CONFIG_MEMORY_HOTREMOVE) ||
+	    mt6878_md_adopt_scalar(domain, "reg", 0) || of_get_child_count(domain) ||
+	    mt6878_md_adopt_scalar(pd->scpsys->dev->of_node, "#power-domain-cells", 1) ||
+	    of_get_child_count(pd->scpsys->dev->of_node) != 1 ||
+	    of_get_available_child_count(pd->scpsys->dev->of_node) != 1 ||
+	    mt6878_md_adopt_empty(pd->scpsys->dev->of_node, "nothing,modem-inherited-on-adoption"))
+		return -EOPNOTSUPP;
+	for_each_compatible_node(node, NULL, "mediatek,mt6878-modem-power-controller")
+		suppliers++;
+	if (suppliers != 1)
+		return -EEXIST;
+	for_each_compatible_node(node, NULL, "mediatek,mddriver") {
+		count++;
+		if (!modem)
+			modem = of_node_get(node);
+	}
+	if (count != 1) {
+		of_node_put(modem);
+		return count ? -EEXIST : -ENODATA;
+	}
+	ret = mt6878_md_adopt_property(modem, "status", status, sizeof(status));
+	if (ret || memcmp(status, "disabled", sizeof(status))) {
+		of_node_put(modem);
+		return ret ? ret : -EBUSY;
+	}
+	owner = devm_kzalloc(pd->scpsys->dev, sizeof(*owner), GFP_KERNEL);
+	if (!owner) {
+		of_node_put(modem);
+		return -ENOMEM;
+	}
+	owner->modem = modem;
+	mutex_init(&owner->lock);
+	ret = devm_add_action_or_reset(pd->scpsys->dev, mt6878_md_adopt_node_put, modem);
+	if (ret)
+		return ret;
+	ret = mt6878_md_adopt_binding(pd, modem, false);
+	if (!ret)
+		ret = mt6878_md_adopt_reports(modem, owner);
+	if (!ret)
+		ret = mt6878_md_adopt_reservations(owner);
+	if (!ret)
+		ret = mt6878_md_adopt_evidence(owner);
+	if (!ret)
+		ret = mt6878_md_adopt_maps(pd);
+	/* Hardware observation follows all copied handoff and resource validation. */
+	if (!ret)
+		ret = mt6878_md_adopt_on(pd, owner->on);
+	if (ret)
+		return ret;
+	owner->state = MT6878_MD_OBSERVED_ON;
+	pd->md_adoption = owner;
+	return 0;
+}
+
+static int mt6878_md_adopt_attach(struct generic_pm_domain *genpd, struct device *dev)
+{
+	struct scpsys_domain *pd = to_scpsys_domain(genpd);
+	struct mt6878_md_adoption *owner = pd->md_adoption;
+	struct mt6878_md_adoption now = { 0 };
+	int ret;
+
+	mutex_lock(&owner->lock);
+	if (owner->first_error) {
+		ret = owner->first_error;
+		goto out;
+	}
+	if (owner->state != MT6878_MD_OBSERVED_ON || owner->attached ||
+	    dev->bus != &platform_bus_type || dev->of_node != owner->modem ||
+	    !of_device_is_available(owner->modem)) {
+		ret = -EBUSY;
+		goto out;
+	}
+	ret = mt6878_md_adopt_binding(pd, dev->of_node, true);
+	if (!ret)
+		ret = mt6878_md_adopt_reports(dev->of_node, &now);
+	if (!ret)
+		ret = mt6878_md_adopt_reservations(&now);
+	if (!ret && (memcmp(now.brom, owner->brom, sizeof(now.brom)) ||
+	    memcmp(now.evidence, owner->evidence, sizeof(now.evidence)) ||
+	    memcmp(now.descriptor, owner->descriptor, sizeof(now.descriptor))))
+		ret = -ESTALE;
+	if (!ret) {
+		unsigned int i;
+
+		for (i = 0; i < ARRAY_SIZE(now.reservations); i++)
+			if (now.reservations[i].start != owner->reservations[i].start ||
+			    now.reservations[i].end != owner->reservations[i].end ||
+			    now.reservations[i].flags != owner->reservations[i].flags) {
+				ret = -ESTALE;
+				break;
+			}
+	}
+	if (!ret)
+		ret = mt6878_md_adopt_on(pd, now.on);
+	if (ret) {
+		ret = mt6878_md_adopt_fault(owner, ret);
+		goto out;
+	}
+	owner->attached = get_device(dev);
+	owner->state = MT6878_MD_ATTACHED_ON;
+out:
+	mutex_unlock(&owner->lock);
+	return ret;
+}
+
+static int mt6878_md_adopt_transition(struct generic_pm_domain *genpd)
+{
+	struct mt6878_md_adoption *owner = to_scpsys_domain(genpd)->md_adoption;
+	int ret;
+
+	mutex_lock(&owner->lock);
+	ret = owner->first_error ? owner->first_error : -EOPNOTSUPP;
+	mutex_unlock(&owner->lock);
+	return ret;
+}
+
+static void mt6878_md_adopt_detach(struct generic_pm_domain *genpd, struct device *dev)
+{
+	struct scpsys_domain *pd = to_scpsys_domain(genpd);
+	struct mt6878_md_adoption *owner = pd->md_adoption;
+	struct device *held;
+
+	mutex_lock(&owner->lock);
+	held = owner->attached;
+	owner->attached = NULL;
+	owner->state = MT6878_MD_RETIRED;
+	mt6878_md_adopt_fault(owner, held == dev ? -ESHUTDOWN : -ESTALE);
+	mutex_unlock(&owner->lock);
+	put_device(held);
+	/* detach_dev is void: this cannot veto consumer unbind or claim teardown. */
+	dev_err(pd->scpsys->dev, "MD adoption detached; physical ON retained, reattach/start unsupported\n");
+}

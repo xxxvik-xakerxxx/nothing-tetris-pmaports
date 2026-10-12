@@ -6,6 +6,12 @@ observe physical ON through the existing native MD supplier. There is no new
 NS certificate requirement. This design has no physical transition and does not
 declare modem READY. First shutdown and inhibited restart remain unproved.
 
+The concrete implementation is now `native-on-adoption.patch`, generated from
+`mt6878-modem-adopt.h`. `STAGING-CONTRACT.md` supersedes the activation design
+below with the agreed two-marker, supplier-only final producer contract. It also
+records that consumer detach is void and cannot veto unbind; the implementation
+retires on detach instead of claiming that requirement passed.
+
 ## Concrete activation dependency
 
 Installed U-Boot's `tetris_modem_brom_only_board()` requires BOTH `mddriver` and
@@ -75,4 +81,4 @@ Next executable step is the native observational attachment only, after final
 producer activation and real caller integration. Validate source patch application
 and target objects in parent CI, then request one controlled observation/probe
 experiment with USB invariants. Keep first SHUTDOWN as a separate unproved
-operation. No adoption patch is activated or physical experiment performed here.
+operation. The adoption patch is staged only; no physical experiment was performed here.

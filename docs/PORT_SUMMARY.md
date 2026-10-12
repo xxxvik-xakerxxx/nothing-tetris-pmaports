@@ -8,13 +8,16 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
 ## Latest installed checkpoint: r182
 
-### Current integration candidate (not installed or CI-validated yet)
+### Current integration checkpoint
 
 - A separate [CCIF/DPMAIF DT](../patches/modem/drafts/runtime-hif-dt/README.md)
   supplies the actual B4.1 registers, IRQs and CCF references. CI repackages
   only this checked DT into the original r182 kernel/initramfs; the shipping
-  disabled modem metadata anchor remains unchanged. The first target test is
-  real resource binding, not firmware START or SIM service.
+  disabled modem metadata anchor remains unchanged. DT compilation, complete
+  delta checks and immutable FIT/boot-filesystem packaging passed the independent
+  `hif-dt-image` job in [CI38299987535](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38299987535).
+  The resource-binding test passed on the handset as recorded below, not
+  firmware START or SIM service.
 - [GPU mailbox dispatch](../patches/gpu/reset-owner-draft/MAILBOX-DISPATCH.md)
   connects the existing exclusive reset/SRAM owner to all eleven source-backed
   RX channels. IRQ activation, complete firmware upload and GPUFREQ admission
@@ -26,15 +29,57 @@ The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 - GNSS now embeds the reverse AGPS owner in the production startup controller,
   activates it only after a real successful engine-run result, and acknowledges
   quiescence before native teardown. Remaining assistance/configuration gates
-  are preserved; no engine INIT or position fix is claimed.
+  are preserved; no engine INIT or position fix is claimed. Exact B4.1 controller
+  checks and native LNA dataflow passed [CI38300004525](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38300004525).
+  All mandatory source/native, sealed-loader and Bionic checks passed
+  [CI38301035398](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38301035398)
+  at `247e714`, including the reviewed deliberate-IRQ-quiescence correction.
+
+#### Actual r182 HIF DT test
+
+CI source `f98d569808d9466748a116a389ea359634396b87`, artifact11770098745:
+ZIP SHA256 `4f863bacc70085d29877b126496cb9ee8775369bc7c1cad915fcd6f0af5e4a1f`;
+FIT SHA256 `832a340579e2f03bba897e4fcdc54a1f7c8bcefb85ec11c44814a8760b3af5a5`.
+Kernel and initramfs payloads were independently compared against original r182
+and are byte-identical. FIT was atomically replaced on mounted `/boot`; original
+FIT remains `/boot/boot_image-r182-before-hif.itb`. No userdata or LK change.
+
+After commanded poweroff, boot `bbc28d61-b267-4c48-9a23-ffa0ad62ed6c`
+populated actual CCIF/DPMAIF platform devices. One guarded resource-only module
+load at uptime176.35-176.54s bound `tetris_ccif_resources` and
+`tetris_dpmaif_resources`; `/proc/iomem` confirms all eight primary/auxiliary
+claims. Both completed probes imply actual six/three OF clock lookups and
+retained IRQ descriptors. All thirteen CCF prepare/enable counts remain0.
+Exact CI38287440390 modules use the unchanged r182 ABI; private preparation=N,
+CLDMA/SCP companions absent, no transport publication, IRQ request, DMA or START
+by these helpers. Owners remain loaded until reboot, not installed/autoloaded.
+
+The full before/after kernel journals differ by only the two expected CCCI
+metadata/retention messages; no new kernel fault or failed service. USB/SSH and
+sensor services remain active. The user confirmed display, touch, rotation and
+automatic brightness unchanged. Full local evidence archive SHA256:
+`8c870e9094998644310f760355018893182bd0fc67e6305dcc0dad9cf0713b53`.
+This boot automatically followed poweroff with USB attached, not a confirmed
+physical cold cycle. Native MD ON adoption, actual HIF activation and end-user
+radio functions remain separate pending steps.
 
 [Modem power integration](../patches/modem/md-pm-integration/ON-ADOPTION.md)
 must adopt the real ON state left by successful BROM. AID241 is the stock NS-CPU
 identity; the loader's reported v2 cells encode RW for the declared service
 ranges. An additional invented permission certificate is not required by an
 ordinary trusted-loader handoff. These are boot-time observations, not a current
-policy lock or coverage of reservation tails. Native shutdown/restart and final
-producer activation remain outstanding.
+policy lock or coverage of reservation tails. Native shutdown/restart and Linux
+activation remain outstanding.
+
+The guarded supplier-only final producer is now in personal U-Boot master
+`e2a916b716c593840291aad2e03de103bdb57e7d` and passed
+[CI38302037174](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38302037174).
+It is not installed. Ordinary input DTs remain unchanged; an explicit diagnostic
+marker permits supplier/domain0 activation only after fresh successful metadata,
+with the modem consumer still disabled. The Linux ON-adoption patch passes
+12 static/application checks, but combined native compilation remains pending.
+Its immutable-lifetime profile also requires a separate resolved diagnostic
+configuration; the installed r182 kernel cannot run that adoption path.
 
 Clean installation used [CI38248220709](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38248220709),
 source `75a510f072239825b9de7e620205a513568cce6e`. ZIP SHA256:
@@ -259,8 +304,8 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 
 | Subsystem | Status | Demonstrated / remaining |
 | --- | --- | --- |
-| Boot / UFS | Works for basic boot | Clean r181 boots and reads/writes root; firmware/SKU portability unverified. |
-| Root expansion | Partial | r181 reaches 104.5 GiB on its next boot; fixed image sealing passed CI, but its first clean installation remains untested. |
+| Boot / UFS | Works for basic boot | Clean r182 boots and reads/writes root; firmware/SKU portability unverified. |
+| Root expansion | Works on tested clean install | Sealed r182 expands to 104.5 GiB on its first installation boot; wider lifecycle/SKU coverage remains. |
 | Native display | Partial | Route and frame-end updates are in main; no visible stripes/flicker. Fixed 60 Hz and software rendering; 120 Hz and power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
 | Sensors | Partial | Five physical classes emit data; rotation, auto-brightness and local-call proximity tested. Automatic cold startup observed; calibration, warm reboot, suspend and smooth brightness remain. |
@@ -270,7 +315,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | Haptics / torch | Partial | Earlier bounded physical effects tested; lifecycle and camera strobe remain. |
 | Battery, charging, thermal | Partial | Telemetry and charging observations exist; sustained safety and idle power remain. |
 | GNSS | Partial, transport only | No position fix or operational GeoClue navigation stack. |
-| SIM, calls, SMS, mobile data | Broken | BROM and physical AP-only metadata import pass; runtime CCCI, SIM/registration and calls are unavailable. Proximity testing used a local dummy call, not GSM. |
+| SIM, calls, SMS, mobile data | Broken | BROM, metadata import and real CCIF/DPMAIF resource binding pass; runtime transport, SIM/registration and calls remain unavailable. Proximity testing used a local dummy call, not GSM. |
 | GPU acceleration | Broken | No render node or accelerated compositor. |
 | Cameras | Broken | No preview/capture or operational video/media node. |
 | microSD | Partial | Controller probes; card insertion and real I/O untested. |
