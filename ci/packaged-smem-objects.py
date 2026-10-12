@@ -119,6 +119,8 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
     for forbidden in ('map', 'publish', 'export'):
         if re.search(r'\btetris_smem_' + forbidden + r'_private$', symbols, re.M):
             raise ValueError('AP-only module contains physical SMEM transaction')
+    if re.search(r'\btetris_smem_export_mapped_private$', symbols, re.M):
+        raise ValueError('AP-only module contains mapped export')
     for required in ('mtk_ccci_owned_smem_init', 'tetris_smem_boot_decode'):
         if not re.search(r'\b' + required + r'$', symbols, re.M):
             raise ValueError('SMEM integration missing from linked module: ' + required)
@@ -151,6 +153,8 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
     for forbidden in ('map', 'publish', 'export'):
         if re.search(r'\btetris_smem_' + forbidden + r'_private$', reservation_symbols, re.M):
             raise ValueError('reservation-only consumer contains physical SMEM transaction')
+    if re.search(r'\btetris_smem_export_mapped_private$', reservation_symbols, re.M):
+        raise ValueError('reservation-only consumer contains mapped export')
     if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
             subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() or \
             subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
@@ -163,6 +167,11 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
         'ccci_util_lib.ko'])
     if b'Tetris CCCI: initial NC read completed' not in module.read_bytes():
         raise ValueError('initial-read consumer missing from linked module')
+    initial_symbols = subprocess.check_output(['llvm-nm', '--defined-only', str(module)], text=True)
+    for forbidden in ('tetris_smem_map_private', 'tetris_smem_export_mapped_private',
+                      'tetris_smem_publish_private', 'tetris_smem_export_private'):
+        if re.search(r'\b' + forbidden + r'$', initial_symbols, re.M):
+            raise ValueError('initial-read consumer contains mapping transaction: ' + forbidden)
     if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
             subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() or \
             subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
@@ -170,6 +179,37 @@ def link_r181(staging, smoke, manifest, work, package, util, report, gpueb_analy
     shutil.copyfile(module, saved / 'ccci-util-nc-initial-read.ko')
     report['initial_read_module'] = dict(report['linked_module'], sha256=staging.sha(module),
         scope='exact r181 exports; opt-in single NC word read; EL1 and historical boot evidence; no runtime grant or START')
+    staging.run([*command, 'KCFLAGS=' + flags +
+        ' -DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY=1 -DCONFIG_TETRIS_CCCI_SMEM_MAP_ONLY=1',
+        'ccci_util_lib.ko'])
+    mapped_symbols = subprocess.check_output(['llvm-nm', '--defined-only', str(module)], text=True)
+    for required in ('tetris_smem_map_private', 'tetris_smem_export_mapped_private'):
+        if not re.search(r'\b' + required + r'$', mapped_symbols, re.M):
+            raise ValueError('mapped consumer missing from linked module: ' + required)
+    for forbidden in ('tetris_smem_publish_private', 'tetris_smem_export_private',
+                      'tetris_smem_slot_init', 'initial_nc_read'):
+        if re.search(r'\b' + forbidden + r'$', mapped_symbols, re.M):
+            raise ValueError('mapped consumer contains forbidden transaction: ' + forbidden)
+    mapped_imports = subprocess.check_output(['llvm-nm', '--undefined-only', str(module)], text=True)
+    # Pinned ARM64 io.h lowers ioremap_wc() to ioremap_prot(PROT_NORMAL_NC).
+    for required in ('ioremap_prot', 'iounmap'):
+        if not re.search(r'\b' + required + r'$', mapped_imports, re.M):
+            raise ValueError('mapped consumer missing real mapping boundary: ' + required)
+    # The AP tag importer reads its own retained tag buffer in every profile;
+    # the SMEM translation unit must contain only map/unmap boundaries.
+    smem_imports = subprocess.check_output(['llvm-nm', '--undefined-only',
+        str(isolated / 'tetris_runtime_smem/smem.o')], text=True)
+    for forbidden in ('readl', 'writel', 'memcpy_fromio', 'memcpy_toio',
+                      'arm_smccc_smc', 'arm_smccc_hvc'):
+        if re.search(r'\b' + forbidden + r'$', smem_imports, re.M):
+            raise ValueError('mapped SMEM contains forbidden access: ' + forbidden)
+    if subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() != release or \
+            subprocess.check_output(['modinfo', '-F', 'depends', str(module)], text=True).strip() or \
+            subprocess.check_output(['modinfo', '-F', 'license', str(module)], text=True).strip() != 'GPL':
+        raise ValueError('mapped module ABI/dependency/license changed')
+    shutil.copyfile(module, saved / 'ccci-util-smem-map-only.ko')
+    report['map_only_module'] = dict(report['linked_module'], sha256=staging.sha(module),
+        scope='exact r181 exports; opt-in private WC mappings and copied tables; EL1/trustedboot evidence; no SMEM access, publication, runtime grant or START')
     report['r181_kernel_sources'] = baseline['source_sha512']
     if gpueb_analysis:
         source = ROOT / 'patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c'

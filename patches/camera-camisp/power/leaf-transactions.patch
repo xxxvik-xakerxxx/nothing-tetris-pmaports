@@ -1,0 +1,186 @@
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.c
+@@ -0,0 +1,158 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* B4.1 MT6878 leaf transactions; no probe, genpd registration or activation. */
++#include <linux/bits.h>
++#include <linux/delay.h>
++#include <linux/errno.h>
++#include <linux/iopoll.h>
++
++#include "mt6878-cam-power.h"
++
++#define CAM_PWR_RST_B		BIT(0)
++#define CAM_PWR_ISO		BIT(1)
++#define CAM_PWR_ON		BIT(2)
++#define CAM_PWR_ON_2ND		BIT(3)
++#define CAM_PWR_CLK_DIS		BIT(4)
++#define CAM_PWR_ACK		BIT(30)
++#define CAM_PWR_ACK_2ND		BIT(31)
++#define CAM_POLL_DELAY_US		10
++#define CAM_POLL_TIMEOUT_US	1000000
++
++#define VMM_ISO_STA		0x0f28
++#define VMM_ISO_SET		0x0f2c
++#define VMM_ISO_CLR		0x0f30
++#define VMM_EXT_BUCK_ISO		BIT(24)
++#define VMM_SRAM_ISO_DIN		BIT(25)
++#define VMM_SRAM_LATCH_ENB	BIT(26)
++#define VMM_ISO_MASK		GENMASK(26, 24)
++
++const struct scpsys_domain_data
++mt6878_cam_domain_data[MT6878_POWER_DOMAIN_NR] = {
++	[MT6878_POWER_DOMAIN_CAM_VCORE] = {
++		.name = "cam-vcore",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e5c,
++		.pwr_sta_offs = 0x0e5c,
++		.pwr_sta2nd_offs = 0x0e5c,
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(31),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(9) | BIT(10),
++					0x0c24, 0x0c28, 0x0c2c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL | MTK_SCPD_DOMAIN_SUPPLY,
++	},
++	[MT6878_POWER_DOMAIN_CAM_MAIN] = {
++		.name = "cam-main",
++		.sta_mask = GENMASK(31, 30),
++		.ctl_offs = 0x0e48,
++		.pwr_sta_offs = 0x0e48,
++		.pwr_sta2nd_offs = 0x0e48,
++		.sram_pdn_bits = BIT(8),
++		.sram_pdn_ack_bits = BIT(12),
++		.bp_cfg = {
++			BUS_PROT_WR_IGN(INFRA, BIT(29),
++					0x0c14, 0x0c18, 0x0c1c),
++			BUS_PROT_WR_IGN(INFRA, BIT(30),
++				0x0c14, 0x0c18, 0x0c1c),
++		},
++		.caps = MTK_SCPD_STATUS_IN_CTL,
++	},
++};
++
++static int mt6878_cam_ack(struct regmap *spm, unsigned int offset,
++			  u32 mask, bool on)
++{
++	u32 val;
++
++	return regmap_read_poll_timeout(spm, offset, val,
++					(val & mask) == (on ? mask : 0),
++					CAM_POLL_DELAY_US, CAM_POLL_TIMEOUT_US);
++}
++
++static int mt6878_cam_switch(struct regmap *spm, unsigned int offset,
++			     u32 control, u32 ack, bool on)
++{
++	int ret;
++
++	ret = regmap_update_bits(spm, offset, control, on ? control : 0);
++	if (ret)
++		return ret;
++
++	return mt6878_cam_ack(spm, offset, ack, on);
++}
++
++int mt6878_cam_ctl_set(struct regmap *spm, unsigned int domain, bool on)
++{
++	unsigned int offset;
++	int ret;
++
++	if (!spm)
++		return -EINVAL;
++	if (domain != MT6878_POWER_DOMAIN_CAM_MAIN &&
++	    domain != MT6878_POWER_DOMAIN_CAM_VCORE)
++		return -EINVAL;
++	offset = mt6878_cam_domain_data[domain].ctl_offs;
++
++	if (on) {
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, true);
++		if (ret)
++			return ret;
++		udelay(50);
++		ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++					CAM_PWR_ACK_2ND, true);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_CLK_DIS);
++		if (ret)
++			return ret;
++		ret = regmap_clear_bits(spm, offset, CAM_PWR_ISO);
++		if (ret)
++			return ret;
++		return regmap_set_bits(spm, offset, CAM_PWR_RST_B);
++	}
++
++	/* Caller has already protected buses, disabled SRAM and subsystem clocks. */
++	ret = regmap_set_bits(spm, offset, CAM_PWR_ISO);
++	if (ret)
++		return ret;
++	ret = regmap_clear_bits(spm, offset, CAM_PWR_RST_B);
++	if (ret)
++		return ret;
++	ret = regmap_set_bits(spm, offset, CAM_PWR_CLK_DIS);
++	if (ret)
++		return ret;
++	ret = mt6878_cam_switch(spm, offset, CAM_PWR_ON, CAM_PWR_ACK, false);
++	if (ret)
++		return ret;
++	return mt6878_cam_switch(spm, offset, CAM_PWR_ON_2ND,
++				  CAM_PWR_ACK_2ND, false);
++}
++
++int mt6878_vmm_iso_set(struct regmap *spm, bool isolate)
++{
++	u32 status, offset = isolate ? VMM_ISO_SET : VMM_ISO_CLR;
++	int ret;
++
++	if (!spm)
++		return -EINVAL;
++
++	/* MT6878 uses W1S/W1C aliases, with the reverse order for isolation ON. */
++	ret = regmap_write(spm, offset,
++			   isolate ? VMM_SRAM_LATCH_ENB : VMM_EXT_BUCK_ISO);
++	if (ret)
++		return ret;
++	ret = regmap_write(spm, offset, VMM_SRAM_ISO_DIN);
++	if (ret)
++		return ret;
++	ret = regmap_write(spm, offset,
++			   isolate ? VMM_EXT_BUCK_ISO : VMM_SRAM_LATCH_ENB);
++	if (ret)
++		return ret;
++	ret = regmap_read(spm, VMM_ISO_STA, &status);
++	if (ret)
++		return ret;
++	if ((status & VMM_ISO_MASK) != (isolate ? VMM_ISO_MASK : 0))
++		return -EIO;
++
++	return 0;
++}
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _MT6878_CAM_POWER_H
++#define _MT6878_CAM_POWER_H
++
++#include <dt-bindings/power/mediatek,mt6878-power.h>
++#include <linux/regmap.h>
++
++#include "mtk-pm-domains.h"
++
++/* Sparse Linux descriptors for review, not a registered genpd provider. */
++extern const struct scpsys_domain_data
++mt6878_cam_domain_data[MT6878_POWER_DOMAIN_NR];
++
++/*
++ * Local transactions only; caller must own the shared SPM regmap and serialize
++ * them. Supplies, parent genpd, clocks, SRAM and bus protection are external.
++ * Failure can leave partial hardware state: retain suppliers and stop access.
++ */
++int mt6878_cam_ctl_set(struct regmap *spm, unsigned int domain, bool on);
++int mt6878_vmm_iso_set(struct regmap *spm, bool isolate);
++
++#endif

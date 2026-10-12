@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Source/patch tests of the real packaged util path, never C compilation."""
 import os
+import hashlib
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +17,8 @@ VENDOR = Path(os.environ.get('TETRIS_VENDOR_TREE', ROOT.parent /
 PACKAGE = ROOT / 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878'
 INITIAL_READ_IF = ('#if defined(CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ) && '
                    'CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ')
+MAP_ONLY_IF = ('#if defined(CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY) && '
+               'CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY')
 
 
 def without_initial_read(source):
@@ -22,7 +26,7 @@ def without_initial_read(source):
     result = []
     depth = 0
     for line in source.splitlines(True):
-        if not depth and line.rstrip() == INITIAL_READ_IF:
+        if not depth and line.rstrip() in (INITIAL_READ_IF, MAP_ONLY_IF):
             depth = 1
             continue
         if depth:
@@ -41,6 +45,34 @@ class PackageMetadataTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.patch, cls.sources = build(VENDOR)
+
+    def test_packaged_candidate_and_expanded_review_are_frozen(self):
+        here = Path(__file__).parent
+        self.assertEqual((here / 'ccci-owned-metadata.overlay').read_text(), self.patch)
+        reviewed = {}
+        for line in (here / 'REVIEW.sha256').read_text().splitlines():
+            digest, name = line.split('  ')
+            self.assertNotIn(name, reviewed)
+            reviewed[name] = digest
+            self.assertEqual(digest, hashlib.sha256((here / name).read_bytes()).hexdigest())
+        for name in ('owned_smem_plan.c', 'package_metadata.py', 'check_packaged_smem.py',
+                     'test_map_only.c', 'ccci-owned-metadata.overlay'):
+            self.assertIn(name, reviewed)
+
+    def test_mapped_source_delimiters_and_private_export_shape(self):
+        here = Path(__file__).parent
+        for name in ('owned_smem_plan.c', 'test_map_only.c', 'test_initial_read.c'):
+            source = (here / name).read_text()
+            source = re.sub(r'/\*.*?\*/|//[^\n]*', '', source, flags=re.S)
+            source = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'', '', source)
+            stack = []
+            for char in source:
+                if char in '([{':
+                    stack.append(char)
+                elif char in ')]}':
+                    self.assertTrue(stack, name)
+                    self.assertEqual(stack.pop(), {')': '(', ']': '[', '}': '{'}[char], name)
+            self.assertFalse(stack, name)
 
     def test_only_util_sources_and_separate_mode(self):
         self.assertTrue(self.sources)
@@ -88,7 +120,7 @@ class PackageMetadataTests(unittest.TestCase):
         self.assertNotIn('EXPORT_SYMBOL(mtk_ccci_owned_banks_copy)', self.patch)
 
     def test_plan_build_omits_mapping_and_publication_bodies(self):
-        smem = self.sources[PREFIX + 'tetris_runtime_smem/smem.c']
+        smem = without_initial_read(self.sources[PREFIX + 'tetris_runtime_smem/smem.c'])
         for forbidden in ('ioremap', 'iounmap', 'tetris_smem_map_private(',
                           'tetris_smem_publish_private(', 'tetris_smem_export_private('):
             self.assertNotIn(forbidden, smem)
@@ -198,6 +230,56 @@ class PackageMetadataTests(unittest.TestCase):
                 self.assertNotIn('-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ', source)
         apkbuild = (PACKAGE / 'APKBUILD').read_text()
         self.assertNotIn('CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ', apkbuild)
+
+    def test_map_only_revalidates_both_banks_before_private_transaction(self):
+        owner = self.sources[PREFIX + 'owned_smem_plan.c']
+        mapped = owner[owner.index('static int map_owned_smem('):]
+        mapped = mapped[:mapped.index('\n#endif')]
+        for token in ('mtk_ccci_owned_banks_copy(&snapshot)',
+                      'memcmp(&owner->banks, banks, sizeof(snapshot))',
+                      'tetris_smem_extent_preview(owner, &exact)',
+                      'claims->count != plan->count', 'for (i = 0; i < 2; i++)',
+                      'record->reservation_base != bank->base',
+                      'record->reservation_capacity != bank->capacity',
+                      'record->slot != 42 + i', 'record->actual_enable != 1',
+                      '((record->policy[7] >> 34) & 3ULL) != 3ULL',
+                      'held->start != span->base', 'held->end != span->base + span->bytes - 1',
+                      'span->bytes > record->range_size - (span->base - record->range_start)',
+                      '(row->flags & 8)', 'read_sysreg(CurrentEL) != CurrentEL_EL1'):
+            self.assertIn(token, mapped)
+            self.assertLess(mapped.index(token), mapped.index('tetris_smem_map_private('))
+        self.assertLess(mapped.index('tetris_smem_map_private('),
+                        mapped.index('tetris_smem_export_mapped_private('))
+        for token in ('readl(', 'writel(', 'ioremap_wc(', 'memcpy_fromio(', 'memcpy_toio(',
+                      'tetris_smem_publish_private(', 'tetris_smem_slot_init(',
+                      'arm_smccc', 'EXPORT_SYMBOL', 'START', 'CCIF'):
+            self.assertNotIn(token, mapped)
+        smem = self.sources[PREFIX + 'tetris_runtime_smem/smem.c']
+        self.assertIn(MAP_ONLY_IF + '\nstatic void unmap_private(', smem)
+        self.assertIn(MAP_ONLY_IF + '\nint tetris_smem_export_mapped_private(', smem)
+        self.assertNotIn('int tetris_smem_publish_private(', smem)
+        self.assertNotIn('void tetris_smem_slot_init(', smem)
+        self.assertNotIn('CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY', (PACKAGE / 'APKBUILD').read_text())
+
+    def test_map_only_ci_actual_faults_and_exact_fourth_artifact(self):
+        here = Path(__file__).parent
+        fixture = (here / 'test_map_only.c').read_text()
+        for token in ('i <= 40', 'i < 6', 'mapped_fail = i', 'export_fail = true',
+                      '__real_tetris_smem_export_mapped_private(owner, layout, nc,',
+                      'mtk_ccci_owned_smem_init() == -EINVAL',
+                      'mapped_order[0] == 2 && mapped_order[1] == 1',
+                      'mtk_ccci_owned_smem_init() == -EALREADY',
+                      'assert_mapped_private_copy()', 'MAP_ONLY must not read SMEM',
+                      'tetris_owned_smem_plan.reservation.held[index] = NULL'):
+            self.assertIn(token, fixture)
+        runner = (here / 'check_packaged_smem.py').read_text()
+        self.assertIn('(4096, 1, 0, 1), (65536, 1, 0, 1)', runner)
+        self.assertIn('-Wl,--wrap=tetris_smem_export_mapped_private', runner)
+        script = (ROOT / 'ci/packaged-smem-objects.py').read_text()
+        self.assertIn("saved / 'ccci-util-smem-map-only.ko'", script)
+        self.assertIn("report['map_only_module'] = dict(report['linked_module']", script)
+        self.assertIn("for required in ('ioremap_prot', 'iounmap'):", script)
+        self.assertNotIn("for required in ('ioremap_wc', 'iounmap'):", script)
 
     def test_initial_read_validates_before_one_page_one_word_and_unmaps(self):
         owner = self.sources[PREFIX + 'owned_smem_plan.c']

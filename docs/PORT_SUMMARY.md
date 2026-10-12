@@ -125,6 +125,15 @@ Clean-install expansion remains unverified until the new artifacts are tested.
 The installed phone is still the original r181; SIM/calls, navigation, GPU
 acceleration and camera capture are not newly demonstrated by these CI tests.
 
+Later full CI38227409738 compiled the kernel and packages, then failed our image
+check with `gzip: invalid magic`. Upstream mkinitfs2.12.0 now defaults to zstd;
+the device has no compression override and the kernel supports RD_ZSTD. Our
+check now uses libarchive to read compressed CPIO and verifies the actual NCM
+module entry plus exact deviceinfo value. Five gzip/zstd/raw/corruption/missing
+entry fixtures pass locally, as does checking the original r181 initramfs.
+The FIT still passes the ramdisk unchanged (`compression=none`); no archive
+conversion or device behavior change is introduced. New image CI remains pending.
+
 ### r181 restart and first AP-only import
 
 After the user's restart, boot `8d332faa-c0ef-4968-bc21-58571eb2dfaf`
@@ -329,6 +338,13 @@ No writes, cache/NV reads, modem START or transport activation occurred.
 Zero does not exclude hardware zero-on-deny behavior, certify immutable secure
 policy, prove modem communication or supply a fresh NS certificate. It is one
 completed bounded initial read, not successful SIM detection or registration.
+The next [private mapped profile](../patches/modem/drafts/runtime-metadata/MAP_ONLY.md)
+reuses the existing WC transaction and mapped-unpublished table export. It
+revalidates both banks and held claims, excludes CONSYS, copies into private
+consumer storage, then retains mappings/ownership until reboot. Native fault
+tests and exact-r181 ARM64 linkage are integrated into CI but have not run for
+this revision. No memory reads/writes, legacy global publication or transport
+START is enabled; this profile is not automatically installed or loaded.
 See [modem research](MODEM_SIM_EVIDENCE_PLAN.md).
 
 **GPU.** Panthor, GPUEB ingress and source-backed power/reset candidates exist.
@@ -397,6 +413,12 @@ Pinned generation and 31 source tests pass. Actual ARM64 objects passed with
 KUnit enabled and disabled in [CI 38236217805](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38236217805).
 Native power/VMM ownership and frame capture remain unproven. No shipping DT
 include or activation is added.
+The [native power candidate](../patches/camera-camisp/power/README.md) adds actual
+Linux CAM_MAIN/CAM_VCORE descriptors, checked sequential ACK transactions and
+MT6878 VMM isolation operations. Thirteen static negative-test groups and pinned
+source/patch checks pass; its object is now included in both ARM64 config
+variants, with compilation pending. Shared VMM ownership/voltage policy and
+complete callback wiring remain missing; no provider or board node is enabled.
 
 **GNSS.** Transport, pinned stock engine/config, native callbacks and bounded
 host/loader ownership candidates exist. Genuine sealed ARM64 Bionic loading,
@@ -422,6 +444,12 @@ and the actual ARM64 Bionic closure including this producer passed
 [CI 38237141944](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38237141944).
 The legitimate receiver and complete startup configuration are still missing;
 endpoint connection does not establish engine INIT or a position fix.
+The [receiver-policy producer](../patches/gnss-navigation-audit/RECEIVER_POLICY_OWNER.md)
+now acquires the two exact build properties and reuses the existing constructor
+for five proven second-config bytes. Its actual native sanitizer fixture and
+ARM64 Bionic link are included in CI, pending for this revision. The property
+service is an Android/Bionic boundary, not a new mandatory pmOS daemon; complete
+native policy inputs and startup configuration still need integration.
 See [transport](GNSS_BRINGUP.md) and [userspace research](GNSS_USERSPACE_BRIDGE_AUDIT.md).
 
 ## Development Boundaries

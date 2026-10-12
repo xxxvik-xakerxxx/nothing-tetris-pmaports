@@ -2,6 +2,7 @@
 """Generate the AP-tag-only util module overlay; never compile or use hardware."""
 import argparse
 import difflib
+import hashlib
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -16,19 +17,28 @@ SMEM = HERE.parent / 'runtime-smem'
 
 
 def plan_sources(producer):
-    """Reuse reviewed bodies, but compile no physical mapping/publication code."""
+    """Reuse reviewed transactions only in opt-in MAP_ONLY; never publication."""
     reviews = producer.load('packaged_plan_reviews', HERE.parent / 'runtime-object-ci/check_objects.py')
     reviews.review(SMEM)
     sources = {name: (SMEM / name).read_text() for name in
                ('smem.c', 'smem.h', 'private.h', 'arguments.c', 'source_model.h')}
     smem = sources['smem.c']
+    guard = '#if defined(CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY) && CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY\n'
     start = smem.index('static void unmap_private(')
+    end = smem.index('void tetris_smem_slot_init(', start)
+    smem = smem[:start] + guard + smem[start:end] + '#endif\n\n' + smem[end:]
+    start = smem.index('void tetris_smem_slot_init(')
     end = smem.index('static bool output_overlap(', start)
     smem = smem[:start] + smem[end:]
     start = smem.index('int tetris_smem_export_private(')
-    end = smem.index('int tetris_smem_destroy(', start)
+    end = smem.index('int tetris_smem_export_mapped_private(', start)
     smem = smem[:start] + smem[end:]
-    smem = producer.replace(smem, '\tunmap_private(owner);\n', '')
+    start = smem.index('int tetris_smem_export_mapped_private(')
+    end = smem.index('int tetris_smem_destroy(', start)
+    smem = smem[:start] + guard + smem[start:end] + '#endif\n\n' + smem[end:]
+    start = smem.index('int tetris_smem_destroy(')
+    smem = smem[:start] + producer.replace(smem[start:], '\tunmap_private(owner);\n',
+        guard + '\tunmap_private(owner);\n#endif\n')
     sources['smem.c'] = smem
     return {PREFIX + 'tetris_runtime_smem/' + name: source
             for name, source in sources.items()}
@@ -158,12 +168,22 @@ def main():
     parser.add_argument('--vendor', type=Path, required=True)
     parser.add_argument('--emit-patch', type=Path)
     parser.add_argument('--check-patch', type=Path)
+    parser.add_argument('--emit-review', action='store_true')
     args = parser.parse_args()
     patch, _ = build(args.vendor)
     if args.emit_patch:
         args.emit_patch.write_text(patch)
     if args.check_patch and args.check_patch.read_text() != patch:
         parser.error('packaged metadata overlay differs from the reviewed producer')
+    if args.emit_review:
+        # Freeze the package candidate here. Parent integration deliberately
+        # updates the shipping overlay/checksum, outside this research scope.
+        (HERE / 'ccci-owned-metadata.overlay').write_text(patch)
+        names = sorted(path.name for path in HERE.iterdir()
+                       if path.is_file() and path.suffix in ('.c', '.h', '.py', '.md', '.vendor', '.overlay'))
+        (HERE / 'REVIEW.sha256').write_text(''.join(
+            f'{hashlib.sha256((HERE / name).read_bytes()).hexdigest()}  {name}\n'
+            for name in names))
     print('AP-tag-only util overlay matches; no compilation or runtime operation')
 
 

@@ -48,4 +48,11 @@ int tetris_smem_export_private(struct tetris_smem_slot *slot,
 		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
 		unsigned int nc_count, struct ccci_smem_region *cache,
 		unsigned int cache_count);
+/* Fallible copy before publication: errors leave all outputs unchanged and
+ * mappings remain privately owned, so destroy can still unwind them.
+ */
+int tetris_smem_export_mapped_private(struct tetris_smem_owner *owner,
+		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
+		unsigned int nc_count, struct ccci_smem_region *cache,
+		unsigned int cache_count);
 #endif

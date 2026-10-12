@@ -72,7 +72,7 @@ diff --git a/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/private.h b/dri
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/private.h
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,58 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#ifndef TETRIS_RUNTIME_SMEM_PRIVATE_H
 +#define TETRIS_RUNTIME_SMEM_PRIVATE_H
@@ -123,12 +123,19 @@ new file mode 100644
 +		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
 +		unsigned int nc_count, struct ccci_smem_region *cache,
 +		unsigned int cache_count);
++/* Fallible copy before publication: errors leave all outputs unchanged and
++ * mappings remain privately owned, so destroy can still unwind them.
++ */
++int tetris_smem_export_mapped_private(struct tetris_smem_owner *owner,
++		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
++		unsigned int nc_count, struct ccci_smem_region *cache,
++		unsigned int cache_count);
 +#endif
 diff --git a/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/smem.c b/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/smem.c
 new file mode 100644
 --- /dev/null
 +++ b/drivers/misc/mediatek/ccci_util/tetris_runtime_smem/smem.c
-@@ -0,0 +1,430 @@
+@@ -0,0 +1,448 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#include <linux/errno.h>
 +#include <linux/io.h>
@@ -542,6 +549,24 @@ new file mode 100644
 +	else
 +		ret = copy_layout(owner, layout, nc, nc_count, cache, cache_count);
 +	mutex_unlock(&slot->lock);
++	return ret;
++}
++
++int tetris_smem_export_mapped_private(struct tetris_smem_owner *owner,
++		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
++		unsigned int nc_count, struct ccci_smem_region *cache,
++		unsigned int cache_count)
++{
++	int ret;
++
++	if (!owner)
++		return -EINVAL;
++	mutex_lock(&owner->lock);
++	if (owner->state != TETRIS_SMEM_MAPPED)
++		ret = owner->first_error ? owner->first_error : -EALREADY;
++	else
++		ret = copy_layout(owner, layout, nc, nc_count, cache, cache_count);
++	mutex_unlock(&owner->lock);
 +	return ret;
 +}
 +

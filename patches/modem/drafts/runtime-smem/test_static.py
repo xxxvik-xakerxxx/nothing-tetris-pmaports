@@ -145,6 +145,13 @@ class SourceTests(unittest.TestCase):
         self.assertIn('output_overlap(nc, sizeof(owner->nc), cache, sizeof(owner->cache))', text)
         self.assertIn('layout->md_bank4_noncacheable = nc;', text)
         self.assertIn('layout->md_bank4_cacheable = cache;', text)
+        mapped = text.split('int tetris_smem_export_mapped_private(', 1)[1].split(
+            'int tetris_smem_destroy(', 1)[0]
+        self.assertIn('owner->state != TETRIS_SMEM_MAPPED', mapped)
+        self.assertIn('ret = copy_layout(owner, layout, nc, nc_count, cache, cache_count)', mapped)
+        self.assertNotIn('slot', mapped)
+        self.assertNotIn('TETRIS_SMEM_PUBLISHED', mapped)
+        self.assertNotIn('unmap_private', mapped)
 
     def test_c_delimiter_syntax(self):
         # Cheap syntax-shape check, NOT a substitute for actual CI compilation.

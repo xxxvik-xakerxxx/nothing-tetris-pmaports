@@ -118,7 +118,7 @@ class SmokeInputs(unittest.TestCase):
                              (self.package / destination).read_bytes())
         self.assertEqual((parent / "Makefile").read_text(), "# original parent\n")
         self.assertFalse((parent / "Kconfig").exists())
-        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 41)
+        self.assertEqual(len(smoke.RESEARCH_OBJECTS), 42)
         self.assertEqual(smoke.PROVIDER_OBJECTS, (
             "drivers/memory/mtk-smi.o", "drivers/clk/mediatek/clk-mt6878-cam.o",
             "drivers/iommu/mtk_iommu.o"))
@@ -183,7 +183,39 @@ class SmokeInputs(unittest.TestCase):
         self.assertEqual(smoke.CAMISP_RESOURCE_PLAN["config_variants"], [{"KUNIT": "y"}, {"KUNIT": "n"}])
         source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
         self.assertIn('manifest["camisp_resource_kunit_disabled_objects"]', source)
-        self.assertIn("CAMISP_RESOURCE_OBJECTS)", source)
+        self.assertIn("CAMISP_RESOURCE_OBJECTS + CAMISP_POWER_OBJECTS)", source)
+
+    def test_camisp_power_staging_and_include_are_isolated(self):
+        root = Path(__file__).resolve().parents[1]
+        parent = self.package / "drivers/pmdomain/mediatek"
+        parent.mkdir(parents=True)
+        for name in ("Makefile", "Kconfig", "mtk-pm-domains.c"):
+            (parent / name).write_text("# original power provider\n")
+        smoke.stage_research_sources(self.package, root)
+        for name in ("Makefile", "Kconfig", "mtk-pm-domains.c"):
+            self.assertEqual((parent / name).read_text(), "# original power provider\n")
+        for source, destination in smoke.CAMISP_POWER_PLAN["sources"].items():
+            self.assertEqual((self.package / destination).read_bytes(), (root / source).read_bytes())
+        for name in smoke.CAMISP_POWER_OBJECTS:
+            self.assertIn(name, smoke.RESEARCH_OBJECTS)
+            self.assertNotIn(name, smoke.OBJECTS + smoke.PROVIDER_OBJECTS)
+            makefile = self.package / Path(name).parent / "Makefile"
+            self.assertEqual(makefile.read_text(), "obj-y += " + Path(name).name +
+                             "\nccflags-y += -I$(srctree)/drivers/pmdomain/mediatek\n")
+        source = Path(__file__).with_name("kernel-object-smoke.py").read_text()
+        self.assertIn('manifest["camisp_power_kunit_disabled_objects"]', source)
+
+    def test_camisp_power_manifest_rejects_provider_and_activation_drift(self):
+        root = Path(__file__).resolve().parents[1]
+        original = json.loads((root / smoke.CAMISP_POWER_MANIFEST).read_text())
+        for field, value in (("runtime_activation", "enabled"),
+                             ("include_directory", "drivers/other")):
+            data = dict(original, **{field: value})
+            with patch.object(smoke.json, "loads", return_value=data), self.assertRaises(ValueError):
+                smoke.camisp_power_staging(root)
+        data = dict(original, sources={"any": "drivers/pmdomain/mediatek/mtk-pm-domains.c"})
+        with patch.object(smoke.json, "loads", return_value=data), self.assertRaises(ValueError):
+            smoke.camisp_power_staging(root)
 
     def test_camisp_resources_manifest_rejects_shipping_provider_destination(self):
         root = Path(__file__).resolve().parents[1]

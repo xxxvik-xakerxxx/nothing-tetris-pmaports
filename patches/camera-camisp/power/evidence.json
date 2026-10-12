@@ -1,0 +1,227 @@
+{
+  "release": "Nothing OS B4.1 Tetris-B4.1-260415-1709",
+  "provenance": [
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-scpsys.c",
+      "sha256": "d6652e98da3d4193dfc1d2f112aea656606f314135168c6ab20d086b63cd67ea"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-scpsys.h",
+      "sha256": "bcd148b2c380c923645864284eabe02e653e52f820966cdf48bb1cfd5c5adc96"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/misc/mediatek/vmm_spm/mtk-vmm-spm.c",
+      "sha256": "0de01af3eb910734339fea1ee2a7686ae366992000ee8d28f7759c49adf33dd7"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/misc/mediatek/vmm/mtk-vmm-notifier.c",
+      "sha256": "8c67354ede2ada45b11d55a8f659f7450d170bd0b602155e2277a14ed81b336d"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-mmdvfs-v3.c",
+      "sha256": "b523231cf75cae38ebad6e927f0e72f5b47b98fbc2befb7d03b4d0a4fe272d37"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/linux/soc/mediatek/mtk_sip_svc.h",
+      "sha256": "98efa028fe246589b5968ac0b4f2138da1f45c349fb02c3e4a0ecb27d5dbf680"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "include/dt-bindings/power/mt6878-power.h",
+      "sha256": "f702071f0abef184c313d569ad780bbd1892617324dccbeee1834ace8344fbbc"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "arch/arm64/boot/dts/mediatek/mt6878-disable-unused.dtsi",
+      "sha256": "1bdf7ebf0e400f2355117a8e41286a248ad8d2895802626ef0cb68c498f4af6a"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts",
+      "sha256": "313491ee77b07a43d0a62c41a5dae2ef40ce9be851dd211ddacdf44ed7d710c5"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/pmdomain/mediatek/mtk-pm-domains.c",
+      "sha256": "1bc964d9b4493fe23ac5955e4198fd2219f6e60ecad360cf2fa78518009a4841"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/pmdomain/mediatek/mtk-pm-domains.h",
+      "sha256": "6784f50366a74c5607d0f66ff397a6b72a148ea396ba0a6d6be92db9f0764e9e"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/regulator/core.c",
+      "sha256": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122"
+    },
+    {
+      "repository": "nothing-tetris-pmaports",
+      "commit": "packaged-input",
+      "path": "0018-pmdomain-mediatek-mt6878-audio.patch",
+      "sha256": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed"
+    },
+    {
+      "repository": "nothing-tetris-pmaports",
+      "commit": "packaged-input",
+      "path": "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch",
+      "sha256": "21952394dca440fe7b8cf70914c09ccf77c78a2c26d9d0aa2dcf84b4d76cf3be"
+    },
+    {
+      "repository": "nothing-tetris-pmaports",
+      "commit": "packaged-input",
+      "path": "0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch",
+      "sha256": "7b6d3c56bbe2f38b53df115e8a553972729e544456f859d414ef82f2193460c1"
+    }
+  ],
+  "kernel_archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c",
+  "domains": {
+    "CAM_VCORE": {
+      "id": 10,
+      "control": 3676,
+      "sram_pdn_bits": [],
+      "sram_ack_bits": [],
+      "protection": [
+        {
+          "set": 3092,
+          "clear": 3096,
+          "enable": 3088,
+          "status": 3100,
+          "bits": [
+            31
+          ],
+          "ignore_clear_ack": true
+        },
+        {
+          "set": 3108,
+          "clear": 3112,
+          "enable": 3104,
+          "status": 3116,
+          "bits": [
+            9,
+            10
+          ],
+          "ignore_clear_ack": true
+        }
+      ]
+    },
+    "CAM_MAIN": {
+      "id": 13,
+      "control": 3656,
+      "sram_pdn_bits": [
+        8
+      ],
+      "sram_ack_bits": [
+        12
+      ],
+      "protection": [
+        {
+          "set": 3092,
+          "clear": 3096,
+          "enable": 3088,
+          "status": 3100,
+          "bits": [
+            29
+          ],
+          "ignore_clear_ack": true
+        },
+        {
+          "set": 3092,
+          "clear": 3096,
+          "enable": 3088,
+          "status": 3100,
+          "bits": [
+            30
+          ],
+          "ignore_clear_ack": true
+        }
+      ]
+    }
+  },
+  "parent_edges": [
+    [
+      "CAM_VCORE",
+      "CAM_MAIN"
+    ],
+    [
+      "MM_INFRA",
+      "CAM_VCORE"
+    ]
+  ],
+  "vmm_isolation": {
+    "iso_con_status": 3880,
+    "iso_con_set": 3884,
+    "iso_con_clr": 3888,
+    "ext_iso_bit": 24,
+    "iso_din_bit": 25,
+    "latch_en_bit": 26
+  },
+  "vmm_supply": "mt6319_6_vbuck1",
+  "cam_main_subsys_clocks": [
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_CAM2MM0_GALS"
+    ],
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_CAM2MM1_GALS"
+    ],
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_LARB13"
+    ],
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_LARB14"
+    ],
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_LARB29"
+    ],
+    [
+      "camsys_main_clk",
+      "CLK_CAM_MAIN_CAM_MRAW"
+    ],
+    [
+      "camsys_mraw_clk",
+      "CLK_CAM_MR_GALS"
+    ],
+    [
+      "camsys_mraw_clk",
+      "CLK_CAM_MR_LARBX"
+    ]
+  ],
+  "generic_vmm_genpd_notifier_in_soc_dts": false,
+  "mm_infra": "\n\t\t.name = \"mm-infra\",\n\t\t.hwv_comp = \"hw-voter-regmap\",\n\t\t.hwv_set_ofs = 0x0198,\n\t\t.hwv_clr_ofs = 0x019C,\n\t\t.hwv_done_ofs = 0x141C,\n\t\t.hwv_en_ofs = 0x1410,\n\t\t.hwv_set_sta_ofs = 0x146C,\n\t\t.hwv_clr_sta_ofs = 0x1470,\n\t\t.hwv_shift = 0,\n\t\t.basic_clk_name = {\"mm_infra\"},\n\t\t.caps = MTK_SCPD_IS_PWR_CON_ON | MTK_SCPD_HWV_OPS | default_cap | MTK_SCPD_INFRA_REQ_OPT,\n\t",
+  "runtime_activation": "disabled"
+}

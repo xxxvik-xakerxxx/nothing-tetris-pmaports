@@ -106,6 +106,7 @@ def native_ci(vendor, uboot, stock):
         (root / 'test_packaged_smem.c').write_bytes((HERE / 'test_packaged_smem.c').read_bytes())
         (root / 'test_smem_reservation.c').write_bytes((HERE / 'test_smem_reservation.c').read_bytes())
         (root / 'test_initial_read.c').write_bytes((HERE / 'test_initial_read.c').read_bytes())
+        (root / 'test_map_only.c').write_bytes((HERE / 'test_map_only.c').read_bytes())
         names = ('tetris_modem_layout.c', 'tetris_modem_layout.h', 'tetris_modem_bundle.h',
                  'tetris_modem_emi.c', 'tetris_modem_emi.h', 'tetris_modem_remap.h',
                  'tetris_modem_emi_rows.c', 'tetris_modem_emi_rows.h',
@@ -121,9 +122,16 @@ def native_ci(vendor, uboot, stock):
                     (4096, 1, 1), (65536, 1, 1),
                     (4096, 0, None), (65536, 0, None),
                     (4096, 1, None), (65536, 1, None))
-        for page, resource_only, initial_read in profiles:
+        profiles = tuple((*profile, None) for profile in profiles) + (
+            (4096, 0, 0, 0), (65536, 0, 0, 0),
+            (4096, 1, 0, 0), (65536, 1, 0, 0),
+            (4096, 1, 1, 0), (65536, 1, 1, 0),
+            (4096, 1, 0, 1), (65536, 1, 0, 1))
+        for page, resource_only, initial_read, map_only in profiles:
             initial_flags = ([] if initial_read is None else
                 [f'-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ={initial_read}'])
+            map_flags = ([] if map_only is None else
+                [f'-DCONFIG_TETRIS_CCCI_SMEM_MAP_ONLY={map_only}'])
             objects = []
             for name in ('tetris_modem_layout.c', 'tetris_modem_emi.c',
                          'tetris_modem_emi_rows.c', 'tetris_modem_ccci_tags.c',
@@ -139,17 +147,31 @@ def native_ci(vendor, uboot, stock):
                     '-Werror', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined',
                     '-fno-omit-frame-pointer', '-g', f'-DTEST_PAGE_SIZE={page}',
                     f'-DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY={resource_only}',
-                    *initial_flags,
+                    *initial_flags, *map_flags,
                     '-DTETRIS_MODEM_LAYOUT_HOST_TEST', '-I', str(root), *flags,
                     '-c', str(root / name), '-o', str(obj)], check=True)
                 objects.append(str(obj))
-            binary = root / f'packaged-smem-{page}-{resource_only}-{initial_read}'
+            binary = root / f'packaged-smem-{page}-{resource_only}-{initial_read}-{map_only}'
             subprocess.run([os.environ.get('CC', 'clang'), '-fsanitize=address,undefined',
-                            *objects, '-o', str(binary)], check=True)
+                            *objects, *(['-Wl,--wrap=tetris_smem_export_mapped_private']
+                                if map_only else []), '-o', str(binary)], check=True)
             for case in range(59):
                 subprocess.run([str(binary), str(stock), str(case)], env=env, check=True)
+        for page in (4096, 65536):
+            for resource_only, initial_read in ((0, 0), (1, 1)):
+                rejected = subprocess.run([os.environ.get('CC', 'clang'), '-std=gnu11',
+                    '-I', str(root), '-include', str(root / 'boundary.h'),
+                    f'-DTEST_PAGE_SIZE={page}', '-DCONFIG_TETRIS_CCCI_SMEM_MAP_ONLY=1',
+                    f'-DCONFIG_TETRIS_CCCI_SMEM_RESOURCE_ONLY={resource_only}',
+                    f'-DCONFIG_TETRIS_CCCI_SMEM_INITIAL_READ={initial_read}',
+                    '-c', str(root / 'import.c'), '-o', str(root / 'invalid-profile.o')],
+                    capture_output=True, text=True)
+                expected = ('requires the isolated resource-only profile' if not resource_only
+                            else 'cannot be combined with the initial-read profile')
+                if not rejected.returncode or expected not in rejected.stderr:
+                    raise ValueError('invalid MAP_ONLY profile not rejected at compile time')
     print('actual packaged import -> SMEM plan: 59 cases x 4KiB/64KiB x '
-          'metadata/resource/initial-read profiles PASS; initial-read I/O is mocked')
+          'metadata/resource/initial-read/map-only profiles PASS; physical I/O is mocked')
 
 
 def main():

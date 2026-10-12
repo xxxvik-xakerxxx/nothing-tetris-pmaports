@@ -153,7 +153,11 @@ static void test_evidence_collection(const struct tetris_metadata_banks *banks)
 			assert(tetris_owned_smem_plan.boot_evidence.record[0].reservation_base == banks->nc.base);
 			memset(evidence_wire, 0xa5, sizeof(evidence_wire));
 			assert(tetris_owned_smem_plan.boot_evidence.version == 1);
+#if CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
+			assert(tetris_owned_smem_plan.layout.md_bank4_noncacheable_total.base_ap_view_vir);
+#else
 			assert(!tetris_owned_smem_plan.layout.md_bank4_noncacheable_total.base_ap_view_vir);
+#endif
 		}
 	}
 	node_exists = compatible = true;
@@ -172,6 +176,7 @@ static void test_evidence_collection(const struct tetris_metadata_banks *banks)
 
 #include "test_smem_reservation.c"
 #include "test_initial_read.c"
+#include "test_map_only.c"
 
 static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 {
@@ -222,14 +227,20 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 		assert(mtk_ccci_owned_smem_init() == -EALREADY);
 		assert(tetris_owned_smem_plan.layout.md_bank0.base_ap_view_phy == copied.firmware.base);
 		assert(!tetris_owned_smem_plan.layout.md_bank0.base_ap_view_vir);
+#if CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
+		assert_mapped_private_copy();
+#else
 		assert(!tetris_owned_smem_plan.layout.md_bank4_noncacheable_total.base_ap_view_vir);
+#endif
 		assert(!tetris_owned_smem_plan.layout.md_bank4_cacheable_total.base_ap_view_vir);
 		assert(tetris_owned_smem_plan.layout.md_bank4_noncacheable == tetris_owned_smem_plan.nc);
 		assert(tetris_owned_smem_plan.layout.md_bank4_cacheable == tetris_owned_smem_plan.cache);
+#if !CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
 		for (i = 0; i < ARRAY_SIZE(tetris_owned_smem_plan.nc); i++)
 			assert(!tetris_owned_smem_plan.nc[i].base_ap_view_vir);
 		for (i = 0; i < ARRAY_SIZE(tetris_owned_smem_plan.cache); i++)
 			assert(!tetris_owned_smem_plan.cache[i].base_ap_view_vir);
+#endif
 		test_evidence_collection(&copied);
 		mtk_ccci_owned_smem_cleanup();
 		test_smem_reservation(&copied);
@@ -238,6 +249,8 @@ static void packaged_probe(struct tetris_metadata_banks *source, int imported)
 #endif
 #if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
 		test_initial_read(&copied);
+#elif CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
+		test_map_only(&copied);
 #else
 		/* Undefined/zero opt-in leaves every physical boundary unreachable. */
 		assert(!initial_read_boundary_calls);

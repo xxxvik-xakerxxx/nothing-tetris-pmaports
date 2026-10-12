@@ -414,6 +414,24 @@ int tetris_smem_export_private(struct tetris_smem_slot *slot,
 	return ret;
 }
 
+int tetris_smem_export_mapped_private(struct tetris_smem_owner *owner,
+		struct ccci_mem_layout *layout, struct ccci_smem_region *nc,
+		unsigned int nc_count, struct ccci_smem_region *cache,
+		unsigned int cache_count)
+{
+	int ret;
+
+	if (!owner)
+		return -EINVAL;
+	mutex_lock(&owner->lock);
+	if (owner->state != TETRIS_SMEM_MAPPED)
+		ret = owner->first_error ? owner->first_error : -EALREADY;
+	else
+		ret = copy_layout(owner, layout, nc, nc_count, cache, cache_count);
+	mutex_unlock(&owner->lock);
+	return ret;
+}
+
 int tetris_smem_destroy(struct tetris_smem_owner *owner)
 {
 	if (!owner)

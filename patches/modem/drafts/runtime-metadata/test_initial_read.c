@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Native boundary only: included with the actual generated importer and init. */
+#if !CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
 static unsigned int initial_read_boundary_calls;
+#endif
 
 #if CONFIG_TETRIS_CCCI_SMEM_INITIAL_READ
 #include <stdarg.h>
@@ -214,7 +216,7 @@ static void test_initial_read(const struct tetris_metadata_banks *banks)
 		assert_initial_read_cleanup(pins);
 	}
 }
-#else
+#elif !CONFIG_TETRIS_CCCI_SMEM_MAP_ONLY
 /* Link traps also cover the metadata and resource-only native profiles. */
 unsigned long test_read_sysreg_CurrentEL(void)
 {

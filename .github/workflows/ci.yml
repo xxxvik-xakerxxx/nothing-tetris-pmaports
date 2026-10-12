@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            build-essential coreutils findutils git python3 python3-cryptography python3-pyelftools shellcheck
+            build-essential coreutils findutils git libarchive-tools python3 python3-cryptography python3-pyelftools shellcheck zstd
       - name: Shellcheck
         run: shellcheck -S error scripts/*.sh
       - name: Validate pmaports overlay
@@ -73,6 +73,7 @@ jobs:
         run: |
           sudo apt-get install --no-install-recommends -y e2fsprogs android-sdk-libsparse-utils util-linux
           python3 ci/test-seal-install-images.py --native-fixtures
+          python3 ci/test-initramfs-check.py
       - name: Fetch native display source
         run: |
           mkdir -p upstream/linux
@@ -282,6 +283,7 @@ jobs:
         continue-on-error: true
         run: |
           sh patches/gnss-navigation-audit/run_agps_host_ci.sh
+          sh patches/gnss-navigation-audit/run_receiver_policy_ci.sh
           sh patches/gnss-navigation-audit/run_control_notify_ci.sh
           sh patches/gnss-navigation-audit/run_second_config_ci.sh
           sh patches/gnss-navigation-audit/run_navigation_output_ci.sh
@@ -356,6 +358,9 @@ jobs:
         run: |
           mkdir -p out
           ndk=/tmp/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin
+          BIONIC_CC="$ndk/aarch64-linux-android28-clang" \
+            sh patches/gnss-navigation-audit/run_receiver_policy_ci.sh \
+              --bionic-compile out/b41-receiver-policy-test
           "$ndk/aarch64-linux-android24-clang" -std=c11 -O2 -Wall -Wextra -Werror \
             patches/gnss-navigation-audit/b41_startup_adapter.c \
             patches/gnss-navigation-audit/test_b41_startup_adapter.c \
@@ -521,6 +526,7 @@ jobs:
             android-tools \
             build-base bzip2 ccache coreutils cryptsetup dosfstools e2fsprogs-extra \
             dtc file findutils git kmod linux-headers mtools multipath-tools openssl \
+            libarchive-tools \
             openssl-dev parted patch py3-yaml python3 rsync sfdisk sudo tar \
             u-boot-tools util-linux xz zstd
       - name: Fetch upstream pmaports and pmbootstrap
@@ -983,20 +989,14 @@ jobs:
           gzip -cd "$rootfs/boot/vmlinuz" > /tmp/nothing-tetris-Image
           check_contains "LLVM 21 compiler identity" \
             'clang version 21' /tmp/nothing-tetris-Image
-          gzip -cd "$rootfs/boot/initramfs" > /tmp/nothing-tetris-initramfs.cpio
-          check_contains "NCM function in initramfs" \
-            'drivers/usb/gadget/function/usb_f_ncm.ko' \
-            /tmp/nothing-tetris-initramfs.cpio
-          check_contains "NCM deviceinfo selection" \
-            'deviceinfo_usb_network_function="ncm.usb0"' \
-            /tmp/nothing-tetris-initramfs.cpio
+          sh /work/scripts/check-initramfs.sh "$rootfs/boot/initramfs" "$release"
           usb_sleep_hook="$rootfs/usr/lib/systemd/system-sleep/50-nothing-tetris-usb-gadget"
           test -x "$usb_sleep_hook"
           check_contains "USB gadget suspend quiesce" \
             'printf '\''\n'\'' > "$udc_file"' "$usb_sleep_hook"
           check_contains "USB gadget resume restore" \
             'printf '\''%s\n'\'' "$controller" > "$udc_file"' "$usb_sleep_hook"
-          rm -f /tmp/nothing-tetris-Image /tmp/nothing-tetris-initramfs.cpio \
+          rm -f /tmp/nothing-tetris-Image \
             /tmp/conninfra.relocations
           test -s /work/out/boot_image.itb
           cat > /work/out/nothing-tetris-radio-live.MANIFEST <<EOF

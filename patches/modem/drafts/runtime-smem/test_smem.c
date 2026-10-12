@@ -353,6 +353,10 @@ int main(int argc, char **argv)
 	verify_plan(owner, false);
 	assert(!tetris_smem_preview(owner, &exported, nc, 26, cache, 11) && !map_calls);
 	assert(!exported.md_bank0.base_ap_view_vir && !cache[2].base_ap_view_vir);
+	before = exported;
+	assert(tetris_smem_export_mapped_private(NULL, &exported, nc, 26, cache, 11) == -EINVAL);
+	assert(tetris_smem_export_mapped_private(owner, &exported, nc, 26, cache, 11) == -EALREADY);
+	assert(!memcmp(&before, &exported, sizeof(before)) && !map_calls);
 	if (which == 68) {
 		assert(tetris_smem_preview(owner, &exported, nc, 26, nc, 26) == -EINVAL);
 		assert(!tetris_smem_destroy(owner) && !live_maps && !live_allocs);
@@ -381,6 +385,7 @@ int main(int argc, char **argv)
 		assert(ret == -ENOMEM && owner->first_error == ret && !live_maps);
 		assert(tetris_smem_map_private(owner) == ret && map_calls == fail_map);
 		assert(tetris_smem_publish_private(&slot, owner) == ret && !slot.owner);
+		assert(tetris_smem_export_mapped_private(owner, &exported, nc, 26, cache, 11) == ret);
 		assert(unmap_calls == (which == 44 ? 1U : 0U));
 		if (unmap_calls)
 			assert(unmap_order[0] == 1);
@@ -389,6 +394,18 @@ int main(int argc, char **argv)
 	}
 	assert(!ret && map_calls == 2);
 	verify_plan(owner, true);
+	before = exported;
+	assert(tetris_smem_export_mapped_private(owner, &exported, nc, 25, cache, 11) == -EINVAL);
+	assert(tetris_smem_export_mapped_private(owner, &exported, nc, 26, cache, 10) == -EINVAL);
+	assert(tetris_smem_export_mapped_private(owner, NULL, nc, 26, cache, 11) == -EINVAL);
+	assert(tetris_smem_export_mapped_private(owner, &owner->layout, nc, 26, cache, 11) == -EINVAL);
+	assert(!memcmp(&before, &exported, sizeof(before)) && live_maps == 2 && !slot.owner);
+	assert(tetris_smem_export_mapped_private(owner, &exported, owner->nc, 26, cache, 11) == -EINVAL);
+	assert(tetris_smem_export_mapped_private(owner, &exported, nc, 26, nc, 26) == -EINVAL);
+	assert(!tetris_smem_export_mapped_private(owner, &exported, nc, 26, cache, 11));
+	assert(owner->state == TETRIS_SMEM_MAPPED && !slot.owner);
+	assert(exported.md_bank4_noncacheable == nc && exported.md_bank4_cacheable == cache);
+	assert(!memcmp(nc, owner->nc, sizeof(nc)) && !memcmp(cache, owner->cache, sizeof(cache)));
 	if (which == 47)
 		assert(tetris_smem_map_private(owner) == -EALREADY && map_calls == 2);
 	if (which == 65) {
@@ -397,6 +414,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 	assert(!tetris_smem_publish_private(&slot, owner) && slot.owner == owner);
+	assert(tetris_smem_export_mapped_private(owner, &exported, nc, 26, cache, 11) == -EALREADY);
 	retained[0] = owner;
 	if (which == 46) {
 		assert(!tetris_smem_create(&input, &other));

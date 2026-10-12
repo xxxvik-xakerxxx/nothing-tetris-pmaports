@@ -1,0 +1,23 @@
+{
+  "scope": "isolated native leaf transactions and Linux descriptors; no registration or linkage",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "sources": {
+    "patches/camera-camisp/power/mt6878-cam-power.c": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.c",
+    "patches/camera-camisp/power/mt6878-cam-power.h": "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.h"
+  },
+  "research_objects": [
+    "drivers/pmdomain/mediatek/tetris-cam-power-smoke/mt6878-cam-power.o"
+  ],
+  "include_directory": "drivers/pmdomain/mediatek",
+  "required_enabled": ["OF", "PM", "REGMAP"],
+  "required_reachable": ["MTK_SCPSYS_PM_DOMAINS"],
+  "config_variants": [{"KUNIT": "y"}, {"KUNIT": "n"}],
+  "runtime_activation": "disabled",
+  "unresolved": [
+    "error-propagating VMM supply and isolation ownership including shared ISP users",
+    "VMM voltage/rate and secure-world cold-start contract",
+    "full native genpd callback wiring with parent-before-child initialization",
+    "physical cold-start and lifecycle evidence"
+  ]
+}

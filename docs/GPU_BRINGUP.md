@@ -2,32 +2,42 @@
 
 ## Current status
 
-The last readback-verified r179/`d385921` checkpoint has no GPU acceleration. The cold
-authenticated GPUEB transform passed with 156064 signed bytes and unknown flat
-format; its temporary plaintext was erased. Display/touch and automatic sensors
-remain working, confirmed by the user after cold boot.
-The subsequent BROM-only loader flash and pending readback are recorded in
-[port summary](PORT_SUMMARY.md); GPU retention is disabled in that experiment.
+Installed r181 still has no GPU acceleration or render node. A separate
+authenticated-retention experiment on boot
+`39116740-88af-499a-993b-7e02682918ab` captured the real 156064-byte signed
+plaintext through the root-only ordinary-RAM analysis driver. SHA256:
+`9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7`.
+No SRAM upload, reset release or GPU execution occurred; USB and sensors stayed
+active. The private firmware is neither committed nor uploaded. The handset
+has since returned to the modem/SCP loader `8d2ccc12`; display, touch, rotation
+and auto-brightness are user-confirmed. See [current evidence](PORT_SUMMARY.md).
 
 Actual U-Boot now includes a separate default-off private flat-retention path:
 one authenticated transform, an exclusive erased-tail no-map reservation and
 publication into an owned final DT. Full ARM64 objects and the opt-in image link
 passed [CI 38027149560](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38027149560)
-at `94ead1146c`. This image is not installed. The earlier CI caught incorrect
+at `94ead1146c`. The later retention profile passed CI38234399917 and was used
+for the physical capture above, then replaced by the modem profile. The earlier CI caught incorrect
 FDT pointer/lifetime handling; the final mapping now remains owned through
 handoff. The paired read-only Linux analysis consumer passed native sanitizer
 checks, isolated ARM64 compilation and modpost against actual kernel exports in
 [CI 38028106842](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38028106842).
-This is a minimal isolated kernel, not the phone's module ABI. A matching phone
-ABI build is still required before one controlled private capture. The kernel
-package now carries this optional module, with its source checked byte-for-byte
-against the verified consumer. Ordinary DTs do not instantiate it; the next
-package/image and lifecycle gates remain pending. Public CI
-uploads metadata only, never plaintext.
+That first build was a minimal isolated kernel, not the phone's module ABI.
+CI38236228444 subsequently linked the corrected driver against the exact original
+r181 sources/configuration/exports. Module SHA256:
+`b32aa610d34464f87bab19afe005d127af8cd690f8cfa26297edf80cf83d4095`.
+The physical driver validated the complete plain NOMAP reservation and retained
+every PFN, claimed its full 1 MiB exclusively and pinned the snapshot until reboot.
+The r182 recipe carries this correction, but no full r182 image is installed.
+Ordinary DTs do not instantiate it. Public CI uploads metadata, never plaintext.
 
 This implements a missing firmware-inspection transport, not GPUEB startup.
-Entry/data/BSS and the unauthenticated larger LK copy span, complete reset/power
-ownership and accelerated Panthor rendering remain unresolved. See
+The [bounded startup audit](../patches/gpu/rv33-startup/README.md) verifies entry,
+cold caller control flow, a BSS fill wholly within the signed image and stack
+fill bounds, with 16 static tests against the exact private inputs. Opaque
+vendor instructions and callee-return assumptions remain explicit. The extra
+102680-byte LK source tail, complete startup memory requirements, reset/power
+ownership and accelerated Panthor rendering are unresolved. See
 [retention integration](../patches/gpu/flat-handoff-draft/HOOK-INTEGRATION.md).
 
 A default-off native reset-controller adapter now reuses the sole SRAM/reset
