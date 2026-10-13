@@ -615,6 +615,39 @@ class GnssModuleGate(unittest.TestCase):
             if key not in ("M", "KERNEL_SRC", "KERNEL_OUT", "KO_CODE_PATH", "DEVICE_MODULES_PATH", "TOP", "KCFLAGS"):
                 self.assertIn(arg, helper)
 
+    def test_adapter_fuzz_cannot_hide_extra_source_changes(self):
+        device = self.root / "adapter-source"
+        targets = {
+            "drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c": "CONN_DBG_DEVICE_NAME",
+            "drivers/misc/mediatek/connectivity/power_throttling/adapter.c": "CONN_PWR_DEVICE_NAME",
+        }
+        before = {}
+        for name, argument in targets.items():
+            path = device / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            before[name] = "class_create(THIS_MODULE, " + argument + ");\n/* unchanged */\n"
+            path.write_text(before[name])
+
+        def apply(command):
+            self.assertIn("--fuzz=2", command)
+            for name, argument in targets.items():
+                (device / name).write_text(before[name].replace("THIS_MODULE, ", "", 1))
+
+        with patch.object(smoke, "run", side_effect=apply):
+            identities = smoke.prepare_gnss_adapter(device)
+        self.assertEqual(set(identities), set(targets))
+        for name in targets:
+            self.assertNotEqual(identities[name]["before_sha256"], identities[name]["after_sha256"])
+            (device / name).write_text(before[name])
+
+        def tamper(command):
+            apply(command)
+            path = device / next(iter(targets))
+            path.write_text(path.read_text() + "unexpected change\n")
+
+        with patch.object(smoke, "run", side_effect=tamper), self.assertRaisesRegex(ValueError, "changed more"):
+            smoke.prepare_gnss_adapter(device)
+
     def test_imports_must_match_real_export_tables(self):
         module = self.root / "gps.ko"
         module.write_bytes(b"test fixture only")
@@ -687,6 +720,7 @@ class GnssModuleGate(unittest.TestCase):
         with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
                 patch.object(smoke, "prepare_gnss_tx_sources", return_value=(SimpleNamespace(), vendor, staged, {})), \
                 patch.object(smoke, "fetch_gnss_archive", return_value=device), \
+                patch.object(smoke, "prepare_gnss_adapter", return_value={}), \
                 patch.object(smoke, "run"), \
                 patch.object(smoke, "apply_gnss_tx", side_effect=lambda *_: original.write_text("candidate\n")) as apply, \
                 patch.object(smoke.subprocess, "check_output", return_value="clang version 21.1.0\n"), \

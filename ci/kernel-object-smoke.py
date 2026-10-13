@@ -567,6 +567,30 @@ def gnss_connectivity_make(make, kernel, output, module, device, top):
             "-Wno-error=format-extra-args -Wno-error=missing-prototypes"]
 
 
+def prepare_gnss_adapter(device):
+    targets = {
+        "drivers/misc/mediatek/connectivity/common/wmt_build_in_adapter.c": "CONN_DBG_DEVICE_NAME",
+        "drivers/misc/mediatek/connectivity/power_throttling/adapter.c": "CONN_PWR_DEVICE_NAME",
+    }
+    expected, identities = {}, {}
+    for name, argument in targets.items():
+        before = (device / name).read_bytes()
+        old = ("class_create(THIS_MODULE, " + argument + ")").encode()
+        if before.count(old) != 1:
+            raise ValueError("absent or ambiguous pinned adapter API: " + name)
+        expected[name] = before.replace(old, ("class_create(" + argument + ")").encode(), 1)
+        identities[name] = {"before_sha256": hashlib.sha256(before).hexdigest()}
+    # This legacy patch uses abuild's default context fuzz. Verify the entire
+    # postimage instead of requiring mismatched historical log-line context.
+    run(["patch", "--batch", "--fuzz=2", "-p1", "-d", device, "-i",
+         (PACKAGE / "1000-vendor-connectivity-adapter-linux-6.18.patch.vendor").resolve()])
+    for name, after in expected.items():
+        if (device / name).read_bytes() != after:
+            raise ValueError("adapter patch changed more than the reviewed API: " + name)
+        identities[name]["after_sha256"] = hashlib.sha256(after).hexdigest()
+    return identities
+
+
 def gnss_module_evidence(module, symvers):
     identity = object_identity(module)
     if identity["format"] != "ELF":
@@ -630,8 +654,8 @@ def compile_gnss_tx_module(kernel, work, report):
         save()
         stage, vendor, staged, _ = prepare_gnss_tx_sources(work)
         device = fetch_gnss_archive(manifest["device_modules"], work)
-        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", device, "-i",
-             (PACKAGE / "1000-vendor-connectivity-adapter-linux-6.18.patch.vendor").resolve()])
+        manifest["adapter_source"] = prepare_gnss_adapter(device)
+        save()
         top = work / "android-top"
         connectivity = top / "vendor/mediatek/kernel_modules/connectivity"
         connectivity.parent.mkdir(parents=True)
