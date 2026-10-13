@@ -99,6 +99,7 @@ jobs:
           python3 ci/test-kernel-object-smoke.py
           python3 -B ci/test-native-camera-link.py
           python3 -B ci/test-native-camera-stream-smoke.py
+          python3 -B patches/modem/md-pm-integration/native-link/test_static.py ABIParserTests
           python3 -B ci/test-native-modem-image.py
           python3 -B ci/test-gnss-tx-image.py
           python3 -B ci/test-native-gnss-image.py
