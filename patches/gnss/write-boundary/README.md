@@ -110,6 +110,14 @@ fixture per build. Missing guards fail bounded assertions rather than hanging.
 
 ## Remaining Gates And Limits
 
+Full ARM64 baseline1001..1008 and candidate1009 module link/modpost passed
+[CI38357565018](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38357565018)
+at `f27228d`, after building genuine kernel exports, connadp and conninfra.
+Both modules resolve all118 strong imports; exact identities are in STAGING.json.
+This uses LLVM21.1.2, not the installed kernel's21.1.8 toolchain. It is source
+integration evidence, not a replacement phone module. The complete install
+image must rebuild its kernel and external modules together before testing.
+
 The implementation bounds shared `o_buf` access by size; it does not serialize
 concurrent writes through a duplicated descriptor or multiple threads. Existing
 DMA ownership/reset races, full-ring and alignment edge behavior, ignored
@@ -118,8 +126,7 @@ User copy, logging, existing locks, and event dispatch are still executed;
 this is not a wall-clock deadline guarantee.
 
 Native mocks do not prove real kernel locking, asynchronous progress, timing,
-or hardware behavior. Parent must run required native CI, review the final
-integration, and compile the touched v051 driver under the package kernel
-config/compiler before activation. No shipping activation before CI. The outer
+or hardware behavior. Image integration and matched packaging remain pending.
+There is no shipping activation or hardware progress claim. The outer
 porting skill's clean-artifact, USB/SSH, cold-repeat, lifecycle, GNSS function,
 coexistence, and portability gates still apply to any later hardware testing.

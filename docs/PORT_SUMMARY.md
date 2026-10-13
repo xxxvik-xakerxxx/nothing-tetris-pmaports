@@ -178,7 +178,12 @@ matches packaged patch application and verifies both entire postimages contain
 only the reviewed class_create API replacements; local real-source application
 and54 static tests passed. Corrected
 [CI38357565018](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38357565018)
-at `f27228d` is pending. No replacement module is installed on the phone.
+at `f27228d` passed actual ARM64 kernel/supplier builds and both complete v051
+module links. All118 strong imports resolve; candidate module SHA256
+`ff929652ffde5ab1dc0d1ba44d92825351d316b8f7c0d92413484363c1972d79`.
+LLVM21.1.2 differs from the installed kernel's21.1.8; this gate explicitly marks
+phone ABI compatibility false. Matched image packaging and real DSP/position
+tests remain pending; no replacement module is installed on the phone.
 
 Personal U-Boot `bd8950d9bf6c10e6ee075e654e19ff43cc889841` adds explicit retained
 GPUEB payload offsets/profile/version and signed-member/container provenance,

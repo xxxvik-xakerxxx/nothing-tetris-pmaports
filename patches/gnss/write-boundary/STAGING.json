@@ -1,5 +1,5 @@
 {
-  "status": "staged only; actual-source native CI38335304033 and real ARM64 v051 objects CI38336059980 passed; full module link, shipping and hardware untested",
+  "status": "staged only; native fixtures, ARM64 objects and full baseline/candidate module link with real suppliers CI38357565018 passed; shipping and hardware untested",
   "connectivity_repository": "NothingOSS/android_kernel_modules_nothing_mt6878",
   "connectivity_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "patch": "patches/gnss/write-boundary/1009-vendor-gnss-nonblocking-data-link-write.patch.vendor",
@@ -22,6 +22,21 @@
   },
   "write_scope": ["new patches/gnss/write-boundary/** only"],
   "native_validation": "CI38335304033 at e8ad596 passed actual-source IRQ/polling ASan/UBSan and all applicable regression controls; CI38336059980 at 9f4b4b2 compiled real ARM64 v051 translation units; no native execution locally",
+  "full_module_validation": {
+    "run": 38357565018,
+    "commit": "f27228d3f101690e9f6592efa4c777b4b936363c",
+    "artifact": 11795055980,
+    "archive_sha256": "d8b74624cd5acf02bad50ecbadab8fdd4483f45186437144fd0c8b20c9958901",
+    "compiler": "Alpine clang 21.1.2; not the installed 21.1.8 kernel toolchain",
+    "kernel_sha256": "99d93d72c33a9dd889394159b5aa6e2990740628daba5adaa0576d0c6ae345f4",
+    "baseline_module_sha256": "13c06d8dfcfb2acfffbd36c358f9e6e4b2e0f30dd840e1b4f1d1ebae15d88064",
+    "candidate_module_sha256": "ff929652ffde5ab1dc0d1ba44d92825351d316b8f7c0d92413484363c1972d79",
+    "strong_imports": 118,
+    "suppliers": ["real kernel exports", "actual connadp", "actual conninfra"],
+    "strict_modpost": true,
+    "phone_abi_compatible": false,
+    "hardware_tested": false
+  },
   "shipping_activation": false,
   "residual_limits": [
     "shared o_buf remains unprotected against concurrent descriptor/thread writers; size overflow is bounded but serialization is not added",

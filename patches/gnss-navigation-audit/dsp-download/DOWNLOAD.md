@@ -83,13 +83,18 @@ at `e8ad596`. No C was compiled or executed locally. The real ARM64 v051
 translation units are now added to the isolated kernel-object CI gate;
 their compilation passed
 [CI38336059980](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38336059980)
-at `9f4b4b2`. This is not a linked/installed v051 module or hardware TX test.
+at `9f4b4b2`. Subsequent full kernel/connadp/conninfra and baseline/candidate
+v051 module link with strict real-export modpost passed
+[CI38357565018](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38357565018)
+at `f27228d`. Its LLVM21.1.2 configuration is not an installed-phone ABI claim;
+image packaging must rebuild the entire matched module stack. No hardware TX
+or DSP readiness was established by these builds.
 Terminal success detaches the borrowed session, and further Linux steps perform
 no syscall. The caller may release session storage after completion without a
 later result query dereferencing it. Failure likewise retains its first error.
 
 Remaining integration: legitimate retained inputs and the sole live fd owner,
-real1009 v051 compilation/packaging, protocol ACK traffic, independent kernel
+real1009 matched image packaging, protocol ACK traffic, independent kernel
 ready evidence, clean teardown and lifecycle, then navigation INIT/fix and
 GeoClue. The arithmetic/assembler/controller no longer need proprietary DSO
 execution; that does not make the required input acquisition optional.
