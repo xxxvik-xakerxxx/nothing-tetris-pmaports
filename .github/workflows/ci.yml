@@ -24,6 +24,10 @@ on:
         description: Build a separate matched native MD first-OFF diagnostic system, not a shipping or working-radio image
         type: boolean
         default: false
+      gnss_tx_image:
+        description: Add exact1009 GNSS TX to the matched native MD image (requires native_modem_first_off)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,6 +50,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check diagnostic image selection
+        run: |
+          if [ '${{ inputs.gnss_tx_image }}' = true ]; then
+            test '${{ inputs.native_modem_first_off }}' = true
+            test '${{ inputs.validation_only }}' != true
+            test '${{ inputs.kernel_smoke_only }}' != true
+            test '${{ inputs.research_owner_smoke }}' != true
+          fi
       - name: Install tools
         run: |
           sudo apt-get update
@@ -61,6 +73,8 @@ jobs:
           python3 ci/test-kernel-object-smoke.py
           python3 -B ci/test-native-camera-link.py
           python3 -B ci/test-native-modem-image.py
+          python3 -B ci/test-gnss-tx-image.py
+          python3 -B ci/test-native-gnss-image.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
@@ -239,6 +253,17 @@ jobs:
           export TETRIS_UBOOT_TREE="$PWD/upstream/modem-uboot"
           python3 patches/gpu/uboot-segments/test_draft.py
           sh patches/gpu/uboot-segments/run-native-ci.sh
+      - name: Validate retained v1 producer and kernel admission
+        run: |
+          git init upstream/gpueb-retained-producer
+          git -C upstream/gpueb-retained-producer fetch --no-tags --depth=1 \
+            https://github.com/xxxvik-xakerxxx/u-boot.git \
+            bd8950d9bf6c10e6ee075e654e19ff43cc889841
+          git -C upstream/gpueb-retained-producer checkout --detach FETCH_HEAD
+          TETRIS_UBOOT_TREE="$PWD/upstream/gpueb-retained-producer" \
+            python3 -B patches/gpu/uboot-segments/test_flat_metadata.py
+          python3 -B patches/gpu/uboot-segments/check_flat_metadata.py \
+            --tree upstream/gpueb-retained-producer
       - name: Validate sensor startup and sample ABI
         run: |
           python3 scripts/tests/test-sensor-startup.py
@@ -626,8 +651,15 @@ jobs:
             https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports.git \
             cbb777d415b564c1e40598740288c0c9d953e745
           export TETRIS_NATIVE_SOURCE_TREE=/work/out/native-source
-          python3 -B ci/stage-native-modem-image.py --pmaports upstream/pmaports \
-            --report out/native-modem-image-profile.json
+          if [ '${{ inputs.gnss_tx_image }}' = true ]; then
+            python3 -B ci/stage-native-gnss-image.py --pmaports upstream/pmaports \
+              --report out/native-modem-image-profile.json \
+              --tx-report out/gnss-tx-image-profile.json --include-exact1009
+          else
+            python3 -B ci/stage-native-gnss-image.py --pmaports upstream/pmaports \
+              --report out/native-modem-image-profile.json \
+              --tx-report out/gnss-tx-image-profile.json
+          fi
       - name: Prepare pmbootstrap workdir
         run: |
           mkdir -p /pmwork/work/cache_distfiles
@@ -1147,7 +1179,8 @@ jobs:
           required_uboot_sha256=$TETRIS_UBOOT_SHA256
           EOF
           if [ '${{ inputs.native_modem_first_off }}' = true ]; then
-            printf 'profile=native-md-first-off-diagnostic\nnative_source=cbb777d415b564c1e40598740288c0c9d953e745\n' \
+            profile=$(python3 -c 'import json; print(json.load(open("/work/out/native-modem-image-profile.json"))["profile"])')
+            printf 'profile=%s\nnative_source=cbb777d415b564c1e40598740288c0c9d953e745\n' "$profile" \
               >> /work/out/BUILD-MANIFEST
             (cd /work/out && sha256sum u-boot-tetris-lk.img >> SHA256SUMS)
           fi
@@ -1204,7 +1237,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{ always() && steps.install_images.outcome == 'success' }}
         with:
-          name: ${{ inputs.native_modem_first_off && 'nothing-tetris-native-md-first-off-images' || 'nothing-tetris-images' }}
+          name: ${{ inputs.gnss_tx_image && 'nothing-tetris-native-md-gnss-tx-images' || inputs.native_modem_first_off && 'nothing-tetris-native-md-first-off-images' || 'nothing-tetris-images' }}
           path: |
             /work/out/boot_image.itb
             /work/out/nothing-tetris-boot.img
@@ -1213,6 +1246,7 @@ jobs:
             /work/out/SHA256SUMS
             /work/out/native-modem-image-profile.json
             /work/out/native-modem-uboot.json
+            /work/out/gnss-tx-image-profile.json
             /work/out/u-boot-tetris-lk.img
           if-no-files-found: error
       - name: Upload build logs

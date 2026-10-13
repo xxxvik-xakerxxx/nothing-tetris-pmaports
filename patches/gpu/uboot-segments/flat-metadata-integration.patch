@@ -1,0 +1,237 @@
+--- a/patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c
++++ b/patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c
+@@ -16,11 +16,176 @@
+ #include <linux/uaccess.h>
+ #include <asm/page.h>
+ 
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef TETRIS_GPUEB_FLAT_METADATA_H
++#define TETRIS_GPUEB_FLAT_METADATA_H
++
++#include <linux/errno.h>
++#include <linux/of.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/string.h>
++
++#define TETRIS_FLAT_VERSION 1U
++#define TETRIS_FLAT_BYTES 156064U
++#define TETRIS_FLAT_ARENA_BYTES 0x100000U
++#define TETRIS_FLAT_ARENA_ALIGN 0x10000U
++#define TETRIS_FLAT_GPR_OFFSET 0x3fd1cU
++
++struct tetris_gpueb_flat_metadata {
++	u32 handoff_version;
++	u32 payload_offset;
++	u32 authenticated_bytes;
++	u32 sram_offset;
++	u32 profile_id;
++	u8 plaintext_sha256[32];
++	u8 primary_header_sha256[32];
++	u8 ciphertext_sha256[32];
++	u8 leaf_certificate_sha256[32];
++	u8 container_sha256[32];
++};
++
++/* Same profile IDs as the actual U-Boot v1 producer: phone-a=1, B4.1=2.
++ * These are signed firmware identities, not handset/calibration identities.
++ */
++static inline int tetris_gpueb_flat_profile_check(
++		const struct tetris_gpueb_flat_metadata *metadata)
++{
++	static const u8 profiles[2][32] = {
++		{ 0x96, 0x28, 0xa4, 0x46, 0xc2, 0x45, 0x36, 0x64,
++		  0xee, 0xbb, 0x7c, 0xe0, 0xf5, 0xb6, 0xd9, 0xdb,
++		  0x51, 0xd6, 0x77, 0xd6, 0xc1, 0xdb, 0x3c, 0x4a,
++		  0xc1, 0x44, 0x9f, 0x4c, 0xfa, 0xad, 0x86, 0xd7 },
++		{ 0x4c, 0xd3, 0xac, 0x60, 0x60, 0x5b, 0x30, 0xf9,
++		  0x29, 0x88, 0xa7, 0x60, 0x6e, 0x95, 0xb7, 0xe4,
++		  0xf8, 0x2d, 0x70, 0x51, 0x3b, 0xbd, 0x12, 0x92,
++		  0x3a, 0x0e, 0x56, 0x2e, 0x9f, 0xc3, 0x17, 0x02 },
++	};
++
++	if (!metadata || metadata->profile_id < 1 || metadata->profile_id > 2)
++		return -ENOEXEC;
++	if (memcmp(metadata->plaintext_sha256,
++		   profiles[metadata->profile_id - 1], 32))
++		return -ENOEXEC;
++	return 0;
++}
++
++static inline int tetris_gpueb_flat_metadata_validate(
++		const struct tetris_gpueb_flat_metadata *metadata,
++		const struct reserved_mem *memory)
++{
++	if (!metadata || !memory || metadata->handoff_version != TETRIS_FLAT_VERSION ||
++	    memory->size != TETRIS_FLAT_ARENA_BYTES ||
++	    memory->base < 0x40000000ULL ||
++	    memory->base > 0x80000000ULL - TETRIS_FLAT_ARENA_BYTES ||
++	    (memory->base & (TETRIS_FLAT_ARENA_ALIGN - 1)) ||
++	    metadata->payload_offset || metadata->sram_offset ||
++	    metadata->authenticated_bytes != TETRIS_FLAT_BYTES ||
++	    metadata->payload_offset > memory->size ||
++	    metadata->authenticated_bytes > memory->size - metadata->payload_offset ||
++	    metadata->sram_offset > TETRIS_FLAT_GPR_OFFSET ||
++	    metadata->authenticated_bytes > TETRIS_FLAT_GPR_OFFSET - metadata->sram_offset)
++		return -EINVAL;
++	/* Provenance must be present and copied, but is not a second signature
++	 * verification. Container identity includes unauthenticated framing/xfile.
++	 * Trust remains the reviewed bootloader producer and its signed postdigest.
++	 */
++	if (!memchr_inv(metadata->primary_header_sha256, 0, 32) ||
++	    !memchr_inv(metadata->ciphertext_sha256, 0, 32) ||
++	    !memchr_inv(metadata->leaf_certificate_sha256, 0, 32) ||
++	    !memchr_inv(metadata->container_sha256, 0, 32))
++		return -EINVAL;
++	return tetris_gpueb_flat_profile_check(metadata);
++}
++
++static inline int tetris_gpueb_flat_read_u32(const struct device_node *node,
++		const char *name, u32 *value)
++{
++	if (of_property_count_u32_elems(node, name) != 1)
++		return -EINVAL;
++	return of_property_read_u32(node, name, value);
++}
++
++static inline int tetris_gpueb_flat_read_digest(const struct device_node *node,
++		const char *name, u8 value[32])
++{
++	const void *property;
++	int length;
++
++	property = of_get_property(node, name, &length);
++	if (!property || length != 32)
++		return -EINVAL;
++	memcpy(value, property, 32);
++	return 0;
++}
++
++/* Metadata only; the existing consumer must validate plain NOMAP ordinary RAM,
++ * claim the whole arena, recheck resources/PFNs and hash its private snapshot.
++ * No borrowed DT property pointer survives. Failure leaves *result unchanged.
++ */
++static inline int tetris_gpueb_flat_metadata_read(const struct device_node *node,
++		const struct reserved_mem *memory,
++		struct tetris_gpueb_flat_metadata *result)
++{
++	struct tetris_gpueb_flat_metadata metadata = { 0 };
++	int ret;
++
++	if (!node || !result || !of_device_is_available(node) ||
++	    of_property_count_strings(node, "compatible") != 1 ||
++	    !of_device_is_compatible(node, "nothing,tetris-gpueb-flat-analysis-v1"))
++		return -EINVAL;
++#define READ_U32(property, field) do { \
++	ret = tetris_gpueb_flat_read_u32(node, property, &metadata.field); \
++	if (ret) return ret; \
++} while (0)
++#define READ_DIGEST(property, field) do { \
++	ret = tetris_gpueb_flat_read_digest(node, property, metadata.field); \
++	if (ret) return ret; \
++} while (0)
++	READ_U32("nothing,handoff-version", handoff_version);
++	READ_U32("nothing,payload-offset", payload_offset);
++	READ_U32("nothing,authenticated-bytes", authenticated_bytes);
++	READ_U32("nothing,sram-offset", sram_offset);
++	READ_U32("nothing,profile-id", profile_id);
++	READ_DIGEST("nothing,plaintext-sha256", plaintext_sha256);
++	READ_DIGEST("nothing,primary-header-sha256", primary_header_sha256);
++	READ_DIGEST("nothing,ciphertext-sha256", ciphertext_sha256);
++	READ_DIGEST("nothing,leaf-certificate-sha256", leaf_certificate_sha256);
++	READ_DIGEST("nothing,container-sha256", container_sha256);
++#undef READ_U32
++#undef READ_DIGEST
++	ret = tetris_gpueb_flat_metadata_validate(&metadata, memory);
++	if (ret)
++		return ret;
++	*result = metadata;
++	return 0;
++}
++
++/* digest must be the actual SHA256 of the owned private snapshot. Admission
++ * covers signed bytes only; it grants no upload/reset/IRQ/start authority.
++ */
++static inline int tetris_gpueb_flat_snapshot_check(
++		const struct tetris_gpueb_flat_metadata *metadata,
++		const u8 digest[32], size_t bytes)
++{
++	int ret;
++
++	if (!metadata || !digest || bytes != TETRIS_FLAT_BYTES ||
++	    bytes != metadata->authenticated_bytes)
++		return -EINVAL;
++	ret = tetris_gpueb_flat_profile_check(metadata);
++	if (ret)
++		return ret;
++	return memcmp(digest, metadata->plaintext_sha256, 32) ? -EBADMSG : 0;
++}
++
++#endif
++
+ struct flat_analysis {
+ 	struct miscdevice misc;
+ 	struct resource *reservation;
+ 	u8 *snapshot;
+ 	u32 size;
++	struct tetris_gpueb_flat_metadata metadata;
+ };
+ 
+ struct flat_ram_check {
+@@ -175,11 +340,11 @@
+ 	struct flat_analysis *analysis;
+ 	struct crypto_shash *hash;
+ 	struct shash_desc *desc;
+-	const u8 *expected;
++	struct tetris_gpueb_flat_metadata metadata;
+ 	u8 digest[32];
+ 	void *mapping;
+ 	u32 size;
+-	int length, ret;
++	int ret;
+ 
+ 	if (of_property_count_u32_elems(pdev->dev.of_node, "memory-region") != 1)
+ 		return -EINVAL;
+@@ -191,15 +356,10 @@
+ 	of_node_put(node);
+ 	if (ret || !memory)
+ 		return -EINVAL;
+-	if (memory->size != 0x100000 || !memory->base ||
+-	    memory->base & 0xffff || memory->base > 0x80000000ULL - memory->size)
+-		return -EINVAL;
+-	if (of_property_read_u32(pdev->dev.of_node, "nothing,authenticated-bytes", &size) ||
+-	    size != 156064 || size > memory->size)
+-		return -EINVAL;
+-	expected = of_get_property(pdev->dev.of_node, "nothing,plaintext-sha256", &length);
+-	if (!expected || length != sizeof(digest))
+-		return -EINVAL;
++	ret = tetris_gpueb_flat_metadata_read(pdev->dev.of_node, memory, &metadata);
++	if (ret)
++		return ret;
++	size = metadata.authenticated_bytes;
+ 	analysis = kzalloc(sizeof(*analysis), GFP_KERNEL);
+ 	if (!analysis)
+ 		return -ENOMEM;
+@@ -216,7 +376,7 @@
+ 		ret = -ENOMEM;
+ 		goto erase;
+ 	}
+-	memcpy(analysis->snapshot, mapping, size);
++	memcpy(analysis->snapshot, (u8 *)mapping + metadata.payload_offset, size);
+ 	memunmap(mapping);
+ 	hash = crypto_alloc_shash("sha256", 0, 0);
+ 	if (IS_ERR(hash)) {
+@@ -233,11 +393,12 @@
+ 	ret = crypto_shash_digest(desc, analysis->snapshot, size, digest);
+ 	kfree_sensitive(desc);
+ 	crypto_free_shash(hash);
+-	if (!ret && memcmp(digest, expected, sizeof(digest)))
+-		ret = -EBADMSG;
++	if (!ret)
++		ret = tetris_gpueb_flat_snapshot_check(&metadata, digest, size);
+ 	memzero_explicit(digest, sizeof(digest));
+ 	if (ret)
+ 		goto erase;
++	analysis->metadata = metadata;
+ 	analysis->size = size;
+ 	analysis->misc.minor = MISC_DYNAMIC_MINOR;
+ 	analysis->misc.name = "gpueb-flat-analysis";

@@ -6,7 +6,71 @@ Current development is in [pmOS main](https://github.com/xxxvik-xakerxxx/nothing
 and the maintainer's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot).
 The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
-## Latest installed checkpoint: r182
+## Latest installed checkpoint: r184
+
+Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)
+at `91c7a1108149d3694fbb255cdf95c3f6ab62be19` passed all five jobs.
+Archive SHA256 `214a67cb840f5ff477ae8ea31cbef3634265e8740ac3f4d52d1582932d023110`
+and all four image hashes were verified before clean `super`/`userdata` installation.
+The sparse image parsed completely: 2783969280 expanded bytes, 7677 chunks.
+Kernel `7.2.1-r184`, Linux `6.18.0 #185`, device `8-r20`; paired startup-OFF
+U-Boot `322cf227` remains in `lk_a`, with stock `lk_b` unchanged.
+Installed FIT SHA256 is
+`54b959868cc3548a7211b1ec525960ae19114f7c74cfd7d166e5cdd9c7403995`.
+
+First boot `62d3d417-ea51-4e83-a228-f8253a921523` retained USB/SSH and completed
+the actual native MD first-OFF transaction: CTL `0x02000009`, isolation `0x3`,
+IFR9 `0xfbfb03b8`, IFR11 `0xcffcd932`, NEMI `0xc1`. This physically validates
+the ACK30 correction and protected MTCMOS OFF, **not modem restart or SIM/calls**.
+The modem consumer remains disabled. Warm SCP preparation failed and conninfra
+reported completion timeouts; no module reload was attempted. Logs were saved
+before full shutdown. The user subsequently reported a working Linux desktop
+but no Wi-Fi or sensors, then entered fastboot. A cold journal was unavailable
+because the host's external hub had lost its USB2 branch; reconnecting the hub
+restored fastboot. This does not identify the causal hardware regression.
+
+A control boot filesystem changes only the DT to the normal native DT compiled
+in the **same r184 CI** (SHA256
+`544b6fa716e1523b74bc9c081592cb0cdde8a489f047760cad90799ea3841398`).
+Kernel/initramfs payloads and every other FIT property were compared unchanged;
+boot filesystem contents differ only in FIT, and userdata/modules stay r184.
+Control FIT SHA256 `d8be9d96a91f3ed251526f67803cffcfefc88a7a808eef2904d5c93f01a12411`;
+boot image SHA256 `6a795b4348dfcb6e12bfb916f3c9143212d934427af50a411eb573b6578b2d11`.
+This disables the first-OFF DT activation to isolate the reported failure; it
+is a derived diagnostic repack, not a separately compiled or validated release.
+The control boot filesystem was written to `super` successfully; userdata and
+both LK slots were untouched. Control boot `0edff604-0759-41a2-be3f-b97c13ec3552`
+confirmed that the failure persists with normal DT: SCP recovery succeeds,
+but sensorhub returns `-ENOMEM` at wakeup-source registration. The first
+conninfra fault is `osal_wake_lock_count`, before subsequent completion timeouts.
+USB/SSH and the control FIT hash remain valid; no hardware owners were reloaded.
+
+The actual r184 configuration disables PM_SLEEP. Pinned Linux
+`include/linux/pm_wakeup.h` then makes `wakeup_source_register()` return NULL;
+the matching sensor transceiver checks it and returns ENOMEM, while conninfra
+dereferences the absent wake lock. This source/live match identifies the
+configuration regression independently of MD first-OFF. Corrected r187/r188
+image staging keeps SUSPEND/PM_SLEEP/PM_SLEEP_SMP and retains a static PM prepare
+veto before the first modem write. A system-transition mutex trylock excludes
+concurrent suspend/reboot without waiting behind a probe-dependent transition.
+CPU idle, hotplug, hibernation and kexec stay excluded. The veto persists through
+success/failure for this boot; this is not working suspend support. Full CI and
+physical recovery remain required before reporting the fix as working.
+This diagnostic profile excludes idle/sleep/hotplug and is not a battery-optimized
+shipping release. GNSS exact1009, camera frames and accelerated rendering are
+not enabled by r184.
+
+The opt-in CI `gnss_tx_image` path stages exact1009 in a matched r188 kernel,
+with all genuine supplier/external modules rebuilt together and separately
+named artifacts. Without GNSS TX the corrected first-OFF image is r187; frozen
+r184 remains a reproducible historical parent. The next full image combines
+the causal wakeup-source correction and real GNSS TX package integration.
+The new GPU v1 metadata admission preserves the existing RAM owner and actual
+bootloader profile/digest fields; real ARM64 object compilation is queued,
+not GPUEB upload/start. The camera VMM admission addition rejects independent
+firmware voters before rail acquisition; post-OFF modem TOP gating remains an
+uncalled, default-off staged primitive. None of these source changes establish
+SIM, GPS fix, GPU rendering or camera capture.
 
 ### Current integration checkpoint
 
@@ -19,7 +83,7 @@ board/profile/frequency inputs remain required; no synthetic bootstrap is sent.
 These source changes have passed the joint native build gates, **not installed
 hardware support**. The nonbootable camera fixture is excluded from FIT inputs.
 
-Personal U-Boot master `322cf227f2ea26a7e319d20e3ce0321db8a38f15` adds the
+Paired U-Boot source `322cf227f2ea26a7e319d20e3ce0321db8a38f15` adds the
 paired fresh final first-OFF marker, without a new hardware operation. Its
 [CI38314466282](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38314466282)
 passed. The matching SCP-secure/BROM-metadata build
@@ -69,7 +133,7 @@ The diagnostic profile corrects that reference to the same actual shared
 provider header used by native CI, explicitly builds/installs its selected DT,
 and declares the sibling modem node in the power binding. A repeated uncorrected
 attempt was cancelled. The corrected complete image is available as described
-below; r183 installation remains pending.
+below; r183 was deliberately withheld and is superseded by r184.
 
 The follow-up source revision retains a staged post-OFF TOP/rail owner and
 first errno, but inhibited ON still stops before regulator acquisition or
@@ -174,8 +238,8 @@ generic second ACK31. The frozen native candidate incorrectly required both.
 Diagnostic r184/device r20 adds an exact post-provider BIT30 correction and
 pairs the corrected loader. Ten static staging/application checks pass;
 complete kernel/image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)
-at `91c7a11` passed validation, Bionic, sealed-loader and object smoke; kernel
-compilation and physical first-OFF remain pending. r183 remains an uninstalled
+at `91c7a11` passed validation, Bionic, sealed-loader, object smoke and full image
+compilation. The installed first-OFF result is recorded above. r183 remains an uninstalled
 CI checkpoint, not a working modem claim.
 
 The full GNSS module gate builds actual kernel exports, connadp and conninfra,

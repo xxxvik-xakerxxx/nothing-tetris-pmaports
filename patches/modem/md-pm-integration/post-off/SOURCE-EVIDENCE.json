@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205"
+  },
+  "method": "exact vendor git objects; hashed pristine pinned Linux files; source-only",
+  "sources": {
+    "vendor-md": {
+      "path": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ae3e3998c2ce060ef7e5e406fa647cbff2fae14f196f1d2494784cc4c46848af"
+    },
+    "vendor-dts": {
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    "vendor-ufs-wrapper": {
+      "path": "drivers/misc/mediatek/eccci/fsm/ccci_fsm.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "90074e8f7292b8610f2aa093382cef0488fcb9fa2e129940519c6e973d5825c1"
+    },
+    "vendor-ufs-release": {
+      "path": "drivers/ufs/ufs-mediatek-dbg.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "9fd58988792127a7f4e8823e717c425ff88498183ba722ca543e269d9c8bb2ab"
+    },
+    "vendor-domain": {
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    "linux-syscon": {
+      "path": "drivers/mfd/syscon.c",
+      "revision": null,
+      "sha256": "78b656e67537bd2bcc232bb289d44d85d956af90c48af8a59af9da9b7c42e030"
+    },
+    "linux-regmap": {
+      "path": "drivers/base/regmap/regmap.c",
+      "revision": null,
+      "sha256": "4052c8235bf4c9c4823c807dc4940e9be7b70d3e66da2cc090482f44b40dc44a"
+    },
+    "linux-regmap-api": {
+      "path": "include/linux/regmap.h",
+      "revision": null,
+      "sha256": "0444ee165f9bfb7cbb2a0abafa982fb415ddf544bb00a9c7bdf70f562fd8d2ef"
+    }
+  },
+  "causal_edges": [
+    {
+      "source": "vendor-md",
+      "line": 661,
+      "anchor": "static int md_cd_topclkgen_off(struct ccci_modem *md)",
+      "meaning": "TOP gate operation; vendor write errno and caller return are ignored"
+    },
+    {
+      "source": "vendor-md",
+      "line": 676,
+      "anchor": "reg_value |= ((1<<8) | (1<<9));",
+      "meaning": "only modem TOP bits8/9 are set"
+    },
+    {
+      "source": "vendor-md",
+      "line": 916,
+      "anchor": "ccci_ufs_io_operate(0);",
+      "meaning": "UFS unblock before gen6299 settle and FLIGHT; caller ignores return"
+    },
+    {
+      "source": "vendor-md",
+      "line": 919,
+      "anchor": "mdelay(4);",
+      "meaning": "settle >=4ms after UFS unblock for gen6299"
+    },
+    {
+      "source": "vendor-md",
+      "line": 648,
+      "anchor": "static void flight_mode_set_by_atf(struct ccci_modem *md,",
+      "meaning": "known secure inputs; void/log-only returns do not prove success or inhibition"
+    },
+    {
+      "source": "vendor-md",
+      "line": 1549,
+      "anchor": "syscon_regmap_lookup_by_phandle(dev_ptr->dev.of_node,\n\t\t\t\"ccci-topckgen\");",
+      "meaning": "native shared TOP syscon lookup"
+    },
+    {
+      "source": "vendor-md",
+      "line": 1302,
+      "anchor": "static int md_cd_power_on(struct ccci_modem *md)",
+      "meaning": "intentional genuine power-on chain is distinct from an inhibited diagnostic promise"
+    },
+    {
+      "source": "vendor-md",
+      "line": 1383,
+      "anchor": "static int md_cd_let_md_go(struct ccci_modem *md)",
+      "meaning": "separate POWER/0 release is not proof of inhibition before release"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 2620,
+      "anchor": "topckgen_clk: syscon@10000000 {\n\t\tcompatible = \"mediatek,mt6878-topckgen\", \"syscon\";\n\t\treg = <0 0x10000000 0 0x1000>;",
+      "meaning": "real TOP compatible/address/size; geometry check does not create an MMIO window"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 6242,
+      "anchor": "ccci-topckgen = <&topckgen_clk>;",
+      "meaning": "actual modem TOP phandle"
+    },
+    {
+      "source": "vendor-ufs-wrapper",
+      "line": 116,
+      "anchor": "int ccci_ufs_io_operate(int op_id)",
+      "meaning": "release requires tracked held calibration state; -1 when unheld/disabled"
+    },
+    {
+      "source": "vendor-ufs-release",
+      "line": 1803,
+      "anchor": "int ufs_mtk_cali_release(void)",
+      "meaning": "release unblocks requests and drops UFS runtime reference; requires matching owner"
+    },
+    {
+      "source": "vendor-domain",
+      "line": 121,
+      "anchor": "MTK_SCPD_BYPASS_INIT_ON | MTK_SCPD_REMOVE_MD_RSTB,",
+      "meaning": "no fabricated AP reset/inhibit mechanism"
+    },
+    {
+      "source": "linux-syscon",
+      "line": 255,
+      "anchor": "struct regmap *device_node_to_regmap(struct device_node *np)",
+      "meaning": "same cached native map as frozen resource helper, with DT resource guard"
+    },
+    {
+      "source": "linux-regmap",
+      "line": 3226,
+      "anchor": "static int _regmap_update_bits(struct regmap *map, unsigned int reg,\n\t\t\t       unsigned int mask, unsigned int val,\n\t\t\t       bool *change, bool force_write)\n{",
+      "meaning": "masked RMW preserves unrelated bits and propagates read/write errno"
+    },
+    {
+      "source": "linux-regmap",
+      "line": 3281,
+      "anchor": "int regmap_update_bits_base(struct regmap *map, unsigned int reg,",
+      "meaning": "RMW under shared map lock; not global hardware/secure serialization"
+    },
+    {
+      "source": "linux-regmap-api",
+      "line": 1384,
+      "anchor": "static inline int regmap_set_bits(struct regmap *map,\n\t\t\t\t  unsigned int reg, unsigned int bits)\n{\n\treturn regmap_update_bits_base(map, reg, bits, bits,",
+      "meaning": "set-only masked RMW API; no ungate"
+    }
+  ],
+  "status": "TOP-only implementation; no full shutdown/restart/boot integration"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "status": "TOP primitive implemented; source/static validation only; hardware untested",
+  "default_enabled": false,
+  "symbol": "CONFIG_MTK_MT6878_MODEM_POST_OFF_TOP_STAGING",
+  "files": ["mt6878-modem-post-off.h", "Kconfig", "STAGING.json", "SOURCE-EVIDENCE.json", "audit.py", "test_static.py", "README.md"],
+  "integration": "none: no provider include/caller, kernel Kconfig source, image staging or APKBUILD change",
+  "owner": "existing retained mt6878_md_first_off_owner and supplier; separate zeroed non-devm TOP sidecar retained through reboot",
+  "operation": "physical OFF readback then checked regmap_set_bits at TOP offset0 bits8/9 then checked readback; mismatch -EIO",
+  "bound": "no polling/retries/delay: five physical OFF reads, at most one TOP RMW read/write and one TOP verification read; bound on operations, not a bus-stall wall-clock guarantee",
+  "first_error": "existing mt6878_md_adopt_fault; read/write errors returned unchanged; failed/complete attempt cannot be retried",
+  "prerequisites_not_implemented": ["owned UFS unblock or source-backed applicability decision", "settle >=4ms after UFS unblock", "actual FLIGHT(true) operation with established failure contract"],
+  "missing_integration": ["retain the zeroed sidecar alongside the native first-OFF owner", "include header after native adoption helpers and source staged Kconfig", "caller holds takeover lock then retained owner lock", "complete prerequisite operations in vendor order before calling TOP gate", "validate competing TOP writers and hardware lifecycle", "separate intentional genuine boot ownership and firmware/EMI/transport chain"],
+  "execution_inhibited_restart": "requires active inhibition owner/readback because execution is intentionally forbidden",
+  "intentional_genuine_boot": "does not require artificial execution inhibition; still requires owned power/secure/firmware/EMI/transport sequence and error contracts; no ON action implemented or authorized by this helper",
+  "not_proofs": ["FLIGHT secure returns", "FIRST_OFF_COMPLETE alone", "AP locks", "initial BROM", "separate POWER/0 release"],
+  "forbidden_actions_performed": []
+}

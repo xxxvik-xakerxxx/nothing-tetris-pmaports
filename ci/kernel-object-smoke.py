@@ -781,6 +781,39 @@ def run(command):
     subprocess.run(list(map(str, command)), check=True)
 
 
+def compile_flat_metadata(make, kernel, output, report):
+    """Compile the actual v1 consumer delta, then restore the packaged source."""
+    draft = Path("patches/gpu/uboot-segments")
+    spec = importlib.util.spec_from_file_location("flat_v1", draft / "integrate_flat_metadata.py")
+    integration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(integration)
+    source = kernel / "drivers/misc/gpueb-flat-analysis.c"
+    before = source.read_text()
+    canonical = (integration.OWNER / source.name).read_text()
+    if before != canonical:
+        raise ValueError("prepared GPUEB consumer differs from reviewed package source")
+    revised = integration.integrate(before, (draft / "tetris_gpueb_flat_metadata.h").read_text())
+    compiled = output / "drivers/misc/gpueb-flat-analysis.o"
+    original_object = compiled.read_bytes()
+    destination = report / "gpueb-flat-v1"
+    destination.mkdir(exist_ok=False)
+    try:
+        source.write_text(revised)
+        run([*make, "drivers/misc/gpueb-flat-analysis.o"])
+        target = destination / "gpueb-flat-analysis.o"
+        shutil.copyfile(compiled, target)
+        shutil.copyfile(output / ".config", destination / "config")
+        (destination / "gpueb-flat-analysis.c").write_text(revised)
+        return dict(source_sha256=hashlib.sha256(revised.encode()).hexdigest(),
+                    object_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
+                    object_identity=object_identity(target),
+                    scope="actual v1 consumer object only; no module link or hardware operation",
+                    shipping_source_changed=False, hardware_tested=False)
+    finally:
+        source.write_text(before)
+        compiled.write_bytes(original_object)
+
+
 def stage_research_sources(kernel, root=Path(".")):
     directories = {str(Path(name).parent) for name in RESEARCH_OBJECTS}
     destinations = [*RESEARCH_SOURCES.values(), *(f"{name}/Makefile" for name in directories)]
@@ -1119,6 +1152,7 @@ def main():
         print(name + ": " + json.dumps(identities[name]), flush=True)
     if list(output.rglob("*.ko")) or (output / "vmlinux").exists():
         raise ValueError("object-only CI must not produce runtime modules or kernel")
+    manifest["gpueb_flat_v1"] = compile_flat_metadata(make, kernel, output, report)
     if args.research_owners:
         # Also compile the real video and clock owners without private KUnit cases.
         # No fixture execution or change to the shipping kernel configuration.

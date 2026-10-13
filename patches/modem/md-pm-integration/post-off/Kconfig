@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Staged fragment only: not sourced by the current kernel/image integration.
+config MTK_MT6878_MODEM_POST_OFF_TOP_STAGING
+	bool "MT6878 modem post-OFF TOP primitive (staging only)"
+	depends on ARCH_MEDIATEK && OF && MFD_SYSCON
+	default n
+	help
+	  Compile the TOP-only shutdown primitive for the retained native modem
+	  owner. Integration must supply the preceding owned UFS unblock, settle
+	  and FLIGHT(true) sequence. This does not enable a modem restart or boot.

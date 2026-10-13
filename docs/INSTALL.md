@@ -1,6 +1,6 @@
 # Installation and FAQ
 
-Updated: 2026-10-11. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
+Updated: 2026-10-13. For Nothing CMF Phone 1 (`nothing-tetris`, A015) only.
 This is an experimental Linux port, not an Android ROM or a daily-driver release.
 
 > **Use at your own risk.** This project is provided as-is, without warranty.
@@ -87,42 +87,38 @@ The check needs `sha256sum` and `file` on the host. Also verify the separate
 U-Boot artifact against its own manifest and checksums. A matching checksum
 does not establish hardware/firmware compatibility.
 
-The latest installed image is r181 from
-[CI 38117727546](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38117727546),
-source `e0c67c561ff7c1a0472da851edfafd5a0abb6cec`.
-Its archive, image hashes and all 7,691 sparse chunks were verified before
-clean installation. First warm boot, USB/SSH and installed FIT verification
-passed. On the next user-reported restart, sensors started automatically and
-the exact-ABI AP-only modem metadata import passed once; runtime radio remains off.
-Visual and full cold/lifecycle checks remain pending.
-The first rootfs resize asks for forced fsck and leaves about 2.4 GiB usable;
-the next boot recovered the journal before mounting and expanded to 104.5 GiB.
-This is still a first-install issue, not a validated full-capacity fresh release.
-The image-sealing fix passed all jobs in
-[CI 38149660135](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38149660135)
-at `4dcbab6e60b56c60f83ea6f8ae958f2014b56446`; those repacked artifacts have
-not been installed. Do not mix them with the original r181 images.
-Do not run `e2fsck` on the mounted root filesystem.
-The retained r179 recovery checkpoint previously passed full root expansion,
-display/touch, rotation and auto-brightness on physical cold startup after
-sensor opt-in with U-Boot `cdd806438d73`.
-Warm reboot still has a known SCP inherited-state failure; full lifecycle and
-other-unit testing remain pending. See the current
-[checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r181).
-Sensors are opt-in on a fresh image and require the matching SCP-enabled
-loader; the ordinary U-Boot artifact does not enable that profile.
-The r181 combined image passed full CI, including all four corrected DTBs and
-actual module linkage. Its disabled modem anchor now receives the loader's
-21-tag descriptor and the separate AP-only import test passed, but this does not establish SIM,
-calls, GPS, GPU acceleration or camera support.
+The maintainer's latest installed **diagnostic** image is r184 from
+[CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811),
+source `91c7a1108149d3694fbb255cdf95c3f6ab62be19`.
+Its separately named `nothing-tetris-native-md-first-off-images` artifact is
+not the ordinary shipping image: it excludes idle/sleep/hotplug and runs one
+native modem power-OFF experiment. Verified clean installation, first boot,
+USB/SSH, FIT and physical modem OFF passed; modem restart/SIM/calls did not.
+Wi-Fi and sensors were reported unavailable after the next restart; the cause
+is being isolated with a same-kernel normal-DT control. Do not treat r184 as a
+validated replacement for the earlier working checkpoint. Visual/lifecycle
+and cold recovery checks remain pending. Use the exact paired
+loader described below, not an older sensor-ready loader selected by name.
+See the maintained [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r184)
+for hashes and remaining failures.
+
+Sealed r182 previously expanded to 104.5 GiB on its first installation boot.
+The image-sealing fix is included in r184; never run `e2fsck` on mounted root.
+Sensors require the matching SCP-enabled loader and a prepared cold handoff.
+Warm reboot has a known SCP inherited-state failure; lifecycle and other-unit
+testing remain pending. Cellular service, GPS navigation, GPU acceleration
+and camera capture are not working features of these images.
 
 ## U-Boot prerequisite
 
 Use the [Tetris U-Boot repository](https://github.com/xxxvik-xakerxxx/u-boot).
-Do not flash raw `u-boot.bin` as an LK image. The recorded sensor-ready image
-is `bf75c572e16079a36ab43a032be3360c3e93250c`, CI 35718518185, LK SHA256
-`7fd5bb218af3d3371dca59930f320ba98d38ddba6cbf7229851c33ba746d62fe`.
-It was tested in `lk_a`, with stock `lk_b` preserved.
+Do not flash raw `u-boot.bin` as an LK image. r184 requires the startup-OFF
+profile from [CI38350296947](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38350296947),
+source `322cf227f2ea26a7e319d20e3ce0321db8a38f15`, LK SHA256
+`0a16ba1da3a40b8da43b9d5b322fc496c65636ab5f516a5c152b7639e973073b`.
+It is included in the paired diagnostic artifact, has 3316976 bytes and was
+written/read back in `lk_a`, preserving stock `lk_b`. Other builds at the same
+source may have different profiles: commit identity alone is insufficient.
 
 For that exact validated slot-A setup only, after independently confirming
 the active stock slot and recovery path, the LK write is:

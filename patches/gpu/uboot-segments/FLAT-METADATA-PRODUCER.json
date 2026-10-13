@@ -1,0 +1,25 @@
+{
+  "reported_uboot_commit": "bd8950d",
+  "reported_uboot_ci": "38356830921",
+  "source_identity_method": "SHA256 of actual sibling checkout; no git or CI query",
+  "board_directory": "board/mediatek/mt6878",
+  "sources": {
+    "tetris_gpueb_flat.c": "5b777b6681499ba6310075f6755b8e8c6b190544eb06d838bebc687a8bb9b62e",
+    "tetris_gpueb_flat.h": "17796899089417a0ad7d771df5977e0350ec9c2052bcca40f9de75fee958b122",
+    "tetris_gpueb_flat_publish.c": "92918f7de55fc9823d805bfc15cb101ee2025e9b3b396262f0e09556a9db6227"
+  },
+  "compatible": "nothing,tetris-gpueb-flat-analysis-v1",
+  "handoff_version": 1,
+  "payload_offset": 0,
+  "sram_offset": 0,
+  "authenticated_bytes": 156064,
+  "reservation_bytes": 1048576,
+  "reservation_alignment": 65536,
+  "profiles": {
+    "1": "9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7",
+    "2": "4cd3ac60605b30f92988a7606e95b7e4f82d70513bbd12923a0e562e9fc31702"
+  },
+  "nos41_evidence": "../GPUEB_B41_TRACE.md; ../reset-owner-draft/README.md",
+  "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
+  "execution_permitted": false
+}

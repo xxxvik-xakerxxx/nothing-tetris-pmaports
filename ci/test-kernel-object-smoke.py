@@ -834,5 +834,41 @@ class NativeProviderOrdering(unittest.TestCase):
         self.assertIn('shutil.copyfile(kernel / name, target)', source[:checked])
 
 
+class FlatMetadataCompile(unittest.TestCase):
+    def test_candidate_compile_restores_packaged_source_on_success_and_failure(self):
+        canonical = Path("patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c").read_text()
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                kernel, output, report = (root / name for name in ("kernel", "output", "report"))
+                source = kernel / "drivers/misc/gpueb-flat-analysis.c"
+                source.parent.mkdir(parents=True)
+                source.write_text(canonical)
+                artifact = output / "drivers/misc/gpueb-flat-analysis.o"
+                artifact.parent.mkdir(parents=True)
+                artifact.write_bytes(b"object fixture; never executed")
+                (output / ".config").write_text("CONFIG_TETRIS_GPUEB_FLAT_ANALYSIS=m\n")
+                report.mkdir()
+
+                def command(argv):
+                    self.assertIn("tetris_gpueb_flat_metadata_read", source.read_text())
+                    self.assertEqual(argv[-1], "drivers/misc/gpueb-flat-analysis.o")
+                    if fail:
+                        raise RuntimeError("compiler failure fixture")
+
+                with patch.object(smoke, "run", side_effect=command), \
+                        patch.object(smoke, "object_identity", return_value={"machine": "AArch64"}):
+                    if fail:
+                        with self.assertRaisesRegex(RuntimeError, "compiler failure"):
+                            smoke.compile_flat_metadata(["make"], kernel, output, report)
+                    else:
+                        result = smoke.compile_flat_metadata(["make"], kernel, output, report)
+                        self.assertFalse(result["hardware_tested"])
+                        self.assertFalse(result["shipping_source_changed"])
+                        self.assertEqual(result["source_sha256"],
+                                         "e0ac3e88c4a23faabf0cc80f406a52e7eda1ac44af0f9004df65de730a367204")
+                self.assertEqual(source.read_text(), canonical)
+
+
 if __name__ == "__main__":
     unittest.main()

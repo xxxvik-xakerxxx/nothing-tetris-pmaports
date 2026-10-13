@@ -1,0 +1,34 @@
+diff --git a/drivers/pmdomain/mediatek/mt6878-native-vmm.inc b/drivers/pmdomain/mediatek/mt6878-native-vmm.inc
+--- a/drivers/pmdomain/mediatek/mt6878-native-vmm.inc
++++ b/drivers/pmdomain/mediatek/mt6878-native-vmm.inc
+@@ -355,6 +355,18 @@
+ 	return ret;
+ }
+ 
++static int scpsys_vmm_admit_legacy_node(struct device *dev, struct device_node *node)
++{
++	/* B4.1 firmware voters need no regulator handle or *-supply property. */
++	if (!of_device_is_compatible(node, "mediatek,vmm_notifier") &&
++	    !of_device_is_compatible(node, "mediatek,mtk-mmdvfs-v3"))
++		return 0;
++
++	dev_err(dev, "%pOF: legacy VMM firmware voter blocks native supplier admission\n",
++		node);
++	return -EBUSY;
++}
++
+ static int scpsys_vmm_prepare(struct scpsys *scpsys)
+ {
+ 	struct device_node *np = scpsys->dev->of_node;
+@@ -382,6 +394,11 @@
+ 
+ 		if (!of_device_is_available(node))
+ 			continue;
++		ret = scpsys_vmm_admit_legacy_node(scpsys->dev, node);
++		if (ret) {
++			of_node_put(node);
++			goto put_rails;
++		}
+ 		for_each_property_of_node(node, prop) {
+ 			struct device_node *rail;
+ 			size_t len = strlen(prop->name);
