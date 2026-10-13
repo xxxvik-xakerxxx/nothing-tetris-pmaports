@@ -52,6 +52,8 @@ class ImageTests(unittest.TestCase):
             self.assertIn("pkgrel=183\n", apk)
             self.assertIn('die "native MD diagnostic exclusion unresolved: $_symbol"', apk)
             self.assertLess(apk.index("0180-native-md"), apk.index("0181-native-camera"))
+            self.assertIn('mediatek/' + stage.BOARD + '.dtb \\\n', apk)
+            self.assertIn('"$pkgdir/boot/dtbs/mediatek/' + stage.BOARD + '.dtb"', apk)
             self.assertEqual(result["source_commit"], stage.SOURCE)
             self.assertFalse(result["modem_consumer_enabled"])
             config = (tree / stage.KERNEL / "config-postmarketos-mediatek-mt6878.aarch64").read_text()

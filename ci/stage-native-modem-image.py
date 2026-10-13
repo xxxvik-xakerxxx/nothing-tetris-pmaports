@@ -124,6 +124,13 @@ def stage(tree, report):
     anchor = '\t1200-vendor-sensor-framework-linux-6.18.patch.vendor\n'
     apk = change_once(apk, anchor, anchor + "".join("\t" + name + "\n" for name in extra))
     apk = change_once(apk, "pkgrel=182\n", "pkgrel=183\n")
+    apk = change_once(apk, '\t\tImage.gz modules \\\n',
+                      '\t\tImage.gz modules \\\n\t\tmediatek/' + BOARD + '.dtb \\\n')
+    install_native = ('\tinstall -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \\\n'
+                      '\t\t"$pkgdir/boot/dtbs/mediatek/mt6878-nothing-tetris-native.dtb"\n')
+    apk = change_once(apk, install_native, install_native +
+                     '\tinstall -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/' + BOARD + '.dtb" \\\n' +
+                     '\t\t"$pkgdir/boot/dtbs/mediatek/' + BOARD + '.dtb"\n')
     checks = ("\t# This diagnostic profile must exclude every competing idle/sleep writer.\n"
               "\tfor _symbol in " + " ".join(DISABLED) + "; do\n"
               '\t\tif grep -Eq "^CONFIG_${_symbol}=[ym]$" .config; then\n'
