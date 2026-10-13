@@ -212,6 +212,15 @@ pending CI. This is not a measurement solver or sufficient navigation INIT:
 the ordinary vendor entry can repeat DSP initialization, so it is not called
 after the retained WORK session. No location, accuracy or NMEA is fabricated.
 
+The next native modem image composer adds genuine NOS util allocations/locks
+and sysfs initialization, plus checked WDT/L2-SRAM/sequencer/genpd resources in
+the real platform caller. Eleven source/packaging tests and full vendor patch
+application passed. It preserves strict modpost and matching image-only module
+installation; modules, HIF, rails and the consumer remain denied/default-off.
+Image-specific C, operational provider binding and first START are untested.
+This candidate currently includes TX1009, not session1010; a combined GPS/radio
+image must preserve the new GNSS session ABI before becoming the next live image.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

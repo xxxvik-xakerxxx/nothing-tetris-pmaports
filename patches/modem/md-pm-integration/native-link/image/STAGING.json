@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "scope": "new native-link/image files only",
+  "pins": {
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "companion_modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "loader": "f25c01444a642c6fca857bd9678ef438ec371988"
+  },
+  "status": "uninstalled image-specific source candidate; actual compilation and hardware pending",
+  "activation": "consumer/HIF/rails remain disabled, no autoload or automatic START, stock slot unchanged",
+  "files_sha256": {
+    "README.md": "e731acdee8f6f2694844a6dd474f1f163e01c3b42170708bc028dfaa3fb39d17",
+    "check_dt.py": "c71153df7b38174f5a190823a40ed4610654efccf2bab800b52d6f3d41b500db",
+    "check_modules.py": "e3a4b50ae66b03a76462719c0e1016e66f0ff0e990199357fbb6d326e18c5de6",
+    "consumer-resources.h": "123c80afb6e1345754e96a0fa12fdb7f2d90f5ecc8d1673987279f62f24055e3",
+    "native-image.sh": "ed7785bf65d3b12e3bfe12587002dae792b9c6adbba0d2ed4d7708012a7e2860",
+    "prepare.py": "a89233070a93edfcc7341fed34b6bde17305dd9fe661b1a035617a2ed80ef6fb",
+    "stage.py": "b49d9d6f82afef5bf64f15fcee20ae0d8f36bd67b75a133ab6215765e8c13396",
+    "test_static.py": "bdf196c0dec4aacc7973765586948a1acb114810f5ee5468b540125d0bc73d41",
+    "util-api.h": "5d0f658c467489bed8eaeb1f65e9b557e25453ca43670c53914925c5b73c70b3",
+    "util-events.h": "0b649bd0f9561b3152d9e3f85d50ca335195e64b3d6b7388a25c4675403067f2",
+    "util-log.h": "97f56c23bf9d7ab53945dec0988a14b9bb8706f26d6bf7ca6aba49139867b481",
+    "util-pin.h": "7c8c3921b6a16c1b356bad73e433d8fa4bf998c3b38d576cde346860729dc0f3"
+  }
+}
