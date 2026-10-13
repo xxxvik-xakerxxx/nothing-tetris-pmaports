@@ -57,10 +57,16 @@ def inputs():
 
 def isolated(path):
     resolved = path.resolve()
-    sources = {ROOT.resolve(), Path(os.environ.get("TETRIS_NATIVE_SOURCE_TREE", ROOT)).resolve()}
-    require(not any(resolved == source or source in resolved.parents or
-                    resolved in source.parents for source in sources),
-            "refusing to mutate repository/frozen source inputs")
+    root = ROOT.resolve()
+    frozen = Path(os.environ.get("TETRIS_NATIVE_SOURCE_TREE", ROOT)).resolve()
+    ci_copy = (os.environ.get("CI") == "true" and os.environ.get("GITHUB_ACTIONS") == "true" and
+               frozen != root and any(resolved == allowed or allowed in resolved.parents
+                   for allowed in (root / "upstream/pmaports", root / "out")))
+    for source in {root, frozen}:
+        if source == root and ci_copy:
+            continue
+        require(not (resolved == source or source in resolved.parents or resolved in source.parents),
+                "refusing to mutate repository/frozen source inputs")
     return resolved
 
 

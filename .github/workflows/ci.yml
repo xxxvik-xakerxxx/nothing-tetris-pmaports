@@ -255,6 +255,10 @@ jobs:
           sh patches/gpu/uboot-segments/run-native-ci.sh
       - name: Validate retained v1 producer and kernel admission
         run: |
+          git -C upstream/linux sparse-checkout add \
+            /kernel/resource.c /drivers/of/of_reserved_mem.c /arch/arm64/mm/init.c \
+            /arch/arm64/Kconfig /arch/arm64/kernel/setup.c /include/linux/ioport.h
+          export TETRIS_KERNEL_TREE="$PWD/upstream/linux"
           git init upstream/gpueb-retained-producer
           git -C upstream/gpueb-retained-producer fetch --no-tags --depth=1 \
             https://github.com/xxxvik-xakerxxx/u-boot.git \

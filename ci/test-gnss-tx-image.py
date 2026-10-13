@@ -109,6 +109,22 @@ class GnssTxImage(unittest.TestCase):
         with patch.dict(os.environ, {"TETRIS_NATIVE_SOURCE_TREE": str(self.tree)}):
             self.refused_unchanged("source inputs")
 
+    def test_actual_ci_copy_and_output_layout_remain_isolated(self):
+        root = Path(self.directory.name).resolve() / "work"
+        frozen = root / "out/native-source"
+        with patch.object(stage, "ROOT", root), \
+                patch.dict(os.environ, CI | {"TETRIS_NATIVE_SOURCE_TREE": str(frozen)}):
+            for path in (root / "upstream/pmaports", root / "upstream/pmaports/device/test/APKBUILD",
+                         root / "out/native-modem-image-profile.json"):
+                self.assertEqual(stage.isolated(path), path)
+            for path in (root, root / "pmaports", root / "ci", frozen,
+                         frozen / "pmaports", root / "out"):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    stage.isolated(path)
+            with patch.dict(os.environ, {"CI": "false"}):
+                with self.assertRaises(ValueError):
+                    stage.isolated(root / "upstream/pmaports")
+
     def test_separate_revision_required(self):
         for revision in (None, True, "186", 182, 184, 185, -1):
             with self.subTest(revision=revision):
