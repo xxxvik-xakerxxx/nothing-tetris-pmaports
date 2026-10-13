@@ -2,6 +2,8 @@
 """Pinned Nothing MT6363 descriptors, control semantics and unsupported DA scope."""
 import hashlib
 import json
+import os
+from pathlib import Path
 import re
 import subprocess
 
@@ -23,7 +25,7 @@ def function(text, name):
 
 def evidence():
     sources, edges = {}, []
-    vendor = stage.ROOT.parent / "android_kernel_device_modules_6.1_nothing_mt6878"
+    vendor = Path(os.environ.get("TETRIS_VENDOR_TREE", str(stage.ROOT.parent / "android_kernel_device_modules_6.1_nothing_mt6878")))
 
     def read(label, path):
         data = subprocess.run(["git", "-C", str(vendor), "show", stage.VENDOR + ":" + path],
@@ -71,7 +73,7 @@ def evidence():
     for name in ("mt6363_vbuck1", "mt6363_vbuck2", "mt6363_vsram_modem"):
         anchor("vendor-pmic-dt", dt, 'regulator-name = "' + name + '";', "correct MT6363 supplier identity and source DT constraints")
 
-    linux = stage.ROOT.parent / ("linux-" + stage.LINUX)
+    linux = Path(os.environ.get("TETRIS_KERNEL_TREE", str(stage.ROOT.parent / ("linux-" + stage.LINUX))))
     for label, path in (("linux-core", "drivers/regulator/core.c"), ("linux-of", "drivers/regulator/of_regulator.c")):
         data = (linux / path).read_bytes()
         sources[label] = {"path": path, "revision": stage.LINUX, "sha256": hashlib.sha256(data).hexdigest()}

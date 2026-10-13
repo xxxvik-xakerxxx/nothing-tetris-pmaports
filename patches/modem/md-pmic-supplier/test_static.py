@@ -195,7 +195,12 @@ class NativeModemSupplier(unittest.TestCase):
     def test_source_only_scripts_and_no_native_build_routes(self):
         for path in stage.HERE.glob("*.py"):
             ast.parse(path.read_text(), filename=str(path))
-        self.assertNotIn("--ci-apply", (stage.HERE / "stage.py").read_text())
+        source = (stage.HERE / "stage.py").read_text()
+        self.assertIn('os.environ.get("CI") != "true"', source)
+        self.assertIn('os.environ.get("GITHUB_ACTIONS") != "true"', source)
+        self.assertIn('actual prepared provider differs', source)
+        self.assertNotIn('"make"', source)
+        self.assertNotIn('"clang"', source)
 
 
 if __name__ == "__main__":

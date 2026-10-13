@@ -380,7 +380,15 @@ def compile_camisp_supplier_dtbs(make, output, report):
 
 def compile_md_pmic(kernel, work, report):
     draft = Path("patches/modem/md-pmic-supplier")
-    run(["python3", draft / "test_static.py"])
+    vendor = Path("out/infra-vendor").resolve()
+    if not vendor.is_dir():
+        vendor = work / "md-pmic-vendor"
+        run(["git", "init", vendor])
+        run(["git", "-C", vendor, "fetch", "--depth=1",
+             "https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git",
+             "ee2be53cb75670b548948636a0db1d1ff112bf12"])
+    run(["env", "TETRIS_VENDOR_TREE=" + str(vendor), "TETRIS_KERNEL_TREE=" + str(kernel),
+         "python3", draft / "test_static.py"])
     run(["python3", draft / "stage.py", "--prepared-kernel", kernel, "--ci-apply"])
     output = work / "md-pmic-objects"
     output.mkdir(exist_ok=False)
