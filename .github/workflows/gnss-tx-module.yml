@@ -1,0 +1,45 @@
+name: GNSS staged TX full module validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gnss-tx-module-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  module:
+    name: ARM64 v051 baseline and candidate with real kernel exports
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: mirror.gcr.io/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Install package-matching compiler and kernel dependencies
+        run: |
+          apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
+            openssl-dev elfutils-dev ca-certificates perl python3 patch linux-headers git dtc
+      - name: Check static inputs and dedicated plan
+        run: |
+          python3 ci/test-kernel-object-smoke.py
+          python3 ci/kernel-object-smoke.py --gnss-tx-module --plan-only
+      - name: Link baseline and staged 1009 with strict supplier modpost
+        shell: bash --noprofile --norc -euo pipefail {0}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          unset LDFLAGS
+          mkdir -p out/kernel-object-smoke
+          python3 -u ci/kernel-object-smoke.py --gnss-tx-module \
+            2>&1 | tee out/kernel-object-smoke/gnss-tx-module.log
+      - name: Retain manifests, real exports and first failure logs only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gnss-tx-module-evidence-${{ github.run_id }}
+          path: out/kernel-object-smoke/
+          if-no-files-found: warn
+          retention-days: 14

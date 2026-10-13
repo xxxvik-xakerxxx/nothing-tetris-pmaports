@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile packaged candidate translation units in CI, never install them."""
+"""Compile packaged candidates in CI, with opt-in GNSS module validation; never install."""
 
 import argparse
 import hashlib
@@ -420,42 +420,78 @@ def compile_md_pmic(kernel, work, report):
     return result
 
 
-def compile_gnss_tx(kernel, work, report):
+def gnss_tx_stage():
     draft = Path("patches/gnss/write-boundary").resolve()
     spec = importlib.util.spec_from_file_location("gnss_tx_stage", draft / "generate.py")
     stage = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(stage)
-    archive_name = "android-kernel-modules-" + stage.PIN + ".tar.gz"
-    checksums = re.findall(r"^([0-9a-f]{128})  " + re.escape(archive_name) + r"$",
-                           (PACKAGE / "APKBUILD").read_text(), re.M)
+    return stage, json.loads((draft / "STAGING.json").read_text())
+
+
+def gnss_archive_identity(device_modules=False):
+    source = (PACKAGE / "APKBUILD").read_text()
+    variable, prefix, repository = (
+        ("_devmods_commit", "android-kernel-device-modules-",
+         "android_kernel_device_modules_6.1_nothing_mt6878") if device_modules else
+        ("_connmods_commit", "android-kernel-modules-", "android_kernel_modules_nothing_mt6878"))
+    pins = re.findall(r'^' + variable + r'="([0-9a-f]{40})"$', source, re.M)
+    if len(pins) != 1:
+        raise ValueError("missing immutable GNSS supplier pin: " + variable)
+    archive_name = prefix + pins[0] + ".tar.gz"
+    expression = (prefix + "$" + variable + ".tar.gz::https://github.com/NothingOSS/" +
+                  repository + "/archive/$" + variable + ".tar.gz")
+    if expression not in block(source, "source").split():
+        raise ValueError("unsupported GNSS supplier archive expression")
+    checksums = re.findall(r"^([0-9a-f]{128})  " + re.escape(archive_name) + r"$", source, re.M)
     if len(checksums) != 1:
         raise ValueError("missing exact GNSS source archive identity")
-    archive = work / archive_name
-    url = "https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878/archive/" + stage.PIN + ".tar.gz"
-    with urllib.request.urlopen(url, timeout=120) as response, archive.open("wb") as dest:
+    return {"commit": pins[0], "archive": archive_name, "sha512": checksums[0],
+            "repository": repository,
+            "url": "https://github.com/NothingOSS/" + repository + "/archive/" + pins[0] + ".tar.gz"}
+
+
+def fetch_gnss_archive(identity, work):
+    archive = work / identity["archive"]
+    with urllib.request.urlopen(identity["url"], timeout=120) as response, archive.open("wb") as dest:
         shutil.copyfileobj(response, dest)
     with archive.open("rb") as stream:
-        if hashlib.file_digest(stream, "sha512").hexdigest() != checksums[0]:
+        if hashlib.file_digest(stream, "sha512").hexdigest() != identity["sha512"]:
             raise ValueError("GNSS source archive checksum mismatch")
     with tarfile.open(archive) as tar:
         tar.extractall(work, filter="data")
-    vendor = work / ("android_kernel_modules_nothing_mt6878-" + stage.PIN)
+    return work / (identity["repository"] + "-" + identity["commit"])
+
+
+def prepare_gnss_tx_sources(work):
+    stage, plan = gnss_tx_stage()
+    identity = gnss_archive_identity()
+    if identity["commit"] != stage.PIN or plan["connectivity_commit"] != stage.PIN:
+        raise ValueError("GNSS package pin differs from reviewed TX fixture")
+    vendor = fetch_gnss_archive(identity, work)
     for patch in stage.stack():
         if patch.name.startswith("1005-"):
             clock = vendor / (stage.BASE + "linux/gps_dl_linux_clock_mng.c")
             clock.write_bytes(clock.read_bytes().replace(b"\r\n", b"\n"))
         run(["patch", "--batch", "--fuzz=0", "-p1", "-d", vendor, "-i", patch])
-    plan = json.loads((draft / "STAGING.json").read_text())
     for name, digest in plan["stacked_source_sha512"].items():
         if hashlib.sha512((vendor / name).read_bytes()).hexdigest() != digest:
             raise ValueError("GNSS compiler preimage differs from reviewed TX fixture: " + name)
     if hashlib.sha512(stage.PATCH.read_bytes()).hexdigest() != plan["patch_sha512"]:
         raise ValueError("GNSS reviewed TX patch identity changed")
+    return stage, vendor, plan, identity
+
+
+def apply_gnss_tx(stage, vendor):
     expected = {name: stage.transform(name, (vendor / name).read_text()).encode() for name in stage.SOURCES}
     run(["patch", "--batch", "--fuzz=0", "-p1", "-d", vendor, "-i", stage.PATCH])
     for name, content in expected.items():
         if (vendor / name).read_bytes() != content:
             raise ValueError("actual GNSS compiler source differs from reviewed TX fixture: " + name)
+
+
+def compile_gnss_tx(kernel, work, report):
+    stage, vendor, _, identity = prepare_gnss_tx_sources(work)
+    apply_gnss_tx(stage, vendor)
     output = work / "gnss-tx-objects"
     output.mkdir(exist_ok=False)
     shutil.copyfile(PACKAGE / CONFIG, output / ".config")
@@ -486,9 +522,188 @@ def compile_gnss_tx(kernel, work, report):
     if list(gps.rglob("*.ko")):
         raise ValueError("GNSS object-only gate must not produce runtime modules")
     return {"scope": "real ARM64 v051 translation units; no modpost, installation or hardware test",
-            "connectivity_commit": stage.PIN, "archive_sha512": checksums[0],
+            "connectivity_commit": stage.PIN, "archive_sha512": identity["sha512"],
             "patch_sha512": hashlib.sha512(stage.PATCH.read_bytes()).hexdigest(),
             "objects": identities}
+
+
+def gnss_module_plan():
+    stage, staged = gnss_tx_stage()
+    prerequisites = stage.stack()
+    connectivity = gnss_archive_identity()
+    device = gnss_archive_identity(True)
+    if connectivity["commit"] != stage.PIN:
+        raise ValueError("GNSS package pin differs from reviewed TX fixture")
+    adapter_patch = PACKAGE / "1000-vendor-connectivity-adapter-linux-6.18.patch.vendor"
+    digest = hashlib.sha512(adapter_patch.read_bytes()).hexdigest()
+    source = (PACKAGE / "APKBUILD").read_text()
+    if (adapter_patch.name not in block(source, "source").split() or
+            re.findall(r"^([0-9a-f]{128})  " + re.escape(adapter_patch.name) + r"$", source, re.M) != [digest]):
+        raise ValueError("GNSS adapter patch checksum mismatch")
+    if hashlib.sha512(stage.PATCH.read_bytes()).hexdigest() != staged["patch_sha512"]:
+        raise ValueError("GNSS reviewed TX patch identity changed")
+    return {"scope": "full ARM64 v051 baseline/candidate link and strict real-export modpost only",
+            "status": "pending", "shipping_activation": False, "hardware_tested": False,
+            "phone_abi_compatible": False, "connectivity": connectivity, "device_modules": device,
+            "prerequisites": [path.name for path in prerequisites],
+            "prerequisite_sha512": staged["prerequisite_sha512"],
+            "adapter_patch_sha512": digest, "patch_sha512": staged["patch_sha512"],
+            "suppliers": ["kernel vmlinux/modules", "connadp", "conninfra"],
+            "variants": ["baseline-1001-1008", "candidate-1009"]}
+
+
+def gnss_connectivity_make(make, kernel, output, module, device, top):
+    # Mirror APKBUILD _connectivity_make, with separate source/output trees.
+    return [*make, "M=" + str(module), "KERNEL_SRC=" + str(kernel),
+            "KERNEL_OUT=" + str(output), "KO_CODE_PATH=" + str(module),
+            "DEVICE_MODULES_PATH=" + str(device), "TOP=" + str(top),
+            "MTK_PLATFORM=mt6878", "MTK_PLATFORM_WMT=mt6878", "CONFIG_MTK_PLATFORM=mt6878",
+            "TARGET_BOARD_PLATFORM_WMT=mt6878", "TARGET_BUILD_VARIANT=user", "CONFIG_ARM64=y",
+            "CONFIG_MTK_COMBO=y", "CONFIG_MTK_COMBO_WIFI=m", "CONFIG_MTK_COMBO_CHIP_CONSYS_6878=y",
+            "CONFIG_MTK_COMBO_WIFI_HIF=axi", "CONFIG_MTK_BTIF=n", "CONFIG_MTK_CONNINFRA=m",
+            "CONFIG_CONNINFRA_PLAT_BUILD_MODE=module", "CONFIG_WLAN_DRV_BUILD_IN=n",
+            "MTK_CONSYS_ADIE=MT6631",
+            "KCFLAGS=-DCONFIG_MTK_COMBO_CHIP_CONSYS_6878=1 -Wno-error=format "
+            "-Wno-error=format-extra-args -Wno-error=missing-prototypes"]
+
+
+def gnss_module_evidence(module, symvers):
+    identity = object_identity(module)
+    if identity["format"] != "ELF":
+        raise ValueError("GNSS final module must be ARM64 ELF")
+    exports = {}
+    for table in symvers:
+        if not table.is_file() or not table.stat().st_size:
+            raise ValueError("missing built GNSS supplier exports: " + str(table))
+        for line in table.read_text().splitlines():
+            fields = line.split()
+            if len(fields) < 4 or not re.fullmatch(r"0x[0-9a-fA-F]{8}", fields[0]):
+                raise ValueError("invalid built GNSS supplier export row: " + str(table))
+            if fields[1] in exports:
+                raise ValueError("duplicate GNSS supplier export: " + fields[1])
+            exports[fields[1]] = {"table": str(table), "row": fields}
+    symbols = subprocess.check_output(["llvm-nm", "--undefined-only", module], text=True)
+    imports, weak = set(), set()
+    for line in symbols.splitlines():
+        fields = line.split()
+        if len(fields) != 2 or fields[0] not in ("U", "w", "v"):
+            raise ValueError("unexpected GNSS undefined-symbol row: " + line)
+        (imports if fields[0] == "U" else weak).add(fields[1])
+    missing = sorted(imports - exports.keys())
+    if missing:
+        raise ValueError("GNSS imports absent from real supplier exports: " + ", ".join(missing))
+    return {**identity, "sha256": hashlib.sha256(module.read_bytes()).hexdigest(),
+            "imports": {name: exports[name] for name in sorted(imports)},
+            "weak_imports": sorted(weak)}
+
+
+def compile_gnss_tx_module(kernel, work, report):
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        raise ValueError("full GNSS module compilation is CI-only")
+    destination = report / "gnss-tx-module"
+    destination.mkdir(exist_ok=False)
+    manifest = gnss_module_plan()
+    manifest["status"] = "started"
+    manifest_file = destination / "MODULE-MANIFEST.json"
+
+    def save():
+        manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
+
+    def step(phase, command):
+        manifest.update(phase=phase, command=list(map(str, command)))
+        save()
+        with (destination / (phase + ".log")).open("w") as log:
+            print("+ " + " ".join(map(str, command)), flush=True)
+            subprocess.run(list(map(str, command)), stdout=log, stderr=subprocess.STDOUT, check=True)
+
+    def retain_exports(table, name):
+        if not table.is_file() or not table.stat().st_size:
+            raise ValueError("missing built GNSS supplier exports: " + str(table))
+        saved = destination / (name + ".symvers")
+        shutil.copyfile(table, saved)
+        manifest.setdefault("supplier_symvers_sha256", {})[saved.name] = hashlib.sha256(saved.read_bytes()).hexdigest()
+        save()
+
+    save()
+    try:
+        manifest["phase"] = "source-preparation"
+        save()
+        stage, vendor, staged, _ = prepare_gnss_tx_sources(work)
+        device = fetch_gnss_archive(manifest["device_modules"], work)
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", device, "-i",
+             (PACKAGE / "1000-vendor-connectivity-adapter-linux-6.18.patch.vendor").resolve()])
+        top = work / "android-top"
+        connectivity = top / "vendor/mediatek/kernel_modules/connectivity"
+        connectivity.parent.mkdir(parents=True)
+        connectivity.symlink_to(vendor / "connectivity", target_is_directory=True)
+        output = work / "gnss-module-kernel"
+        output.mkdir()
+        shutil.copyfile(PACKAGE / CONFIG, output / ".config")
+        make = ["make", "-j4", "-C", kernel, "O=" + str(output), "ARCH=arm64", "LLVM=1",
+                "KBUILD_MODPOST_WARN=", "KBUILD_MODPOST_NOFINAL=", "KBUILD_EXTRA_SYMBOLS="]
+        manifest["phase"] = "compiler-identity"
+        save()
+        compiler = subprocess.check_output(["clang", "--version"], text=True)
+        if not re.search(r"clang version 21\.", compiler):
+            raise ValueError("GNSS module gate requires package-matching LLVM 21")
+        manifest["compiler"] = compiler.strip()
+        step("kernel-config", [*make, "olddefconfig"])
+        shutil.copyfile(output / ".config", destination / "kernel.config")
+        manifest["config_sha256"] = hashlib.sha256((output / ".config").read_bytes()).hexdigest()
+        # modules_prepare cannot generate Module.symvers; build the actual kernel.
+        step("kernel-exports", [*make, "vmlinux", "modules"])
+        manifest["kernel_identity"] = object_identity(output / "vmlinux")
+        with (output / "vmlinux").open("rb") as stream:
+            manifest["kernel_identity"]["sha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
+        tables = [output / "Module.symvers"]
+        retain_exports(tables[0], "kernel")
+        suppliers = (("connadp", device / "drivers/misc/mediatek/connectivity"),
+                     ("conninfra", vendor / "connectivity/conninfra"))
+        for name, module in suppliers:
+            # Require every preceding supplier's real exports before invoking modpost.
+            for table in tables:
+                if not table.is_file() or not table.stat().st_size:
+                    raise ValueError("missing built GNSS supplier exports: " + str(table))
+            command = gnss_connectivity_make(make, kernel, output, module, device, top)
+            if name == "connadp":
+                command = [arg for arg in command if arg != "CONFIG_MTK_COMBO=y"]
+                command.append("CONFIG_MTK_COMBO=m")
+            else:
+                command.append("KBUILD_EXTRA_SYMBOLS=" + " ".join(map(str, tables[1:])))
+            step(name, [*command, "modules"])
+            manifest[name] = gnss_module_evidence(module / (name + ".ko"), tables)
+            tables.append(module / "Module.symvers")
+            retain_exports(tables[-1], name)
+        gps = vendor / "connectivity/gps/data_link/plat/v051"
+        command = gnss_connectivity_make(make, kernel, output, gps, device, top)
+        command += ["CONFIG_MTK_GPS_SUPPORT=y",
+                    "KBUILD_EXTRA_SYMBOLS=" + " ".join(map(str, tables[1:]))]
+        for variant in manifest["variants"]:
+            if variant == "candidate-1009":
+                step("gnss-clean", [*command, "clean"])
+                manifest["phase"] = "apply-1009"
+                save()
+                apply_gnss_tx(stage, vendor)
+            else:
+                manifest["phase"] = "baseline-source-check"
+                save()
+                for name, digest in staged["stacked_source_sha512"].items():
+                    if hashlib.sha512((vendor / name).read_bytes()).hexdigest() != digest:
+                        raise ValueError("GNSS baseline source changed: " + name)
+            step(variant, [*command, "modules"])
+            manifest[variant] = gnss_module_evidence(gps / "gps_drv_dl_v051.ko", tables)
+            manifest[variant]["source_sha512"] = {
+                name: hashlib.sha512((vendor / name).read_bytes()).hexdigest()
+                for name in staged["stacked_source_sha512"]}
+            manifest[variant]["kbuild_sha256"] = hashlib.sha256((gps / "Kbuild").read_bytes()).hexdigest()
+            save()
+        manifest["status"] = "passed"
+        save()
+        return manifest
+    except Exception as error:
+        manifest.update(status="failed", error=str(error))
+        save()
+        raise
 
 
 def compile_dt_only(kernel, package, work, report, manifest):
@@ -619,13 +834,18 @@ def main():
                         help="prepare exact packaged provider sources without compiling any objects")
     parser.add_argument("--research-owners", action="store_true",
                         help="also compile frozen default-off owners without shipping wiring")
+    parser.add_argument("--gnss-tx-module", action="store_true",
+                        help="CI-only full v051 baseline and staged TX module link with real suppliers")
     parser.add_argument("--work", type=Path, default=Path("/tmp/tetris-kernel-smoke"))
     args = parser.parse_args()
-    if sum((args.dt_only, args.prepare_only, args.research_owners)) > 1:
-        parser.error("DT-only, source-only and driver-owner modes are separate experiments")
+    if sum((args.dt_only, args.prepare_only, args.research_owners, args.gnss_tx_module)) > 1:
+        parser.error("DT-only, source-only, driver-owner and GNSS module modes are separate experiments")
     package = PACKAGE.resolve()
     manifest = plan(package)
     objects = OBJECTS
+    if args.gnss_tx_module:
+        args.work = args.work.resolve()
+        manifest.update(objects=[], dtbs=[], gnss_nonblocking_tx_module=gnss_module_plan())
     if args.research_owners:
         objects += RESEARCH_OBJECTS + PROVIDER_OBJECTS
         manifest["objects"] = objects
@@ -687,6 +907,8 @@ def main():
     report.mkdir(parents=True, exist_ok=True)
     manifest.update(commit=os.environ["GITHUB_SHA"], status="started",
                     scope="object-only; no linking, installation or hardware test")
+    if args.gnss_tx_module:
+        manifest["scope"] = manifest["gnss_nonblocking_tx_module"]["scope"]
     manifest_file = report / "BUILD-MANIFEST.json"
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
     archive = args.work / manifest["archive"]
@@ -724,6 +946,16 @@ def main():
         # Match abuild default_prepare for legacy patches, not a different build.
         flags = ["--fuzz=0"] if patch in STRICT_PATCHES else []
         run(["patch", "--batch", *flags, "-p1", "-d", kernel, "-i", package / patch])
+    if args.gnss_tx_module:
+        try:
+            manifest["gnss_nonblocking_tx_module"] = compile_gnss_tx_module(kernel, args.work, report)
+        except Exception as error:
+            manifest.update(status="failed", error=str(error))
+            manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
+            raise
+        manifest["status"] = "passed"
+        manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
+        return
     if args.research_owners or args.prepare_only:
         source_report = report / "native-provider-inputs"
         source_report.mkdir()

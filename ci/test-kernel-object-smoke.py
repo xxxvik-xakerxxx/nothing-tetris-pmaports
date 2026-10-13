@@ -5,10 +5,12 @@ import hashlib
 import importlib.util
 import inspect
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -78,12 +80,16 @@ class SmokeInputs(unittest.TestCase):
 
     def test_gnss_compiler_uses_reviewed_stack_and_real_kbuild(self):
         source = inspect.getsource(smoke.compile_gnss_tx)
+        preparation = inspect.getsource(smoke.prepare_gnss_tx_sources)
+        application = inspect.getsource(smoke.apply_gnss_tx)
         contract = json.loads((Path(__file__).resolve().parents[1] /
                                "patches/gnss/write-boundary/STAGING.json").read_text())
-        self.assertIn('plan["stacked_source_sha512"]', source)
+        self.assertIn('plan["stacked_source_sha512"]', preparation)
         self.assertEqual(len(contract["stacked_source_sha512"]), 4)
-        self.assertIn('plan["patch_sha512"]', source)
-        self.assertIn('stage.transform(name', source)
+        self.assertIn('plan["patch_sha512"]', preparation)
+        self.assertIn('stage.transform(name', application)
+        self.assertIn('prepare_gnss_tx_sources(work)', source)
+        self.assertIn('apply_gnss_tx(stage, vendor)', source)
         self.assertIn('"CONFIG_MTK_GPS_SUPPORT=y"', source)
         self.assertIn('("gps_each_link.o", "linux/gps_each_device.o")', source)
         self.assertLess(source.index('"olddefconfig"'), source.index('"modules_prepare"'))
@@ -552,6 +558,226 @@ class SmokeInputs(unittest.TestCase):
         with patch.object(smoke.subprocess, "check_output", return_value="Machine: AArch64\n"):
             with self.assertRaisesRegex(ValueError, "object architecture"):
                 smoke.object_identity(target)
+
+
+class GnssModuleGate(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.kernel = self.root / "kernel"
+        self.kernel.mkdir()
+        self.report = self.root / "report"
+        self.report.mkdir()
+
+    def test_plan_has_exact_stack_real_suppliers_and_no_activation(self):
+        with patch.object(smoke.urllib.request, "urlopen") as network, \
+                patch.object(smoke.subprocess, "run") as commands:
+            plan = smoke.gnss_module_plan()
+        network.assert_not_called()
+        commands.assert_not_called()
+        self.assertEqual([name[:4] for name in plan["prerequisites"]],
+                         [str(n) for n in range(1001, 1009)])
+        self.assertEqual(plan["suppliers"], ["kernel vmlinux/modules", "connadp", "conninfra"])
+        self.assertEqual(plan["variants"], ["baseline-1001-1008", "candidate-1009"])
+        self.assertEqual(plan["status"], "pending")
+        for name in ("shipping_activation", "hardware_tested", "phone_abi_compatible"):
+            self.assertFalse(plan[name])
+
+    def test_missing_or_mutable_archive_identity_fails(self):
+        package = self.root / "package"
+        package.mkdir()
+        original = (smoke.PACKAGE / "APKBUILD").read_text()
+        identity = smoke.gnss_archive_identity(True)
+        for source in (original.replace(identity["commit"], "main"),
+                       original.replace(identity["sha512"], "0" * 128) +
+                       "\n" + "0" * 128 + "  " + identity["archive"] + "\n",
+                       original.replace("https://github.com/NothingOSS/", "https://example.invalid/")):
+            (package / "APKBUILD").write_text(source)
+            with patch.object(smoke, "PACKAGE", package), self.assertRaises(ValueError):
+                smoke.gnss_archive_identity(True)
+
+    def test_local_full_module_execution_rejected_before_writes(self):
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+                patch.object(smoke.subprocess, "run") as commands, \
+                self.assertRaisesRegex(ValueError, "CI-only"):
+            smoke.compile_gnss_tx_module(self.kernel, self.root, self.report)
+        commands.assert_not_called()
+        self.assertEqual(list(self.report.iterdir()), [])
+
+    def test_connectivity_flags_match_packaged_values(self):
+        source = (smoke.PACKAGE / "APKBUILD").read_text()
+        helper = source.split("_connectivity_make() {", 1)[1].split("\n}", 1)[0]
+        flags = smoke.gnss_connectivity_make([], self.kernel, self.root, self.root, self.root, self.root)
+        for arg in flags:
+            key = arg.split("=", 1)[0]
+            self.assertIn(key + "=", helper)
+            if key not in ("M", "KERNEL_SRC", "KERNEL_OUT", "KO_CODE_PATH", "DEVICE_MODULES_PATH", "TOP", "KCFLAGS"):
+                self.assertIn(arg, helper)
+
+    def test_imports_must_match_real_export_tables(self):
+        module = self.root / "gps.ko"
+        module.write_bytes(b"test fixture only")
+        tables = [self.root / "kernel.symvers", self.root / "conninfra.symvers"]
+        tables[0].write_text("0x00000000 printk vmlinux EXPORT_SYMBOL\n")
+        tables[1].write_text("0x00000000 conninfra_pwr_on conninfra EXPORT_SYMBOL_GPL\n")
+        with patch.object(smoke, "object_identity", return_value={"format": "ELF", "machine": "AArch64"}), \
+                patch.object(smoke.subprocess, "check_output", return_value=" U printk\n U conninfra_pwr_on\n w optional\n"):
+            result = smoke.gnss_module_evidence(module, tables)
+            self.assertEqual(set(result["imports"]), {"printk", "conninfra_pwr_on"})
+            self.assertEqual(result["weak_imports"], ["optional"])
+            self.assertEqual(result["imports"]["conninfra_pwr_on"]["table"], str(tables[1]))
+            tables[1].write_text("0x00000000 unrelated conninfra EXPORT_SYMBOL\n")
+            with self.assertRaisesRegex(ValueError, "conninfra_pwr_on"):
+                smoke.gnss_module_evidence(module, tables)
+            tables[1].write_text("")
+            with self.assertRaisesRegex(ValueError, "missing built"):
+                smoke.gnss_module_evidence(module, tables)
+            tables[1].write_text(tables[0].read_text())
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                smoke.gnss_module_evidence(module, tables)
+            tables[1].write_text("untracked export fixture\n")
+            with self.assertRaisesRegex(ValueError, "invalid built"):
+                smoke.gnss_module_evidence(module, tables)
+
+    def mocked_build(self, fail_phase=None, missing_exports=None):
+        # All compiler/ELF calls are mocked; these fixtures only test CI ordering.
+        vendor = self.root / "vendor"
+        gps = vendor / "connectivity/gps/data_link/plat/v051"
+        gps.mkdir(parents=True)
+        (gps / "Kbuild").write_text("# Kbuild fixture\n")
+        original = vendor / "baseline.c"
+        original.write_text("baseline\n")
+        staged = {"stacked_source_sha512": {"baseline.c": hashlib.sha512(original.read_bytes()).hexdigest()}}
+        device = self.root / "device"
+        adapter = device / "drivers/misc/mediatek/connectivity"
+        adapter.mkdir(parents=True)
+        conninfra = vendor / "connectivity/conninfra"
+        conninfra.mkdir()
+        calls = []
+
+        def command(argv, **kwargs):
+            argv = list(map(str, argv))
+            if argv[0] != "make":
+                raise AssertionError("unexpected real command: " + repr(argv))
+            output = Path(next(arg[2:] for arg in argv if arg.startswith("O=")))
+            module_arg = next((arg[2:] for arg in argv if arg.startswith("M=")), None)
+            if argv[-1] == "olddefconfig":
+                phase = "kernel-config"
+            elif module_arg is None:
+                phase = "kernel-exports"
+                (output / "vmlinux").write_bytes(b"mocked kernel")
+                if missing_exports != "kernel":
+                    (output / "Module.symvers").write_text("mocked exports\n")
+            elif Path(module_arg) == adapter:
+                phase = "connadp"
+            elif Path(module_arg) == conninfra:
+                phase = "conninfra"
+            elif argv[-1] == "clean":
+                phase = "gnss-clean"
+            else:
+                phase = "baseline-1001-1008" if original.read_text() == "baseline\n" else "candidate-1009"
+            calls.append((phase, argv))
+            if fail_phase == phase:
+                kwargs["stdout"].write("first supplier failure\n")
+                raise subprocess.CalledProcessError(2, argv)
+            if phase in ("connadp", "conninfra") and missing_exports != phase:
+                (Path(module_arg) / "Module.symvers").write_text("mocked exports\n")
+
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                patch.object(smoke, "prepare_gnss_tx_sources", return_value=(SimpleNamespace(), vendor, staged, {})), \
+                patch.object(smoke, "fetch_gnss_archive", return_value=device), \
+                patch.object(smoke, "run"), \
+                patch.object(smoke, "apply_gnss_tx", side_effect=lambda *_: original.write_text("candidate\n")) as apply, \
+                patch.object(smoke.subprocess, "check_output", return_value="clang version 21.1.0\n"), \
+                patch.object(smoke.subprocess, "run", side_effect=command), \
+                patch.object(smoke, "object_identity", return_value={"format": "ELF", "machine": "AArch64"}), \
+                patch.object(smoke, "gnss_module_evidence", side_effect=lambda *_: {"format": "ELF"}):
+            if fail_phase or missing_exports:
+                with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                    smoke.compile_gnss_tx_module(self.kernel, self.root, self.report)
+            else:
+                smoke.compile_gnss_tx_module(self.kernel, self.root, self.report)
+            applied = apply.call_count
+        manifest = json.loads((self.report / "gnss-tx-module/MODULE-MANIFEST.json").read_text())
+        return calls, manifest, applied
+
+    def test_full_module_order_strict_modpost_and_separate_candidate(self):
+        calls, manifest, applied = self.mocked_build()
+        self.assertEqual([phase for phase, _ in calls], ["kernel-config", "kernel-exports", "connadp", "conninfra",
+                                                       "baseline-1001-1008", "gnss-clean", "candidate-1009"])
+        self.assertEqual(applied, 1)
+        self.assertEqual(manifest["status"], "passed")
+        self.assertNotEqual(manifest["baseline-1001-1008"]["source_sha512"],
+                            manifest["candidate-1009"]["source_sha512"])
+        self.assertEqual(set(manifest["supplier_symvers_sha256"]), {"kernel.symvers", "connadp.symvers", "conninfra.symvers"})
+        for phase, argv in calls:
+            self.assertIn("KBUILD_MODPOST_WARN=", argv)
+            self.assertIn("KBUILD_MODPOST_NOFINAL=", argv)
+            if phase == "kernel-exports":
+                self.assertEqual(argv[-2:], ["vmlinux", "modules"])
+            if phase == "connadp":
+                self.assertIn("CONFIG_MTK_COMBO=m", argv)
+                self.assertNotIn("CONFIG_MTK_COMBO=y", argv)
+            if phase in ("baseline-1001-1008", "candidate-1009"):
+                tables = [arg for arg in argv if arg.startswith("KBUILD_EXTRA_SYMBOLS=")][-1]
+                self.assertIn("connectivity/Module.symvers", tables)
+                self.assertIn("conninfra/Module.symvers", tables)
+        self.assertEqual(list(self.report.rglob("*.ko")), [])
+
+    def test_baseline_failure_preserved_without_applying_candidate(self):
+        calls, manifest, applied = self.mocked_build(fail_phase="baseline-1001-1008")
+        self.assertEqual(applied, 0)
+        self.assertEqual(calls[-1][0], "baseline-1001-1008")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertEqual(manifest["phase"], "baseline-1001-1008")
+        self.assertEqual((self.report / "gnss-tx-module/baseline-1001-1008.log").read_text(), "first supplier failure\n")
+        self.assertNotIn("candidate-1009", manifest)
+
+    def test_supplier_failure_stops_before_gnss(self):
+        calls, manifest, applied = self.mocked_build(fail_phase="conninfra")
+        self.assertEqual(applied, 0)
+        self.assertEqual(calls[-1][0], "conninfra")
+        self.assertEqual(manifest["phase"], "conninfra")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertNotIn("baseline-1001-1008", manifest)
+
+    def test_missing_kernel_exports_cannot_reach_supplier_modpost(self):
+        calls, manifest, applied = self.mocked_build(missing_exports="kernel")
+        self.assertEqual(applied, 0)
+        self.assertEqual(calls[-1][0], "kernel-exports")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertIn("missing built GNSS supplier exports", manifest["error"])
+
+    def test_missing_adapter_exports_cannot_reach_conninfra_modpost(self):
+        calls, manifest, applied = self.mocked_build(missing_exports="connadp")
+        self.assertEqual(applied, 0)
+        self.assertEqual(calls[-1][0], "connadp")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertIn("missing built GNSS supplier exports", manifest["error"])
+
+    def test_candidate_failure_retains_successful_baseline(self):
+        calls, manifest, applied = self.mocked_build(fail_phase="candidate-1009")
+        self.assertEqual(applied, 1)
+        self.assertEqual(calls[-1][0], "candidate-1009")
+        self.assertEqual(manifest["status"], "failed")
+        self.assertIn("baseline-1001-1008", manifest)
+        self.assertNotIn("candidate-1009", manifest)
+
+    def test_opt_in_plan_and_workflow_do_not_dispatch_or_ship(self):
+        root = Path(smoke.__file__).resolve().parents[1]
+        result = subprocess.check_output([sys.executable, str(root / "ci/kernel-object-smoke.py"),
+                                          "--gnss-tx-module", "--plan-only"], cwd=root, text=True)
+        plan = json.loads(result)
+        self.assertEqual(plan["objects"], [])
+        self.assertEqual(plan["dtbs"], [])
+        self.assertEqual(plan["gnss_nonblocking_tx_module"]["status"], "pending")
+        workflow = (root / ".github/workflows/gnss-tx-module.yml").read_text()
+        self.assertIn("workflow_dispatch:", workflow)
+        for forbidden in ("pull_request:", "push:", "schedule:", "modules_install", "insmod", "modprobe"):
+            self.assertNotIn(forbidden, workflow)
+        self.assertIn("--gnss-tx-module", workflow)
+        self.assertIn("if: always()", workflow)
 
 
 class NativeProviderOrdering(unittest.TestCase):
