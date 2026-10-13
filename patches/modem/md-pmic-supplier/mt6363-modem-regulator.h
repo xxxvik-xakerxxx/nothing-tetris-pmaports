@@ -271,7 +271,7 @@ static int mt6363_md_set_mode(struct regulator_dev *rdev, unsigned int mode)
 {
 	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
 	const struct mt6363_md_info *info = state->info;
-	unsigned int current, lp;
+	unsigned int current_mode, lp;
 	int ret;
 
 	mutex_lock(state->lock);
@@ -282,18 +282,18 @@ static int mt6363_md_set_mode(struct regulator_dev *rdev, unsigned int mode)
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
-	ret = mt6363_md_read_mode(rdev->regmap, info, &current);
+	ret = mt6363_md_read_mode(rdev->regmap, info, &current_mode);
 	if (ret)
 		goto out;
 	/* FCCM needs the shared BUCK key. Do not unlock/relock it without its owner. */
-	if (current == REGULATOR_MODE_FAST) {
+	if (current_mode == REGULATOR_MODE_FAST) {
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
 	ret = regmap_read(rdev->regmap, info->lp, &lp);
 	if (ret)
 		goto out;
-	if (!!(lp & info->lp_mask) != (current == REGULATOR_MODE_IDLE)) {
+	if (!!(lp & info->lp_mask) != (current_mode == REGULATOR_MODE_IDLE)) {
 		ret = -EBUSY;
 		goto out;
 	}
@@ -301,7 +301,7 @@ static int mt6363_md_set_mode(struct regulator_dev *rdev, unsigned int mode)
 				mode == REGULATOR_MODE_IDLE ? info->lp_mask : 0);
 	if (ret)
 		goto fault;
-	if (current == REGULATOR_MODE_IDLE && mode == REGULATOR_MODE_NORMAL)
+	if (current_mode == REGULATOR_MODE_IDLE && mode == REGULATOR_MODE_NORMAL)
 		udelay(100);
 	ret = mt6363_md_control(rdev->regmap, info);
 	if (ret)

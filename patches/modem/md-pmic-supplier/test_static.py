@@ -65,7 +65,7 @@ def check_operations(source):
             "REGULATOR_MODE_FAST", "regmap_read(map, info->hw_lp", "if (ret)", "return ret")
     setter = body(source, "mt6363_md_set_mode")
     ordered(setter, "mt6363_md_write_admit", "mode != REGULATOR_MODE_NORMAL && mode != REGULATOR_MODE_IDLE",
-            "mt6363_md_read_mode", "if (ret)", "goto out", "current == REGULATOR_MODE_FAST",
+            "mt6363_md_read_mode", "if (ret)", "goto out", "current_mode == REGULATOR_MODE_FAST",
             "regmap_read", "if (ret)", "goto out", "ret = -EBUSY",
             "regmap_update_bits", "if (ret)", "goto fault", "udelay(100)",
             "mt6363_md_control", "regmap_read", "fault:", "mt6363_md_write_fault")
@@ -179,7 +179,7 @@ class NativeModemSupplier(unittest.TestCase):
                          ("!enable && !state->owns_enable", "false"),
                          ("enable_reg + (enable ? 1 : 2)", "enable_reg"),
                          ("if (info->fccm)", "if (true)"),
-                         ("current == REGULATOR_MODE_FAST", "false"),
+                         ("current_mode == REGULATOR_MODE_FAST", "false"),
                          ("udelay(100)", "udelay(1)"),
                          ("if (!state->first_write_error)", "if (true)"),
                          ("desc.of_match = NULL", "desc.of_match = info->desc.of_match"),
@@ -201,6 +201,7 @@ class NativeModemSupplier(unittest.TestCase):
         self.assertIn('actual prepared provider differs', source)
         self.assertNotIn('"make"', source)
         self.assertNotIn('"clang"', source)
+        self.assertNotRegex(self.source, r"\bcurrent\s*[,;=]")
 
 
 if __name__ == "__main__":

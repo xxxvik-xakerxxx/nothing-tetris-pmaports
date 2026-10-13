@@ -24,12 +24,12 @@
     "Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml": "7a70f2db97e17fa90f67bf1d330ad5a3fd61472d3752ce40ce18adbce84f99fc",
     "arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi": "a9bf3490bb33601ab56092b0ab3dca0b2e6eed5f699b0bc09994b5d5f22c6716",
     "drivers/regulator/mt6363-modem-regulator-test.h": "0ffab1a06d25f1f7145c5fda70e6284a9d058d3d46e69265be955610cf643bd8",
-    "drivers/regulator/mt6363-modem-regulator.h": "84da7731a94f2311eeedb0d1f0dcff250931c7b396e7b5d9e377ce8fbe772dd7",
+    "drivers/regulator/mt6363-modem-regulator.h": "244fd9bd2a3d0288a2c4e417fc93539e6b6ad74c4287d8f88530921a926b9ce0",
     "drivers/regulator/mt6363-regulator.c": "f5e19be1f8dc88cd297b6d82f61cbf659f4ed3d03e015da341fd35e22289d7cf"
   },
   "patch": {
     "path": "native-modem-rails.patch",
-    "sha256": "235776bf27796de16b9cc7871d58b42a4ca53a31a5441e7abb09cf2a8bb421da"
+    "sha256": "459f5c85b0b8372ce8328d8825013fc692873be1b7f70342d9c5c2d20fc3a832"
   },
   "canonical_sources": [
     "mt6363-modem-regulator.h",
