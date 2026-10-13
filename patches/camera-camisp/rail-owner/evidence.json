@@ -1,0 +1,60 @@
+{
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "dt_scope": "four complete disabled rail nodes from tracked 0055; full board assembly is parent CI",
+  "fixture_fragment_sha256": "3ad61edb2e2fa0c41b4bc9d307d6bcd35caf7247ad650848102772e9918bd599",
+  "fixture_line_hint": 95,
+  "fixture_sha256": "9662da5d38ba3d60fff991f4749f6e719c45e7177ad0de4422ddbb87cf08e0ea",
+  "kernel_archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "native_sha256": {
+    "drivers/gpio/gpiolib-devres.c": "b23e225f02cc55e57990036d89a93c10b3dba8fcc977568760d3f4385017b16d",
+    "drivers/gpio/gpiolib.c": "ff6cd722aaaa1d4d1f1b6f0bc250e93d2fbdbadc98886f16d112f79519f60cbb",
+    "drivers/pinctrl/core.c": "87b5af12d1965798fae39390c7d9a4e2220433ec7f8229fec3a704613e4f4038",
+    "drivers/pinctrl/mediatek/pinctrl-mt6878.c": "8beb519a354ae2c20f9a805117f23dc428fff97ccb9a6e199cc032574581aa39",
+    "drivers/pinctrl/mediatek/pinctrl-mtk-common-v2.c": "f8615055a2df94dd69e57c8dc7e1be59ab7cceddd50163f6de0c5a239a1565e4",
+    "drivers/pinctrl/mediatek/pinctrl-mtk-common-v2.h": "8691ca4ef77adbb488f1388562c4930affc911778a65933eb9549a92f8086ff4",
+    "drivers/pinctrl/mediatek/pinctrl-mtk-mt6878.h": "1d9a02beb58c9a14f875e5cd16851d016212d99796fbf8cb7c0b501c7e691dc7",
+    "drivers/pinctrl/mediatek/pinctrl-paris.c": "7023ac596d67185f668b26dbfc7e601753e9666a7e23ecea23ad99f172604bce",
+    "drivers/pinctrl/mediatek/pinctrl-paris.h": "2785801e5113c50a0feec28b9d39a26f18cd16baa51af3d48a4dde9e1fdb3285",
+    "drivers/pinctrl/pinmux.c": "308a216f9fa710e88ee4d7332a8b5d456f9ad98805c5edd9c651959b638ba634",
+    "drivers/regulator/Kconfig": "ee58e00ec356113beadaf9ce38731a6fc44ddbfcc14edec0911eea26d04be174",
+    "drivers/regulator/Makefile": "7bd594dd75b7ba37c45dd89d36a49791beeb574864b7051ed4751a9e21060ad1",
+    "drivers/regulator/core.c": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122",
+    "drivers/regulator/fixed.c": "fbe6e86cfa70e17abb9d92e2da08575b0fb25568698ace5c3af482a2ffeff09a",
+    "drivers/regulator/of_regulator.c": "b6feada4bfec5356ef8efe432dd49fc9e6ffc27b383220faa8535a3aaef8de8a",
+    "include/linux/gpio/consumer.h": "951171cfeedaa2424bcd16e78a2b11d93e9a5e860598690843c48bb791acf2dc",
+    "include/linux/gpio/driver.h": "62deccf026a9a684ce0155352812b532a55e5b197e9452a7462ab2472df7a180",
+    "include/linux/of.h": "9edf35d31f8d6dd14919dd043e73a2eab96238a6f8974d9fcc0899f3d2aca3a4",
+    "include/linux/of_platform.h": "075c3677662abadf904b62d24142ecbe2da934f1952c3fd35dbaccb7a92ccf8b",
+    "include/linux/regulator/driver.h": "c8d363560f778f70a5f882050a89db12f1a42d96fa52b8080f457f60fff9a66a"
+  },
+  "packaged_pin_table": {
+    "patch": "0006-pinctrl-mediatek-mt6878-eint.patch",
+    "patch_sha256": "33b29de43bb14255f02b6e36e7d2a5084e58c6746b11113ce29756cd82f517d7",
+    "prepared_sha256": "8da8652041b64ec173c89b669cccd67531161077d7d9e41e21af4883832530b3"
+  },
+  "patch_sha256": {
+    "disabled-description.patch": "fc564d61733ec78c124e27f3248c84787533513a1b8c6529f043b0b9eb4abec9",
+    "provider.patch": "b1cc170aa712674d5d18ff68e407baa740b541424fdb2d966454baefaf2864b6"
+  },
+  "payload_sha256": {
+    "Documentation/devicetree/bindings/regulator/nothing,tetris-camera-gpio-regulator.yaml": "64e2b7a1710ec8edf6430c0818c041d8f50fed968e6e547b42d8ec24bebd0828",
+    "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts": "43caf202fd7e139f7579dbd67aa833a96dbfd6cbb99b740c9c3390d303d12e88",
+    "drivers/regulator/Kconfig": "ee287ee7d9742c3336489b9a1fe4f240d3debf5d80b4c569604abc0c81a1ba9b",
+    "drivers/regulator/Makefile": "085c56577cc68f7ccd6a84dcd423c651085561d4a9fc1f773b12fd7808a42b5a",
+    "drivers/regulator/tetris-camera-gpio-regulator.c": "e1795b30caf9f0ff2d07be82031b4cffd53f3ef2d94536e91a1f06ca8a84ead0"
+  },
+  "vendor_blob_ids": {
+    "arch/arm64/boot/dts/mediatek/cust_mt6878_camera_v4l2.dtsi": "9b515c59678f786f0f9bcb91ec858ba18a91fd51",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "d13065ff2bfd3cdfd3ee9210b248961fd625304c",
+    "mtkcam/imgsensor/src-v4l2/common/imx882_mipi_raw/imx882mipiraw_Sensor.c": "569539f5ca6ad4f46a6c68b35d45261834791950",
+    "mtkcam/imgsensor/src-v4l2/common/imx882txd_mipi_raw/imx882txdmipiraw_Sensor.c": "6709ebcb1700fa3f34aa1a1abe84e0598d49fc74"
+  },
+  "vendor_sha256": {
+    "arch/arm64/boot/dts/mediatek/cust_mt6878_camera_v4l2.dtsi": "f68d62f8710cd042847a8cb34aa59bc229538f6748c9bc23f0631b8210be6f15",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "313491ee77b07a43d0a62c41a5dae2ef40ce9be851dd211ddacdf44ed7d710c5",
+    "mtkcam/imgsensor/src-v4l2/common/imx882_mipi_raw/imx882mipiraw_Sensor.c": "73713ea62ee99c7a8a9d4f0b86994249f46389d6f469739c13dc557568764d8d",
+    "mtkcam/imgsensor/src-v4l2/common/imx882txd_mipi_raw/imx882txdmipiraw_Sensor.c": "62329f1f52d4e272bfda6110b201d44da4ac6f3d99abe3341d9fcac0aeb9df58"
+  }
+}

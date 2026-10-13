@@ -1,0 +1,44 @@
+{
+  "status": "Untested native GPIO regulator candidate; not packaged, installed or activated",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "source": "tetris-camera-gpio-regulator.c",
+  "provider_patch": "provider.patch",
+  "disabled_dt_delta": "disabled-description.patch",
+  "compatible": "nothing,tetris-camera-gpio-regulator",
+  "shipping_selector": "CONFIG_REGULATOR_TETRIS_CAMERA_GPIO=n",
+  "ci_object": "drivers/regulator/tetris-camera-gpio-regulator.o",
+  "ci_required_enabled": ["OF", "GPIOLIB", "REGULATOR", "PINCTRL_MT6878", "REGULATOR_TETRIS_CAMERA_GPIO"],
+  "ci_runner": "run_ci.py --prepared-kernel PATH --kernel-archive PATH --device-repo PATH --modules-repo PATH --output PATH --report PATH",
+  "ci_security_profile": "preserve shipping ThinLTO/CFI and hardening after olddefconfig; use existing kernel-object-smoke object_identity for actual AArch64 LLVM bitcode or ELF",
+  "shared_dovdd_stock_consumers": ["sensor0@1a", "sensor1@10", "sensor2@36"],
+  "rail_topology": {
+    "afvdd": {"gpio": 1, "microvolts": 2800000},
+    "avdd": {"gpio": 22, "microvolts": 2800000},
+    "dvdd": {"gpio": 21, "microvolts": 1200000},
+    "dovdd": {"gpio": 23, "microvolts": 1800000}
+  },
+  "ownership": "one exclusive GPIO descriptor and one regulator device per physical rail; native regulator core owns shared consumer references; Paris non-strict GPIO reservation does not establish exclusive mux/firmware ownership",
+  "startup": "pre-request MODE=GPIO, DO=0, DI=0 snapshot and known input/output DIR through the bound native owner; exclusive ASIS still invokes MODE write; startup-only known direction and DI=0; checked DO=0 before DIR=output and output-low read-back; publish regulator last",
+  "request_handoff_limit": "device/register locks are released before GPIO claim; snapshot is not atomic observe-and-claim and does not prove untouched inherited state; all DT stays disabled",
+  "activation_inputs_remaining": [
+    "parent CI native object/final link and complete board binding/DTB validation",
+    "all shared users reference the same regulator nodes; no fixed-regulator fallback or second GPIO writer",
+    "owner-level atomic read-before-MODE-write reservation and mux-client exclusion; current Paris request is non-strict and snapshot-to-claim has a gap",
+    "real AP/bootloader pin ownership and GPIO-mode low startup handoff; firmware writers must be reconciled",
+    "cold-start and repeated regulator/sensor use with observed rail voltages and first-error recovery"
+  ],
+  "capture_followup": [
+    "apply explicit CAMTG2_SEL/UVPLL192M_D8 MCLK acquisition to the actual imx882-tetris-stream probe/start/stop/remove lifecycle and binding",
+    "hold clock references through stream and uncertain shutdown; preserve shared regulator clients",
+    "SENINF/CAMSV/ISP runtime graph, VMM voltage/rate and MMUP/firmware handoff",
+    "per-SKU sensor identity, per-device calibration, captured frames and lifecycle"
+  ],
+  "local_checks": [
+    "python3 -B patches/camera-camisp/rail-owner/generate.py",
+    "python3 -B patches/camera-camisp/rail-owner/check.py",
+    "python3 -B patches/camera-camisp/rail-owner/test_source.py"
+  ],
+  "local_validation_scope": "exact source objects, callback/order/error and shared-framework source checks, scoped provider/disabled-DT patch application; no compilation, hardware emulation, JIT or GPIO operations"
+}

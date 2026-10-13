@@ -1,0 +1,162 @@
+diff --git a/drivers/pmdomain/mediatek/Kconfig b/drivers/pmdomain/mediatek/Kconfig
+--- a/drivers/pmdomain/mediatek/Kconfig
++++ b/drivers/pmdomain/mediatek/Kconfig
+@@ -65,3 +65,5 @@
+ source "drivers/pmdomain/mediatek/mt6878-modem-real-boot.Kconfig"
+ 
+ endmenu
++
++source "drivers/pmdomain/mediatek/native-start.Kconfig"
+diff --git a/drivers/pmdomain/mediatek/mt6878-modem-real-boot.h b/drivers/pmdomain/mediatek/mt6878-modem-real-boot.h
+--- a/drivers/pmdomain/mediatek/mt6878-modem-real-boot.h
++++ b/drivers/pmdomain/mediatek/mt6878-modem-real-boot.h
+@@ -33,6 +33,7 @@
+ /* One boot-lifetime sidecar, including failure. Steps describe attempts only. */
+ static struct {
+ 	struct mt6878_md_adoption *owner;
++	struct scpsys_domain *pd;
+ 	struct mt6878_md_post_off_top top;
+ 	unsigned long flight_off_a0, flight_on_a0;
+ 	struct device_node *rail_nodes[3];
+@@ -248,8 +249,10 @@
+ 		ret = mt6878_md_first_off_readback(pd, mt6878_md_real_boot_tail.off);
+ 	if (ret)
+ 		ret = mt6878_md_adopt_fault(owner, ret);
+-	else
++	else {
+ 		owner->attached = get_device(dev);
++		mt6878_md_real_boot_tail.pd = pd;
++	}
+ out:
+ 	mutex_unlock(&owner->lock);
+ 	mutex_unlock(&mt6878_md_first_off_lock);
+@@ -382,4 +385,6 @@
+ 	return ret;
+ }
+ 
++#include "native-on-provider.h"
++
+ #endif
+diff --git a/drivers/pmdomain/mediatek/native-on-provider.h b/drivers/pmdomain/mediatek/native-on-provider.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-on-provider.h
+@@ -0,0 +1,93 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included after real_boot_power_on in the actual scpsys translation unit. */
++#if IS_ENABLED(CONFIG_MTK_MT6878_MODEM_NATIVE_START_STAGING)
++#include <linux/soc/mediatek/mt6878_md_native_on.h>
++
++static int mt6878_md_native_on_locked(struct device *dev)
++{
++	struct scpsys_domain *pd = mt6878_md_real_boot_tail.pd;
++	struct mt6878_md_adoption *owner = mt6878_md_first_off_owner;
++	u32 top, on[5];
++	unsigned int i;
++	int ret;
++
++	if (!pd || !owner || !dev || owner != mt6878_md_real_boot_tail.owner ||
++	    pd->md_adoption != owner || owner->attached != dev ||
++	    dev->bus != &platform_bus_type || dev->of_node != owner->modem ||
++	    dev->pm_domain != &pd->genpd.domain ||
++	    pd->genpd.power_on != mt6878_md_real_boot_power_on ||
++	    pd->genpd.attach_dev != mt6878_md_real_boot_attach)
++		return -EXDEV;
++	if (owner->first_error)
++		return owner->first_error;
++	if (owner->state != MT6878_MD_ATTACHED_ON ||
++	    mt6878_md_real_boot_tail.step != MT6878_MD_REAL_BOOT_ON_COMPLETE)
++		return -EHOSTDOWN;
++	ret = mt6878_md_adopt_binding(pd, owner->modem, true);
++	if (!ret)
++		ret = mt6878_md_adopt_revalidate_resources(pd, owner);
++	if (!ret)
++		ret = mt6878_md_adopt_on(pd, on);
++	if (!ret)
++		ret = regmap_read(mt6878_md_real_boot_tail.top.map, 0, &top);
++	if (!ret && (top & MT6878_MD_POST_OFF_TOP_MASK))
++		ret = -EHOSTDOWN;
++	for (i = 0; !ret && i < ARRAY_SIZE(mt6878_md_real_boot_rails); i++) {
++		struct regulator *rail = mt6878_md_real_boot_tail.rails[i];
++		int value;
++
++		if (IS_ERR_OR_NULL(rail)) {
++			ret = -ENODEV;
++			break;
++		}
++		value = regulator_is_enabled(rail);
++		if (value <= 0) {
++			ret = value < 0 ? value : -EHOSTDOWN;
++			break;
++		}
++		value = regulator_get_voltage(rail);
++		if (value < 0)
++			ret = value;
++		else if ((u32)value != mt6878_md_real_boot_rails[i].uv)
++			ret = -EIO;
++	}
++	return ret ? mt6878_md_adopt_fault(owner, ret) : 0;
++}
++
++int mt6878_md_native_on_validate(struct device *consumer)
++{
++	struct mt6878_md_adoption *owner;
++	int ret;
++
++	mutex_lock(&mt6878_md_first_off_lock);
++	owner = mt6878_md_first_off_owner;
++	if (!owner) {
++		ret = -ENODEV;
++		goto out;
++	}
++	mutex_lock(&owner->lock);
++	ret = mt6878_md_native_on_locked(consumer);
++	mutex_unlock(&owner->lock);
++out:
++	mutex_unlock(&mt6878_md_first_off_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_md_native_on_validate);
++
++int mt6878_md_native_on_latch(struct device *consumer, int error)
++{
++	struct mt6878_md_adoption *owner;
++	int ret = -EXDEV;
++
++	mutex_lock(&mt6878_md_first_off_lock);
++	owner = mt6878_md_first_off_owner;
++	if (owner && owner->attached == consumer) {
++		mutex_lock(&owner->lock);
++		ret = mt6878_md_adopt_fault(owner, error);
++		mutex_unlock(&owner->lock);
++	}
++	mutex_unlock(&mt6878_md_first_off_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_md_native_on_latch);
++#endif
+diff --git a/drivers/pmdomain/mediatek/native-start.Kconfig b/drivers/pmdomain/mediatek/native-start.Kconfig
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/native-start.Kconfig
+@@ -0,0 +1,7 @@
++config MTK_MT6878_MODEM_NATIVE_START_STAGING
++	bool "MT6878 native physical-ON CCCI handoff (staging)"
++	depends on MTK_MT6878_MODEM_REAL_BOOT_STAGING
++	default n
++	help
++	  Export validation of the retained real platform consumer and fresh native
++	  ON readbacks. This is not firmware authentication or modem readiness.
+diff --git a/include/linux/soc/mediatek/mt6878_md_native_on.h b/include/linux/soc/mediatek/mt6878_md_native_on.h
+new file mode 100644
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878_md_native_on.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_MD_NATIVE_ON_H
++#define MT6878_MD_NATIVE_ON_H
++struct device;
++/* Actual retained supplier + fresh readbacks, not a transferable grant/token. */
++int mt6878_md_native_on_validate(struct device *consumer);
++int mt6878_md_native_on_latch(struct device *consumer, int error);
++#endif

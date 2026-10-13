@@ -101,7 +101,7 @@ are not installed hardware support. All target compilation stays in GitHub CI.
 | Subsystem | Change | Remaining functional gate |
 | --- | --- | --- |
 | Modem | Native genpd ON callback after first-OFF, using real MT6363 voltage/sync, TOP, FLIGHT, isolation, ACK30 and bus release. | CCCI first-start integration, secure execution release, firmware handshake, SIM registration and calls. |
-| GNSS | Decode the actual 52-byte GPS NVM profile and derive bootstrap selectors from the pinned B4.1 producers. | Actual firmware download/ACK, DSP WORKING, navigation initialization and position fix. |
+| GNSS | Native L1 firmware download and all matching ACKs passed on r188; the driver observed RAM_OKAY and WORK. | Retained session/clean stop, navigation initialization and position fix. |
 | GPU | Package the retained-v1 metadata consumer directly; preserve exclusive RAM ownership and digest checks. | Matching retained loader, executable GPUEB SRAM/DRAM/mailbox contract, power lifecycle and rendering. |
 | Camera | Package IMX882's documented 24 MHz mux/source acquisition before sensor power/reset. | Checked GPIO-rail ownership, sensor identity, streaming-clock integration and capture. |
 
@@ -116,6 +116,34 @@ The complete 107-patch package application, overlay checks and 58 smoke-helper
 tests passed locally. These are source/orchestration checks, not target C
 compilation or live execution of this candidate. Camera DT and shipping
 identity probe remain disabled; no GPIO power sequence was activated.
+
+The standalone GNSS build at `ca947b991b83851512083802f7ed14cdcaccb3b9`
+passed [CI38403683556](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38403683556),
+including actual C fixtures and static AArch64 musl compilation. Its 88704-byte
+executable SHA256 is
+`fea532a7178de6d751d14d781fcec4ab35855015b238e3c8cc078bcf3f328522`;
+the same digest was verified on the phone before one exclusive fresh-fd test.
+At uptime6907.18-6907.69 on boot `b09bc1f9`, bootstrap and every selected
+fragment received matching ACKs. The kernel observed `RAM_OKAY -> WORK`.
+The temporary private NVM copy was removed; no calibration/firmware partition
+was modified. Sensor/proxy/connectivity/SSH services stayed active, with both
+DMA stops OKAY and GPS CLOSED. No new kernel BUG/WARNING/Oops appeared.
+
+The runner closed immediately after the final ACK, before queued RAM_OKAY was
+handled. The resulting WORK -> FUNC_OFF transition has the vendor FSM's
+`is_err=1`; this is not a clean navigation/session lifecycle pass. The next
+owner must retain its descriptor through actual DSP readiness and source-backed
+stop handling. No navigation commands, NMEA output or position fix were tested.
+
+In [CI38402801113](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38402801113),
+the normal seven-object/DT gate passed on `4bfe7d4`. The new IMX882 identity
+object is AArch64 SHA256
+`8c41c97d5c0a38cc40fa40d58e608f56b41b6ae7032a3d94184efc57815dc32e`;
+the canonical GPU object is
+`49442839b12decedd4a3938e464458903cba910ed85f05239c84dacc0ccef91e`.
+The later modem-ON step failed before compilation because container checkout
+had fallen back to a non-Git source download. This run is not globally green,
+and neither object result proves camera capture or accelerated rendering.
 
 ### Previous regression: r184
 

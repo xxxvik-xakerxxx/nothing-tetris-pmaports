@@ -75,6 +75,7 @@ jobs:
           python3 -B ci/test-native-modem-image.py
           python3 -B ci/test-gnss-tx-image.py
           python3 -B ci/test-native-gnss-image.py
+          python3 -B ci/test-native-gnss-candidate-image.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
@@ -586,11 +587,11 @@ jobs:
       # Official Alpine 3.23.3 amd64; identical manifest verified on Google's mirror.
       image: mirror.gcr.io/library/alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
     steps:
-      - uses: actions/checkout@v6
       - name: Install package-matching kernel compiler
         run: |
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
-            openssl-dev perl python3 patch linux-headers git dtc
+            openssl-dev perl python3 py3-yaml patch linux-headers git dtc
+      - uses: actions/checkout@v6
       - name: Compile isolated AArch64 candidate objects
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -600,6 +601,22 @@ jobs:
           else
             python3 ci/kernel-object-smoke.py
           fi
+      - name: Compile joined GPUEB reset and SRAM owners
+        if: ${{ inputs.research_owner_smoke }}
+        run: sh patches/gpu/boot-owner/run-ci.sh
+      - name: Fetch pinned hardware sources for native callbacks
+        if: ${{ !inputs.research_owner_smoke }}
+        run: |
+          git init /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878
+          git -C /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            fetch --filter=blob:none --depth=1 \
+            https://github.com/NothingOSS/android_kernel_device_modules_6.1_nothing_mt6878.git \
+            ee2be53cb75670b548948636a0db1d1ff112bf12
+          git init /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878
+          git -C /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
+            fetch --filter=blob:none --depth=1 \
+            https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git \
+            e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
       - name: Compile genuine native modem ON callbacks
         if: ${{ !inputs.research_owner_smoke }}
         run: |
@@ -614,6 +631,44 @@ jobs:
             --config pmaports/device/testing/linux-postmarketos-mediatek-mt6878/config-postmarketos-mediatek-mt6878.aarch64 \
             --output /tmp/tetris-modem-real-on-objects \
             --report /tmp/tetris-modem-real-on-evidence/BUILD-MANIFEST.json
+      - name: Compile native platform CCCI first-start callers
+        if: ${{ !inputs.research_owner_smoke }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          mkdir -p /tmp/tetris-native-start-pristine
+          tar -xzf /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            -C /tmp/tetris-native-start-pristine --strip-components=1 \
+            linux-d84b264a54a37611f2f46bc19363cb9b41606205/drivers/pmdomain/mediatek/mtk-pm-domains.c \
+            linux-d84b264a54a37611f2f46bc19363cb9b41606205/drivers/pmdomain/mediatek/mtk-pm-domains.h \
+            linux-d84b264a54a37611f2f46bc19363cb9b41606205/drivers/pmdomain/mediatek/Kconfig
+          python3 -B patches/modem/md-pm-integration/native-start/ci.py \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --pristine-kernel /tmp/tetris-native-start-pristine \
+            --config pmaports/device/testing/linux-postmarketos-mediatek-mt6878/config-postmarketos-mediatek-mt6878.aarch64 \
+            --vendor /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --output /tmp/tetris-native-start-objects \
+            --report /tmp/tetris-native-start-evidence/BUILD-MANIFEST.json --enable-native-start
+      - name: Compile observed-OFF camera rail provider
+        if: ${{ !inputs.research_owner_smoke }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/camera-camisp/rail-owner/run_ci.py \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
+            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            --output /tmp/tetris-camera-rail-objects --report /tmp/tetris-camera-rail-evidence
+      - uses: actions/upload-artifact@v7
+        if: always() && !inputs.research_owner_smoke
+        with:
+          name: native-first-start-and-camera-rail-evidence
+          path: |
+            /tmp/tetris-native-start-evidence/
+            /tmp/tetris-native-start-objects/**/mtk-pm-domains.o
+            /tmp/tetris-native-start-objects/**/fsm/*.o
+            /tmp/tetris-native-start-objects/**/hif/*.o
+            /tmp/tetris-camera-rail-evidence/
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always() && !inputs.research_owner_smoke
         with:
@@ -694,11 +749,11 @@ jobs:
             cbb777d415b564c1e40598740288c0c9d953e745
           export TETRIS_NATIVE_SOURCE_TREE=/work/out/native-source
           if [ '${{ inputs.gnss_tx_image }}' = true ]; then
-            python3 -B ci/stage-native-gnss-image.py --pmaports upstream/pmaports \
+            python3 -B ci/stage-native-gnss-candidate-image.py --pmaports upstream/pmaports \
               --report out/native-modem-image-profile.json \
               --tx-report out/gnss-tx-image-profile.json --include-exact1009
           else
-            python3 -B ci/stage-native-gnss-image.py --pmaports upstream/pmaports \
+            python3 -B ci/stage-native-gnss-candidate-image.py --pmaports upstream/pmaports \
               --report out/native-modem-image-profile.json \
               --tx-report out/gnss-tx-image-profile.json
           fi

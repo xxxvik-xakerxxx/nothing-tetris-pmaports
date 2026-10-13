@@ -1,0 +1,7 @@
+config MTK_MT6878_MODEM_NATIVE_START_STAGING
+	bool "MT6878 native physical-ON CCCI handoff (staging)"
+	depends on MTK_MT6878_MODEM_REAL_BOOT_STAGING
+	default n
+	help
+	  Export validation of the retained real platform consumer and fresh native
+	  ON readbacks. This is not firmware authentication or modem readiness.

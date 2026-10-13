@@ -17,7 +17,8 @@ On r188, the corrected SCP loader restored automatic cold startup, rotation
 and auto-brightness; warm reboot and power lifecycle remain incomplete.
 
 Wi-Fi, Bluetooth, audio, charging, haptics and torch have partial support.
-GNSS has transport progress but no verified position fix. Cellular service,
+GNSS firmware download and a DSP WORK transition have passed a bounded native
+test; navigation and a position fix are not verified. Cellular service,
 camera capture and GPU acceleration are not working.
 
 [Current status and tested versions](docs/PORT_SUMMARY.md) |

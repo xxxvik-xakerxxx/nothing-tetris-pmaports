@@ -1,0 +1,55 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -95,39 +95,39 @@
+ 	camera_main_afvdd: regulator-camera-main-afvdd {
+-		compatible = "regulator-fixed";
++		compatible = "nothing,tetris-camera-gpio-regulator";
++		nothing,rail = "afvdd";
+ 		regulator-name = "camera-main-afvdd";
+ 		regulator-min-microvolt = <2800000>;
+ 		regulator-max-microvolt = <2800000>;
+-		gpio = <&pio 1 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
++		enable-gpios = <&pio 1 GPIO_ACTIVE_HIGH>;
+ 		status = "disabled";
+ 	};
+ 
+ 	camera_main_avdd: regulator-camera-main-avdd {
+-		compatible = "regulator-fixed";
++		compatible = "nothing,tetris-camera-gpio-regulator";
++		nothing,rail = "avdd";
+ 		regulator-name = "camera-main-avdd";
+ 		regulator-min-microvolt = <2800000>;
+ 		regulator-max-microvolt = <2800000>;
+-		gpio = <&pio 22 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
++		enable-gpios = <&pio 22 GPIO_ACTIVE_HIGH>;
+ 		status = "disabled";
+ 	};
+ 
+ 	camera_main_dvdd: regulator-camera-main-dvdd {
+-		compatible = "regulator-fixed";
++		compatible = "nothing,tetris-camera-gpio-regulator";
++		nothing,rail = "dvdd";
+ 		regulator-name = "camera-main-dvdd";
+ 		regulator-min-microvolt = <1200000>;
+ 		regulator-max-microvolt = <1200000>;
+-		gpio = <&pio 21 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
++		enable-gpios = <&pio 21 GPIO_ACTIVE_HIGH>;
+ 		status = "disabled";
+ 	};
+ 
+ 	camera_main_dovdd: regulator-camera-main-dovdd {
+-		compatible = "regulator-fixed";
++		compatible = "nothing,tetris-camera-gpio-regulator";
++		nothing,rail = "dovdd";
+ 		regulator-name = "camera-main-dovdd";
+ 		regulator-min-microvolt = <1800000>;
+ 		regulator-max-microvolt = <1800000>;
+-		gpio = <&pio 23 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
++		enable-gpios = <&pio 23 GPIO_ACTIVE_HIGH>;
+ 		status = "disabled";
+ 	};

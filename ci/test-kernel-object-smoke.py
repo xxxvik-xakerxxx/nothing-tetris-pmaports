@@ -20,6 +20,14 @@ spec.loader.exec_module(smoke)
 
 
 class SmokeInputs(unittest.TestCase):
+    def test_container_has_git_before_checkout_for_frozen_sources(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        job = workflow.split("  kernel-object-smoke:\n", 1)[1].split("  build-pmaports:\n", 1)[0]
+        self.assertLess(job.index("Install package-matching kernel compiler"),
+                        job.index("uses: actions/checkout@v6"))
+        self.assertIn("python3 py3-yaml patch linux-headers git dtc", job)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

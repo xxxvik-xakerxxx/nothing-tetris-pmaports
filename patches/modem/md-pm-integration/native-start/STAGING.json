@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "scope": "new files under patches/modem/md-pm-integration/native-start only",
+  "status": "uninstalled default-off actual native platform probe and first-START integration; source/application validated, target compilation pending",
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "modules_tree": "f31ccc4a9130168fb937943b5d8e77d871c47c8d",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "atf_payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
+  },
+  "base": "published real-boot at 0f2b9b3e3eb894a15ef7fedb2266dd59f5726e04 plus complete pinned CCCI shipping/owner/ports/prepare/lifecycle/SMEM-consumer closure",
+  "actual_callers": [
+    "native genpd attach retains exact scpsys domain; GPL validate/latch read retained owner and current physical ON",
+    "CCCI common private probe -> ccci_tetris_native_probe; PM accounting/ref pin, no execution",
+    "real HIF probes -> resource claim + checked sealed registration",
+    "explicit post-bind ccci_tetris_native_first_start -> register_prepared -> actual fsm_append_command START",
+    "fsm_routine_start -> ccci_md_start -> md_cd_start -> native ccci_tetris_owner_start",
+    "native START -> real platform PM pin -> bounded POWER/3 predicate + POWER/2 flags -> WDT disabled -> sealed CCIF/DPMAIF start -> BOOT_WAITING_FOR_HS1 -> checked POWER/0 -> WDT enable"
+  ],
+  "configuration": {
+    "supplier_api": "MTK_MT6878_MODEM_NATIVE_START_STAGING default n",
+    "vendor": "MTK_ECCCI_TETRIS_NATIVE_START default n",
+    "shipping": "no DT enablement, registration or autostart; legacy OFF owner not selected with native composition"
+  },
+  "files_sha256": {
+    "README.md": "7eec2939c2ed4588b4cc5828890bc75d287d4df0beea0d1b174de5ab096e6bcc",
+    "SOURCE-EVIDENCE.json": "eaa659374c87638e0fbb391cbc35dfda997e0336e4105518f738c02641da9df8",
+    "audit.py": "1f687da93bb3cf7fd44bc93245d8f3b92f8092e0377ffb64fcb98c9a45203509",
+    "ccci-native-start.patch.vendor": "39c80d0d194f35983b10d84d7781a283b9e0f8f7869ca6d932ba53407acfd2d9",
+    "ccci_tetris_native_start.c": "530e563094810115fe126556af545d15b389b751e43b89074c07f98f67d1197b",
+    "ccci_tetris_native_start.h": "54005b167f8ab78e341331ab6b9155cf70e545ef48b83bcbe81f552e1296c38c",
+    "ci.py": "faf1d4b11701ce6cdb6348e7db7133231cca6a00f5b9df171c625d4b9195f8fc",
+    "mt6878_md_native_on.h": "185141fb422baca8df76d743025f3d4886855b16caa2e46c6edf2c6fec2f2753",
+    "native-hif-owner.h": "c401482afe080d7806df5203011023d6065fd8be304202e56b9e8446a22a4166",
+    "native-on-api.patch": "523331bd2f825c0c273cf8ef711e5ad2a5555499bab747e0d7cfe7cbee0124df",
+    "native-on-provider.h": "84cd69f5407181185b5fb5ef8dfab528415305d25cfbbab905e936c63e6d1bd8",
+    "native-start.Kconfig": "58bf209f7d513da25f7c3f58d000bb4e6fce17a80aaf18099fcbd3c3d217de81",
+    "stage.py": "f1de2e759ab7632a3040a1c346eb8264fa76add18b7ea49470e3db0ffe920197",
+    "test_static.py": "1b6c393473bfa38506473a00865a7c6146eaeb43b3a22e990a370d55c40030bf",
+    "vendor-start.Kconfig": "bdc00e4c28c0bc7c3dd6447d319b49c2f1f3d5fb2b461b038b5f9fa953ac769a"
+  },
+  "checks": [
+    "python3 -B audit.py",
+    "python3 -B stage.py",
+    "python3 -B -m unittest -v test_static.py"
+  ],
+  "ci_contract": {
+    "helper": "ci.py --enable-native-start",
+    "input": "disposable prepared kernel AFTER real-boot/ci.py build, not research owners",
+    "units": "native supplier plus seven actual vendor caller/HIF objects",
+    "variants": [
+      "default-off API",
+      "native-start API"
+    ],
+    "dt": "consumer + rails disabled; supplier untouched",
+    "link": "not performed; no fabricated Module.symvers or exports",
+    "status": "compile entry provided, not run here",
+    "pristine_argument": "--pristine-kernel /tmp/tetris-native-start-pristine (required, no UPSTREAM default)",
+    "pristine_files": [
+      "drivers/pmdomain/mediatek/mtk-pm-domains.c",
+      "drivers/pmdomain/mediatek/mtk-pm-domains.h",
+      "drivers/pmdomain/mediatek/Kconfig"
+    ],
+    "pristine_validation": "each file SHA256 matches pinned d84; parent extracts from already SHA512-verified archive; no archive path needed by compile helper",
+    "historical_reads": {
+      "cbb777d415b564c1e40598740288c0c9d953e745": [
+        "patches/modem/md-pm-integration/native-on-adoption.patch",
+        "patches/modem/md-pm-integration/mt6878-modem-adopt.h",
+        "patches/camera-camisp/native-integration/native-provider-after-md.patch"
+      ],
+      "06fa22493cb8686e67c82236fdd26741e8da0378": [
+        "patches/modem/md-pm-integration/post-off/mt6878-modem-post-off.h",
+        "patches/modem/md-pm-integration/post-off/Kconfig"
+      ]
+    },
+    "not_read_here": "e0c67c561ff7c1a0472da851edfafd5a0abb6cec only in separate link_full.backend_sources; no U-Boot git object read here"
+  },
+  "remaining": [
+    "actual native-start CI compiler/report",
+    "complete module linkage/modpost and genuine export CRC/ABI closure",
+    "trusted loader final DT, retained mapped SMEM/firmware/NS ownership and matching secure admission",
+    "lower HIF getter/DMA/IRQ lifetimes and unsupported forced detach, STOP/restart/exception/suspend",
+    "controlled hardware and real HS1/HS2/SIM/network plus lifecycle/SKU gates"
+  ],
+  "performed": "no local native compilation, emulation/JIT/Unicorn, phone/SSH/fastboot, commit/push or remote mutation"
+}

@@ -1,0 +1,432 @@
+diff --git a/drivers/regulator/tetris-camera-gpio-regulator.c b/drivers/regulator/tetris-camera-gpio-regulator.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/regulator/tetris-camera-gpio-regulator.c
+@@ -0,0 +1,293 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Tetris sensor rails: observed-OFF acquisition, no boot-state adoption. */
++#include <linux/gpio/consumer.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/regulator/driver.h>
++#include <linux/regulator/machine.h>
++#include <linux/regulator/of_regulator.h>
++#include <linux/slab.h>
++#include <linux/string.h>
++#include "../pinctrl/mediatek/pinctrl-mtk-common-v2.h"
++
++struct tetris_rail_spec {
++	const char *name;
++	unsigned int pin;
++	int microvolts;
++};
++
++/* B4.1 cust_mt6878_camera_v4l2.dtsi and both IMX882 power tables. */
++static const struct tetris_rail_spec tetris_rails[] = {
++	{ "afvdd", 1, 2800000 },
++	{ "avdd", 22, 2800000 },
++	{ "dvdd", 21, 1200000 },
++	{ "dovdd", 23, 1800000 },
++};
++
++struct tetris_camera_rail {
++	struct regulator_desc desc;
++	struct gpio_desc *gpio;
++	int last_level;
++	int first_error;
++};
++
++static int tetris_rail_fault(struct tetris_camera_rail *rail, int error)
++{
++	if (!rail->first_error)
++		rail->first_error = error;
++	return rail->first_error;
++}
++
++/* Input-low is a cold startup candidate, never an enabled-state observation. */
++static int tetris_rail_startup_observe(struct tetris_camera_rail *rail)
++{
++	int direction, level;
++
++	if (rail->first_error)
++		return rail->first_error;
++	direction = gpiod_get_direction(rail->gpio);
++	if (direction < 0)
++		return tetris_rail_fault(rail, direction);
++	if (direction != 0 && direction != 1)
++		return tetris_rail_fault(rail, -EOPNOTSUPP);
++	level = gpiod_get_value_cansleep(rail->gpio);
++	if (level < 0)
++		return tetris_rail_fault(rail, level);
++	if (level != 0)
++		return tetris_rail_fault(rail, -EBUSY);
++	return 0;
++}
++
++/* The regulator core serializes callbacks and owns every consumer reference. */
++static int tetris_rail_observe(struct tetris_camera_rail *rail, int expected)
++{
++	int direction, level;
++
++	if (rail->first_error)
++		return rail->first_error;
++	direction = gpiod_get_direction(rail->gpio);
++	if (direction < 0)
++		return tetris_rail_fault(rail, direction);
++	/* A floating/input pin is not an established OFF output handoff. */
++	if (direction != 0)
++		return tetris_rail_fault(rail, -EOPNOTSUPP);
++	level = gpiod_get_value_cansleep(rail->gpio);
++	if (level < 0)
++		return tetris_rail_fault(rail, level);
++	if (level != expected)
++		return tetris_rail_fault(rail, level ? -EBUSY : -EIO);
++	return level;
++}
++
++static int tetris_rail_is_enabled(struct regulator_dev *rdev)
++{
++	struct tetris_camera_rail *rail = rdev_get_drvdata(rdev);
++
++	return tetris_rail_observe(rail, rail->last_level);
++}
++
++static int tetris_rail_set(struct regulator_dev *rdev, int target)
++{
++	struct tetris_camera_rail *rail = rdev_get_drvdata(rdev);
++	int ret;
++
++	ret = tetris_rail_observe(rail, rail->last_level);
++	if (ret < 0)
++		return ret;
++	if (ret == target)
++		return 0;
++	ret = gpiod_set_value_cansleep(rail->gpio, target);
++	if (ret)
++		return tetris_rail_fault(rail, ret);
++	ret = tetris_rail_observe(rail, target);
++	if (ret < 0)
++		return ret;
++	/* Track only a completed, read-back transition; never count consumers. */
++	rail->last_level = ret;
++	return 0;
++}
++
++static int tetris_rail_enable(struct regulator_dev *rdev)
++{
++	return tetris_rail_set(rdev, 1);
++}
++
++static int tetris_rail_disable(struct regulator_dev *rdev)
++{
++	return tetris_rail_set(rdev, 0);
++}
++
++static int tetris_rail_list_voltage(struct regulator_dev *rdev, unsigned int selector)
++{
++	return selector ? -EINVAL : rdev->desc->fixed_uV;
++}
++
++static const struct regulator_ops tetris_rail_ops = {
++	.enable = tetris_rail_enable,
++	.disable = tetris_rail_disable,
++	.is_enabled = tetris_rail_is_enabled,
++	.list_voltage = tetris_rail_list_voltage,
++};
++
++static int tetris_rail_gpio_contract(struct device_node *node,
++				     const struct tetris_rail_spec *spec)
++{
++	struct of_phandle_args gpio;
++	struct platform_device *owner;
++	struct mtk_pinctrl *hw;
++	const struct mtk_pin_desc *pin;
++	unsigned long flags;
++	int ret, mode, direction, output, input;
++
++	if (of_count_phandle_with_args(node, "enable-gpios", "#gpio-cells") != 1)
++		return -EINVAL;
++	ret = of_parse_phandle_with_args(node, "enable-gpios", "#gpio-cells", 0, &gpio);
++	if (ret)
++		return ret;
++	ret = 0;
++	if (!of_device_is_compatible(gpio.np, "mediatek,mt6878-pinctrl") ||
++	    !of_device_is_available(gpio.np) || gpio.args_count != 2 ||
++	    gpio.args[0] != spec->pin || gpio.args[1] != 0)
++		ret = -EINVAL;
++	if (ret) {
++		of_node_put(gpio.np);
++		return ret;
++	}
++	owner = of_find_device_by_node(gpio.np);
++	of_node_put(gpio.np);
++	if (!owner)
++		return -EPROBE_DEFER;
++	device_lock(&owner->dev);
++	if (!owner->dev.driver) {
++		ret = -EPROBE_DEFER;
++		goto unlock;
++	}
++	/* Check the native driver before interpreting its private data. */
++	if (strcmp(owner->dev.driver->name, "mt6878-pinctrl")) {
++		ret = -EOPNOTSUPP;
++		goto unlock;
++	}
++	hw = platform_get_drvdata(owner);
++	if (!hw || hw->dev != &owner->dev || hw->chip.parent != &owner->dev ||
++	    !hw->chip.gpiodev || !hw->soc || spec->pin >= hw->soc->npins) {
++		ret = -EPROBE_DEFER;
++		goto unlock;
++	}
++	pin = &hw->soc->pins[spec->pin];
++	/*
++	 * Read-only snapshot, not an atomic GPIO/mux claim. Paris request still
++	 * writes MODE; its non-strict mux ownership and external writers need
++	 * an owner-level handoff before this disabled candidate can activate.
++	 */
++	spin_lock_irqsave(&hw->lock, flags);
++	ret = mtk_hw_get_value(hw, pin, PINCTRL_PIN_REG_MODE, &mode);
++	if (!ret)
++		ret = mtk_hw_get_value(hw, pin, PINCTRL_PIN_REG_DIR, &direction);
++	if (!ret)
++		ret = mtk_hw_get_value(hw, pin, PINCTRL_PIN_REG_DO, &output);
++	if (!ret)
++		ret = mtk_hw_get_value(hw, pin, PINCTRL_PIN_REG_DI, &input);
++	spin_unlock_irqrestore(&hw->lock, flags);
++	if (!ret && (mode != hw->soc->gpio_m || output != 0 || input != 0))
++		ret = -EBUSY;
++	if (!ret && direction != 0 && direction != 1)
++		ret = -EOPNOTSUPP;
++unlock:
++	device_unlock(&owner->dev);
++	put_device(&owner->dev);
++	return ret;
++}
++
++static int tetris_camera_rail_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *node = dev->of_node;
++	const struct tetris_rail_spec *spec = NULL;
++	struct regulator_config config = { };
++	struct regulator_init_data *init;
++	struct tetris_camera_rail *rail;
++	struct regulator_dev *rdev;
++	const char *name;
++	int ret, i;
++
++	ret = of_property_read_string(node, "nothing,rail", &name);
++	if (ret)
++		return dev_err_probe(dev, ret, "missing camera rail selector\n");
++	for (i = 0; i < ARRAY_SIZE(tetris_rails); i++) {
++		if (!strcmp(name, tetris_rails[i].name)) {
++			spec = &tetris_rails[i];
++			break;
++		}
++	}
++	if (!spec)
++		return dev_err_probe(dev, -EINVAL, "unsupported camera rail\n");
++	/* Default pinctrl or a generic fixed fallback would precede this gate. */
++	if (of_property_present(node, "pinctrl-0") ||
++	    of_property_present(node, "pinctrl-names") ||
++	    of_property_present(node, "gpio") || of_property_present(node, "vin-supply"))
++		return dev_err_probe(dev, -EINVAL, "unsupported camera rail startup resources\n");
++	rail = devm_kzalloc(dev, sizeof(*rail), GFP_KERNEL);
++	if (!rail)
++		return -ENOMEM;
++	rail->desc.name = spec->name;
++	rail->desc.owner = THIS_MODULE;
++	rail->desc.type = REGULATOR_VOLTAGE;
++	rail->desc.ops = &tetris_rail_ops;
++	rail->desc.n_voltages = 1;
++	rail->desc.fixed_uV = spec->microvolts;
++	init = of_get_regulator_init_data(dev, node, &rail->desc);
++	if (!init || !init->constraints.name ||
++	    init->constraints.min_uV != spec->microvolts ||
++	    init->constraints.max_uV != spec->microvolts ||
++	    init->constraints.boot_on || init->constraints.always_on ||
++	    init->constraints.initial_state)
++		return dev_err_probe(dev, -EINVAL, "camera rail requires fixed, non-boot constraints\n");
++	init->constraints.apply_uV = 0;
++	/* Reject an unsafe observed boot mux before the request callback writes it. */
++	ret = tetris_rail_gpio_contract(node, spec);
++	if (ret)
++		return dev_err_probe(dev, ret, "camera rail pre-request GPIO/MODE check failed\n");
++	rail->gpio = devm_gpiod_get(dev, "enable", GPIOD_ASIS);
++	if (IS_ERR(rail->gpio))
++		return dev_err_probe(dev, PTR_ERR(rail->gpio), "camera rail GPIO unavailable\n");
++	if (gpiod_is_active_low(rail->gpio))
++		return dev_err_probe(dev, -EINVAL, "camera rail enable must be active-high\n");
++	ret = tetris_rail_startup_observe(rail);
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "camera rail lacks observed startup GPIO low\n");
++	/* Paris checks DO=0 before selecting DIR=output; steady callbacks stay output-only. */
++	ret = gpiod_direction_output(rail->gpio, 0);
++	if (ret)
++		return dev_err_probe(dev, ret, "camera rail OFF direction failed\n");
++	ret = tetris_rail_observe(rail, 0);
++	if (ret < 0)
++		return dev_err_probe(dev, ret, "camera rail OFF read-back failed\n");
++	config.dev = dev;
++	config.of_node = node;
++	config.init_data = init;
++	config.driver_data = rail;
++	/* Do not hand the GPIO to regulator core's early enable-pin path. */
++	rdev = devm_regulator_register(dev, &rail->desc, &config);
++	if (IS_ERR(rdev))
++		return dev_err_probe(dev, PTR_ERR(rdev), "camera rail registration failed\n");
++	return 0;
++}
++
++static const struct of_device_id tetris_camera_rail_match[] = {
++	{ .compatible = "nothing,tetris-camera-gpio-regulator" },
++	{ }
++};
++
++static struct platform_driver tetris_camera_rail_driver = {
++	.probe = tetris_camera_rail_probe,
++	.driver = {
++		.name = "tetris-camera-gpio-regulator",
++		.of_match_table = tetris_camera_rail_match,
++		.suppress_bind_attrs = true,
++	},
++};
++builtin_platform_driver(tetris_camera_rail_driver);
+diff --git a/Documentation/devicetree/bindings/regulator/nothing,tetris-camera-gpio-regulator.yaml b/Documentation/devicetree/bindings/regulator/nothing,tetris-camera-gpio-regulator.yaml
+new file mode 100644
+--- /dev/null
++++ b/Documentation/devicetree/bindings/regulator/nothing,tetris-camera-gpio-regulator.yaml
+@@ -0,0 +1,98 @@
++# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++%YAML 1.2
++---
++$id: http://devicetree.org/schemas/regulator/nothing,tetris-camera-gpio-regulator.yaml#
++$schema: http://devicetree.org/meta-schemas/core.yaml#
++
++title: Nothing Tetris observed-OFF camera GPIO regulator
++
++maintainers:
++  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
++
++description: |
++  A single GPIO-controlled sensor rail on Tetris. The provider requires an
++  already configured output reading OFF before changing direction or publishing
++  a regulator. Shared consumers reference the same regulator node. GPIO23
++  DOVDD is shared by all three sensor positions; it must not be duplicated.
++  Observation of a GPIO level does not measure voltage or establish firmware
++  ownership. Registration remains gated by the actual GPIO and pinctrl owners.
++
++allOf:
++  - $ref: regulator.yaml#
++  - if:
++      properties:
++        nothing,rail:
++          enum: [afvdd, avdd]
++    then:
++      properties:
++        regulator-min-microvolt:
++          const: 2800000
++        regulator-max-microvolt:
++          const: 2800000
++  - if:
++      properties:
++        nothing,rail:
++          const: dvdd
++    then:
++      properties:
++        regulator-min-microvolt:
++          const: 1200000
++        regulator-max-microvolt:
++          const: 1200000
++  - if:
++      properties:
++        nothing,rail:
++          const: dovdd
++    then:
++      properties:
++        regulator-min-microvolt:
++          const: 1800000
++        regulator-max-microvolt:
++          const: 1800000
++
++properties:
++  compatible:
++    const: nothing,tetris-camera-gpio-regulator
++  nothing,rail:
++    $ref: /schemas/types.yaml#/definitions/string
++    enum: [afvdd, avdd, dvdd, dovdd]
++  enable-gpios:
++    maxItems: 1
++    description: |
++      Active-high MT6878 PIO GPIO1 (AFVDD), GPIO22 (main AVDD), GPIO21 (main
++      DVDD) or GPIO23 (common DOVDD), selected by nothing,rail. The driver
++      checks the controller, line and flags before requesting a descriptor.
++  regulator-name: true
++  regulator-min-microvolt: true
++  regulator-max-microvolt: true
++  regulator-boot-on: false
++  regulator-always-on: false
++  regulator-state-mem: false
++  regulator-state-standby: false
++  regulator-state-disk: false
++  pinctrl-0: false
++  pinctrl-names: false
++  vin-supply: false
++
++required:
++  - compatible
++  - nothing,rail
++  - enable-gpios
++  - regulator-name
++  - regulator-min-microvolt
++  - regulator-max-microvolt
++
++unevaluatedProperties: false
++
++examples:
++  - |
++    regulator-camera-main-dovdd {
++        compatible = "nothing,tetris-camera-gpio-regulator";
++        nothing,rail = "dovdd";
++        regulator-name = "camera-common-dovdd";
++        regulator-min-microvolt = <1800000>;
++        regulator-max-microvolt = <1800000>;
++        enable-gpios = <&pio 23 0>;
++        status = "disabled";
++    };
++...
+diff --git a/drivers/regulator/Kconfig b/drivers/regulator/Kconfig
+--- a/drivers/regulator/Kconfig
++++ b/drivers/regulator/Kconfig
+@@ -439,6 +439,16 @@
+ 	  regulator. The regulator is a programmable power management IC
+ 	  (PMIC), it is controlled by I2C and provides one BUCK, one BOOST
+ 	  and four LDO outputs.
++
++config REGULATOR_TETRIS_CAMERA_GPIO
++	bool "Nothing Tetris observed-OFF camera GPIO rails"
++	depends on OF && GPIOLIB && PINCTRL_MT6878
++	default n
++	help
++	  Check the four Tetris sensor GPIO rails through their native pinctrl
++	  owner before GPIO request. ASIS still invokes a mux-writing callback;
++	  the check is not an atomic GPIO/mux ownership handoff. Keep board DT
++	  disabled until that handoff is established. Do not adopt inherited ON.
+ 
+ config REGULATOR_GPIO
+ 	tristate "GPIO regulator support"
+diff --git a/drivers/regulator/Makefile b/drivers/regulator/Makefile
+--- a/drivers/regulator/Makefile
++++ b/drivers/regulator/Makefile
+@@ -8,6 +8,7 @@
+ obj-$(CONFIG_REGULATOR_NETLINK_EVENTS) += event.o
+ obj-$(CONFIG_OF) += of_regulator.o
+ obj-$(CONFIG_REGULATOR_FIXED_VOLTAGE) += fixed.o
++obj-$(CONFIG_REGULATOR_TETRIS_CAMERA_GPIO) += tetris-camera-gpio-regulator.o
+ obj-$(CONFIG_REGULATOR_VIRTUAL_CONSUMER) += virtual.o
+ obj-$(CONFIG_REGULATOR_USERSPACE_CONSUMER) += userspace-consumer.o
+ 

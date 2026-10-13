@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/regulator/nothing,tetris-camera-gpio-regulator.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Nothing Tetris observed-OFF camera GPIO regulator
+
+maintainers:
+  - xxxvik-xakerxxx <19531907+xxxvik-xakerxxx@users.noreply.github.com>
+
+description: |
+  A single GPIO-controlled sensor rail on Tetris. The provider requires an
+  already configured output reading OFF before changing direction or publishing
+  a regulator. Shared consumers reference the same regulator node. GPIO23
+  DOVDD is shared by all three sensor positions; it must not be duplicated.
+  Observation of a GPIO level does not measure voltage or establish firmware
+  ownership. Registration remains gated by the actual GPIO and pinctrl owners.
+
+allOf:
+  - $ref: regulator.yaml#
+  - if:
+      properties:
+        nothing,rail:
+          enum: [afvdd, avdd]
+    then:
+      properties:
+        regulator-min-microvolt:
+          const: 2800000
+        regulator-max-microvolt:
+          const: 2800000
+  - if:
+      properties:
+        nothing,rail:
+          const: dvdd
+    then:
+      properties:
+        regulator-min-microvolt:
+          const: 1200000
+        regulator-max-microvolt:
+          const: 1200000
+  - if:
+      properties:
+        nothing,rail:
+          const: dovdd
+    then:
+      properties:
+        regulator-min-microvolt:
+          const: 1800000
+        regulator-max-microvolt:
+          const: 1800000
+
+properties:
+  compatible:
+    const: nothing,tetris-camera-gpio-regulator
+  nothing,rail:
+    $ref: /schemas/types.yaml#/definitions/string
+    enum: [afvdd, avdd, dvdd, dovdd]
+  enable-gpios:
+    maxItems: 1
+    description: |
+      Active-high MT6878 PIO GPIO1 (AFVDD), GPIO22 (main AVDD), GPIO21 (main
+      DVDD) or GPIO23 (common DOVDD), selected by nothing,rail. The driver
+      checks the controller, line and flags before requesting a descriptor.
+  regulator-name: true
+  regulator-min-microvolt: true
+  regulator-max-microvolt: true
+  regulator-boot-on: false
+  regulator-always-on: false
+  regulator-state-mem: false
+  regulator-state-standby: false
+  regulator-state-disk: false
+  pinctrl-0: false
+  pinctrl-names: false
+  vin-supply: false
+
+required:
+  - compatible
+  - nothing,rail
+  - enable-gpios
+  - regulator-name
+  - regulator-min-microvolt
+  - regulator-max-microvolt
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    regulator-camera-main-dovdd {
+        compatible = "nothing,tetris-camera-gpio-regulator";
+        nothing,rail = "dovdd";
+        regulator-name = "camera-common-dovdd";
+        regulator-min-microvolt = <1800000>;
+        regulator-max-microvolt = <1800000>;
+        enable-gpios = <&pio 23 0>;
+        status = "disabled";
+    };
+...

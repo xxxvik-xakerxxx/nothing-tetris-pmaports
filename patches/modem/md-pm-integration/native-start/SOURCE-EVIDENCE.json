@@ -1,0 +1,66 @@
+{
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "modules_tree": "f31ccc4a9130168fb937943b5d8e77d871c47c8d",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "atf_payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
+  },
+  "sources": {
+    "drivers/misc/mediatek/eccci/fsm/modem_sys1.c": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "53a546c3de0614215e205e4ba69ce06ec7064303c8598b90b2917be632f24faa"
+    },
+    "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ae3e3998c2ce060ef7e5e406fa647cbff2fae14f196f1d2494784cc4c46848af"
+    },
+    "drivers/misc/mediatek/eccci/inc/modem_secure_base.h": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2d5727255d1381ea914df7d8811de99dfcf1d4917a85597c9fb1ab49f13d814c"
+    },
+    "drivers/misc/mediatek/eccci/hif/ccci_hif.c": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "603ad31ec6bf22bc51157ef55040a4b40cfca49bd619cd0a01262622a7f2fe4d"
+    },
+    "drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ec6c9bf24ed53d12a07edc0eb91dcbdab6056ad7d1e61166ba896985599c0e55"
+    },
+    "drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c": {
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "252efa6dd83c366ac34fa7fa8638aab121759ee2803da53621d3c54f668b5548"
+    },
+    "tracked-atf-power": {
+      "revision": "634789437e3f80a0129f00e5cff922bd8cdbb64b",
+      "path": "patches/modem/test-atf-power-contract.py",
+      "sha256": "f927f76be2d78b5d25a8a85d3a2a5fc84186bb82ab304fa51204cfb2ba60d930",
+      "method": "source read only; not imported or executed"
+    },
+    "linux:kernel/reboot.c": {
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "58073d46b0657084dff68a451d6ffcb6b342c979d745598716ca3a46e7bf67a8"
+    },
+    "linux:kernel/power/main.c": {
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "48cf853235097bce2a817cb37a82d4e4c7a78565fd4f793ba4f05466934aa60b"
+    },
+    "linux:include/linux/pm_runtime.h": {
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "6e56aead7c16bb0144650e1aec57ef31e9789212d3a39cd92f5643e5837e212e"
+    }
+  },
+  "power0": {
+    "x0": "0xc2000505",
+    "x1": 6,
+    "x2": 0,
+    "x3_x7": 0,
+    "a0": "status; nonzero -> EIO, raw retained",
+    "a1_a2": "defined boot-status register words; diagnostic, not readiness flags",
+    "a3": "boot-slave register readback, require 1",
+    "boot_register": "0x21b20300",
+    "outer_admission": "separate; not manufactured from return status"
+  },
+  "kernel_export_boundary": "system_transition_mutex not exported; module uses exported lock_system_sleep/unlock_system_sleep",
+  "validation": "source checks only; no ATF fixture execution or hardware permission claim"
+}

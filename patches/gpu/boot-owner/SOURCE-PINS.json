@@ -1,0 +1,15 @@
+{
+  "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
+  "observed_primary_sha256": "9628a446c2453664eebb7ce0f5b6d9db51d677d6c1db3c4ac1449f4cfaad86d7",
+  "sources": {
+    "patches/gpu/flat-handoff-draft/gpueb-flat-analysis.c": "e0ac3e88c4a23faabf0cc80f406a52e7eda1ac44af0f9004df65de730a367204",
+    "patches/gpu/sram-owner/mt6878-gpueb-sram.c": "4d4490ddb6bb4a9e2c660b0e11aff3d649e22ae100a50fbbbfecd063d95eee7e",
+    "patches/gpu/sram-owner/mt6878-gpueb-sram.h": "b7df742ca39a82b6945a7e871a329373e6850209bfbe3754db75f8e844c96e1e",
+    "patches/gpu/reset-owner-draft/mt6878-gpueb-reset.c": "e14672182bcee8a69a94a942e4e603fea970ee0c1c45f9f72474875b06fea43e",
+    "patches/gpu/reset-owner-draft/mt6878-gpueb-reset.h": "ba0bdf3d42d685876072017009f2ac325bf3b2f42a94fe17f052df0cd4b28d98",
+    "patches/gpu/rv33-startup/audit_startup.py": "66638960895d0713818f4fc00378839b7744e22e934abd595e3702948c800719"
+  }
+}

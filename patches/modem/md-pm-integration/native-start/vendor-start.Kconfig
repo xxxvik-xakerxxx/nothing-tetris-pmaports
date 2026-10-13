@@ -1,0 +1,11 @@
+config MTK_ECCCI_TETRIS_NATIVE_START
+	bool "Tetris native platform first-start (staging)"
+	depends on MTK_ECCCI_TETRIS_OWNER
+	depends on MTK_MT6878_MODEM_NATIVE_START_STAGING
+	depends on PM && PM_SLEEP && REGULATOR
+	depends on !SCSI_UFS_MEDIATEK_DBG
+	depends on !OF_DYNAMIC && !MEMORY_HOTREMOVE
+	default n
+	help
+	  Requires the actual mapped-SMEM consumer profile, operational CCIF/DPMAIF
+	  providers and trusted loader DT. No probe or init callback starts firmware.

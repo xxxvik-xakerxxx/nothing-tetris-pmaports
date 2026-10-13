@@ -78,7 +78,7 @@ class Composition(unittest.TestCase):
         self.assertIn("gnss_tx_image:\n", workflow)
         self.assertIn("if [ '${{ inputs.gnss_tx_image }}' = true ]; then", workflow)
         self.assertIn("test '${{ inputs.native_modem_first_off }}' = true", workflow)
-        self.assertIn("else\n            python3 -B ci/stage-native-gnss-image.py", workflow)
+        self.assertIn("else\n            python3 -B ci/stage-native-gnss-candidate-image.py", workflow)
         self.assertIn("nothing-tetris-native-md-gnss-tx-images", workflow)
         self.assertIn("/work/out/gnss-tx-image-profile.json", workflow)
         self.assertIn('["profile"]', workflow)

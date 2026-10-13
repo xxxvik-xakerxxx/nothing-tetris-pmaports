@@ -1,0 +1,740 @@
+diff --git a/drivers/misc/mediatek/eccci/Kconfig b/drivers/misc/mediatek/eccci/Kconfig
+--- a/drivers/misc/mediatek/eccci/Kconfig
++++ b/drivers/misc/mediatek/eccci/Kconfig
+@@ -9,6 +9,18 @@
+ 	  eccci driver is disabled.
+ 	  The option default disabled.
+ 
++
++config MTK_ECCCI_TETRIS_NATIVE_START
++	bool "Tetris native platform first-start (staging)"
++	depends on MTK_ECCCI_TETRIS_OWNER
++	depends on MTK_MT6878_MODEM_NATIVE_START_STAGING
++	depends on PM && PM_SLEEP && REGULATOR
++	depends on !SCSI_UFS_MEDIATEK_DBG
++	depends on !OF_DYNAMIC && !MEMORY_HOTREMOVE
++	default n
++	help
++	  Requires the actual mapped-SMEM consumer profile, operational CCIF/DPMAIF
++	  providers and trusted loader DT. No probe or init callback starts firmware.
+ 
+ config MTK_ECCCI_TETRIS_OWNER
+ 	bool "Tetris authenticated first-start owner (compile-only candidate)"
+diff --git a/drivers/misc/mediatek/eccci/Makefile b/drivers/misc/mediatek/eccci/Makefile
+--- a/drivers/misc/mediatek/eccci/Makefile
++++ b/drivers/misc/mediatek/eccci/Makefile
+@@ -88,7 +88,11 @@
+ 
+ # fsm end
+ ifeq ($(CONFIG_MTK_ECCCI_TETRIS_OWNER), y)
++ifeq ($(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START), y)
++ccci_md_all-$(CCCI_OBJ) += fsm/ccci_tetris_native_start.o
++else
+ ccci_md_all-$(CCCI_OBJ) += fsm/ccci_tetris_owner.o hif/ccci_tetris_hif_owned.o
++endif
+ endif
+ 
+ # plat start
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c b/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
+--- a/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_fsm.c
+@@ -4,6 +4,9 @@
+  */
+ 
+ #include <linux/platform_device.h>
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++#include "ccci_tetris_native_start.h"
++#endif
+ #include <linux/device.h>
+ #include <linux/module.h>
+ #include <linux/interrupt.h>
+@@ -1413,7 +1416,7 @@
+ 	unsigned long flags;
+ 	struct arm_smccc_res res;
+ 
+-#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER)
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_OWNER) && !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
+ 	/* No physical stop/start contract is provided by registration. */
+ 	ccci_tetris_registration_quarantine(-EOPNOTSUPP);
+ 	fsm_finish_command(ctl, cmd, -1);
+@@ -2018,3 +2021,13 @@
+ 	hs2_done = 0;
+ }
+ 
++
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++int ccci_tetris_native_queue_start(void)
++{
++	int ret = ccci_tetris_owner_entry();
++	if (ret)
++		return ret;
++	return fsm_append_command(ccci_fsm_entries, CCCI_COMMAND_START, 0);
++}
++#endif
+diff --git a/drivers/misc/mediatek/eccci/fsm/ccci_tetris_native_start.c b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_native_start.c
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/fsm/ccci_tetris_native_start.c
+@@ -0,0 +1,260 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/arm-smccc.h>
++#include <linux/device.h>
++#include <linux/delay.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/platform_device.h>
++#include <linux/pm_runtime.h>
++#include <linux/suspend.h>
++#include <linux/soc/mediatek/mt6878_md_native_on.h>
++#include "ccci_config.h"
++#include "ccci_core.h"
++#include "ccci_modem.h"
++#include "modem_sys.h"
++#include "ccci_hif.h"
++#include "ccci_tetris_owner.h"
++#include "ccci_tetris_prepare.h"
++#include "ccci_tetris_native_start.h"
++#include "md_sys1_platform.h"
++#include "modem_secure_base.h"
++#include "mt-plat/tetris_ccci_smem.h"
++
++static DEFINE_MUTEX(native_start_lock);
++static struct {
++	struct ccci_modem *md;
++	struct device *dev;
++	int first_error;
++	unsigned int step;
++	struct arm_smccc_res power0;
++	struct arm_smccc_res brom_done, brom_flags;
++} native_start;
++
++static int native_fault(int error)
++{
++	if (!native_start.first_error)
++		native_start.first_error = error < 0 ? error : -EPROTO;
++	if (native_start.dev)
++		mt6878_md_native_on_latch(native_start.dev, native_start.first_error);
++	return native_start.first_error;
++}
++
++/* Both providers own their live state. No caller supplies a verify callback. */
++int ccci_tetris_native_admit(struct ccci_modem *md)
++{
++	if (!md || !md->plat_dev || !md->hw_info || !md->hw_info->plat_val ||
++	    !md->tetris_smem || !md->tetris_smem->provider)
++		return -ENODATA;
++	if (md->hw_info->plat_val->md_gen != 6299 ||
++	    md->hw_info->plat_val->power_flow_config ||
++	    md->hif_flag != (BIT(CCIF_HIF_ID) | BIT(DPMAIF_HIF_ID)) ||
++	    md->mem_layout.md_bank4_noncacheable != md->tetris_smem->nc ||
++	    md->mem_layout.md_bank4_cacheable != md->tetris_smem->cache)
++		return -EXDEV;
++	return mt6878_md_native_on_validate(&md->plat_dev->dev);
++}
++
++/* Last fallible unpublished prepare operation, not START or registration. */
++int ccci_tetris_native_probe(struct ccci_modem *md)
++{
++	struct device *dev;
++	int ret;
++
++	if (!md || !md->plat_dev)
++		return -EINVAL;
++	dev = &md->plat_dev->dev;
++	mutex_lock(&native_start_lock);
++	if (native_start.md || native_start.first_error) {
++		ret = native_start.first_error ? native_start.first_error : -EALREADY;
++		goto out;
++	}
++	ret = ccci_tetris_native_admit(md);
++	if (ret)
++		goto out;
++	/* Platform attach already performed genuine ON. Set only PM accounting,
++	 * while runtime PM is disabled; pin before enable so idle cannot race. */
++	if (pm_runtime_enabled(dev)) {
++		ret = -EBUSY;
++		goto out;
++	}
++	ret = pm_runtime_set_active(dev);
++	if (ret)
++		goto out;
++	pm_runtime_get_noresume(dev);
++	pm_runtime_enable(dev);
++	native_start.dev = get_device(dev);
++	native_start.md = md;
++	__module_get(THIS_MODULE);
++out:
++	mutex_unlock(&native_start_lock);
++	return ret;
++}
++
++int ccci_tetris_owner_entry(void)
++{
++	int ret;
++
++	mutex_lock(&native_start_lock);
++	ret = native_start.first_error;
++	if (!ret && (!native_start.md || !ccci_tetris_registration_complete()))
++		ret = -ENODEV;
++	if (!ret && native_start.step)
++		ret = -EALREADY;
++	mutex_unlock(&native_start_lock);
++	return ret;
++}
++
++int ccci_tetris_owner_latch(int error)
++{
++	int ret;
++
++	mutex_lock(&native_start_lock);
++	ret = native_fault(error);
++	mutex_unlock(&native_start_lock);
++	return ret;
++}
++
++/* Preserve md_start_platform's bounded BROM queries, not its legacy OFF tail.
++ * SHA05a247 POWER/3 is a predicate, NOT status=error: 1 means not done.
++ * POWER/2 defines all four flag cells; each must actually equal one. */
++static int native_brom_check(void)
++{
++	unsigned int remaining;
++
++	for (remaining = 100; remaining; remaining--) {
++		arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, MD_POWER_CONFIG,
++			      MD_CHECK_DONE, 0, 0, 0, 0, 0, &native_start.brom_done);
++		if (!native_start.brom_done.a0)
++			break;
++		if (native_start.brom_done.a0 != 1)
++			return -EIO;
++		msleep(20);
++	}
++	if (!remaining)
++		return -ETIMEDOUT;
++	arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, MD_POWER_CONFIG,
++		      MD_CHECK_FLAG, 0, 0, 0, 0, 0, &native_start.brom_flags);
++	if (native_start.brom_flags.a0 != 1 || native_start.brom_flags.a1 != 1 ||
++	    native_start.brom_flags.a2 != 1 || native_start.brom_flags.a3 != 1)
++		return -EPROTO;
++	return 0;
++}
++
++int ccci_tetris_owner_start(struct ccci_modem *md)
++{
++	struct device *dev;
++	unsigned int sleep_flags;
++	int ret;
++
++	/* Device -> transaction -> HIF device locks. Never wait for the FSM while
++	 * holding them; the explicit queue adapter below does not hold these locks. */
++	if (!md || !md->plat_dev)
++		return -EINVAL;
++	dev = &md->plat_dev->dev;
++	/* Public exported API; system_transition_mutex itself is NOT exported.
++	 * Acquire before device locks to avoid inversion with system suspend. */
++	sleep_flags = lock_system_sleep();
++	if (!device_trylock(dev)) {
++		unlock_system_sleep(sleep_flags);
++		return -EBUSY;
++	}
++	mutex_lock(&native_start_lock);
++	if (native_start.first_error) {
++		ret = native_start.first_error;
++		goto out;
++	}
++	if (native_start.md != md || native_start.dev != dev ||
++	    !device_is_bound(dev) || !ccci_tetris_registration_complete()) {
++		ret = -ENODEV;
++		goto fault;
++	}
++	if (native_start.step) {
++		ret = -EALREADY;
++		goto out;
++	}
++	native_start.step = 1;
++	ret = ccci_tetris_native_admit(md);
++	if (ret)
++		goto transition;
++	/* A real reference to the real platform consumer, not a virtual OFF cycle.
++	 * Positive runtime-PM success is valid; retain every acquired ref on failure. */
++	native_start.step = 2;
++	ret = pm_runtime_resume_and_get(dev);
++	if (ret < 0)
++		goto transition;
++	ret = ccci_tetris_native_admit(md);
++	if (ret)
++		goto transition;
++	native_start.step = 3;
++	ret = native_brom_check();
++	if (ret)
++		goto transition;
++	ret = ccci_tetris_hif_lock();
++	if (ret)
++		goto transition;
++	native_start.step = 4;
++	ret = ccci_tetris_wdt_init_owned(md);
++	if (ret)
++		goto hif;
++	native_start.step = 5;
++	ret = ccci_tetris_hif_start();
++	if (ret)
++		goto hif;
++	native_start.step = 6;
++	ret = ccci_tetris_publish_hs1();
++	if (ret)
++		goto hif;
++	ret = ccci_tetris_native_admit(md);
++	if (ret)
++		goto hif;
++	if (MD_IN_DEBUG(md)) {
++		ret = -EBUSY;
++		goto hif;
++	}
++	native_start.step = 7;
++	arm_smccc_smc(MTK_SIP_KERNEL_CCCI_CONTROL, MD_POWER_CONFIG,
++		      MD_KERNEL_BOOT_UP, 0, 0, 0, 0, 0, &native_start.power0);
++	/* SHA05a247 POWER/0: a0=status, a1/a2=boot-status words, a3=boot-slave
++	 * register readback. The status words are not four BROM completion flags. */
++	dev_info(dev, "MD POWER/0: status=%#lx boot-status=%#lx/%#lx boot-slave=%#lx\n",
++		 native_start.power0.a0, native_start.power0.a1,
++		 native_start.power0.a2, native_start.power0.a3);
++	ret = native_start.power0.a0 ? -EIO :
++		(native_start.power0.a3 != 1 ? -EPROTO : 0);
++	if (ret)
++		goto hif;
++	native_start.step = 8;
++	md->per_md_data.config.setting &= ~MD_SETTING_FIRST_BOOT;
++	atomic_set(&md->reset_on_going, 0);
++	md->per_md_data.is_in_ee_dump = 0;
++	md->is_force_asserted = 0;
++	wdt_enable_irq(md);
++	/* Genuine receive IRQ/port/FSM events still own HS1, HS2 and READY. */
++hif:
++	ccci_tetris_hif_unlock();
++transition:
++	if (ret)
++		goto fault;
++	goto out;
++fault:
++	ret = native_fault(ret);
++out:
++	mutex_unlock(&native_start_lock);
++	device_unlock(dev);
++	unlock_system_sleep(sleep_flags);
++	return ret;
++}
++
++int ccci_tetris_native_first_start(struct platform_device *pdev)
++{
++	int ret;
++
++	/* Never called by probe/module init. Existing prepared commit owns its
++	 * device lock and error retention; only then enqueue the real FSM command. */
++	ret = ccci_tetris_register_prepared(pdev);
++	if (ret)
++		return ret;
++	ret = ccci_tetris_native_queue_start();
++	return ret ? ccci_tetris_owner_latch(ret) : 0;
++}
++EXPORT_SYMBOL_GPL(ccci_tetris_native_first_start);
+diff --git a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+--- a/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
++++ b/drivers/misc/mediatek/eccci/fsm/modem_sys1.c
+@@ -4,6 +4,9 @@
+  */
+ 
+ #include <linux/list.h>
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++#include "ccci_tetris_native_start.h"
++#endif
+ #include <linux/device.h>
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+@@ -1220,6 +1223,15 @@
+ #if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
+ 	/* Checked private preparation already owns memory. Legacy void
+ 	 * config cannot replace it or consume unpublished util globals. */
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	/* Preserve the already-owned layout; initialize native B4.1 bookkeeping. */
++	md->per_md_data.config.load_type = get_md_img_type();
++	md->per_md_data.config.setting |= MD_SETTING_ENABLE | MD_SETTING_FIRST_BOOT;
++	md->per_md_data.img_info[IMG_MD].type = IMG_MD;
++	md->per_md_data.img_info[IMG_MD].address = md->mem_layout.md_bank0.base_ap_view_phy;
++	md->per_md_data.img_info[IMG_DSP].type = IMG_DSP;
++	md->per_md_data.img_info[IMG_ARMV7].type = IMG_ARMV7;
++#endif
+ 	(void)md;
+ 	return;
+ #endif
+diff --git a/drivers/misc/mediatek/eccci/fsm/register_prepare.h b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+--- a/drivers/misc/mediatek/eccci/fsm/register_prepare.h
++++ b/drivers/misc/mediatek/eccci/fsm/register_prepare.h
+@@ -152,6 +152,11 @@
+ 		goto abort_ports;
+ 	/* Empty vendor module exits cannot safely release published callbacks. */
+ 	__module_get(THIS_MODULE);
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	ret = ccci_tetris_native_probe(md);
++	if (ret)
++		goto abort_ports;
++#endif
+ 	/* Successful probe means ONLY privately prepared resources. No publication.
+ 	 * No subsequent fallible operation may run in this probe path. */
+ 	tetris_prepared_md = md;
+@@ -192,8 +197,10 @@
+ 	int ret;
+ 
+ #if defined(CONFIG_TETRIS_CCCI_SMEM_CONSUMER) && CONFIG_TETRIS_CCCI_SMEM_CONSUMER
++#if !IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
+ 	/* Memory preparation alone does not own operational dependencies. */
+ 	return -EOPNOTSUPP;
++#endif
+ #endif
+ 	if (!pdev)
+ 		return -EINVAL;
+@@ -216,6 +223,11 @@
+ 		ret = tetris_registration_error ? tetris_registration_error : -EALREADY;
+ 		goto out;
+ 	}
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	ret = ccci_tetris_native_admit(md);
++	if (ret)
++		goto out;
++#endif
+ 	tetris_commit_attempted = true;
+ 	/* This is NOT a probe return path. Failure leaves the already-bound device
+ 	 * and its devres/clocks intact, with the original error returned to caller. */
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+@@ -4,6 +4,9 @@
+  */
+ 
+ #include <linux/list.h>
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++#include "ccci_tetris_native_start.h"
++#endif
+ #include <linux/device.h>
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+@@ -3227,7 +3230,14 @@
+ 	mtk_ccci_md_spd_qos_init(dev);
+ 	mtk_ccci_spd_qos_method_init();
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	ret = ccci_tetris_hif_register(DPMAIF_HIF_ID,
++		dpmaif_ctl, &g_dpmaif_ops, dev);
++	if (ret)
++		return ret;
++#else
+ 	ccci_hif_register(DPMAIF_HIF_ID, dpmaif_ctl, &g_dpmaif_ops);
++#endif
+ 
+ 	atomic_set(&dpmaif_ctl->suspend_flag, 0);
+ 
+@@ -3247,6 +3257,11 @@
+ 
+ static int dpmaif_probe(struct platform_device *pdev)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	int error = ccci_tetris_hif_claim(pdev, DPMAIF_HIF_ID);
++	if (error)
++		return error;
++#endif
+ 	if (of_property_read_u32(pdev->dev.of_node,
+ 			"mediatek,dpmaif-ver", &g_dpmf_ver)) {
+ 		CCCI_ERROR_LOG(0, TAG,
+@@ -3277,6 +3292,9 @@
+ 
+ static int dpmaif_suspend_noirq(struct device *dev)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	return -EOPNOTSUPP;
++#endif
+ 	CCCI_NORMAL_LOG(-1, TAG, "[%s] dev: %p\n", __func__, dev);
+ 
+ 	if ((!dpmaif_ctl) || (atomic_read(&dpmaif_ctl->suspend_flag) < 0))
+@@ -3296,6 +3314,9 @@
+ 
+ static int dpmaif_resume_noirq(struct device *dev)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	return -EOPNOTSUPP;
++#endif
+ 	struct arm_smccc_res res;
+ 	int ret = 0;
+ 
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif.c
+@@ -15,6 +15,7 @@
+ 
+ void *ccci_hif[CCCI_HIF_NUM];
+ struct ccci_hif_ops *ccci_hif_op[CCCI_HIF_NUM];
++#include "native-hif-owner.h"
+ 
+ int ccci_dpmaif_empty_query(int qno)
+ {
+@@ -515,6 +516,11 @@
+ 	CCCI_HISTORY_TAG_LOG(0, CORE,
+ 			"hif register: %d\n", hif_id);
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	/* Native providers use the checked, sealed API only. */
++	CCCI_ERROR_LOG(0, CORE, "native HIF rejects legacy registration\n");
++	return;
++#endif
+ 	if (hif_id < CCCI_HIF_NUM) {
+ 		ccci_hif[hif_id] = hif_per_data;
+ 		ccci_hif_op[hif_id] = ops;
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+@@ -4,6 +4,9 @@
+  */
+ 
+ #include <linux/list.h>
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++#include "ccci_tetris_native_start.h"
++#endif
+ #include <linux/device.h>
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+@@ -1872,8 +1875,13 @@
+ 		return ret;
+ 	}
+ 	ccci_ccif_ctrl = ccif_ctrl;
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	return ccci_tetris_hif_register(ccif_ctrl->hif_id,
++		ccci_ccif_ctrl, &ccci_hif_ccif_ops, &pdev->dev);
++#else
+ 	ccci_hif_register(ccif_ctrl->hif_id,
+ 		(void *)ccci_ccif_ctrl, &ccci_hif_ccif_ops);
++#endif
+ 
+ 	return 0;
+ }
+@@ -1882,6 +1890,11 @@
+ {
+ 	int ret;
+ 
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	ret = ccci_tetris_hif_claim(pdev, CCIF_HIF_ID);
++	if (ret)
++		return ret;
++#endif
+ 	ret = ccci_ccif_hif_init(pdev, CCIF_HIF_ID);
+ 	if (ret < 0) {
+ 		CCCI_ERROR_LOG(-1, TAG, "ccci ccif init fail");
+@@ -1898,6 +1911,9 @@
+ 
+ static int ccif_resume_noirq(struct device *dev)
+ {
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++	return -EOPNOTSUPP;
++#endif
+ 	struct arm_smccc_res res;
+ 	struct md_ccif_ctrl *ccif_ctrl = ccci_ccif_ctrl;
+ 	unsigned int ccif_ch;
+diff --git a/drivers/misc/mediatek/eccci/hif/native-hif-owner.h b/drivers/misc/mediatek/eccci/hif/native-hif-owner.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/hif/native-hif-owner.h
+@@ -0,0 +1,174 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included in ccci_hif.c after the real registry arrays. */
++#if IS_ENABLED(CONFIG_MTK_ECCCI_TETRIS_NATIVE_START)
++#include <linux/device.h>
++#include <linux/ioport.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
++#include "ccci_tetris_native_start.h"
++
++static DEFINE_MUTEX(native_hif_lock);
++static struct {
++	struct device *dev;
++	struct device_driver *driver;
++	struct ccci_hif_ops *ops;
++	void *data;
++	struct resource *claims[4];
++	unsigned int claim_count;
++} native_hif[CCCI_HIF_NUM];
++static const unsigned char native_hif_ids[] = { CCIF_HIF_ID, DPMAIF_HIF_ID };
++static unsigned int native_hif_start_step;
++static int native_hif_error;
++
++int ccci_tetris_hif_claim(struct platform_device *pdev, unsigned char id)
++{
++	struct resource res;
++	unsigned int i, count;
++	int ret = 0;
++
++	if (id != CCIF_HIF_ID && id != DPMAIF_HIF_ID)
++		return -EOPNOTSUPP;
++	/* Exact B4.1 of_iomap inventory: CCIF AP/MD, DPMAIF AO/PD/MD-misc/SRAM.
++	 * Shared infracfg/syscon ownership is not duplicated by this transaction. */
++	count = id == CCIF_HIF_ID ? 2 : 4;
++	mutex_lock(&native_hif_lock);
++	if (native_hif_error) {
++		ret = native_hif_error;
++		goto out;
++	}
++	if (native_hif[id].dev) {
++		ret = -EALREADY;
++		goto out;
++	}
++	for (i = 0; i < count; i++) {
++		ret = of_address_to_resource(pdev->dev.of_node, i, &res);
++		if (ret)
++			goto out;
++		if (resource_type(&res) != IORESOURCE_MEM || !resource_size(&res)) {
++			ret = -EINVAL;
++			goto out;
++		}
++		/* Non-devm claims survive a failed probe after a physical mutation.
++		 * Failed profiles require cold recovery; no retry/unowned release API. */
++		native_hif[id].claims[i] = request_mem_region(res.start,
++			resource_size(&res), "tetris-native-hif");
++		if (!native_hif[id].claims[i]) {
++			ret = -EBUSY;
++			goto out;
++		}
++		native_hif[id].claim_count++;
++	}
++	native_hif[id].dev = get_device(&pdev->dev);
++out:
++	if (ret && !native_hif_error)
++		native_hif_error = ret;
++	mutex_unlock(&native_hif_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(ccci_tetris_hif_claim);
++
++int ccci_tetris_hif_register(unsigned char id, void *data,
++			     struct ccci_hif_ops *ops, struct device *dev)
++{
++	int ret = 0;
++
++	if (id != CCIF_HIF_ID && id != DPMAIF_HIF_ID)
++		return -EOPNOTSUPP;
++	mutex_lock(&native_hif_lock);
++	if (native_hif_error) {
++		ret = native_hif_error;
++		goto out;
++	}
++	if (native_hif[id].dev != dev || !data || !ops || !ops->start ||
++	    !ops->owner || !dev->driver || native_hif[id].ops ||
++	    ccci_hif[id] || ccci_hif_op[id]) {
++		ret = -EBUSY;
++		goto out;
++	}
++	if (!try_module_get(ops->owner)) {
++		ret = -ENODEV;
++		goto out;
++	}
++	/* Seal the real registration under the same mutex as all registry writers.
++	 * Preserve module/device/data/ops identity for the whole boot. */
++	native_hif[id].driver = dev->driver;
++	native_hif[id].ops = ops;
++	native_hif[id].data = data;
++	ccci_hif[id] = data;
++	ccci_hif_op[id] = ops;
++out:
++	if (ret && !native_hif_error)
++		native_hif_error = ret;
++	mutex_unlock(&native_hif_lock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(ccci_tetris_hif_register);
++
++int ccci_tetris_hif_lock(void)
++{
++	unsigned int i;
++	int ret;
++
++	/* Singleton START holds its own lock. trylock avoids driver-core inversion.
++	 * No driver probe is allowed to overwrite a sealed registry entry. */
++	for (i = 0; i < ARRAY_SIZE(native_hif_ids); i++) {
++		struct device *dev = native_hif[native_hif_ids[i]].dev;
++
++		if (!dev || !device_trylock(dev)) {
++			ret = -EBUSY;
++			goto unwind;
++		}
++	}
++	mutex_lock(&native_hif_lock);
++	ret = native_hif_error;
++	for (i = 0; !ret && i < ARRAY_SIZE(native_hif_ids); i++) {
++		unsigned char id = native_hif_ids[i];
++
++		if (!device_is_bound(native_hif[id].dev) ||
++		    native_hif[id].dev->driver != native_hif[id].driver ||
++		    !native_hif[id].ops || !native_hif[id].ops->start ||
++		    native_hif[id].data != ccci_hif[id] || native_hif[id].ops != ccci_hif_op[id] ||
++		    native_hif[id].claim_count != (id == CCIF_HIF_ID ? 2 : 4))
++			ret = -ESTALE;
++	}
++	mutex_unlock(&native_hif_lock);
++	if (!ret)
++		return 0;
++	i = ARRAY_SIZE(native_hif_ids);
++unwind:
++	while (i)
++		device_unlock(native_hif[native_hif_ids[--i]].dev);
++	return ret;
++}
++
++void ccci_tetris_hif_unlock(void)
++{
++	unsigned int i = ARRAY_SIZE(native_hif_ids);
++
++	while (i)
++		device_unlock(native_hif[native_hif_ids[--i]].dev);
++}
++
++int ccci_tetris_hif_start(void)
++{
++	unsigned int i;
++	int ret;
++
++	if (native_hif_start_step)
++		return native_hif_error ? native_hif_error : -EALREADY;
++	for (i = 0; i < ARRAY_SIZE(native_hif_ids); i++) {
++		unsigned char id = native_hif_ids[i];
++
++		native_hif_start_step = i + 1;
++		ret = native_hif[id].ops->start(id);
++		if (ret) {
++			native_hif_error = ret < 0 ? ret : -EPROTO;
++			return native_hif_error;
++		}
++	}
++	return 0;
++}
++#endif
+diff --git a/drivers/misc/mediatek/eccci/inc/ccci_tetris_native_start.h b/drivers/misc/mediatek/eccci/inc/ccci_tetris_native_start.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/misc/mediatek/eccci/inc/ccci_tetris_native_start.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef CCCI_TETRIS_NATIVE_START_H
++#define CCCI_TETRIS_NATIVE_START_H
++struct device;
++struct platform_device;
++struct ccci_modem;
++struct ccci_hif_ops;
++int ccci_tetris_native_probe(struct ccci_modem *md);
++int ccci_tetris_native_admit(struct ccci_modem *md);
++/* Explicit post-bind caller; success means command queued, never READY. */
++int ccci_tetris_native_first_start(struct platform_device *pdev);
++int ccci_tetris_native_queue_start(void);
++int ccci_tetris_hif_claim(struct platform_device *pdev, unsigned char id);
++int ccci_tetris_hif_register(unsigned char id, void *data,
++			     struct ccci_hif_ops *ops, struct device *dev);
++int ccci_tetris_hif_lock(void);
++void ccci_tetris_hif_unlock(void);
++int ccci_tetris_hif_start(void);
++#endif
