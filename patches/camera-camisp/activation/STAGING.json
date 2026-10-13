@@ -1,0 +1,49 @@
+{
+  "status": "Packaged sensor MCLK candidate; compilation and activation untested, shipping driver and DT disabled",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "patch": "patches/camera-camisp/activation/sensor-mclk.patch",
+  "packaged_patch": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0121-media-i2c-imx882-acquire-mclk-source.patch",
+  "apply_after": "packaged 0049, 0050, 0055, 0106 and 0107, in the parent kernel patch series",
+  "source_fragment": "imx882-mclk.c is inserted into the existing identity driver; never compile or link it independently",
+  "runtime_call_chain_after_integration": [
+    "imx882_identity_driver.probe -> imx882_identity_probe",
+    "real supply references and observed rail-OFF checks",
+    "imx882_mclk_acquire -> CCF rate leases -> clk_set_parent(CAMTG2_SEL, UVPLL192M_D8)",
+    "gpiod_direction_output -> imx882_power_on -> existing ordered sensor rail/reset/MCLK sequence",
+    "two real I2C ID reads -> physical ID match -> checked power_off and clock lease release"
+  ],
+  "ci_objects": ["drivers/media/i2c/imx882-identity.o"],
+  "ci_config": {
+    "VIDEO_IMX882_IDENTITY": "m",
+    "I2C": "y",
+    "OF": "y",
+    "GPIOLIB": "y",
+    "COMMON_CLK": "y",
+    "REGULATOR": "y",
+    "PINCTRL": "y"
+  },
+  "ci_dt_target": "mediatek/mt6878-nothing-tetris.dtb",
+  "ci_binding": "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml",
+  "dt_status": "all sensor and regulator fixture nodes remain disabled",
+  "parent_runtime_inputs": [
+    "CI-validated installed identity driver and intentionally selected sensor DT",
+    "actual sensor rail/pin OFF handoff before fixed-regulator GPIO registration",
+    "shared AFVDD/DOVDD consumers described through the existing owners; no concurrent sensor client",
+    "CAMTG2 output OFF and registered CCF source already measuring 24000000 Hz",
+    "I2C8, pinctrl, GPIO and main/DMA clock owners available from the same CI artifact"
+  ],
+  "camisp_inputs_still_missing": [
+    "VMM voltage/rate policy",
+    "secure and MMUP/firmware owner handoff",
+    "receiver/capture graph and remaining clock/domain/DMA dependencies",
+    "per-SKU module identity and per-device calibration"
+  ],
+  "local_checks": [
+    "python3 -B patches/camera-camisp/activation/generate.py",
+    "python3 -B patches/camera-camisp/activation/check.py",
+    "python3 -B patches/camera-camisp/activation/test_source.py"
+  ],
+  "local_validation_scope": "Pinned source objects, packaged driver hunks, complete sensor fixture subtree and strict delta application. Full board assembly, compilation, schema/DTB and runtime validation are parent CI/hardware gates."
+}

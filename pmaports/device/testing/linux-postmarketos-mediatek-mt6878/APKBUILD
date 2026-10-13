@@ -167,6 +167,7 @@ source="
 	0114-media-platform-mediatek-mt6878-seninf-graph.patch
 	0115-media-platform-mediatek-mt6878-seninf-transaction-backend.patch
 	0116-media-platform-mediatek-mt6878-seninf-phy-backend.patch
+	0121-media-i2c-imx882-acquire-mclk-source.patch
 	1000-vendor-connectivity-adapter-linux-6.18.patch.vendor
 	1001-vendor-connectivity-linux-6.18-compat.patch.vendor
 	1002-vendor-gnss-linux-6.18-compat.patch.vendor
@@ -1111,8 +1112,9 @@ package() {
 }
 
 sha512sums="
+ae657b00fdd9d12d988939ac4a9d2b64b2a5835e038b78c36227b7e3aebc62a439bfcfcd1c454903ca623533d94b12b82546ea5b74b7463f6585faca210e064c  0121-media-i2c-imx882-acquire-mclk-source.patch
 a6e06d8bc7401ca0a442048c9714950dc4792b4f71f88fb43741ff97b7354067d9fe42f83be8552b5f1e348e36fc1432065bc833840e1f3f49f66bf6f0fde8ae  1008-vendor-gnss-bound-data-link-read.patch.vendor
-31390471ea0d2236801761d85341ba454ab48121701ce885203fe9968b6ce708fc3d14a33e56c2561f5ac2bda2aa571fd939aff576374c724cd45c2c36e260a4  0120-misc-tetris-gpueb-authenticated-ram-analysis.patch
+9b511e9bc06e3247c2f28b14f6cde674b838ffef82c8272369bd357e67d6b6aee49c24bf22080e359c4f7635e118511f171372d27a992ebb667d31291df3bb27  0120-misc-tetris-gpueb-authenticated-ram-analysis.patch
 57fb64f85444f1b07dafb4c2c25fe36aa1c20753ba2c09678c036fee2ea48bea4cec082e325f180ecdcb60d6fe597598219a29ee5e1c022a83e44f450816c28f  1007-vendor-gnss-refuse-unproven-lna-control.patch.vendor
 ba09a21ec84dcda21457e2ec6dc4466c3823fa7f61d7c6e589fe882770f646db0c4d92259b649ecad6727de0e2778e2ac115eb73ccdce08ea5848d69aedfd714  0117-soc-mediatek-mt6878-ccci-first-start-backend.patch
 fe0a04fbeb7cd6172c4897f0836345218d6642afcae30e95309d02f6e7599a2ace1127d7eb8f94dc50ab4adeebfc9f5ee57400bd2d44748cd3ebf71507b749ce  1006-vendor-gnss-readonly-lna-metadata.patch.vendor

@@ -20,7 +20,7 @@ LK_COPY_BYTES = 258744
 RETAINED_SOURCES = {
     "tetris_gpueb_flat.c": "9a425bfa1a824459a6e0fd4c7fa31397a798aa91fdc7bcdff17907437b256d7f",
     "tetris_gpueb_flat_publish.c": "6cb04f7b33b86c9b5937624dc7221cad4ad6d9b87f436d9d662ea9cc22d2f34b",
-    "gpueb-flat-analysis.c": "90659a3481c240f58673cd769d44245fb2814dcb61ac8ffce371311c5359ea86",
+    "gpueb-flat-analysis.c": "e0ac3e88c4a23faabf0cc80f406a52e7eda1ac44af0f9004df65de730a367204",
 }
 
 

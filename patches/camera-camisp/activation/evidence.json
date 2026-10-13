@@ -1,0 +1,49 @@
+{
+  "baseline_sha256": {
+    "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml": "ce0de304af84f5a61fcdef1185052ae8b27175527cb89aba34f71460759697c6",
+    "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts": "f2ce4b79b4b52feb69b33b5bff5b9e9f37e450cb21b486736bf9455e9f5ed3e3",
+    "arch/arm64/boot/dts/mediatek/mt6878.dtsi": "b843089406a4eeac4b14c2ad446289b6278c4e16381149b7a9154a98ce78603b",
+    "drivers/clk/clk.c": "a30805dc12b79b20f41dfaf20ce18aa04aa6afb332317b7c1310df3d2b2cd235",
+    "drivers/clk/mediatek/clk-mt6878-topckgen.c": "436c50899407daad948ed4a14137b29b5b09ce494404887741fcddbddd8015ba",
+    "drivers/i2c/busses/i2c-mt65xx.c": "97a7193f00827341b26f074ed26fb5b4ed7839e45b87b7a2a2c03681c46d7b69",
+    "drivers/media/i2c/Kconfig": "da375311eedc74896a57126da0d75f5387d7817b240795aff9175eb3c5b228c1",
+    "drivers/media/i2c/Makefile": "4dc8bc3b5d35ff103516c0655080856dfd73e816b7d7e034c209576fcd5f0f3f",
+    "drivers/media/i2c/imx882-identity.c": "b87094e1c61e0f5295c62168e2ec7109cc0714c1e85d0ee5a328d8ad30ea7e86",
+    "include/linux/clk-provider.h": "07d671138c2f938cfd05e1f9e725e74dbfc4fcbe612532842f58b8bf9b2d8791",
+    "include/linux/clk.h": "219714b5994dacfcd5e4d1bd1e4d681f13a656f3850c0c250a1672c76c833fa7"
+  },
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "dt_application_scope": "complete I2C8 sensor subtree from packaged 0055; full board assembly is parent CI",
+  "kernel_archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "output_sha256": {
+    "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml": "3ef436945eea3035707f7be7c75573c330f3be2b96b5acbce08f3defa23064f6",
+    "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts": "bbc7f60d9f8908b71a98d5b3958cba965b13e9a6fccfa77926708c184d264062",
+    "drivers/media/i2c/imx882-identity.c": "d04d065dcf88b44ad5af3c444ae5bf7edaa32e3975dcab0fec19714b5839c593"
+  },
+  "packaged_patch": {
+    "name": "0121-media-i2c-imx882-acquire-mclk-source.patch",
+    "sha512": "ae657b00fdd9d12d988939ac4a9d2b64b2a5835e038b78c36227b7e3aebc62a439bfcfcd1c454903ca623533d94b12b82546ea5b74b7463f6585faca210e064c"
+  },
+  "packaged_patch_sha256": {
+    "0009-clk-mediatek-mt6878-mfg.patch": "ebaf8dfa1aecfeed628084b388ab97f6347e88abeb970cdef944e9b861d80dab",
+    "0010-audio-mt6878-aw88261.patch": "998dd225dda66e12cb724034d6d3ee73b88e88c59f16a3d958dfc4162b02cfb6",
+    "0047-media-i2c-pd9302a-vcm.patch": "3c1b0e050b34950894d60f329ac0871e13251db04c8e0467615cf93b56f5914c",
+    "0049-media-i2c-imx882-identity.patch": "855de12c6af5dd5f9abd8c4489ff15a91f98a7033b88a8cf90ecdb7979d45db1",
+    "0050-media-i2c-imx882-honor-active-low-reset.patch": "810a3eb6cfd0e9a6d7b938eb3f8177edb0385ff20790baab4aea864e8aef497c",
+    "0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch": "9662da5d38ba3d60fff991f4749f6e719c45e7177ad0de4422ddbb87cf08e0ea",
+    "0106-media-i2c-imx882-check-shutdown.patch": "a3e5854e3576057af2bbfb387192d346f3086f4efa47c7e1de642484801563db",
+    "0107-media-i2c-imx882-hold-clock-rate.patch": "79170294e4054b45ad13c06b3209c8f25cc2e725e1ba95208b0f722621a41f55",
+    "0112-media-i2c-imx882-v4l2-controls.patch": "2f43c5262d21e2fa799821faa1e6f0caede3bf31449029229a789fe6c7081313"
+  },
+  "patch_sha256": "99a24cd6aa3e2ad91a885f7173c73707337def6ab0a8e26edb62dce6c342d090",
+  "vendor_source_sha256": {
+    "arch/arm64/boot/dts/mediatek/cust_mt6878_camera_v4l2.dtsi": "f68d62f8710cd042847a8cb34aa59bc229538f6748c9bc23f0631b8210be6f15",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "313491ee77b07a43d0a62c41a5dae2ef40ce9be851dd211ddacdf44ed7d710c5",
+    "drivers/clk/mediatek/clk-mt6878.c": "ab87e230702a5f627b3e3c77255363e1a2abc0ead3df736190ebaa6c13f5e122",
+    "mtkcam/imgsensor/src-v4l2/adaptor-hw.c": "0c99d044bcef79c95b17bd4c49f5e31bde1bc8b21e14026fa4dd2c00f8489d1c",
+    "mtkcam/imgsensor/src-v4l2/common/imx882_mipi_raw/imx882mipiraw_Sensor.c": "73713ea62ee99c7a8a9d4f0b86994249f46389d6f469739c13dc557568764d8d",
+    "mtkcam/imgsensor/src-v4l2/common/imx882txd_mipi_raw/imx882txdmipiraw_Sensor.c": "62329f1f52d4e272bfda6110b201d44da4ac6f3d99abe3341d9fcac0aeb9df58"
+  }
+}

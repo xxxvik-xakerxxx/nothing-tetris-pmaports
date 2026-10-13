@@ -1,4 +1,17 @@
-# Authenticated flat retention draft (not packaged or enabled)
+# Authenticated flat retention and canonical RAM consumer
+
+`gpueb-flat-analysis.c` is the canonical Linux diagnostic consumer, rendered
+into package patch 0120 by `generate_consumer_patch.py`. It now embeds the
+reviewed retained-v1 metadata admission. Source integration is complete;
+no compilation, installation or hardware validation was performed in this task. See
+[CANONICAL-INTEGRATION.md](CANONICAL-INTEGRATION.md) for the runtime boundary,
+exact-source checks and parent CI/package updates.
+
+The U-Boot sources in this directory are frozen historical review mirrors.
+They do not publish the complete current v1 ABI and are not the loader input
+for this consumer. The actual producer pins live in
+`../uboot-segments/FLAT-METADATA-PRODUCER.json`. The remaining producer draft
+description below is historical; do not install these mirrors as a new loader.
 
 The new cold result confirms raw primary bytes, not an ELF/PT load table.
 This candidate uses the existing strict GPUEB root/leaf/header/ciphertext

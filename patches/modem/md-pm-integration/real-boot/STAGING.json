@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "status": "uninstalled-real-native-genpd-ON; physical/secure/firmware/lifecycle hardware-untested",
+  "scope": "new files under patches/modem/md-pm-integration/real-boot only",
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "atf_payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
+  },
+  "base": {
+    "frozen_native_repo_object": "cbb777d415b564c1e40598740288c0c9d953e745",
+    "native_patch_sha256": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a",
+    "ack": "BIT(30), actual r188 correction",
+    "post_off_repo_object": "06fa22493cb8686e67c82236fdd26741e8da0378",
+    "post_off_header_sha256": "d6edccda312bf133173e629aba23d7f2dc3a578b22a8b710d65d1ec17f8b8ff5",
+    "shared_provider_patch_sha256": "34845f753bdd21af7444f8e1bc5de8ca887a007a707463972a90c65211c9c99d",
+    "wakeup_patch_sha256": "f03e63b0e9be3cbe27ee37f6bb7461ad77628d70d90d2974de5608cc31aaf2c2"
+  },
+  "callsite": "patched mtk-pm-domains scpsys_add_one_domain installs real_boot_attach + real_boot_power_on; platform attach calls genpd_power_on before real CCCI probe",
+  "operations": [
+    "probe: revalidate retained first-OFF owner/resources + >=4ms settle",
+    "probe: cached TOP acquisition, current OFF readback, FLIGHT(true) defined a0 checked/logged; no a1..a3 output, checked TOP gate",
+    "publish actual native genpd initially OFF",
+    "attach_dev: admit sole actual CCCI platform device with native domain0; preserve real handoff/resources and current OFF",
+    "power_on: acquire retained real CCCI consumer and MT6363 regulator handles, check inherited enable, voltage/sync/readback",
+    "power_on: TOP ungate/readback, FLIGHT(false) defined a0 checked; not readiness, ISO down/readback, PWR_ON/ACK30 polling, NEMI/IFR11/IFR9 release/polling",
+    "power_on: five current physical ON readbacks precede ATTACHED_ON; preserve first errno/resources on all failures"
+  ],
+  "ufs": "CONFIG_SCSI_UFS_MEDIATEK_DBG=n required; no calibration API/hold owner; no unowned release",
+  "configuration": {
+    "real_boot": "default n",
+    "post_off_top": "default n; explicit separate opt-in",
+    "consumer": "shipping disabled; candidate final FDT may enable sole real CCCI node with native power-domains binding, before its attach-time ON"
+  },
+  "files_sha256": {
+    "CI-SOURCES.json": "933f3d9e1b8bf5694d435677e55d61a1a285b67ad5728c75dc1d33d4269d063f",
+    "Kconfig": "ee5c7d4f29e96db15df8021239b9329217cb5d9cffc1d21442f938bc1a1bd3e4",
+    "README.md": "75cbb08fb484ef5c0fa7e1580bf00e91a86130b541083db46cbe0eec1020f60a",
+    "SOURCE-EVIDENCE.json": "a03b3392d5818095620c8ed039e0aac11d2fde119cc69e8ea073a4193c70a289",
+    "audit.py": "19cbf0f0cc28991dfa65c70e9aaaf19a1fd06700bff893454b985387dc7cdc3d",
+    "ci.py": "a48f2c1ffa23e40b60c5fc90ccdf059d2866ee752a220937a44132e9f8528e39",
+    "mt6878-modem-real-boot.h": "7d1be8f57af8ce286171821e50bec0fe11694905f40f11936ae3ebca9918e3c2",
+    "native-real-boot-post-off.patch": "781e3a68e36b89ab43f5d4753bfae5843e5fa14e797345b95150253ca84389de",
+    "stage.py": "ccdb6c014a30aaa45761ea81ef9db5bc64cf20c63f29a3a35db6a2565c16e506",
+    "test_ci.py": "fbf80a646be362069f54d2b096ebb61ae3e4cf41addcdde3c70d4c6bb5ccca15",
+    "test_static.py": "3a86761ff8a608a0c033bfae7d1f42c80c0fc48ea049e5eb45c26902a3b7e4fe"
+  },
+  "checks": [
+    "python3 -B audit.py",
+    "python3 -B stage.py",
+    "python3 -B -m unittest -v test_static.py",
+    "python3 -B -m unittest -v test_ci.py"
+  ],
+  "validation": "static source/patch-application only; CI compile entry provided, actual parent run/report pending; new target C neither compiled nor executed locally",
+  "remaining": [
+    "actual parent CI compile report, later complete kernel/link and candidate FDT wiring",
+    "CCCI native PM/first-start adaptation after successful platform attach-time physical ON",
+    "ordered firmware/EMI lifetime, transport, POWER/0 and CCCI handshake",
+    "matching ATF handler/address/flag interpretation; no secure readiness inferred",
+    "real calibration hold owner if firmware requires DBG calibration",
+    "controlled hardware, clean-install, lifecycle and SKU gates"
+  ],
+  "performed": "no local native build/emulation/JIT, phone/SSH/fastboot, CI dispatch, commit/push or remote changes",
+  "secure_dispatch": {
+    "flight_false": {
+      "x0": "0xc2000505",
+      "x1": 7,
+      "x2": 0,
+      "x3_x7": 0
+    },
+    "flight_true": {
+      "x0": "0xc2000505",
+      "x1": 7,
+      "x2": 1,
+      "x3_x7": 0
+    },
+    "separate_kernel_boot": {
+      "x0": "0xc2000505",
+      "x1": 6,
+      "x2": 0,
+      "x3_x7": 0
+    },
+    "requesting_function": "ee2be53 md_sys1_platform.c:648 flight_mode_set_by_atf",
+    "inner_payload_base": "0x48800000",
+    "inner_dispatch_offsets": [
+      "0xbf2c",
+      "0xbfa0"
+    ],
+    "inner_wrapper_offset": "0x1bf58",
+    "registry_dispatch_offset": "0x1efc0",
+    "callbacks": [
+      "0x33d3c",
+      "0x33aec",
+      "0x33c5c"
+    ],
+    "policy_halfword_offset": "0x5a9fa",
+    "policy_bit": "0x40",
+    "spinlock_offset": "0xf73b4",
+    "defined_return": "a0 only: zero-extended inner w0. Any nonzero stops locally with EIO; raw a0 retained. Zero also possible for null callback; not policy/readiness proof.",
+    "outer_admission": "separate; not inferred from inner contract or a0",
+    "provenance": "tracked contract and fixture source at 634789437e3f80a0129f00e5cff922bd8cdbb64b; no fresh ATF decode, no Unicorn execution"
+  },
+  "ci_entry": {
+    "command": "ci.py build",
+    "input_profile": "packaged",
+    "prepared_kernel": "/tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205",
+    "ordering": "after normal ci/kernel-object-smoke.py, not research-owner mode",
+    "guard": "CI=true, GITHUB_ACTIONS=true, Linux, --enable-real-on",
+    "objects": [
+      "drivers/pmdomain/mediatek/mtk-pm-domains.o",
+      "drivers/regulator/mt6363-regulator.o"
+    ],
+    "variants": [
+      "default-off",
+      "explicit-real-on"
+    ],
+    "compiler_profile": "preserve ThinLTO/CFI; resolve callback definitions and retained pointers including LLVM suffixes/aliases",
+    "dt": "consumer and three rails disabled; supplier/domain0 status untouched"
+  }
+}

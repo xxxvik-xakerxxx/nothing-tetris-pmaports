@@ -93,6 +93,30 @@ That candidate is not installed or proof of accelerated rendering. Camera
 VMM admission and post-OFF modem TOP gating remain uninstalled sidecars.
 SIM/calls, GPS navigation, GPU acceleration and camera capture remain unavailable.
 
+### Combined bring-up candidate
+
+The installed baseline remains r188 with U-Boot `f25c0144`; the changes below
+are not installed hardware support. All target compilation stays in GitHub CI.
+
+| Subsystem | Change | Remaining functional gate |
+| --- | --- | --- |
+| Modem | Native genpd ON callback after first-OFF, using real MT6363 voltage/sync, TOP, FLIGHT, isolation, ACK30 and bus release. | CCCI first-start integration, secure execution release, firmware handshake, SIM registration and calls. |
+| GNSS | Decode the actual 52-byte GPS NVM profile and derive bootstrap selectors from the pinned B4.1 producers. | Actual firmware download/ACK, DSP WORKING, navigation initialization and position fix. |
+| GPU | Package the retained-v1 metadata consumer directly; preserve exclusive RAM ownership and digest checks. | Matching retained loader, executable GPUEB SRAM/DRAM/mailbox contract, power lifecycle and rendering. |
+| Camera | Package IMX882's documented 24 MHz mux/source acquisition before sensor power/reset. | Checked GPIO-rail ownership, sensor identity, streaming-clock integration and capture. |
+
+On the same healthy boot, read-only conninfra queries returned chip `0x6878`
+and GPS ADIE `0x6631`. The actual GPS NVM file is 54 physical bytes; its logical
+profile selects 26 MHz, interval0 (stock fallback2000), mode255 and profile0.
+Only these common fields were reported. Unique calibration, key material and
+raw records are not published. GNSS ioctl11 returned33 and the bound MT6685
+clock query returned0 (26 MHz); neither establishes firmware readiness.
+
+The complete 107-patch package application, overlay checks and 58 smoke-helper
+tests passed locally. These are source/orchestration checks, not target C
+compilation or live execution of this candidate. Camera DT and shipping
+identity probe remain disabled; no GPIO power sequence was activated.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

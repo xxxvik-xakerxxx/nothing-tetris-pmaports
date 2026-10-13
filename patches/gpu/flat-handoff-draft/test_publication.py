@@ -38,13 +38,18 @@ class Publication(unittest.TestCase):
         self.assertNotRegex(LINUX, r"\b(readl|writel|ioremap|rproc_boot)\s*\(")
         self.assertIn("IORESOURCE_SYSTEM_RAM", LINUX)
         self.assertIn("MEMREMAP_WB", LINUX)
-        self.assertIn("size != 156064 || size > memory->size", LINUX)
+        self.assertIn("metadata->payload_offset || metadata->sram_offset", LINUX)
+        self.assertIn("metadata->authenticated_bytes != TETRIS_FLAT_BYTES", LINUX)
+        self.assertIn("size = metadata.authenticated_bytes", LINUX)
+        self.assertIn("tetris_gpueb_flat_snapshot_check(&metadata, digest, size)", LINUX)
         self.assertIn("CAP_SYS_RAWIO", LINUX)
         self.assertIn(".mode = 0600", LINUX)
         self.assertIn("analysis->snapshot, analysis->size", LINUX)
 
     def test_digest_before_publication_and_boot_lifetime(self):
         self.assertLess(LINUX.index("crypto_shash_digest("), LINUX.index("misc_register("))
+        self.assertLess(LINUX.index("ret = tetris_gpueb_flat_snapshot_check("),
+                        LINUX.index("misc_register("))
         self.assertIn("suppress_bind_attrs = true", LINUX)
         self.assertIn("try_module_get(THIS_MODULE)", LINUX)
         self.assertIn("kvfree_sensitive(analysis->snapshot, size)", LINUX)

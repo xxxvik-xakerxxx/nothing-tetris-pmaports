@@ -75,8 +75,44 @@ class SmokeInputs(unittest.TestCase):
     def test_real_package_inputs(self):
         plan = smoke.plan(Path(__file__).resolve().parents[1] / smoke.PACKAGE)
         self.assertGreater(len(plan["patches"]), 100)
-        self.assertEqual(len(plan["objects"]), 6)
+        self.assertEqual(len(plan["objects"]), 7)
         self.assertEqual(plan["dtbs"], smoke.DTBS)
+
+    def test_imx882_identity_uses_packaged_source_and_strict_application(self):
+        package = Path(__file__).resolve().parents[1] / smoke.PACKAGE
+        plan = smoke.plan(package)
+        name = "0121-media-i2c-imx882-acquire-mclk-source.patch"
+        driver = "drivers/media/i2c/imx882-identity.o"
+        self.assertEqual(plan["patches"].count(name), 1)
+        self.assertEqual(plan["patches"][-1], name)
+        self.assertIn(name, smoke.STRICT_PATCHES)
+        self.assertEqual(plan["objects"].count(driver), 1)
+        self.assertIn("VIDEO_IMX882_IDENTITY", plan["module_options"])
+        self.assertNotIn(driver, smoke.RESEARCH_OBJECTS + smoke.PROVIDER_OBJECTS)
+        for prerequisite in ("0049-media-i2c-imx882-identity.patch",
+                             "0050-media-i2c-imx882-honor-active-low-reset.patch",
+                             "0055-arm64-dts-mediatek-tetris-imx882-disabled-fixture.patch",
+                             "0106-media-i2c-imx882-check-shutdown.patch",
+                             "0107-media-i2c-imx882-hold-clock-rate.patch"):
+            self.assertLess(plan["patches"].index(prerequisite), plan["patches"].index(name))
+        canonical = package.parents[3] / "patches/camera-camisp/activation/sensor-mclk.patch"
+        self.assertEqual((package / name).read_bytes(), canonical.read_bytes())
+
+    def test_imx882_identity_config_is_isolated_and_shipping_stays_disabled(self):
+        for research in (False, True):
+            command = smoke.config_options(Path("kernel"), Path("objects"), research)
+            enabled = [command[i + 1] for i, flag in enumerate(command) if flag == "-e"]
+            modules = [command[i + 1] for i, flag in enumerate(command) if flag == "-m"]
+            for symbol in ("I2C", "OF", "GPIOLIB", "COMMON_CLK", "REGULATOR", "PINCTRL"):
+                self.assertEqual(enabled.count(symbol), 1)
+            self.assertEqual(modules.count("VIDEO_IMX882_IDENTITY"), 1)
+        package = Path(__file__).resolve().parents[1] / smoke.PACKAGE
+        config = (package / smoke.CONFIG).read_text()
+        self.assertNotRegex(config, r"(?m)^CONFIG_VIDEO_IMX882_IDENTITY=(y|m)$")
+        source = (package / "APKBUILD").read_text()
+        self.assertIn("IMX882 identity probe must stay disabled in the shipped kernel", source)
+        patch = (package / "0121-media-i2c-imx882-acquire-mclk-source.patch").read_text()
+        self.assertNotRegex(patch, r'(?m)^\+[^+].*status\s*=\s*"okay"', msg="identity delta must not activate DT")
 
     def test_gnss_compiler_uses_reviewed_stack_and_real_kbuild(self):
         source = inspect.getsource(smoke.compile_gnss_tx)

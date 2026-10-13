@@ -1,0 +1,250 @@
+diff --git a/drivers/media/i2c/imx882-identity.c b/drivers/media/i2c/imx882-identity.c
+--- a/drivers/media/i2c/imx882-identity.c
++++ b/drivers/media/i2c/imx882-identity.c
+@@ -8,12 +8,15 @@
+  */
+ 
+ #include <linux/clk.h>
++#include <linux/clk-provider.h>
++#include <linux/kernel.h>
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/pinctrl/consumer.h>
++#include <linux/property.h>
+ #include <linux/regulator/consumer.h>
+ 
+ #define IMX882_REG_CHIP_ID_HIGH		0x0016
+@@ -45,13 +48,69 @@
+ 
+ struct imx882_identity {
+ 	struct clk *xclk;
++	struct clk *xclk_source;
+ 	struct gpio_desc *reset;
+ 	struct pinctrl *pinctrl;
+ 	struct pinctrl_state *mclk_4ma;
+ 	struct pinctrl_state *mclk_off;
+ 	struct regulator_bulk_data supplies[IMX882_NUM_SUPPLIES];
+ 	bool rate_exclusive;
+-};
++	bool source_rate_exclusive;
++};
++
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Inserted into imx882-identity.c, using its existing resource owner. */
++
++static void imx882_mclk_release(struct imx882_identity *imx882)
++{
++	if (imx882->rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk);
++		imx882->rate_exclusive = false;
++	}
++	if (imx882->source_rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk_source);
++		imx882->source_rate_exclusive = false;
++	}
++}
++
++static int imx882_mclk_acquire(struct imx882_identity *imx882)
++{
++	int ret;
++
++	if (clk_is_match(imx882->xclk, imx882->xclk_source))
++		return -EINVAL;
++	ret = clk_rate_exclusive_get(imx882->xclk);
++	if (ret)
++		return ret;
++	imx882->rate_exclusive = true;
++	/* Do not reparent an output left running by another owner. */
++	if (__clk_is_enabled(imx882->xclk)) {
++		ret = -EBUSY;
++		goto release;
++	}
++	ret = clk_rate_exclusive_get(imx882->xclk_source);
++	if (ret)
++		goto release;
++	imx882->source_rate_exclusive = true;
++	/* B4.1 uses UVPLL192M_D8. Never tune the shared PLL to obtain 24 MHz. */
++	if (clk_get_rate(imx882->xclk_source) != IMX882_XCLK_RATE) {
++		ret = -ERANGE;
++		goto release;
++	}
++	ret = clk_set_parent(imx882->xclk, imx882->xclk_source);
++	if (ret)
++		goto release;
++	if (!clk_is_match(clk_get_parent(imx882->xclk), imx882->xclk_source) ||
++	    clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE) {
++		ret = -EIO;
++		goto release;
++	}
++	return 0;
++
++release:
++	imx882_mclk_release(imx882);
++	return ret;
++}
+ 
+ static int imx882_read_reg(struct i2c_client *client, u16 reg, u8 *value)
+ {
+@@ -120,10 +179,7 @@
+ 		if (!ret)
+ 			ret = err;
+ 	}
+-	if (imx882->rate_exclusive) {
+-		clk_rate_exclusive_put(imx882->xclk);
+-		imx882->rate_exclusive = false;
+-	}
++	imx882_mclk_release(imx882);
+ 	return ret;
+ }
+ 
+@@ -132,13 +188,6 @@
+ 			   bool *clock_enabled)
+ {
+ 	int ret;
+-
+-	ret = clk_set_rate_exclusive(imx882->xclk, IMX882_XCLK_RATE);
+-	if (ret)
+-		return ret;
+-	imx882->rate_exclusive = true;
+-	if (clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE)
+-		return -EINVAL;
+ 
+ 	gpiod_set_value_cansleep(imx882->reset, 1);
+ 
+@@ -192,14 +241,27 @@
+ 	u8 id_low;
+ 	int ret;
+ 	int cleanup_ret;
++	u32 xclk_rate;
+ 	int i;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
++		return -EOPNOTSUPP;
++	ret = device_property_read_u32(dev, "clock-frequency", &xclk_rate);
++	if (ret || xclk_rate != IMX882_XCLK_RATE)
++		return dev_err_probe(dev, -EINVAL, "requires explicit 24 MHz MCLK\n");
+ 
+ 	imx882 = devm_kzalloc(dev, sizeof(*imx882), GFP_KERNEL);
+ 	if (!imx882)
+ 		return -ENOMEM;
+ 
+-	for (i = 0; i < IMX882_NUM_SUPPLIES; i++)
++	for (i = 0; i < IMX882_NUM_SUPPLIES; i++) {
++		char property[32];
++
++		snprintf(property, sizeof(property), "%s-supply", imx882_supply_names[i]);
++		if (!device_property_present(dev, property))
++			return dev_err_probe(dev, -EINVAL, "missing sensor supply reference\n");
+ 		imx882->supplies[i].supply = imx882_supply_names[i];
++	}
+ 
+ 	ret = devm_regulator_bulk_get(dev, IMX882_NUM_SUPPLIES,
+ 				      imx882->supplies);
+@@ -211,7 +273,12 @@
+ 		return dev_err_probe(dev, PTR_ERR(imx882->xclk),
+ 				     "failed to get xclk\n");
+ 
+-	imx882->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	imx882->xclk_source = devm_clk_get(dev, "xclk-source");
++	if (IS_ERR(imx882->xclk_source))
++		return dev_err_probe(dev, PTR_ERR(imx882->xclk_source),
++				     "24 MHz MCLK source unavailable\n");
++
++	imx882->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
+ 	if (IS_ERR(imx882->reset))
+ 		return dev_err_probe(dev, PTR_ERR(imx882->reset),
+ 				     "failed to get reset GPIO\n");
+@@ -230,6 +297,25 @@
+ 	if (IS_ERR(imx882->mclk_off))
+ 		return dev_err_probe(dev, PTR_ERR(imx882->mclk_off),
+ 				     "missing mclk-off pinctrl state\n");
++
++	if (!gpiod_is_active_low(imx882->reset))
++		return dev_err_probe(dev, -EINVAL, "reset must be active-low\n");
++	/* Normal references preserve shared DOVDD; reject an observed ON rail. */
++	for (i = 0; i < IMX882_NUM_SUPPLIES; i++) {
++		ret = regulator_is_enabled(imx882->supplies[i].consumer);
++		if (ret < 0)
++			return dev_err_probe(dev, ret, "sensor rail state unavailable\n");
++		if (ret)
++			return dev_err_probe(dev, -EBUSY, "sensor rail already enabled\n");
++	}
++	ret = imx882_mclk_acquire(imx882);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot acquire sensor MCLK\n");
++	ret = gpiod_direction_output(imx882->reset, 1);
++	if (ret) {
++		imx882_mclk_release(imx882);
++		return ret;
++	}
+ 
+ 	ret = imx882_power_on(imx882, &enabled_supplies, &clock_enabled);
+ 	if (ret) {
+diff --git a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml
+--- a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-identity.yaml
+@@ -22,10 +22,17 @@
+     maxItems: 1
+ 
+   clocks:
+-    maxItems: 1
++    items:
++      - description: CAMTG2 selector and gate
++      - description: UVPLL192M_D8 source, already at 24 MHz
+ 
+   clock-names:
+-    const: xclk
++    items:
++      - const: xclk
++      - const: xclk-source
++
++  clock-frequency:
++    const: 24000000
+ 
+   afvdd-supply:
+     description: 2.8 V autofocus supply
+@@ -52,6 +59,7 @@
+   - reg
+   - clocks
+   - clock-names
++  - clock-frequency
+   - afvdd-supply
+   - avdd-supply
+   - dvdd-supply
+@@ -70,13 +78,14 @@
+         camera@1a {
+             compatible = "nothing,tetris-imx882-identity";
+             reg = <0x1a>;
+-            clocks = <&camera_clk>;
+-            clock-names = "xclk";
++            clocks = <&camera_clk 0>, <&camera_clk 1>;
++            clock-names = "xclk", "xclk-source";
++            clock-frequency = <24000000>;
+             afvdd-supply = <&camera_afvdd>;
+             avdd-supply = <&camera_avdd>;
+             dvdd-supply = <&camera_dvdd>;
+             dovdd-supply = <&camera_dovdd>;
+-            reset-gpios = <&gpio 25 0>;
++            reset-gpios = <&gpio 25 1>;
+             pinctrl-names = "mclk-off", "mclk-4ma";
+             pinctrl-0 = <&camera_mclk_off>;
+             pinctrl-1 = <&camera_mclk_4ma>;
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+--- a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris.dts
+@@ -5,8 +5,10 @@
+ 	camera@1a {
+ 		compatible = "nothing,tetris-imx882-identity";
+ 		reg = <0x1a>;
+-		clocks = <&topckgen CLK_TOP_CAMTG2>;
+-		clock-names = "xclk";
++		clocks = <&topckgen CLK_TOP_CAMTG2_SEL>,
++			 <&topckgen CLK_TOP_UVPLL192M_D8>;
++		clock-names = "xclk", "xclk-source";
++		clock-frequency = <24000000>;
+ 		afvdd-supply = <&camera_main_afvdd>;
+ 		avdd-supply = <&camera_main_avdd>;
+ 		dvdd-supply = <&camera_main_dvdd>;

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config MTK_MT6878_MODEM_REAL_BOOT_STAGING
+	bool "MT6878 modem genuine native ON callback (staging)"
+	depends on ARM64 && ARCH_MEDIATEK && HAVE_ARM_SMCCC
+	depends on MTK_SCPSYS_PM_DOMAINS && OF && MFD_SYSCON
+	depends on REGULATOR && REGULATOR_MT6363
+	depends on MTK_MT6878_MODEM_POST_OFF_TOP_STAGING
+	depends on !SCSI_UFS_MEDIATEK_DBG
+	default n
+	help
+	  Extend the frozen native first-OFF probe with actual FLIGHT(true)
+	  submission and checked TOP gating. Check the defined raw a0 using the
+	  matched ATF inner contract; a1..a3 are not defined or logged. Zero does
+	  not prove policy applied or modem readiness. No UFS calibration provider
+	  may be present.
+	  Admit the real sole CCCI consumer to the initially OFF native domain;
+	  attach-time power_on executes real voltage/sync, TOP, FLIGHT(false),
+	  isolation, power/ACK30 and reverse bus release with physical readbacks.
+	  Intentional modem execution is allowed. This is not an inhibited
+	  diagnostic restart. Firmware release, transport and lifecycle are separate.

@@ -8,6 +8,12 @@ set -eu
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT HUP INT TERM
+sh "$here/live-inputs/run-ci.sh"
+"${CC:-clang}" -std=c11 -Wall -Wextra -Werror -Wconversion -Wshadow \
+    -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "$here/../b41_first_config.c" "$here/platform_profile.c" \
+    "$here/test_platform_profile.c" -o "$out/test-platform-profile"
+"$out/test-platform-profile"
 "${CC:-clang}" -std=c11 -Wall -Wextra -Werror -Wconversion -Wshadow \
     -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
     "$here/wire.c" "$here/test_wire.c" -o "$out/test-wire"

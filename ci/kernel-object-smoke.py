@@ -17,7 +17,7 @@ import urllib.request
 PACKAGE = Path("pmaports/device/testing/linux-postmarketos-mediatek-mt6878")
 CONFIG = "config-postmarketos-mediatek-mt6878.aarch64"
 MODULES = (
-    "VIDEO_IMX882_TETRIS", "VIDEO_MT6878_SENINF_GRAPH",
+    "VIDEO_IMX882_IDENTITY", "VIDEO_IMX882_TETRIS", "VIDEO_MT6878_SENINF_GRAPH",
     "MTK_MT6878_CCCI_FIRST_START", "MTK_MT6878_GPUEB_POWER",
     "TETRIS_GPUEB_FLAT_ANALYSIS",
 )
@@ -25,8 +25,10 @@ ENABLE = (
     "MEDIA_SUPPORT", "MEDIA_CAMERA_SUPPORT", "VIDEO_DEV",
     "MEDIA_PLATFORM_SUPPORT", "MEDIA_PLATFORM_DRIVERS",
     "MEDIA_CONTROLLER", "VIDEO_V4L2_SUBDEV_API", "V4L2_FWNODE",
+    "I2C", "OF", "GPIOLIB", "COMMON_CLK", "REGULATOR", "PINCTRL",
 )
 OBJECTS = (
+    "drivers/media/i2c/imx882-identity.o",
     "drivers/media/i2c/imx882-tetris-stream.o",
     "drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.o",
     "drivers/media/platform/mediatek/seninf/mt6878-seninf-phy-smoke.o",
@@ -45,6 +47,7 @@ STRICT_PATCHES = frozenset((
     "0117-soc-mediatek-mt6878-ccci-first-start-backend.patch",
     "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch",
     "0120-misc-tetris-gpueb-authenticated-ram-analysis.patch",
+    "0121-media-i2c-imx882-acquire-mclk-source.patch",
 ))
 RESEARCH_DIR = "drivers/soc/mediatek/tetris-owner-smoke"
 RESEARCH_SOURCES = {
@@ -782,32 +785,27 @@ def run(command):
 
 
 def compile_flat_metadata(make, kernel, output, report):
-    """Compile the actual v1 consumer delta, then restore the packaged source."""
-    draft = Path("patches/gpu/uboot-segments")
-    spec = importlib.util.spec_from_file_location("flat_v1", draft / "integrate_flat_metadata.py")
-    integration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(integration)
+    """Retain actual packaged v1 object evidence without staging a second delta."""
     source = kernel / "drivers/misc/gpueb-flat-analysis.c"
     before = source.read_text()
-    canonical = (integration.OWNER / source.name).read_text()
-    if before != canonical:
+    canonical = (Path("patches/gpu/flat-handoff-draft") / source.name).read_text()
+    if before != canonical or hashlib.sha256(before.encode()).hexdigest() != \
+            "e0ac3e88c4a23faabf0cc80f406a52e7eda1ac44af0f9004df65de730a367204":
         raise ValueError("prepared GPUEB consumer differs from reviewed package source")
-    revised = integration.integrate(before, (draft / "tetris_gpueb_flat_metadata.h").read_text())
     compiled = output / "drivers/misc/gpueb-flat-analysis.o"
     original_object = compiled.read_bytes()
     destination = report / "gpueb-flat-v1"
     destination.mkdir(exist_ok=False)
     try:
-        source.write_text(revised)
         run([*make, "drivers/misc/gpueb-flat-analysis.o"])
         target = destination / "gpueb-flat-analysis.o"
         shutil.copyfile(compiled, target)
         shutil.copyfile(output / ".config", destination / "config")
-        (destination / "gpueb-flat-analysis.c").write_text(revised)
-        return dict(source_sha256=hashlib.sha256(revised.encode()).hexdigest(),
+        (destination / "gpueb-flat-analysis.c").write_text(before)
+        return dict(source_sha256=hashlib.sha256(before.encode()).hexdigest(),
                     object_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                     object_identity=object_identity(target),
-                    scope="actual v1 consumer object only; no module link or hardware operation",
+                    scope="actual packaged v1 consumer object; no module link or hardware operation",
                     shipping_source_changed=False, hardware_tested=False)
     finally:
         source.write_text(before)

@@ -6,12 +6,13 @@ import importlib.util
 import os
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 LINUX_REV = "d84b264a54a37611f2f46bc19363cb9b41606205"
-KERNEL = Path(os.environ.get("TETRIS_KERNEL_TREE", ROOT.parent / f"linux-{LINUX_REV}"))
+KERNEL = Path(os.environ.get("TETRIS_KERNEL_TREE", ROOT / "upstream/linux"))
 SOURCE = (HERE / "gpueb-flat-analysis.c").read_text()
 TOKENS = re.compile(r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:(?:\\.)|[^\'\\])*\'', re.S)
 
@@ -38,6 +39,13 @@ def function(source, name):
 
 def compact(text):
     return re.sub(r"\s+", " ", text).strip()
+
+
+def kernel_source(path):
+    # Read the pinned object, never a possibly modified checkout or loose archive.
+    return subprocess.check_output(
+        ["git", "-C", str(KERNEL), "show", f"{LINUX_REV}:{path}"],
+        text=True, env={**os.environ, "GIT_NO_LAZY_FETCH": "1"})
 
 
 class RamAdmission(unittest.TestCase):
@@ -149,33 +157,44 @@ class RamAdmission(unittest.TestCase):
         self.terms(function(SOURCE, "flat_read"), 'if (!capable(CAP_SYS_RAWIO)) return -EPERM;',
                    'analysis->snapshot, analysis->size')
         body = function(SOURCE, "flat_probe")
-        self.terms(body, 'memory->size != 0x100000', 'memory->base & 0xffff',
-                   'memory->base > 0x80000000ULL - memory->size',
-                   'size != 156064 || size > memory->size',
-                   '!expected || length != sizeof(digest)',
+        self.terms(body, 'ret = tetris_gpueb_flat_metadata_read(pdev->dev.of_node, memory, &metadata);',
+                   'if (ret) return ret; size = metadata.authenticated_bytes;',
                    'memremap(memory->base, size, MEMREMAP_WB)',
+                   'memcpy(analysis->snapshot, (u8 *)mapping + metadata.payload_offset, size);',
                    'crypto_shash_digest(desc, analysis->snapshot, size, digest)',
-                   'if (!ret && memcmp(digest, expected, sizeof(digest))) ret = -EBADMSG;',
+                   'if (!ret) ret = tetris_gpueb_flat_snapshot_check(&metadata, digest, size);',
+                   'analysis->metadata = metadata;',
                    'analysis->misc.mode = 0600;')
-        self.assertLess(body.index("memcmp(digest, expected"), body.index("misc_register("))
+        self.assertLess(body.index("tetris_gpueb_flat_metadata_read("), body.index("flat_claim_reserved_ram("))
+        self.assertLess(body.index("tetris_gpueb_flat_snapshot_check("), body.index("misc_register("))
+        bounds = function(SOURCE, "tetris_gpueb_flat_metadata_validate")
+        self.terms(bounds, 'memory->size != TETRIS_FLAT_ARENA_BYTES',
+                   'memory->base < 0x40000000ULL',
+                   'memory->base > 0x80000000ULL - TETRIS_FLAT_ARENA_BYTES',
+                   'memory->base & (TETRIS_FLAT_ARENA_ALIGN - 1)',
+                   'metadata->payload_offset || metadata->sram_offset',
+                   'metadata->authenticated_bytes != TETRIS_FLAT_BYTES',
+                   'metadata->authenticated_bytes > memory->size - metadata->payload_offset',
+                   'metadata->authenticated_bytes > TETRIS_FLAT_GPR_OFFSET - metadata->sram_offset')
         self.assertNotRegex(without_comments(SOURCE),
-                            r"\b(?:readl|writel|ioremap\w*|arm_smccc_smc|rproc_boot|request_firmware)\s*\(")
+                            r"\b(?:readl|writel|ioremap\w*|arm_smccc_smc|rproc_boot|request_firmware|"
+                            r"request_irq|enable_irq|pm_runtime\w*)\s*\(")
 
     def test_pinned_failed_init_catalogue_and_pfn_lifetime(self):
-        rmem = (KERNEL / "drivers/of/of_reserved_mem.c").read_text()
+        rmem = kernel_source("drivers/of/of_reserved_mem.c")
         self.terms(function(rmem, "fdt_init_reserved_mem_node"),
                    'if (err != 0 && err != -ENOENT)',
                    'if (nomap) memblock_clear_nomap(rmem->base, rmem->size);')
         saved = function(rmem, "fdt_reserved_mem_save_node")
         self.assertLess(saved.index("fdt_init_reserved_mem_node(rmem)"), saved.index("reserved_mem_count++"))
         self.assertIn("return &reserved_mem[i];", function(rmem, "of_reserved_mem_lookup"))
-        init = (KERNEL / "arch/arm64/mm/init.c").read_text()
+        init = kernel_source("arch/arm64/mm/init.c")
         self.assertIn("return memblock_is_map_memory(addr);", function(init, "pfn_is_map_memory"))
         self.assertIn("EXPORT_SYMBOL(pfn_is_map_memory);", init)
-        self.assertIn("select ARCH_KEEP_MEMBLOCK", (KERNEL / "arch/arm64/Kconfig").read_text())
+        self.assertIn("select ARCH_KEEP_MEMBLOCK", kernel_source("arch/arm64/Kconfig"))
 
     def test_pinned_walker_omits_names_and_children(self):
-        resources = (KERNEL / "kernel/resource.c").read_text()
+        resources = kernel_source("kernel/resource.c")
         body = function(resources, "find_next_iomem_res")
         copied = body.split("*res = (struct resource)", 1)[1].split("};", 1)[0]
         self.terms(copied, '.start = max(start, p->start)', '.end = min(end, p->end)',
@@ -184,13 +203,13 @@ class RamAdmission(unittest.TestCase):
         self.assertNotIn(".child", copied)
         self.assertIn("EXPORT_SYMBOL_GPL(walk_iomem_res_desc);", resources)
         self.terms(function(resources, "__walk_iomem_res_desc"), 'if (ret) break;', 'start = res.end + 1;')
-        setup = (KERNEL / "arch/arm64/kernel/setup.c").read_text()
+        setup = kernel_source("arch/arm64/kernel/setup.c")
         self.terms(function(setup, "request_standard_resources"),
                    'if (memblock_is_nomap(region))', 'res->name = "reserved";',
                    'res->flags = IORESOURCE_MEM;', 'insert_resource(&iomem_resource, res);')
 
     def test_pinned_claim_descends_nonbusy_and_excludes_conflicts(self):
-        resources = (KERNEL / "kernel/resource.c").read_text()
+        resources = kernel_source("kernel/resource.c")
         body = function(resources, "__request_region_locked")
         self.terms(body, 'res->start = start;', 'res->end = start + n - 1;',
                    'res->flags |= IORESOURCE_BUSY | flags;', 'res->desc = parent->desc;',
@@ -199,7 +218,7 @@ class RamAdmission(unittest.TestCase):
                    'return -EBUSY;')
         self.assertIn('EXPORT_SYMBOL(__request_region);', resources)
         self.assertIn('EXPORT_SYMBOL(__release_region);', resources)
-        header = (KERNEL / "include/linux/ioport.h").read_text()
+        header = kernel_source("include/linux/ioport.h")
         macro = header.split('#define request_mem_region_exclusive(start,n,name)', 1)[1].split('#define', 1)[0]
         self.terms(macro, '__request_region(&iomem_resource, (start), (n), (name), IORESOURCE_EXCLUSIVE)')
 
@@ -229,8 +248,7 @@ class RamAdmission(unittest.TestCase):
         self.assertTrue(all(line.startswith("+") for line in lines))
         self.assertEqual("\n".join(line[1:] for line in lines) + "\n", SOURCE)
         shipping = ROOT / "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0120-misc-tetris-gpueb-authenticated-ram-analysis.patch"
-        self.assertEqual(patch.split("diff --git a/drivers/misc/gpueb-flat-analysis.c", 1)[0],
-                         shipping.read_text().split("diff --git a/drivers/misc/gpueb-flat-analysis.c", 1)[0])
+        self.assertEqual(patch, shipping.read_text())
         for invalid in ("", "int missing_newline;"):
             with self.assertRaises(ValueError):
                 generator.render(invalid)
@@ -238,7 +256,8 @@ class RamAdmission(unittest.TestCase):
     def test_snapshot_covers_admission_source_and_source_only_tests(self):
         entries = dict(line.split("  ", 1)[::-1] for line in
                        (HERE / "SNAPSHOT.sha256").read_text().splitlines())
-        for name in ("gpueb-flat-analysis.c", "generate_consumer_patch.py", "test_ram_admission.py"):
+        for name in ("gpueb-flat-analysis.c", "generate_consumer_patch.py", "test_ram_admission.py",
+                     "test_canonical_metadata.py"):
             self.assertIn(name, entries)
         for name, digest in entries.items():
             self.assertEqual(hashlib.sha256((HERE / name).read_bytes()).hexdigest(), digest, name)

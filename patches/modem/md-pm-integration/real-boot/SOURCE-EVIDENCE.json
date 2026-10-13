@@ -1,0 +1,314 @@
+{
+  "schema": 1,
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "atf_payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e"
+  },
+  "linux_provenance": {
+    "method": "APKBUILD SHA512-verified d84 archive; selected files byte-compared",
+    "archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c"
+  },
+  "sources": {
+    "tracked-atf:TRANSPORT_OWNER.md": {
+      "path": "patches/modem/TRANSPORT_OWNER.md",
+      "revision": "634789437e3f80a0129f00e5cff922bd8cdbb64b",
+      "sha256": "6d5cc1a564fba87f684f5c193b478a49e19267e9bc8e21f47f02e3e9833b9d85"
+    },
+    "tracked-atf:test-atf-flight-contract.py": {
+      "path": "patches/modem/test-atf-flight-contract.py",
+      "revision": "634789437e3f80a0129f00e5cff922bd8cdbb64b",
+      "sha256": "969a0469366456d8988b8f9f520bdde03bb93324c3edc79c05f541a672cf3869"
+    },
+    "tracked-atf:test-atf-power-contract.py": {
+      "path": "patches/modem/test-atf-power-contract.py",
+      "revision": "634789437e3f80a0129f00e5cff922bd8cdbb64b",
+      "sha256": "f927f76be2d78b5d25a8a85d3a2a5fc84186bb82ab304fa51204cfb2ba60d930"
+    },
+    "md-platform": {
+      "path": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ae3e3998c2ce060ef7e5e406fa647cbff2fae14f196f1d2494784cc4c46848af"
+    },
+    "md-request-ids": {
+      "path": "drivers/misc/mediatek/eccci/inc/modem_secure_base.h",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2d5727255d1381ea914df7d8811de99dfcf1d4917a85597c9fb1ab49f13d814c"
+    },
+    "sip-ids": {
+      "path": "include/linux/soc/mediatek/mtk_sip_svc.h",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "98efa028fe246589b5968ac0b4f2138da1f45c349fb02c3e4a0ecb27d5dbf680"
+    },
+    "ufs-wrapper": {
+      "path": "drivers/misc/mediatek/eccci/fsm/ccci_fsm.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "90074e8f7292b8610f2aa093382cef0488fcb9fa2e129940519c6e973d5825c1"
+    },
+    "ufs-rpc-caller": {
+      "path": "drivers/misc/mediatek/eccci/port/port_rpc.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "cc19cd3f0be833762bd2cd69e295fb80f29595789e3c9d7d36e8626cd4685303"
+    },
+    "ufs-provider": {
+      "path": "drivers/ufs/ufs-mediatek-dbg.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "9fd58988792127a7f4e8823e717c425ff88498183ba722ca543e269d9c8bb2ab"
+    },
+    "ufs-selection": {
+      "path": "drivers/ufs/Makefile",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "f188904a859cc59cd02f7bef1d6de710a84c4fe5f0f616326dc064e5be0b0c3f"
+    },
+    "md-start-caller": {
+      "path": "drivers/misc/mediatek/eccci/fsm/modem_sys1.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "53a546c3de0614215e205e4ba69ce06ec7064303c8598b90b2917be632f24faa"
+    },
+    "md-domain": {
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    "md-native-sequence": {
+      "path": "drivers/soc/mediatek/mtk-scpsys.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "d6652e98da3d4193dfc1d2f112aea656606f314135168c6ab20d086b63cd67ea"
+    },
+    "md-dts": {
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    "linux:drivers/base/platform.c": {
+      "path": "drivers/base/platform.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "b2330f57b496fbe0d7e29b2873303c6294b9c207b4212becc52638e6efe86f4d"
+    },
+    "linux:drivers/base/regmap/regmap.c": {
+      "path": "drivers/base/regmap/regmap.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "4052c8235bf4c9c4823c807dc4940e9be7b70d3e66da2cc090482f44b40dc44a"
+    },
+    "linux:drivers/mfd/syscon.c": {
+      "path": "drivers/mfd/syscon.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "78b656e67537bd2bcc232bb289d44d85d956af90c48af8a59af9da9b7c42e030"
+    },
+    "linux:drivers/pmdomain/core.c": {
+      "path": "drivers/pmdomain/core.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "aa2162e66ff41a9fa2a50339dfc8ed2900ee814ed9f52af75c62b4b54dcfb8d9"
+    },
+    "linux:drivers/pmdomain/mediatek/Kconfig": {
+      "path": "drivers/pmdomain/mediatek/Kconfig",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "a2595596d4922d40b42b9efadf6a35f907eaa1c7646dc7f6c873cdb374c221f9"
+    },
+    "linux:drivers/pmdomain/mediatek/mtk-pm-domains.c": {
+      "path": "drivers/pmdomain/mediatek/mtk-pm-domains.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "1bc964d9b4493fe23ac5955e4198fd2219f6e60ecad360cf2fa78518009a4841"
+    },
+    "linux:drivers/regulator/core.c": {
+      "path": "drivers/regulator/core.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122"
+    },
+    "linux:drivers/regulator/of_regulator.c": {
+      "path": "drivers/regulator/of_regulator.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "b6feada4bfec5356ef8efe432dd49fc9e6ffc27b383220faa8535a3aaef8de8a"
+    },
+    "linux:drivers/ufs/host/ufs-mediatek.c": {
+      "path": "drivers/ufs/host/ufs-mediatek.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "cfb027c324df5792ecf9ad785e6d376bae1eb12f83b4a054a2798399a6f638d4"
+    },
+    "linux:include/linux/regmap.h": {
+      "path": "include/linux/regmap.h",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "0444ee165f9bfb7cbb2a0abafa982fb415ddf544bb00a9c7bdf70f562fd8d2ef"
+    },
+    "linux:include/linux/regulator/consumer.h": {
+      "path": "include/linux/regulator/consumer.h",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "87501f03cd27f1be8ae24ea6c4d26d63eda3521d528fa37a543a418c9140b9e7"
+    },
+    "linux:include/linux/soc/mediatek/mtk_sip_svc.h": {
+      "path": "include/linux/soc/mediatek/mtk_sip_svc.h",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "9008a8eb3bdd738242a8f9a48c20949d35b70846d5dd9ecf51cf1723f20c9066"
+    }
+  },
+  "causal_edges": [
+    {
+      "source": "md-platform",
+      "line": 648,
+      "anchor": "static void flight_mode_set_by_atf(struct ccci_modem *md,",
+      "meaning": "vendor void API logs four flags, but matched tracked ATF contract defines only zero-extended a0"
+    },
+    {
+      "source": "md-platform",
+      "line": 916,
+      "anchor": "ccci_ufs_io_operate(0);",
+      "meaning": "release only after physical OFF; vendor ignores return"
+    },
+    {
+      "source": "md-platform",
+      "line": 919,
+      "anchor": "mdelay(4);",
+      "meaning": "gen6299 settle precedes FLIGHT and TOP"
+    },
+    {
+      "source": "md-platform",
+      "line": 676,
+      "anchor": "reg_value |= ((1<<8) | (1<<9));",
+      "meaning": "TOP gate sets bits8/9 at offset0"
+    },
+    {
+      "source": "md-platform",
+      "line": 1302,
+      "anchor": "static int md_cd_power_on(struct ccci_modem *md)",
+      "meaning": "real ON chain requires PMIC settings, TOP ungate, FLIGHT(false), runtime domain and later execution release"
+    },
+    {
+      "source": "md-platform",
+      "line": 594,
+      "anchor": "static void md1_pmic_setting_on(void)",
+      "meaning": "void rail setter logs/continues errors; it is not a native owned rail operation"
+    },
+    {
+      "source": "md-platform",
+      "line": 1394,
+      "anchor": "MD_KERNEL_BOOT_UP, 0, 0, 0, 0, 0, &res);",
+      "meaning": "POWER/0 execution release has no checked secure result in this caller"
+    },
+    {
+      "source": "md-request-ids",
+      "line": 20,
+      "anchor": "\tMD_FLIGHT_MODE_SET,",
+      "meaning": "enumerated request7 after POWER6; not POWER/5"
+    },
+    {
+      "source": "sip-ids",
+      "line": 92,
+      "anchor": "#define MTK_SIP_KERNEL_CCCI_CONTROL \\\n\tMTK_SIP_SMC_CMD(0x505)",
+      "meaning": "ARM64 SiP fast SMC 0xc2000505"
+    },
+    {
+      "source": "ufs-wrapper",
+      "line": 116,
+      "anchor": "int ccci_ufs_io_operate(int op_id)",
+      "meaning": "actual serialized CCCI hold owner; no-op/disabled returns -1 rather than proof of successful release"
+    },
+    {
+      "source": "ufs-rpc-caller",
+      "line": 1289,
+      "anchor": "tmp_data[1] = ccci_ufs_io_operate(op_id);",
+      "meaning": "only dynamic acquisition caller is runtime modem RPC AFC/UFC operation"
+    },
+    {
+      "source": "ufs-provider",
+      "line": 1767,
+      "anchor": "int ufs_mtk_cali_hold(void)",
+      "meaning": "hold blocks storage and takes runtime reference even when doorbell timeout is returned; vendor wrapper loses ownership on that failure"
+    },
+    {
+      "source": "ufs-provider",
+      "line": 1803,
+      "anchor": "int ufs_mtk_cali_release(void)",
+      "meaning": "release drops the real storage PM reference; never call without its acquisition owner"
+    },
+    {
+      "source": "md-domain",
+      "line": 121,
+      "anchor": "MTK_SCPD_BYPASS_INIT_ON | MTK_SCPD_REMOVE_MD_RSTB,",
+      "meaning": "no reset/inhibit owner inferred for genuine boot"
+    },
+    {
+      "source": "md-native-sequence",
+      "line": 922,
+      "anchor": "static int scpsys_md_power_on(struct generic_pm_domain *genpd)",
+      "meaning": "physical ON: isolation down, power bit2, control ACK30, reverse bus release; MD skips reset"
+    },
+    {
+      "source": "md-dts",
+      "line": 13975,
+      "anchor": "md-vmodem = <800000 800000>;",
+      "meaning": "source rail: VBUCK2, 800000uV"
+    },
+    {
+      "source": "md-dts",
+      "line": 13977,
+      "anchor": "md-vsram = <800000 800000>;",
+      "meaning": "source rail: VSRAM_MODEM, 800000uV"
+    },
+    {
+      "source": "md-dts",
+      "line": 13979,
+      "anchor": "md-vdigrf = <700000 700000>;",
+      "meaning": "source rail: VBUCK1, 700000uV"
+    },
+    {
+      "source": "md-platform",
+      "line": 1567,
+      "anchor": "md_cd_plat_val_ptr.power_flow_config = 0;",
+      "meaning": "absent flow selector means zero; no SRC/O1/PLL/sequencer operation for this profile"
+    },
+    {
+      "source": "md-dts",
+      "line": 6242,
+      "anchor": "ccci-topckgen = <&topckgen_clk>;",
+      "meaning": "actual shared TOP phandle"
+    }
+  ],
+  "ufs_callsite_census": [
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/fsm/ccci_fsm.c:116:int ccci_ufs_io_operate(int op_id)",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/fsm/ccci_fsm.c:125:\t\tval = ufs_mtk_cali_hold();\t//replace ufs api block io",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/fsm/ccci_fsm.c:133:\t\tval = ufs_mtk_cali_release();  //replace ufs api release io",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/fsm/ccci_fsm.c:454:\tccci_ufs_io_operate(0);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c:916:\tccci_ufs_io_operate(0);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/inc/ccci_fsm.h:21:int ccci_ufs_io_operate(int op_id);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/inc/ccci_fsm.h:23:extern int ufs_mtk_cali_hold(void);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/inc/ccci_fsm.h:24:extern int ufs_mtk_cali_release(void);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/misc/mediatek/eccci/port/port_rpc.c:1289:\t\t\ttmp_data[1] = ccci_ufs_io_operate(op_id);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.c:1767:int ufs_mtk_cali_hold(void)",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.c:1798:EXPORT_SYMBOL_GPL(ufs_mtk_cali_hold);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.c:1803:int ufs_mtk_cali_release(void)",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.c:1817:EXPORT_SYMBOL_GPL(ufs_mtk_cali_release);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.h:169:int ufs_mtk_cali_hold(void);",
+    "ee2be53cb75670b548948636a0db1d1ff112bf12:drivers/ufs/ufs-mediatek-dbg.h:170:int ufs_mtk_cali_release(void);"
+  ],
+  "modules_census": {
+    "tree": "f31ccc4a9130168fb937943b5d8e77d871c47c8d",
+    "matches": []
+  },
+  "flight_contract": "matched ATF kernel wrapper zero-extends inner w0; only a0 defined; nonzero fails, zero is not policy/readiness proof",
+  "atf_contract": {
+    "provenance": "committed disassembly conclusions and fixture source; no fresh binary decode or Unicorn execution",
+    "repo_revision": "634789437e3f80a0129f00e5cff922bd8cdbb64b",
+    "payload_base": "0x48800000",
+    "dispatch": [
+      "0xbf2c",
+      "0xbfa0"
+    ],
+    "wrapper": "0x1bf58",
+    "registry_dispatch": "0x1efc0",
+    "callbacks": [
+      "0x33d3c",
+      "0x33aec",
+      "0x33c5c"
+    ],
+    "secure_policy_halfword": "0x5a9fa",
+    "policy_mask": "0x40",
+    "actual_spinlock": "0xf73b4",
+    "missing_registry_a0": "0x00000000ffffffff",
+    "null_callback": "terminates successfully without policy guarantee",
+    "outer_admission": "separate; not inferred from inner result or physical ON"
+  },
+  "ufs_scope": "DBG=n excludes acquisition API and RPC calibration operation; skip release, never fabricate held state",
+  "native_on": "real attach-time genpd callback: acquired rail handles/voltage/sync, TOP ungate, checked defined FLIGHT a0, ISO down, PWR_ON/ACK30, reverse bus release, current ON readback",
+  "status": "uninstalled real native ON integration; no secure/firmware/transport/lifecycle success claimed"
+}

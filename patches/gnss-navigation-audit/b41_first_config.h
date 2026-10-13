@@ -25,6 +25,7 @@ enum b41_first_provenance {
     B41_FIRST_MODEM_RESULT,
     B41_FIRST_CLOCK_CALIBRATION,
     B41_FIRST_TRANSPORT_MODE,
+    B41_FIRST_NVRAM_PROFILE,
 };
 
 enum b41_first_transport { B41_FIRST_HOST = 0, B41_FIRST_OFFLOAD = 1 };
