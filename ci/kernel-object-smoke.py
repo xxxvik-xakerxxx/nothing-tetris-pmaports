@@ -425,10 +425,7 @@ def compile_md_pmic(kernel, work, report):
     rails.inputs()
     header = kernel / rails.HELPER
     before = header.read_text()
-    anchor = "\t\trdev = devm_regulator_register(dev, &states[i].desc, &config);\n"
-    if before.count(anchor) != 1:
-        raise ValueError("native regulator registration anchor changed")
-    revised = before.replace(anchor, rails.REGISTRATION + anchor, 1)
+    revised = rails.registration_header(before)
     result["registration_source_sha256"] = hashlib.sha256(revised.encode()).hexdigest()
     result["registration_variants"] = {}
     try:

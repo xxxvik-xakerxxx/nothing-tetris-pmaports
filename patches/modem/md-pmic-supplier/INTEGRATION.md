@@ -40,10 +40,12 @@ rejects such probe-time writes through `state->registering`; without the
 follow-up, an out-of-range inherited selector can fail registration.
 
 The future diagnostic follow-up clears only
-`config.init_data->constraints.apply_uV` after successful exact-node parsing
+`init_data->constraints.apply_uV` after successful exact-node parsing
 and before registration. Parsed ranges, allowed modes, standard operation
 permissions, mutation admission, error latches and real callbacks are retained.
-This uses the regulator core's existing constraint API. It neither fabricates
+The mutable pointer returned by the single OF parse is retained locally and
+then assigned to the const-qualified `config.init_data` view; no const cast or
+second parse is used. This uses the regulator core's existing constraint API. It neither fabricates
 readback nor silently grants ownership. The header already includes
 `linux/regulator/machine.h`. Connectivity/GPU descriptor and probe blocks
 remain byte-identical to the verified extension.

@@ -115,6 +115,16 @@ class NativeRails(unittest.TestCase):
             self.assertIn(name + f" = <{voltage} {voltage}>;", texts["vendor-board"])
         self.assertIn("ccci-topckgen = <&topckgen_clk>;", texts["vendor-board"])
         self.assertIn('compatible = "mediatek,mt6878-topckgen", "syscon";', texts["vendor-board"])
+
+    def test_registration_uses_single_mutable_parse_without_const_cast(self):
+        original = (rails.HERE / Path(rails.HELPER).name).read_text()
+        revised = rails.registration_header(original)
+        self.assertEqual(revised.count("of_get_regulator_init_data("), 1)
+        self.assertIn("struct regulator_init_data *init_data;", revised)
+        self.assertIn("init_data->constraints.apply_uV = false;", revised)
+        self.assertNotIn("config.init_data->constraints.apply_uV", revised)
+        self.assertNotIn("(struct regulator_init_data *)", revised)
+        self.assertEqual(rails.registration_base(revised), original)
         for label, minimum in rails.CHILDREN.values():
             body = texts["vendor-pmic-dt"].split('regulator-name = "' + label + '";', 1)[1].split("};", 1)[0]
             self.assertIn(f"regulator-min-microvolt = <{minimum}>;", body)
@@ -158,7 +168,7 @@ class NativeRails(unittest.TestCase):
                 for path, sha in manifest["staged_after_sha256"].items():
                     self.assertEqual(rails.digest((tree / path).read_bytes()), sha)
                 rails.apply(tree, rails.integration_patch(activate))
-                self.assertEqual((tree / rails.HELPER).read_text().replace(rails.REGISTRATION, "", 1),
+                self.assertEqual(rails.registration_base((tree / rails.HELPER).read_text()),
                                  (rails.HERE / Path(rails.HELPER).name).read_text())
                 driver = (tree / supplier.DRIVER).read_text()
                 restored = driver.replace('#include "mt6363-modem-regulator.h"\n\n', "", 1)

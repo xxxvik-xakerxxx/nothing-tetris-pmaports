@@ -36,7 +36,10 @@ SUPPLIES = {"md-vmodem": ("vbuck2", 800000),
 REGISTRATION = ("\t\t/* Diagnostic registration preserves inherited voltage. The DT bounds\n"
                 "\t\t * still constrain subsequent real consumer requests.\n"
                 "\t\t */\n"
-                "\t\tconfig.init_data->constraints.apply_uV = false;\n")
+                "\t\tinit_data->constraints.apply_uV = false;\n")
+INIT_DECLARATION = "\t\tstruct regulator_init_data *init_data;\n"
+INIT_ASSIGNMENT = "\t\tconfig.init_data = init_data;\n"
+INIT_PARSE = "of_get_regulator_init_data(dev, nodes[i], &info->desc);\n"
 
 
 def digest(data):
@@ -87,6 +90,24 @@ def board_source(parent):
                           "mt6878-nothing-tetris-ccci-hif-resources.dts").decode() + parent.SUPPLIER_DTS)
 
 
+def registration_header(header):
+    parent = parent_stage()
+    declaration = "\t\tstruct regulator_dev *rdev;\n"
+    header = parent.change_once(header, declaration, declaration + INIT_DECLARATION)
+    header = parent.change_once(header, "\t\tconfig.init_data = " + INIT_PARSE,
+                                "\t\tinit_data = " + INIT_PARSE + INIT_ASSIGNMENT)
+    anchor = "\t\trdev = devm_regulator_register(dev, &states[i].desc, &config);\n"
+    return parent.change_once(header, anchor, REGISTRATION + anchor)
+
+
+def registration_base(header):
+    parent = parent_stage()
+    header = parent.change_once(header, REGISTRATION, "")
+    header = parent.change_once(header, INIT_DECLARATION, "")
+    return parent.change_once(header, "\t\tinit_data = " + INIT_PARSE + INIT_ASSIGNMENT,
+                              "\t\tconfig.init_data = " + INIT_PARSE)
+
+
 def integration_patch(activate=False):
     inputs()
     parent = parent_stage()
@@ -101,8 +122,7 @@ def integration_patch(activate=False):
         for label, _ in CHILDREN.values():
             extra += f'\n&{label} {{\n\tstatus = "okay";\n}};\n'
     header = (HERE / Path(HELPER).name).read_text()
-    anchor = "\t\trdev = devm_regulator_register(dev, &states[i].desc, &config);\n"
-    revised = parent.change_once(header, anchor, REGISTRATION + anchor)
+    revised = registration_header(header)
     result = ("From: Tetris port maintainers\n"
               "Subject: [DIAGNOSTIC PATCH] MT6363: preserve inherited voltage at registration\n\n"
               "Keep the parsed DT ranges and real callbacks; suppress only core apply_uV.\n"
@@ -152,7 +172,7 @@ def check_kernel(kernel, activate=False):
         followup = integration_patch(activate)
         apply(copy, followup, check=True)
         apply(copy, followup)
-        require((copy / HELPER).read_text().replace(REGISTRATION, "", 1) ==
+        require(registration_base((copy / HELPER).read_text()) ==
                 (HERE / Path(HELPER).name).read_text(), "native callbacks changed")
     return {"native_patch_sha256": PATCH_SHA, "integration_patch_sha256": digest(followup)}
 
