@@ -136,8 +136,10 @@ The failed image was not installed. Corrected full
 at `bd74848b726b6c5b7e2fbea8db1c1618e6a72f5a` passed all five jobs and produced
 artifact11789527090 (ZIP SHA256
 `1d806baf12529de7434abc788e2cff4f8dc82538fb7ee514c0a51dbdd3c1f8cc`).
-Download, local image verification and installation are pending; CI success
-does not establish a physical OFF transition or radio service.
+The ZIP and all four image hashes were verified locally; Android sparse parsing
+passed (2783969280 expanded bytes, 7697 chunks). Installation was withheld after
+the modem-only ACK defect below was identified. CI success does not establish a
+physical OFF transition or radio service.
 The diagnostic artifact is explicitly
 named `nothing-tetris-native-md-first-off-images`, with the paired loader above;
 ordinary shipping images do not activate this experiment.
@@ -149,15 +151,43 @@ final metadata or native supplier activation occurred. Corrected loader profile
 passed at the same `322cf227` source, enabling the existing initial LK OFF
 transaction before RAM writes. Image SHA256
 `0a16ba1da3a40b8da43b9d5b322fc496c65636ab5f516a5c152b7639e973073b`.
-This new profile has not yet been installed.
+This profile was installed and read back in `lk_a` (3316976 bytes), preserving
+stock `lk_b`. On warm boot `3bde0513-97f9-4932-93c8-51d1cdcd0b76` and the
+user-confirmed physical cold boot `610323aa-8ba6-4b69-97e9-7a17e940d99e`, actual
+loader stage11, bootstrap stage15 and board stage16 completed with zero errors,
+no cleanup and four BROM flags equal to1. Real descriptor32/evidence336 and the
+four NOMAP reservations were published; the modem consumer remained disabled.
+Cold SCP/sensor/proxy initialization and USB/SSH passed without failed units.
+Warm SCP recovery still failed; no warm sensor support is claimed.
 The Linux modem-only ACK mask also required correction: pinned B4.1
 `drivers/soc/mediatek/mtk-scpsys-mt6878.c` selects `MD_OPS | IS_PWR_CON_ON`, and
 `scpsys_md_power_on/off()` use `scpsys_pwr_ack_is_on()` with BIT30, not the
 generic second ACK31. The frozen native candidate incorrectly required both.
 Diagnostic r184/device r20 adds an exact post-provider BIT30 correction and
 pairs the corrected loader. Ten static staging/application checks pass;
-complete kernel/image CI and physical first-OFF remain pending. r183 remains
-an uninstalled CI checkpoint, not a working modem claim.
+complete kernel/image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)
+at `91c7a11` passed validation, Bionic, sealed-loader and object smoke; kernel
+compilation and physical first-OFF remain pending. r183 remains an uninstalled
+CI checkpoint, not a working modem claim.
+
+The full GNSS module gate builds actual kernel exports, connadp and conninfra,
+then the complete v051 baseline and staged1009 candidate with strict modpost.
+Its first [CI38356794383](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356794383)
+stopped before compilation on historical1000 patch context. The correction
+matches packaged patch application and verifies both entire postimages contain
+only the reviewed class_create API replacements; local real-source application
+and54 static tests passed. Corrected
+[CI38357565018](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38357565018)
+at `f27228d` is pending. No replacement module is installed on the phone.
+
+Personal U-Boot `bd8950d9bf6c10e6ee075e654e19ff43cc889841` adds explicit retained
+GPUEB payload offsets/profile/version and signed-member/container provenance,
+with a fresh plaintext digest check before failure-atomic DT publication.
+[CI38356830921](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38356830921)
+passed the real firmware/authentication tests, native retained-payload fixtures
+and ARM64 loader build. This revision is not installed; the current modem/SCP
+profile keeps GPUEB retention disabled. IRQ activation, GPR0/GPR6/EMI ownership,
+RV33 execution and accelerated rendering remain unverified.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in
