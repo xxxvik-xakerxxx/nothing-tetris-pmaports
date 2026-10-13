@@ -115,7 +115,10 @@ were executed. Native comparison is pending parent CI.
 
 Run `test_clock_source.py PINNED_MNLD PINNED_LIBMNL` with the existing offline
 Capstone directory on PYTHONPATH for immutable proof checks. `sh run-ci.sh`
-now builds wire, clock and bootstrap-field fixtures **only in GitHub Actions**.
+now builds wire, clock, bootstrap-field and complete-bootstrap fixtures
+**only in GitHub Actions**. [BOOTSTRAP.md](BOOTSTRAP.md) documents the separate
+original-frequency table producer for payload62..93; it must not use the
+helper's overridden effective frequency.
 
 Next input gate: actual first-profile selection, configured de304 ID, mode
 selectors and actual private clock record acquisition. The new constructor

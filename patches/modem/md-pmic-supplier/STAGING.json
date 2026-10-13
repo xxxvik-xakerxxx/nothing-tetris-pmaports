@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "phase": "additive-native-provider-source-only-not-shipping",
+  "pins": {
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12"
+  },
+  "live_basis": "parent-measured boot b8e13a10-19f6-4ab7-9f71-de0623e1d494 exposes only mt6363-vcn13 and mt6363-vrfio18 in sysfs; source worker did not access phone",
+  "packaged_inputs": [
+    {
+      "patch": "0008-connectivity-mt6878-mt6631-connsys.patch",
+      "sha256": "02c72385dc0d08367299d0b55d7e50eecdc4145748c6af025243e44ab1dda32c"
+    },
+    {
+      "patch": "0030-regulator-mediatek-mt6878-gpu-rails.patch",
+      "sha256": "330e46826a6cc167c93fb0b029b458d798435b1bf33a076d774cab807341da38"
+    }
+  ],
+  "prepared_before_sha256": {
+    "Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml": "9baee35afefe2ed8b00e8165992ba879c3eaeceb1662230098e19823a5df88ab",
+    "drivers/regulator/mt6363-regulator.c": "62f4f1ed120a05aab237b46be84be8c965ba076a0baee8d85cbefa75aced8dfb"
+  },
+  "staged_after_sha256": {
+    "Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml": "7a70f2db97e17fa90f67bf1d330ad5a3fd61472d3752ce40ce18adbce84f99fc",
+    "arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi": "a9bf3490bb33601ab56092b0ab3dca0b2e6eed5f699b0bc09994b5d5f22c6716",
+    "drivers/regulator/mt6363-modem-regulator-test.h": "0ffab1a06d25f1f7145c5fda70e6284a9d058d3d46e69265be955610cf643bd8",
+    "drivers/regulator/mt6363-modem-regulator.h": "84da7731a94f2311eeedb0d1f0dcff250931c7b396e7b5d9e377ce8fbe772dd7",
+    "drivers/regulator/mt6363-regulator.c": "f5e19be1f8dc88cd297b6d82f61cbf659f4ed3d03e015da341fd35e22289d7cf"
+  },
+  "patch": {
+    "path": "native-modem-rails.patch",
+    "sha256": "235776bf27796de16b9cc7871d58b42a4ca53a31a5441e7abb09cf2a8bb421da"
+  },
+  "canonical_sources": [
+    "mt6363-modem-regulator.h",
+    "mt6363-modem-regulator-test.h",
+    "mt6878-modem-pmic-disabled.dtsi"
+  ],
+  "stock_consumer_mapping": {
+    "md-vmodem": {
+      "rail": "vbuck2",
+      "microvolt": 800000
+    },
+    "md-vsram": {
+      "rail": "vsram-modem",
+      "microvolt": 800000
+    },
+    "md-vdigrf": {
+      "rail": "vbuck1",
+      "microvolt": 700000
+    }
+  },
+  "selector_semantics": "source-defined main RG selector with checked normal AP OP_EN/OP_CFG and SSHUB exclusion; programmed selector is not independent DA voltage measurement",
+  "ownership": "mutex serializes these three native rails; preserve OP banks/SSHUB/shared key; checks do not prove global secure actor exclusion; inherited enables cannot be disabled",
+  "registration": "actual available unique native DT children only; exact DT node/init data; mutation callbacks reject core probe-time changes; no new allocation/PMIC access when all three are unavailable",
+  "supported": [
+    "standard linear list/map",
+    "guarded main selector get/set with readback",
+    "guarded exact SET/CLR enable aliases and SW request readback",
+    "observe source-defined FCCM/HW-LP mode",
+    "guarded NORMAL/IDLE LP-bit changes with source 100us IDLE exit delay"
+  ],
+  "denied": [
+    "independent DA voltage/power-good status (not defined by pinned source)",
+    "SSHUB selector takeover",
+    "OP_EN/OP_CFG hardware voter rewrite",
+    "shared-key FCCM/FAST changes and exit from inherited FAST",
+    "STANDBY/ULP",
+    "set_load/DRMS",
+    "suspend controls",
+    "calibration/efuse/unlock",
+    "unknown ramp rate or invented voltage/settle helpers",
+    "probe-time clamp/enable/mode",
+    "inherited enable teardown"
+  ],
+  "failure": "first hardware write/post-write errno latched per rail; no compensating writes or unsafe retry; read-only errors returned directly",
+  "parser_limit": "standard of_get_regulator_init_data returns NULL without an errno; reject as EINVAL instead of core unconstrained fallback",
+  "metadata": {
+    "path": "arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi",
+    "included": false,
+    "children": "all disabled; no modem consumer supply wiring or activation"
+  },
+  "checks": {
+    "source": "python3 -B patches/modem/md-pmic-supplier/stage.py",
+    "tests": "python3 -B patches/modem/md-pmic-supplier/test_static.py",
+    "native_target": "drivers/regulator/mt6363-regulator.o",
+    "kunit_suite": "mt6363-native-modem-regulator",
+    "native": "not compiled or executed; parent ARM64 integration pending"
+  },
+  "hardware": "untested; no phone access, regulator operation or modem activation"
+}

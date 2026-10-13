@@ -61,17 +61,37 @@ candidate, not SIM/call support or a battery-optimized daily-driver image.
 The first image attempt, CI38326117165, passed validation/isolated compilation
 but stopped before kernel compilation because Alpine checkout had no Git
 history. The corrected [CI38326786870](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38326786870)
-has entered full kernel-package compilation; no r183 installation is claimed.
+failed on the nested native camera header's missing parent include path.
+The diagnostic profile corrects that reference to the same actual shared
+provider header used by native CI, explicitly builds/installs its selected DT,
+and declares the sibling modem node in the power binding. A repeated uncorrected
+attempt was cancelled; no r183 installation is claimed.
 
 The follow-up source revision retains a staged post-OFF TOP/rail owner and
 first errno, but inhibited ON still stops before regulator acquisition or
 hardware writes. GPU gains a sealed eleven-consumer dispatch lifetime, not IRQ
 activation/RV33 startup. GNSS adds the source-derived constructor for 50 of 106
 bootstrap bytes, including real private-record frequency semantics; the other
-56 bytes and same-session inputs remain required before sending. New camera
+56 bytes are now implemented by the full 106-byte / 116-byte frame constructor,
+including the immutable original-frequency profile block and exact MVCD/CW
+ioctl selection. Same-session inputs and real ACK/WORKING evidence remain
+required before navigation can work. New camera
 supplier DT candidates preserve the native board or explicitly identify a
 forbidden-to-boot ownership delta. These follow-ups require their own native
 CI and do not replace the frozen `cbb777d` image inputs.
+The 50-byte field constructor and updated GPU lifetime fixtures passed mandatory
+validation [CI38327618654](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327618654);
+exact GNSS producer/native checks passed
+[CI38327625537](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327625537).
+The new full-frame constructor has not yet passed native CI.
+
+The running MT6363 provider exposes only VCN13/VRFIO18, not stock modem VBUCK2,
+VSRAM_MODEM and VBUCK1. A standard native three-rail extension is staged under
+`patches/modem/md-pmic-supplier`, preserving the existing connectivity source.
+Selector/SET/CLR/mode operations retain real errors; unsupported shared-key,
+SSHUB, hardware-voter and calibration controls stay denied. Actual ARM64 object
+compilation is the next gate; disabled rail metadata is not activated or
+advertised as SIM support.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in

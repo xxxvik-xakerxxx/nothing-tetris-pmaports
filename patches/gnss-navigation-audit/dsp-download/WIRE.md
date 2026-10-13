@@ -48,14 +48,14 @@ that does **not** establish every dynamic value or its valid profile.
 | 14..15 | Low16 of ioctl23/24 code_size (`sp+118`) | Same-session output; reject failed ioctl, preserve full metadata separately |
 | 16..17 | Low16 of start_addr (`sp+11c`) | Same; not a hard-coded address |
 | 18..19 | Low16 of exec_addr (`sp+120`) | Same |
-| 20..21 | Low16 of cipher_key (`sp+124`) | Session secret; never log, fixture or replace |
+| 20..21 | Low16 of cipher_key (`sp+124`) | Session secret; never log, publish, replace or include a real key in fixtures |
 | 22..23 | Low16 of frag_num (`sp+128`) | Must match same successful metadata query |
 | 24..25 | `sp+f4/f0`, reset0 at `4f2600..4f2604` | Proven zero |
 | 26..29 | LE32(0x00050000), `4f2734..4f273c` | Proven fixed value |
 | 30..57 | Byte copy of `sp+750..76b` | 28-byte clock synthesis result from `4f05f4`, **not reserved zero** |
 | 58..59 | `4f2824..4f28b0`: globals via GOT6e6670/6e6650, helper508d0c and context+30 branch | Runtime profile-dependent; not always7 or5 |
 | 60..61 | `sp+d4/d0`: context+13==FE and zero (`4f2094..4f20cc`) | Need actual context mode |
-| 62..93 | Byte copy of `sp+720..73f`, zeroed `4f20c0..4f20c4` | Proven zero on inspected path |
+| 62..93 | Byte copy of `sp+720..73f`; zeroed `4f20c0..4f20c4`, then frequency-selected table27934 via `4f35e8..4f362c` | Conditional table output; zero only when original context frequency matches no window |
 | 94..95 | Low16 global via GOT6e6688 (`4f29b8..4f29dc`) | Producer/validity not closed |
 | 96..97 | Low16 context+30 (`4f287c`, `4f29d8..4f29f0`) | Native signed chip/profile identifier, not ADIE6631 substitute |
 | 98..99 | `4f29e0..4f2a48`, context+30/+54 and global6e6670 | Branch-derived chip/revision bytes |
@@ -81,6 +81,12 @@ producers, input-stage requirements and remaining acquisition/transport gates.
 The earlier table's dynamic-input gates now refer to acquiring legitimate
 snapshots; those field computations are implemented. All other56 bytes remain
 untouched by this block, including ROM-session metadata.
+`bootstrap.c/h` now constructs the other56 bytes and the complete106-byte
+payload/116-byte frame. [BOOTSTRAP.md](BOOTSTRAP.md) corrects the former
+62..93 zero-only interpretation and gives exact MVCD/CW selection, same-session
+query binding, private key handling and atomic failure rules. No byte remains
+unjustified for the supported secure L1 paths; input acquisition and transport
+are still external gates. The embedded-image path is explicitly refused.
 
 ## Receive Grammar And Matching ACK
 
@@ -136,7 +142,8 @@ and unchanged outputs on failure.
 Run `sh run-ci.sh` in GitHub Actions; no native compilation/execution occurred
 locally and no CI run is claimed. The parent integrates this fixture job.
 
-Next implementable work is the authoritative profile/effective-clock input closure.
+Next implementable work is live authoritative input acquisition and the sole
+bounded transport/ACK controller, following native validation of the full assembler.
 The pure codec is usable independently, but a download controller must not
 emit a synthetic bootstrap and rely on retries. Kernel ioctl25/26 submits integer fragment
 numbers only after a real matched bootstrap ACK; RAM_CODE_READY remains a

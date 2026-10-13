@@ -1,6 +1,6 @@
 # B4.1 L1 DSP Download Boundary
 
-Status: bounded pure wire codec and clock/board field constructor supplied;
+Status: bounded pure wire codec and complete secure L1 bootstrap assembler supplied;
 **no hardware download callable exposed**. The r182
 bbc28d61 open at 3175.908..3175.916 established ROM reset, ADIE6631, OPENED,
 ioctl13=0 and ioctl23 metadata (code_size42505, fragments106), followed by
@@ -38,6 +38,12 @@ The next [BOOTSTRAP_FIELDS.md](BOOTSTRAP_FIELDS.md) block implements50 bytes
 from real typed owner snapshots, including the private-record frequency decoder,
 clock mode and board/feature branches. It preserves the other56 bytes and
 does not substitute for complete context or ROM-session acquisition.
+The distinct [BOOTSTRAP.md](BOOTSTRAP.md) implementation now constructs all106
+payload bytes and the116-byte frame from those fields, actual same-session
+typed ioctl23/24 output and exact selector snapshots. It also closes the
+previously missed frequency-table producer for62..93. The embedded-image
+branch is explicitly unsupported; actual input acquisition and bounded TX/RX
+still require the real gps0 owner.
 
 ## Exact Inspected Boundary And Protocol
 
@@ -97,7 +103,9 @@ context. [CLOCK.md](CLOCK.md) identifies its real constructor/query inputs.
 their live input acquisition and profile choices remain gated. Wire inputs stay
 explicit. `test_clock_source.py PINNED_MNLD PINNED_LIBMNL` checks those producers.
 `test_bootstrap_fields_source.py PINNED_MNLD PINNED_LIBMNL` checks the new block.
-`sh run-ci.sh` compiles/runs synthetic wire, clock and field C fixtures only inside GitHub Actions.
+`test_bootstrap_source.py PINNED_MNLD PINNED_LIBMNL` checks complete assembly.
+`sh run-ci.sh` compiles/runs synthetic wire, clock, field and complete bootstrap
+C fixtures only inside GitHub Actions.
 It has not been run locally or dispatched here; parent owns CI integration.
 `TETRIS_MODULES_TREE` overrides the default outer vendor checkout. The override
 must contain the exact B4.1 git commit object; source is read with `git show`

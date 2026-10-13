@@ -23,3 +23,9 @@ trap 'rm -rf "$out"' EXIT HUP INT TERM
     "$here/clock.c" "$here/bootstrap_fields.c" "$here/test_bootstrap_fields.c" \
     -lm -o "$out/test-bootstrap-fields"
 "$out/test-bootstrap-fields"
+"${CC:-clang}" -std=c11 -Wall -Wextra -Werror -Wconversion -Wshadow \
+    -O1 -g -frounding-math -ffp-contract=off \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "$here/wire.c" "$here/clock.c" "$here/bootstrap_fields.c" \
+    "$here/bootstrap.c" "$here/test_bootstrap.c" -lm -o "$out/test-bootstrap"
+"$out/test-bootstrap"

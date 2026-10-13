@@ -5,6 +5,10 @@ layout from typed owner snapshots: payload4..9,30..61,94..105. It calls the
 existing clock synthesis and preserves all other bytes when applied. It does
 not assemble a complete request, query a device, call libMNL, acquire a session,
 send firmware, or claim DSP WORKING. Native fixtures are supplied for CI only.
+The later [BOOTSTRAP.md](BOOTSTRAP.md) assembler now supplies the other56 bytes
+and framing. Its source trace corrects the earlier assumption that62..93 were
+always zero: recognized original context frequencies populate an immutable
+table block. This50-byte field constructor remains unchanged.
 
 ## Pins And Producer Semantics
 
@@ -103,10 +107,12 @@ Precise remaining download blockers:
 3. Obtain actual8ca018 private clock records, retained second+1ae and the
    secondary descriptor owner, actual word7178b0 and first+54.52b6b4 initially
    clears7178b0, but its optional52ae60 route still prevents assuming universal0.
-4. Assemble the remaining56 bytes from their traced constants/zero stores and
-   one successful same-owner ioctl23/24 metadata query. The key stays private
-   to that session. Prove MVCD/CW selection; neither ADIE nor ROM metadata
-   proves it. The field applicator deliberately leaves these bytes untouched.
+4. The complete [bootstrap assembler](BOOTSTRAP.md) now fills the other56 bytes
+   and proves the MVCD/CW command pair from actual selectors. Acquisition of
+   successful same-owner ioctl23/24 metadata is still required. Neither ADIE
+   nor ROM metadata supplies the selector snapshots. Key-bearing outputs remain
+   private to their transport owner; the field-only applicator leaves these
+   bytes untouched.
 5. Implement the sole bounded gps0 TX/RX owner, complete frame reads and real
    sequence-matched ACK handling, integer ioctl25/26 fragment submission,
    first-fault preservation and deadlines. Stock ring waits/retries remain unsafe.

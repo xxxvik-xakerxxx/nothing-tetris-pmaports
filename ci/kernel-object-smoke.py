@@ -378,6 +378,40 @@ def compile_camisp_supplier_dtbs(make, output, report):
     return outcomes
 
 
+def compile_md_pmic(kernel, work, report):
+    draft = Path("patches/modem/md-pmic-supplier")
+    run(["python3", draft / "test_static.py"])
+    run(["python3", draft / "stage.py", "--prepared-kernel", kernel, "--ci-apply"])
+    output = work / "md-pmic-objects"
+    output.mkdir(exist_ok=False)
+    result = {"scope": "real native regulator object only; no registration, DT activation or hardware test", "variants": {}}
+    for unit in ("y", "n"):
+        shutil.copyfile(Path(PACKAGE) / CONFIG, output / ".config")
+        run([kernel / "scripts/config", "--file", output / ".config",
+             "-e", "REGULATOR_MT6363", "-e", "MFD_MT6363",
+             "-e" if unit == "y" else "-d", "KUNIT"])
+        make = ["make", "-j4", "-C", kernel, "O=" + str(output), "ARCH=arm64", "LLVM=1"]
+        run([*make, "olddefconfig"])
+        config = (output / ".config").read_text().splitlines()
+        if "CONFIG_REGULATOR_MT6363=y" not in config or "CONFIG_MFD_MT6363=y" not in config or \
+                ("CONFIG_KUNIT=y" in config) != (unit == "y"):
+            raise ValueError("native modem PMIC configuration failed to resolve")
+        name = "drivers/regulator/mt6363-regulator.o"
+        run([*make, name])
+        destination = report / "native-modem-pmic" / ("kunit-" + unit)
+        destination.mkdir(parents=True, exist_ok=False)
+        target = destination / "mt6363-regulator.o"
+        shutil.copyfile(output / name, target)
+        shutil.copyfile(output / ".config", destination / "config")
+        result["variants"][unit] = {**object_identity(target), "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
+    plan = json.loads((draft / "STAGING.json").read_text())
+    result["staged_sources_sha256"] = {
+        name: hashlib.sha256((kernel / name).read_bytes()).hexdigest()
+        for name in plan["staged_after_sha256"]
+    }
+    return result
+
+
 def compile_dt_only(kernel, package, work, report, manifest):
     output = work / "dt-only-output"
     output.mkdir(exist_ok=False)
@@ -630,6 +664,7 @@ def main():
     if args.research_owners:
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
+        manifest["native_modem_pmic"] = compile_md_pmic(kernel, args.work, report)
         stage_research_sources(kernel)
         for source, destination in CAMISP_SUPPLIER_PLAN["sources"].items():
             if hashlib.sha256((kernel / destination).read_bytes()).hexdigest() != \

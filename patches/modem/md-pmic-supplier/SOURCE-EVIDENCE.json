@@ -1,0 +1,214 @@
+{
+  "schema": 1,
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205"
+  },
+  "sources": {
+    "vendor-driver": {
+      "path": "drivers/regulator/mt6363-regulator.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "5103f926597d3f5feb9d165ea4e6473048d03b1a25db9fd40718438ae7a3be99"
+    },
+    "vendor-fields": {
+      "path": "include/linux/regulator/mt6363-regulator.h",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2382d5399daff51abc081ff515ffe7070d9a0bc425aae019f0224df9cdf28173"
+    },
+    "vendor-pmic-dt": {
+      "path": "arch/arm64/boot/dts/mediatek/mt6363.dtsi",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "1f951e6890e0b2d210d9545dc5fd3b06bc296232317f08e30162aaabf738055a"
+    },
+    "vendor-board": {
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    "linux-core": {
+      "path": "drivers/regulator/core.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122"
+    },
+    "linux-of": {
+      "path": "drivers/regulator/of_regulator.c",
+      "revision": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "sha256": "b6feada4bfec5356ef8efe432dd49fc9e6ffc27b383220faa8535a3aaef8de8a"
+    },
+    "packaged-spmi-parent": {
+      "path": "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0003-mfd-mt6363-keys-mt6375-telemetry.patch",
+      "revision": null,
+      "sha256": "330beca71205759ad96087e74d04c8ba29ca71e1756edf2f1b9a458f9ccfc8d4"
+    }
+  },
+  "causal_edges": [
+    {
+      "source": "vendor-driver",
+      "line": 691,
+      "anchor": "MT6363_BUCK(VBUCK1,",
+      "meaning": "exact rail descriptor; VSRAM_MODEM also selects buck_ops and SET/CLR enables"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 700,
+      "anchor": "MT6363_BUCK(VBUCK2,",
+      "meaning": "exact rail descriptor; VSRAM_MODEM also selects buck_ops and SET/CLR enables"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 798,
+      "anchor": "MT6363_LDO_LINEAR1(VSRAM_MODEM,",
+      "meaning": "exact rail descriptor; VSRAM_MODEM also selects buck_ops and SET/CLR enables"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 250,
+      "anchor": "REGULATOR_LINEAR_RANGE(0, 0, 191, 6250)",
+      "meaning": "buck selectors 0..191, step 6250uV"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 258,
+      "anchor": "REGULATOR_LINEAR_RANGE(400000, 0, 127, 6250)",
+      "meaning": "VSRAM selectors 0..127, base 400000uV"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 289,
+      "anchor": "static int mt6363_buck_enable(struct regulator_dev *rdev)",
+      "meaning": "write enable_reg+1 with only rail mask"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 295,
+      "anchor": "static int mt6363_buck_disable(struct regulator_dev *rdev)",
+      "meaning": "write enable_reg+2 with only rail mask"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 20,
+      "anchor": "#define NORMAL_OP_EN\t0x800000",
+      "meaning": "normal AP control pattern; native code observes rather than rewriting hardware voters"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 19,
+      "anchor": "#define NORMAL_OP_CFG\t0x10",
+      "meaning": "source-defined OP_CFG profile at OP_EN+5"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 393,
+      "anchor": "\t\t\tudelay(100);",
+      "meaning": "source NORMAL transition out of IDLE delay"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 33,
+      "anchor": "#define MT6363_BUCK_TOP_UNLOCK_VALUE\t0x5543",
+      "meaning": "FAST/FCCM changes share the BUCK key; denied without a whole-key owner"
+    },
+    {
+      "source": "vendor-driver",
+      "line": 413,
+      "anchor": "static int mt6363_regulator_set_load(struct regulator_dev *rdev, int load_uA)",
+      "meaning": "vendor DRMS rewrites OP banks; native implementation explicitly rejects it"
+    },
+    {
+      "source": "vendor-fields",
+      "line": 207,
+      "anchor": "#define MT6363_BUCK_VBUCK1_WDTDBG_VOSEL_ADDR",
+      "meaning": "WDT debug is not defined as a live DA selector"
+    },
+    {
+      "source": "vendor-board",
+      "line": 13975,
+      "anchor": "md-vmodem = <800000 800000>;",
+      "meaning": "exact modem consumer target pair"
+    },
+    {
+      "source": "vendor-board",
+      "line": 13977,
+      "anchor": "md-vsram = <800000 800000>;",
+      "meaning": "exact modem consumer target pair"
+    },
+    {
+      "source": "vendor-board",
+      "line": 13979,
+      "anchor": "md-vdigrf = <700000 700000>;",
+      "meaning": "exact modem consumer target pair"
+    },
+    {
+      "source": "vendor-pmic-dt",
+      "line": 165,
+      "anchor": "regulator-name = \"mt6363_vbuck1\";",
+      "meaning": "correct MT6363 supplier identity and source DT constraints"
+    },
+    {
+      "source": "vendor-pmic-dt",
+      "line": 173,
+      "anchor": "regulator-name = \"mt6363_vbuck2\";",
+      "meaning": "correct MT6363 supplier identity and source DT constraints"
+    },
+    {
+      "source": "vendor-pmic-dt",
+      "line": 275,
+      "anchor": "regulator-name = \"mt6363_vsram_modem\";",
+      "meaning": "correct MT6363 supplier identity and source DT constraints"
+    },
+    {
+      "source": "linux-core",
+      "line": 5867,
+      "anchor": "\t\tinit_data = config->init_data;",
+      "meaning": "core DT parsing can fall back; native registration explicitly parses and binds the exact node"
+    },
+    {
+      "source": "linux-core",
+      "line": 1209,
+      "anchor": "if (rdev->constraints->apply_uV &&",
+      "meaning": "DT min/max may clamp an inherited selector at probe; registering flag denies this mutation"
+    }
+  ],
+  "rail_fields": {
+    "VBUCK1": {
+      "EN_ADDR": 576,
+      "EN_SHIFT": 1,
+      "VOSEL_ADDR": 589,
+      "VOSEL_MASK": 255,
+      "LP_ADDR": 582,
+      "LP_SHIFT": 1,
+      "HW_LP": 5400,
+      "OP_EN": 5389,
+      "SSHUB_EN": 5402,
+      "FCCM": 6706,
+      "FCCM_SHIFT": 0
+    },
+    "VBUCK2": {
+      "EN_ADDR": 576,
+      "EN_SHIFT": 2,
+      "VOSEL_ADDR": 590,
+      "VOSEL_MASK": 255,
+      "LP_ADDR": 582,
+      "LP_SHIFT": 2,
+      "HW_LP": 5528,
+      "OP_EN": 5517,
+      "SSHUB_EN": 5530,
+      "FCCM": 6706,
+      "FCCM_SHIFT": 1
+    },
+    "VSRAM_MODEM": {
+      "EN_ADDR": 579,
+      "EN_SHIFT": 6,
+      "VOSEL_ADDR": 602,
+      "VOSEL_MASK": 127,
+      "LP_ADDR": 585,
+      "LP_SHIFT": 6,
+      "HW_LP": 7590,
+      "OP_EN": 7599
+    }
+  },
+  "active_selector_limit": "main RG selectors only under checked normal AP OP_EN/OP_CFG and inactive SSHUB; no DA voltage or power-good proof; no guaranteed exclusion of secure actors",
+  "vsram_limit": "LDO_LINEAR1 lacks modeset/LP-load metadata; skip zero FCCM address and deny DRMS instead of reading register0 or returning fake success",
+  "control_profile_basis": "NORMAL_OP_EN/CFG taken from vendor normal-control writer; VSRAM_MODEM OP address from its named field declaration. Readback admission only, not a hardware ownership attestation or a claimed stock register value.",
+  "status": "source-derived-native-supplier-implemented; native/hardware-untested"
+}

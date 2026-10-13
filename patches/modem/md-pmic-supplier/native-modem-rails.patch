@@ -1,0 +1,950 @@
+From: Tetris port maintainers
+Subject: [STAGING PATCH] regulator: MT6363 native modem rails
+
+Add source-backed VBUCK1/2 and VSRAM_MODEM to the exact packaged
+minimal provider. Existing connectivity blocks remain byte-identical.
+New children must be available to register; metadata remains disabled
+and is not included by any shipping DT. Preserve inherited control
+banks and enable requests. Main selector readback is not DA voltage.
+Shared-key FCCM changes, voter takeover and set_load stay unsupported.
+
+diff --git a/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml b/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml
+--- a/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml
++++ b/Documentation/devicetree/bindings/regulator/mediatek,mt6363-regulator.yaml
+@@ -32,6 +32,21 @@
+     $ref: regulator.yaml#
+     unevaluatedProperties: false
+ 
++  vbuck1:
++    type: object
++    $ref: regulator.yaml#
++    unevaluatedProperties: false
++
++  vbuck2:
++    type: object
++    $ref: regulator.yaml#
++    unevaluatedProperties: false
++
++  vsram-modem:
++    type: object
++    $ref: regulator.yaml#
++    unevaluatedProperties: false
++
+ required:
+   - compatible
+ 
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-modem-pmic-disabled.dtsi
+@@ -0,0 +1,30 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Metadata only: intentionally not included by any shipping DT. */
++&main_pmic {
++	regulators {
++		mt6363_vbuck1: vbuck1 {
++			status = "disabled";
++			regulator-name = "mt6363_vbuck1";
++			regulator-min-microvolt = <300000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <180>;
++			regulator-allowed-modes = <0 2>;
++		};
++		mt6363_vbuck2: vbuck2 {
++			status = "disabled";
++			regulator-name = "mt6363_vbuck2";
++			regulator-min-microvolt = <300000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <180>;
++			regulator-allowed-modes = <0 2>;
++		};
++		mt6363_vsram_modem: vsram-modem {
++			status = "disabled";
++			regulator-name = "mt6363_vsram_modem";
++			regulator-min-microvolt = <400000>;
++			regulator-max-microvolt = <1193750>;
++			regulator-enable-ramp-delay = <180>;
++			regulator-allowed-modes = <0 2>;
++		};
++	};
++};
+diff --git a/drivers/regulator/mt6363-modem-regulator-test.h b/drivers/regulator/mt6363-modem-regulator-test.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/regulator/mt6363-modem-regulator-test.h
+@@ -0,0 +1,334 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Native KUnit fixtures use the actual callbacks/helpers and an uncached regmap.
++ * The alias/status model tests software contracts, not electrical behavior.
++ */
++#if IS_REACHABLE(CONFIG_KUNIT)
++#include <kunit/test.h>
++#include <kunit/resource.h>
++
++struct mt6363_md_fixture {
++	u8 registers[0x2000];
++	unsigned int reads, writes, fail_read, fail_write, last_read, last_write;
++	bool drop_write, change_control;
++	struct mutex lock;
++	struct mt6363_md_state state;
++	struct regulator_dev rdev;
++};
++
++static int mt6363_md_test_read(void *context, unsigned int reg, unsigned int *value)
++{
++	struct mt6363_md_fixture *fixture = context;
++
++	fixture->reads++;
++	fixture->last_read = reg;
++	if (fixture->reads == fixture->fail_read)
++		return -EIO;
++	*value = fixture->registers[reg];
++	return 0;
++}
++
++static int mt6363_md_test_write(void *context, unsigned int reg, unsigned int value)
++{
++	struct mt6363_md_fixture *fixture = context;
++	const struct mt6363_md_info *info = fixture->state.info;
++	unsigned int i;
++
++	fixture->writes++;
++	fixture->last_write = reg;
++	if (fixture->writes == fixture->fail_write)
++		return -EREMOTEIO;
++	if (fixture->drop_write)
++		return 0;
++	if (reg == info->desc.enable_reg + 1)
++		fixture->registers[info->desc.enable_reg] |= value;
++	else if (reg == info->desc.enable_reg + 2)
++		fixture->registers[info->desc.enable_reg] &= ~value;
++	else
++		fixture->registers[reg] = value;
++	if (fixture->change_control)
++		fixture->registers[info->op_en] = 1;
++	/* Model the source HW_LP observation following a software LP request. */
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		const struct mt6363_md_info *rail = &mt6363_md_rails[i];
++
++		if (reg != rail->lp)
++			continue;
++		fixture->registers[rail->hw_lp] &= ~rail->hw_lp_mask;
++		if (value & rail->lp_mask)
++			fixture->registers[rail->hw_lp] |= 4;
++	}
++	return 0;
++}
++
++static const struct regmap_bus mt6363_md_test_bus = {
++	.reg_read = mt6363_md_test_read,
++	.reg_write = mt6363_md_test_write,
++};
++
++static void mt6363_md_test_map_exit(void *map)
++{
++	regmap_exit(map);
++}
++
++static struct mt6363_md_fixture *mt6363_md_test_fixture(struct kunit *test, unsigned int rail)
++{
++	static const struct regmap_config config = {
++		.reg_bits = 16, .val_bits = 8, .max_register = 0x1fff,
++		.cache_type = REGCACHE_NONE, .name = "mt6363-md-native-fixture",
++	};
++	struct mt6363_md_fixture *fixture;
++	const struct mt6363_md_info *info = &mt6363_md_rails[rail];
++	int ret;
++
++	fixture = kunit_kzalloc(test, sizeof(*fixture), GFP_KERNEL);
++	if (!fixture)
++		return NULL;
++	mutex_init(&fixture->lock);
++	fixture->state.info = info;
++	fixture->state.lock = &fixture->lock;
++	fixture->rdev.desc = &info->desc;
++	fixture->rdev.reg_data = &fixture->state;
++	fixture->rdev.regmap = regmap_init(NULL, &mt6363_md_test_bus, fixture, &config);
++	if (IS_ERR(fixture->rdev.regmap))
++		return NULL;
++	ret = kunit_add_action_or_reset(test, mt6363_md_test_map_exit, fixture->rdev.regmap);
++	if (ret)
++		return NULL;
++	fixture->registers[info->op_en + 2] = 0x80;
++	fixture->registers[info->op_en + 5] = 0x10;
++	return fixture;
++}
++
++static void mt6363_md_voltage_test(struct kunit *test)
++{
++	static const int targets[] = { 700000, 800000, 800000 };
++	static const int selectors[] = { 112, 128, 64 };
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		struct regulator_dev *rdev;
++		int selector;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		rdev = &fixture->rdev;
++		selector = rdev->desc->ops->map_voltage(rdev, targets[i], targets[i]);
++		KUNIT_EXPECT_EQ(test, selector, selectors[i]);
++		KUNIT_EXPECT_EQ(test, rdev->desc->ops->list_voltage(rdev, selector), targets[i]);
++		KUNIT_EXPECT_EQ(test,
++			       rdev->desc->ops->list_voltage(rdev, rdev->desc->n_voltages - 1),
++			       1193750);
++		KUNIT_EXPECT_EQ(test, rdev->desc->ops->set_voltage_sel(rdev, selector), 0);
++		KUNIT_EXPECT_EQ(test, rdev->desc->ops->get_voltage_sel(rdev), selector);
++		KUNIT_EXPECT_EQ(test, fixture->last_write, rdev->desc->vsel_reg);
++		KUNIT_EXPECT_EQ(test,
++			       rdev->desc->ops->set_voltage_sel(rdev, rdev->desc->n_voltages),
++			       -EINVAL);
++		if (i < 2) {
++			fixture->registers[rdev->desc->vsel_reg] = 192;
++			KUNIT_EXPECT_EQ(test, mt6363_md_get_voltage_sel(rdev), -ERANGE);
++		}
++	}
++}
++
++static void mt6363_md_enable_test(struct kunit *test)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		const struct regulator_desc *desc;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		desc = fixture->rdev.desc;
++		fixture->registers[desc->enable_reg] = 0x80;
++		KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), 0);
++		KUNIT_EXPECT_EQ(test, desc->ops->is_enabled(&fixture->rdev), 1);
++		KUNIT_EXPECT_EQ(test, fixture->last_write, desc->enable_reg + 1);
++		KUNIT_EXPECT_EQ(test, fixture->registers[desc->enable_reg],
++			       0x80 | desc->enable_mask);
++		KUNIT_EXPECT_TRUE(test, fixture->state.owns_enable);
++		KUNIT_EXPECT_EQ(test, mt6363_md_disable(&fixture->rdev), 0);
++		KUNIT_EXPECT_EQ(test, desc->ops->is_enabled(&fixture->rdev), 0);
++		KUNIT_EXPECT_EQ(test, fixture->last_write, desc->enable_reg + 2);
++		KUNIT_EXPECT_EQ(test, fixture->registers[desc->enable_reg], 0x80);
++		fixture->registers[desc->enable_reg] |= desc->enable_mask;
++		fixture->writes = 0;
++		KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), 0);
++		KUNIT_EXPECT_FALSE(test, fixture->state.owns_enable);
++		KUNIT_EXPECT_EQ(test, mt6363_md_disable(&fixture->rdev), -EBUSY);
++		KUNIT_EXPECT_EQ(test, fixture->writes, 0U);
++	}
++}
++
++static void mt6363_md_ownership_test(struct kunit *test)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		const struct mt6363_md_info *info;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		info = fixture->state.info;
++		fixture->state.registering = true;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EOPNOTSUPP);
++		KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), -EOPNOTSUPP);
++		KUNIT_EXPECT_EQ(test, fixture->reads, 0U);
++		fixture->state.registering = false;
++		fixture->registers[info->op_en] = 1;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EBUSY);
++		KUNIT_EXPECT_EQ(test, mt6363_md_is_enabled(&fixture->rdev), -EBUSY);
++		fixture->registers[info->op_en] = 0;
++		if (info->sshub_en) {
++			fixture->registers[info->sshub_en] = 1;
++			KUNIT_EXPECT_EQ(test, mt6363_md_get_voltage_sel(&fixture->rdev), -EBUSY);
++			KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), -EBUSY);
++		}
++		KUNIT_EXPECT_EQ(test, fixture->writes, 0U);
++	}
++}
++
++static void mt6363_md_mode_test(struct kunit *test)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		const struct mt6363_md_info *info;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		info = fixture->state.info;
++		fixture->registers[info->lp] = 0x80;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_mode(&fixture->rdev, REGULATOR_MODE_IDLE), 0);
++		KUNIT_EXPECT_EQ(test, mt6363_md_get_mode(&fixture->rdev),
++			       (unsigned int)REGULATOR_MODE_IDLE);
++		KUNIT_EXPECT_EQ(test, fixture->last_read, (unsigned int)info->hw_lp);
++		KUNIT_EXPECT_EQ(test, fixture->registers[info->lp], 0x80 | info->lp_mask);
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_mode(&fixture->rdev, REGULATOR_MODE_NORMAL), 0);
++		KUNIT_EXPECT_EQ(test, fixture->registers[info->lp], 0x80);
++		fixture->writes = 0;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_mode(&fixture->rdev, REGULATOR_MODE_FAST),
++			       -EOPNOTSUPP);
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_load(&fixture->rdev, 100000), -EOPNOTSUPP);
++		if (info->fccm) {
++			fixture->registers[info->fccm] = info->fccm_mask;
++			KUNIT_EXPECT_EQ(test, mt6363_md_get_mode(&fixture->rdev),
++				       (unsigned int)REGULATOR_MODE_FAST);
++			KUNIT_EXPECT_EQ(test,
++				       mt6363_md_set_mode(&fixture->rdev, REGULATOR_MODE_NORMAL),
++				       -EOPNOTSUPP);
++		}
++		KUNIT_EXPECT_EQ(test, fixture->writes, 0U);
++	}
++}
++
++static void mt6363_md_first_errno_test(struct kunit *test)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		fixture->fail_write = 1;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EREMOTEIO);
++		KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), -EREMOTEIO);
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_mode(&fixture->rdev, REGULATOR_MODE_IDLE),
++			       -EREMOTEIO);
++		KUNIT_EXPECT_EQ(test, fixture->writes, 1U);
++		fixture = mt6363_md_test_fixture(test, i);
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		fixture->drop_write = true;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EIO);
++		KUNIT_EXPECT_EQ(test, mt6363_md_disable(&fixture->rdev), -EIO);
++		KUNIT_EXPECT_EQ(test, fixture->writes, 1U);
++		fixture = mt6363_md_test_fixture(test, i);
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		fixture->change_control = true;
++		KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EBUSY);
++		KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), -EBUSY);
++		KUNIT_EXPECT_EQ(test, fixture->writes, 1U);
++	}
++}
++
++static void mt6363_md_read_fault_test(struct kunit *test)
++{
++	unsigned int i, fault;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		unsigned int reads;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		KUNIT_EXPECT_EQ(test, mt6363_md_get_voltage_sel(&fixture->rdev), 0);
++		reads = fixture->reads;
++		for (fault = 1; fault <= reads; fault++) {
++			fixture->reads = 0;
++			fixture->fail_read = fault;
++			KUNIT_EXPECT_EQ(test, mt6363_md_get_voltage_sel(&fixture->rdev), -EIO);
++			KUNIT_EXPECT_EQ(test, fixture->reads, fault);
++			KUNIT_EXPECT_EQ(test, fixture->writes, 0U);
++		}
++		fixture->reads = 0;
++		fixture->fail_read = 1;
++		KUNIT_EXPECT_EQ(test, mt6363_md_get_mode(&fixture->rdev), (unsigned int)-EIO);
++	}
++}
++
++static void mt6363_md_unavailable_test(struct kunit *test)
++{
++	struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, 0);
++	struct platform_device *pdev = kunit_kzalloc(test, sizeof(*pdev), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, fixture);
++	KUNIT_ASSERT_NOT_NULL(test, pdev);
++	KUNIT_EXPECT_EQ(test, mt6363_md_register(pdev, fixture->rdev.regmap), 0);
++	KUNIT_EXPECT_EQ(test, fixture->reads, 0U);
++	KUNIT_EXPECT_EQ(test, fixture->writes, 0U);
++}
++
++static void mt6363_md_writer_read_fault_test(struct kunit *test)
++{
++	unsigned int i, fault;
++
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		struct mt6363_md_fixture *fixture = mt6363_md_test_fixture(test, i);
++		unsigned int reads;
++
++		KUNIT_ASSERT_NOT_NULL(test, fixture);
++		KUNIT_ASSERT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), 0);
++		reads = fixture->reads;
++		for (fault = 1; fault <= reads; fault++) {
++			fixture = mt6363_md_test_fixture(test, i);
++			KUNIT_ASSERT_NOT_NULL(test, fixture);
++			fixture->fail_read = fault;
++			KUNIT_EXPECT_EQ(test, mt6363_md_set_voltage_sel(&fixture->rdev, 64), -EIO);
++			KUNIT_EXPECT_EQ(test, fixture->reads, fault);
++			if (fixture->writes) {
++				KUNIT_EXPECT_EQ(test, mt6363_md_enable(&fixture->rdev), -EIO);
++				KUNIT_EXPECT_EQ(test, fixture->reads, fault);
++				KUNIT_EXPECT_EQ(test, fixture->writes, 1U);
++			}
++		}
++	}
++}
++
++static struct kunit_case mt6363_md_cases[] = {
++	KUNIT_CASE(mt6363_md_voltage_test),
++	KUNIT_CASE(mt6363_md_enable_test),
++	KUNIT_CASE(mt6363_md_ownership_test),
++	KUNIT_CASE(mt6363_md_mode_test),
++	KUNIT_CASE(mt6363_md_first_errno_test),
++	KUNIT_CASE(mt6363_md_read_fault_test),
++	KUNIT_CASE(mt6363_md_unavailable_test),
++	KUNIT_CASE(mt6363_md_writer_read_fault_test),
++	{ }
++};
++
++static struct kunit_suite mt6363_md_suite = {
++	.name = "mt6363-native-modem-regulator",
++	.test_cases = mt6363_md_cases,
++};
++kunit_test_suite(mt6363_md_suite);
++#endif
+diff --git a/drivers/regulator/mt6363-modem-regulator.h b/drivers/regulator/mt6363-modem-regulator.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/regulator/mt6363-modem-regulator.h
+@@ -0,0 +1,509 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Additive to the packaged minimal MT6363 provider, not the vendor driver. */
++#include <linux/delay.h>
++#include <linux/mutex.h>
++#include <linux/slab.h>
++#include <linux/regulator/machine.h>
++#include <linux/regulator/of_regulator.h>
++
++struct mt6363_md_info {
++	struct regulator_desc desc;
++	u16 op_en, sshub_en, fccm, hw_lp, lp;
++	u8 fccm_mask, hw_lp_mask, lp_mask;
++};
++
++struct mt6363_md_state {
++	const struct mt6363_md_info *info;
++	struct regulator_desc desc;
++	struct mutex *lock;
++	int first_write_error;
++	bool registering, owns_enable;
++};
++
++static const struct linear_range mt6363_md_buck_ranges[] = {
++	REGULATOR_LINEAR_RANGE(0, 0, 191, 6250),
++};
++
++static const struct linear_range mt6363_md_sram_ranges[] = {
++	REGULATOR_LINEAR_RANGE(400000, 0, 127, 6250),
++};
++
++/* ee2 MT6363 normal AP control: preserve, never rewrite these ownership banks.
++ * VBUCK1/2 have separate SSHUB controls; their selectors are not interchangeable.
++ * This checks a source-defined control profile, not a global secure-actor lock.
++ */
++static int mt6363_md_control(struct regmap *map, const struct mt6363_md_info *info)
++{
++	unsigned int value, i;
++	int ret;
++
++	for (i = 0; i < 3; i++) {
++		ret = regmap_read(map, info->op_en + i, &value);
++		if (ret)
++			return ret;
++		if (value != (i == 2 ? 0x80 : 0))
++			return -EBUSY;
++	}
++	ret = regmap_read(map, info->op_en + 5, &value);
++	if (ret)
++		return ret;
++	if (value != 0x10)
++		return -EBUSY;
++	if (info->sshub_en) {
++		ret = regmap_read(map, info->sshub_en, &value);
++		if (ret)
++			return ret;
++		if (value & BIT(0))
++			return -EBUSY;
++	}
++	return 0;
++}
++
++static int mt6363_md_selector(struct regmap *map, const struct mt6363_md_info *info)
++{
++	unsigned int value;
++	int ret;
++
++	ret = mt6363_md_control(map, info);
++	if (ret)
++		return ret;
++	ret = regmap_read(map, info->desc.vsel_reg, &value);
++	if (ret)
++		return ret;
++	value &= info->desc.vsel_mask;
++	if (value >= info->desc.n_voltages)
++		return -ERANGE;
++	ret = mt6363_md_control(map, info);
++	if (ret)
++		return ret;
++	return value;
++}
++
++static int mt6363_md_get_voltage_sel(struct regulator_dev *rdev)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_selector(rdev->regmap, state->info);
++	mutex_unlock(state->lock);
++	return ret;
++}
++
++static int mt6363_md_is_enabled(struct regulator_dev *rdev)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	int ret, enabled;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_control(rdev->regmap, state->info);
++	if (ret)
++		goto out;
++	enabled = regulator_is_enabled_regmap(rdev);
++	if (enabled < 0) {
++		ret = enabled;
++		goto out;
++	}
++	ret = mt6363_md_control(rdev->regmap, state->info);
++	if (!ret)
++		ret = enabled;
++out:
++	mutex_unlock(state->lock);
++	return ret;
++}
++
++static int mt6363_md_write_admit(struct regulator_dev *rdev)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++
++	if (state->first_write_error)
++		return state->first_write_error;
++	if (state->registering)
++		return -EOPNOTSUPP;
++	return mt6363_md_control(rdev->regmap, state->info);
++}
++
++static int mt6363_md_write_fault(struct mt6363_md_state *state, int error)
++{
++	if (!state->first_write_error)
++		state->first_write_error = error < 0 ? error : -EPROTO;
++	return state->first_write_error;
++}
++
++static int mt6363_md_set_voltage_sel(struct regulator_dev *rdev, unsigned int selector)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	int ret;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_write_admit(rdev);
++	if (ret)
++		goto out;
++	if (selector >= rdev->desc->n_voltages) {
++		ret = -EINVAL;
++		goto out;
++	}
++	ret = regulator_set_voltage_sel_regmap(rdev, selector);
++	if (ret)
++		goto fault;
++	ret = mt6363_md_selector(rdev->regmap, state->info);
++	if (ret < 0)
++		goto fault;
++	if ((unsigned int)ret != selector) {
++		ret = -EIO;
++		goto fault;
++	}
++	ret = 0;
++	goto out;
++fault:
++	ret = mt6363_md_write_fault(state, ret);
++out:
++	mutex_unlock(state->lock);
++	return ret;
++}
++
++static int mt6363_md_enable_request(struct regulator_dev *rdev, bool enable)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	int ret, enabled;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_write_admit(rdev);
++	if (ret)
++		goto out;
++	enabled = regulator_is_enabled_regmap(rdev);
++	if (enabled < 0) {
++		ret = enabled;
++		goto out;
++	}
++	/* Do not turn an inherited enable request into our disable permission. */
++	if (enabled == enable) {
++		if (!enabled)
++			state->owns_enable = false;
++		ret = 0;
++		goto out;
++	}
++	if (!enable && !state->owns_enable) {
++		ret = -EBUSY;
++		goto out;
++	}
++	/* Vendor buck_ops also supplies VSRAM_MODEM: use exact SET/CLR aliases. */
++	ret = regmap_write(rdev->regmap, rdev->desc->enable_reg + (enable ? 1 : 2),
++			   rdev->desc->enable_mask);
++	if (ret)
++		goto fault;
++	ret = mt6363_md_control(rdev->regmap, state->info);
++	if (ret)
++		goto fault;
++	ret = regulator_is_enabled_regmap(rdev);
++	if (ret < 0)
++		goto fault;
++	if (ret != enable) {
++		ret = -EIO;
++		goto fault;
++	}
++	state->owns_enable = enable;
++	ret = 0;
++	goto out;
++fault:
++	ret = mt6363_md_write_fault(state, ret);
++out:
++	mutex_unlock(state->lock);
++	return ret;
++}
++
++static int mt6363_md_enable(struct regulator_dev *rdev)
++{
++	return mt6363_md_enable_request(rdev, true);
++}
++
++static int mt6363_md_disable(struct regulator_dev *rdev)
++{
++	return mt6363_md_enable_request(rdev, false);
++}
++
++static int mt6363_md_read_mode(struct regmap *map, const struct mt6363_md_info *info,
++			       unsigned int *mode)
++{
++	unsigned int value;
++	int ret;
++
++	/* Linear VSRAM_MODEM has no FCCM field: never access vendor's zero default. */
++	if (info->fccm) {
++		ret = regmap_read(map, info->fccm, &value);
++		if (ret)
++			return ret;
++		if (value & info->fccm_mask) {
++			*mode = REGULATOR_MODE_FAST;
++			return 0;
++		}
++	}
++	ret = regmap_read(map, info->hw_lp, &value);
++	if (ret)
++		return ret;
++	*mode = value & info->hw_lp_mask ? REGULATOR_MODE_IDLE : REGULATOR_MODE_NORMAL;
++	return 0;
++}
++
++static unsigned int mt6363_md_get_mode(struct regulator_dev *rdev)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	unsigned int mode;
++	int ret;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_read_mode(rdev->regmap, state->info, &mode);
++	mutex_unlock(state->lock);
++	/* get_mode has an unsigned API; retain the negative errno representation. */
++	return ret ? (unsigned int)ret : mode;
++}
++
++static unsigned int mt6363_md_map_mode(unsigned int mode)
++{
++	if (mode == 0)
++		return REGULATOR_MODE_NORMAL;
++	if (mode == 2)
++		return REGULATOR_MODE_IDLE;
++	return REGULATOR_MODE_INVALID;
++}
++
++static int mt6363_md_set_mode(struct regulator_dev *rdev, unsigned int mode)
++{
++	struct mt6363_md_state *state = rdev_get_drvdata(rdev);
++	const struct mt6363_md_info *info = state->info;
++	unsigned int current, lp;
++	int ret;
++
++	mutex_lock(state->lock);
++	ret = mt6363_md_write_admit(rdev);
++	if (ret)
++		goto out;
++	if (mode != REGULATOR_MODE_NORMAL && mode != REGULATOR_MODE_IDLE) {
++		ret = -EOPNOTSUPP;
++		goto out;
++	}
++	ret = mt6363_md_read_mode(rdev->regmap, info, &current);
++	if (ret)
++		goto out;
++	/* FCCM needs the shared BUCK key. Do not unlock/relock it without its owner. */
++	if (current == REGULATOR_MODE_FAST) {
++		ret = -EOPNOTSUPP;
++		goto out;
++	}
++	ret = regmap_read(rdev->regmap, info->lp, &lp);
++	if (ret)
++		goto out;
++	if (!!(lp & info->lp_mask) != (current == REGULATOR_MODE_IDLE)) {
++		ret = -EBUSY;
++		goto out;
++	}
++	ret = regmap_update_bits(rdev->regmap, info->lp, info->lp_mask,
++				mode == REGULATOR_MODE_IDLE ? info->lp_mask : 0);
++	if (ret)
++		goto fault;
++	if (current == REGULATOR_MODE_IDLE && mode == REGULATOR_MODE_NORMAL)
++		udelay(100);
++	ret = mt6363_md_control(rdev->regmap, info);
++	if (ret)
++		goto fault;
++	ret = regmap_read(rdev->regmap, info->lp, &lp);
++	if (ret)
++		goto fault;
++	if (!!(lp & info->lp_mask) != (mode == REGULATOR_MODE_IDLE)) {
++		ret = -EIO;
++		goto fault;
++	}
++	ret = 0;
++	goto out;
++fault:
++	ret = mt6363_md_write_fault(state, ret);
++out:
++	mutex_unlock(state->lock);
++	return ret;
++}
++
++static int mt6363_md_set_load(struct regulator_dev *rdev, int load_uA)
++{
++	/* Vendor load switching rewrites hardware voters; no takeover is implemented. */
++	(void)rdev;
++	(void)load_uA;
++	return -EOPNOTSUPP;
++}
++
++static const struct regulator_ops mt6363_md_ops = {
++	.list_voltage = regulator_list_voltage_linear_range,
++	.map_voltage = regulator_map_voltage_linear_range,
++	.get_voltage_sel = mt6363_md_get_voltage_sel,
++	.set_voltage_sel = mt6363_md_set_voltage_sel,
++	.enable = mt6363_md_enable,
++	.disable = mt6363_md_disable,
++	.is_enabled = mt6363_md_is_enabled,
++	.get_mode = mt6363_md_get_mode,
++	.set_mode = mt6363_md_set_mode,
++	.set_load = mt6363_md_set_load,
++};
++
++#define MT6363_MD_DESC(_name, _id, _ranges, _count, _en, _bit, _sel, _mask) \
++	{ .name = _name, .of_match = _name, .id = _id, .owner = THIS_MODULE, \
++	  .type = REGULATOR_VOLTAGE, .ops = &mt6363_md_ops, \
++	  .linear_ranges = _ranges, .n_linear_ranges = ARRAY_SIZE(_ranges), \
++	  .n_voltages = _count, .enable_reg = _en, .enable_mask = BIT(_bit), \
++	  .vsel_reg = _sel, .vsel_mask = _mask, .enable_time = 180, \
++	  .of_map_mode = mt6363_md_map_mode }
++
++static const struct mt6363_md_info mt6363_md_rails[] = {
++	{
++		.desc = MT6363_MD_DESC("vbuck1", 1, mt6363_md_buck_ranges, 192,
++				      0x240, 1, 0x24d, 0xff),
++		.op_en = 0x150d, .sshub_en = 0x151a,
++		.fccm = 0x1a32, .fccm_mask = BIT(0),
++		.hw_lp = 0x1518, .hw_lp_mask = 0xc,
++		.lp = 0x246, .lp_mask = BIT(1),
++	},
++	{
++		.desc = MT6363_MD_DESC("vbuck2", 2, mt6363_md_buck_ranges, 192,
++				      0x240, 2, 0x24e, 0xff),
++		.op_en = 0x158d, .sshub_en = 0x159a,
++		.fccm = 0x1a32, .fccm_mask = BIT(1),
++		.hw_lp = 0x1598, .hw_lp_mask = 0xc,
++		.lp = 0x246, .lp_mask = BIT(2),
++	},
++	{
++		.desc = MT6363_MD_DESC("vsram-modem", 15, mt6363_md_sram_ranges, 128,
++				      0x243, 6, 0x25a, 0x7f),
++		.op_en = 0x1daf,
++		.hw_lp = 0x1da6, .hw_lp_mask = 0x4,
++		.lp = 0x249, .lp_mask = BIT(6),
++	},
++};
++#undef MT6363_MD_DESC
++
++static int mt6363_md_dt(struct device_node *node, const char *name)
++{
++	static const char * const properties[] = {
++		"status", "regulator-name", "regulator-compatible", "phandle", "linux,phandle",
++		"regulator-min-microvolt", "regulator-max-microvolt",
++		"regulator-enable-ramp-delay", "regulator-allowed-modes",
++	};
++	struct property *property;
++	const char *match;
++	unsigned int i;
++	u32 mode, delay;
++	int ret, count;
++
++	if (of_get_child_count(node))
++		return -EOPNOTSUPP;
++	for_each_property_of_node(node, property) {
++		for (i = 0; i < ARRAY_SIZE(properties); i++)
++			if (!strcmp(property->name, properties[i]))
++				break;
++		if (i == ARRAY_SIZE(properties))
++			return -EOPNOTSUPP;
++	}
++	if (of_property_present(node, "regulator-compatible")) {
++		ret = of_property_read_string(node, "regulator-compatible", &match);
++		if (ret)
++			return ret;
++		if (strcmp(match, name))
++			return -EINVAL;
++	}
++	for (i = 0; i < 2; i++)
++		if (of_property_count_u32_elems(node, i ? "regulator-max-microvolt" :
++					      "regulator-min-microvolt") != 1)
++			return -EINVAL;
++	if (of_property_present(node, "regulator-enable-ramp-delay")) {
++		if (of_property_count_u32_elems(node, "regulator-enable-ramp-delay") != 1)
++			return -EINVAL;
++		ret = of_property_read_u32(node, "regulator-enable-ramp-delay", &delay);
++		if (ret)
++			return ret;
++		if (delay != 180)
++			return -EOPNOTSUPP;
++	}
++	if (of_property_present(node, "regulator-allowed-modes")) {
++		count = of_property_count_u32_elems(node, "regulator-allowed-modes");
++		if (count < 1 || count > 2)
++			return -EINVAL;
++		for (i = 0; i < count; i++) {
++			ret = of_property_read_u32_index(node, "regulator-allowed-modes", i, &mode);
++			if (ret)
++				return ret;
++			if (mt6363_md_map_mode(mode) == REGULATOR_MODE_INVALID)
++				return -EOPNOTSUPP;
++		}
++	}
++	return 0;
++}
++
++static int mt6363_md_register(struct platform_device *pdev, struct regmap *map)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *nodes[ARRAY_SIZE(mt6363_md_rails)] = { 0 }, *child;
++	struct mt6363_md_state *states;
++	struct mutex *lock;
++	unsigned int i, count = 0;
++	int ret = 0;
++
++	/* No new allocation or PMIC access when the opt-in children are unavailable. */
++	for_each_available_child_of_node(dev->of_node, child) {
++		for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++			if (!of_node_name_eq(child, mt6363_md_rails[i].desc.of_match))
++				continue;
++			if (nodes[i]) {
++				of_node_put(child);
++				ret = -EEXIST;
++				goto out;
++			}
++			ret = mt6363_md_dt(child, mt6363_md_rails[i].desc.of_match);
++			if (ret) {
++				of_node_put(child);
++				goto out;
++			}
++			nodes[i] = of_node_get(child);
++			count++;
++		}
++	}
++	if (!count)
++		return 0;
++	states = devm_kcalloc(dev, ARRAY_SIZE(mt6363_md_rails), sizeof(*states), GFP_KERNEL);
++	lock = devm_kzalloc(dev, sizeof(*lock), GFP_KERNEL);
++	if (!states || !lock) {
++		ret = -ENOMEM;
++		goto out;
++	}
++	mutex_init(lock);
++	for (i = 0; i < ARRAY_SIZE(mt6363_md_rails); i++) {
++		const struct mt6363_md_info *info = &mt6363_md_rails[i];
++		struct regulator_config config = { .dev = dev, .regmap = map };
++		struct regulator_dev *rdev;
++
++		if (!nodes[i])
++			continue;
++		states[i].info = info;
++		states[i].desc = info->desc;
++		/* Bind the exact validated node/init data. Core DT parse errors can otherwise
++		 * fall back to an unconstrained regulator instead of returning an errno.
++		 */
++		states[i].desc.of_match = NULL;
++		states[i].lock = lock;
++		states[i].registering = true;
++		config.driver_data = &states[i];
++		config.of_node = nodes[i];
++		config.init_data = of_get_regulator_init_data(dev, nodes[i], &info->desc);
++		if (!config.init_data) {
++			ret = -EINVAL;
++			goto out;
++		}
++		rdev = devm_regulator_register(dev, &states[i].desc, &config);
++		if (IS_ERR(rdev)) {
++			ret = dev_err_probe(dev, PTR_ERR(rdev), "failed to register %s\n",
++					    info->desc.name);
++			goto out;
++		}
++		states[i].registering = false;
++	}
++out:
++	for (i = 0; i < ARRAY_SIZE(nodes); i++)
++		of_node_put(nodes[i]);
++	return ret;
++}
+diff --git a/drivers/regulator/mt6363-regulator.c b/drivers/regulator/mt6363-regulator.c
+--- a/drivers/regulator/mt6363-regulator.c
++++ b/drivers/regulator/mt6363-regulator.c
+@@ -89,6 +89,8 @@
+ 	},
+ };
+ 
++#include "mt6363-modem-regulator.h"
++
+ static int mt6363_regulator_probe(struct platform_device *pdev)
+ {
+ 	struct regulator_config config = {};
+@@ -128,7 +130,7 @@
+ 					     mt6363_regulators[i].name);
+ 	}
+ 
+-	return 0;
++	return mt6363_md_register(pdev, regmap);
+ }
+ 
+ static const struct of_device_id mt6363_regulator_of_match[] = {
+@@ -148,3 +150,5 @@
+ 
+ MODULE_DESCRIPTION("MediaTek MT6363 connectivity regulator driver");
+ MODULE_LICENSE("GPL");
++
++#include "mt6363-modem-regulator-test.h"

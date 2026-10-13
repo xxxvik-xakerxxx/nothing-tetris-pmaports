@@ -96,6 +96,12 @@ def dt_patch():
     return ("From: Tetris port maintainers\nSubject: [DIAGNOSTIC PATCH] separate native MD first-OFF board\n\n"
             "Not shipping. The signed final U-Boot producer alone enables MD supplier/domain0.\n"
             "The modem consumer and camera/GPU hardware remain disabled.\n\n"
+            "diff --git a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml\n"
+            "--- a/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml\n"
+            "+++ b/Documentation/devicetree/bindings/power/mediatek,power-controller.yaml\n"
+            "@@ -22,3 +22,3 @@\n   $nodename:\n"
+            "-    pattern: '^power-controller(@[0-9a-f]+)?$'\n"
+            "+    pattern: '^power-controller(-modem)?(@[0-9a-f]+)?$'\n \n"
             "diff --git a/" + path + " b/" + path + "\nnew file mode 100644\n" +
             "".join(difflib.unified_diff([], board.splitlines(True), fromfile="/dev/null", tofile="b/" + path)) +
             "diff --git a/arch/arm64/boot/dts/mediatek/Makefile b/arch/arm64/boot/dts/mediatek/Makefile\n"
@@ -121,6 +127,16 @@ def stage(tree, report):
             raise ValueError("frozen native source identity mismatch: " + path)
         extra[name] = data
     extra["0182-native-md-first-off-board.patch"] = dt_patch().encode()
+    # The native leaf Makefile has a parent-header search path, but the parent
+    # provider TU does not inherit it while including this nested header.
+    extra["0183-native-camera-header-parent.patch"] = (
+        "From: Tetris port maintainers\nSubject: [DIAGNOSTIC PATCH] native VMM: resolve the real parent header\n\n"
+        "Same actual shared-provider header as the isolated link, with no research include flags.\n\n"
+        "diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
+        "--- a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
+        "+++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
+        "@@ -8 +8 @@\n-#include \"mtk-pm-domains.h\"\n+#include \"../mtk-pm-domains.h\"\n"
+    ).encode()
     anchor = '\t1200-vendor-sensor-framework-linux-6.18.patch.vendor\n'
     apk = change_once(apk, anchor, anchor + "".join("\t" + name + "\n" for name in extra))
     apk = change_once(apk, "pkgrel=182\n", "pkgrel=183\n")
@@ -154,6 +170,7 @@ def stage(tree, report):
                     linked_kernel_run=LINK_RUN, required_uboot_commit=UBOOT_SOURCE,
                     kernel_package="7.2.1-r183", device_package="8-r19", board=BOARD,
                     changes={name: hashlib.sha256(data).hexdigest() for name, data in extra.items()},
+                    native_include_correction="nested header resolves ../mtk-pm-domains.h; no provider behavior change",
                     sleep_idle_hotplug_allowed=False, modem_consumer_enabled=False,
                     camera_gpu_enabled=False, end_user_radio_functionality=False)
     report.parent.mkdir(parents=True, exist_ok=True)

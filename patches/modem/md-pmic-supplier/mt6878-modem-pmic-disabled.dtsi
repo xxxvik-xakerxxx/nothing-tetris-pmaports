@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/* Metadata only: intentionally not included by any shipping DT. */
+&main_pmic {
+	regulators {
+		mt6363_vbuck1: vbuck1 {
+			status = "disabled";
+			regulator-name = "mt6363_vbuck1";
+			regulator-min-microvolt = <300000>;
+			regulator-max-microvolt = <1193750>;
+			regulator-enable-ramp-delay = <180>;
+			regulator-allowed-modes = <0 2>;
+		};
+		mt6363_vbuck2: vbuck2 {
+			status = "disabled";
+			regulator-name = "mt6363_vbuck2";
+			regulator-min-microvolt = <300000>;
+			regulator-max-microvolt = <1193750>;
+			regulator-enable-ramp-delay = <180>;
+			regulator-allowed-modes = <0 2>;
+		};
+		mt6363_vsram_modem: vsram-modem {
+			status = "disabled";
+			regulator-name = "mt6363_vsram_modem";
+			regulator-min-microvolt = <400000>;
+			regulator-max-microvolt = <1193750>;
+			regulator-enable-ramp-delay = <180>;
+			regulator-allowed-modes = <0 2>;
+		};
+	};
+};

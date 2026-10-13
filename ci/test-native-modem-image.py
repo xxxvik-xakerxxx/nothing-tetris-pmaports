@@ -54,6 +54,9 @@ class ImageTests(unittest.TestCase):
             self.assertLess(apk.index("0180-native-md"), apk.index("0181-native-camera"))
             self.assertIn('mediatek/' + stage.BOARD + '.dtb \\\n', apk)
             self.assertIn('"$pkgdir/boot/dtbs/mediatek/' + stage.BOARD + '.dtb"', apk)
+            header_fix = (tree / stage.KERNEL / "0183-native-camera-header-parent.patch").read_text()
+            self.assertIn('+#include "../mtk-pm-domains.h"', header_fix)
+            self.assertEqual(header_fix.count("diff --git"), 1)
             self.assertEqual(result["source_commit"], stage.SOURCE)
             self.assertFalse(result["modem_consumer_enabled"])
             config = (tree / stage.KERNEL / "config-postmarketos-mediatek-mt6878.aarch64").read_text()
@@ -69,9 +72,13 @@ class ImageTests(unittest.TestCase):
             makefile = tree / "arch/arm64/boot/dts/mediatek/Makefile"
             makefile.parent.mkdir(parents=True)
             makefile.write_text("# SPDX-License-Identifier: GPL-2.0\ndtb-$(CONFIG_ARCH_MEDIATEK) += mt2712-evb.dtb\n")
+            binding = tree / "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml"
+            binding.parent.mkdir(parents=True)
+            binding.write_text("  $nodename:\n    pattern: '^power-controller(@[0-9a-f]+)?$'\n\n")
             subprocess.run(["git", "apply", "--verbose", "-"], input=stage.dt_patch(),
                            cwd=tree, text=True, check=True, capture_output=True)
             self.assertTrue((makefile.parent / (stage.BOARD + ".dts")).is_file())
+            self.assertIn("power-controller(-modem)?", binding.read_text())
 
     def fixture(self):
         normal, dt = hif_test.fixture()
