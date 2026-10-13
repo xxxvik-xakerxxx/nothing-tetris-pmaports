@@ -131,7 +131,7 @@ def inputs(archive, device_repo, modules_repo):
     apk = (PACKAGE / "APKBUILD").read_text()
     shipping_disabled(stream.package_file("config-postmarketos-mediatek-mt6878.aarch64", apk).decode())
     smoke = load("cold_packaged_smoke", ROOT / "ci/kernel-object-smoke.py")
-    evidence["packaged_preparation_output"] = {}
+    evidence["packaged_preparation"] = {}
     names = re.search(r'^source="\n(.*?)^"$', apk, re.M | re.S)[1].split()
     with tempfile.TemporaryDirectory(prefix="cold-extra-base-") as directory:
         tree = Path(directory)
@@ -152,11 +152,13 @@ def inputs(archive, device_repo, modules_repo):
                 flags = ["--fuzz=0"] if name in smoke.STRICT_PATCHES else []
                 # Match the existing package checker for legacy context changes.
                 # The new candidate is always checked separately by git apply.
-                log = stream.run(["patch", "--batch", *flags, "-p1", "-i", str(patch)], tree)
+                stream.run(["patch", "--batch", *flags, "-p1", "-i", str(patch)], tree)
             except subprocess.CalledProcessError as error:
                 raise ValueError(name + ": " + error.stderr.decode(errors="replace")) from error
             evidence["packaged_patch_sha256"][name] = sha(data)
-            evidence["packaged_preparation_output"][name] = log.decode()
+            # Human patch messages vary between host versions. Identity is
+            # established by input hashes and every resulting source hash.
+            evidence["packaged_preparation"][name] = {"zero_fuzz": bool(flags)}
         for path in extra:
             base[path] = (tree / path).read_text()
     evidence["baseline_sha256"] = {p: sha(text.encode()) for p, text in base.items()}

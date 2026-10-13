@@ -34,6 +34,16 @@ class ClosureTests(unittest.TestCase):
         self.assertEqual(len(self.evidence['production_units']), 16)
         check.contracts(self.base, self.output, self.evidence)
 
+    def test_source_identity_does_not_depend_on_patch_log_format(self):
+        self.assertNotIn('packaged_preparation_output', self.evidence)
+        self.assertTrue(self.evidence['packaged_preparation'])
+        for name, policy in self.evidence['packaged_preparation'].items():
+            self.assertEqual(set(policy), {'zero_fuzz'})
+            self.assertIsInstance(policy['zero_fuzz'], bool)
+            self.assertIn(name, self.evidence['packaged_patch_sha256'])
+        self.assertEqual({path: gen.sha(raw.encode()) for path, raw in self.base.items()},
+                         self.evidence['baseline_sha256'])
+
     def test_no_dt_payload(self):
         with self.assertRaisesRegex(ValueError, 'DT activation'):
             check.contracts(self.base, {**self.output, 'arch/arm64/fake.dts': ''}, self.evidence)

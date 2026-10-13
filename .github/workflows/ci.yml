@@ -654,6 +654,16 @@ jobs:
             fetch --filter=blob:none --depth=1 \
             https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git \
             e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+      - name: Link actual cold camera capture and native suppliers
+        if: ${{ always() && inputs.native_camera_link && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/camera-camisp/cold-integration/run_ci.py \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
+            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            --output /tmp/tetris-camera-cold-link --report /tmp/tetris-camera-cold-evidence
       - name: Compile genuine native modem ON callbacks
         id: modem_on
         if: ${{ !inputs.research_owner_smoke }}
@@ -722,16 +732,6 @@ jobs:
             --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
             --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
             --output /tmp/tetris-camera-stream-objects --report /tmp/tetris-camera-stream-evidence
-      - name: Link actual cold camera capture and native suppliers
-        if: ${{ always() && inputs.native_camera_link && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
-        run: |
-          export PATH="/usr/lib/llvm21/bin:$PATH"
-          python3 -B patches/camera-camisp/cold-integration/run_ci.py \
-            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
-            --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
-            --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
-            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
-            --output /tmp/tetris-camera-cold-link --report /tmp/tetris-camera-cold-evidence
       - uses: actions/upload-artifact@v7
         if: always() && inputs.native_camera_link
         with:

@@ -70,6 +70,8 @@ class SmokeInputs(unittest.TestCase):
         self.assertIn("inputs.native_camera_link && 'camera-link'", workflow)
         self.assertIn("path: /tmp/tetris-camera-cold-evidence/", workflow)
         self.assertNotIn("path: /tmp/tetris-camera-cold-link/", workflow)
+        self.assertLess(workflow.index("- name: Link actual cold camera capture and native suppliers"),
+                        workflow.index("- name: Compile genuine native modem ON callbacks"))
 
     def test_session_image_requires_exact1009_and_distinct_artifact(self):
         root = Path(__file__).resolve().parents[1]

@@ -23,7 +23,9 @@ The input profile is the **normal packaged source preparation**, including
 selected packaged inputs have tracked provenance and APKBUILD SHA512 checks.
 Legacy package preparation follows `ci/check-kernel-patch-stack.py` rules;
 0098 currently needs the same context fuzz as normal preparation after 0092
-inserts a clock Makefile line. This adjustment is recorded, not hidden. The
+inserts a clock Makefile line. The strict/legacy policy and actual resulting
+source hashes are recorded; platform-specific human patch messages are not
+used as source identity. The
 **new patch** has strict `git apply --check` and application/byte comparison.
 Actual prepared input files must match those reconstructed hashes before
 staging. This includes pristine archive GPIO/pinctrl implementations and the

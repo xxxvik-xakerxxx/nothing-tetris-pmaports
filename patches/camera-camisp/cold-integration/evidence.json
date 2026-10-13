@@ -199,24 +199,58 @@
     "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch": "11419eeb163b750da899978028726252d49692372d42530d3d60c8c7a1428980",
     "0121-media-i2c-imx882-acquire-mclk-source.patch": "99a24cd6aa3e2ad91a885f7173c73707337def6ab0a8e26edb62dce6c342d090"
   },
-  "packaged_preparation_output": {
-    "0002-mfd-mt6369-spmi-pmic.patch": "patching file 'drivers/regulator/Kconfig'\npatching file 'drivers/regulator/Makefile'\n",
-    "0006-pinctrl-mediatek-mt6878-eint.patch": "patching file 'drivers/pinctrl/mediatek/pinctrl-mtk-mt6878.h'\n",
-    "0008-connectivity-mt6878-mt6631-connsys.patch": "patching file 'drivers/regulator/Kconfig'\npatching file 'drivers/regulator/Makefile'\n",
-    "0009-clk-mediatek-mt6878-mfg.patch": "patching file 'drivers/clk/mediatek/Makefile'\n",
-    "0010-audio-mt6878-aw88261.patch": "patching file 'drivers/clk/mediatek/Makefile'\n",
-    "0018-pmdomain-mediatek-mt6878-audio.patch": "patching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\npatching file 'drivers/pmdomain/mediatek/mtk-pm-domains.h'\npatching file 'include/dt-bindings/power/mediatek,mt6878-power.h'\n",
-    "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": "patching file 'Documentation/devicetree/bindings/power/mediatek,power-controller.yaml'\npatching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\n",
-    "0056-clk-mediatek-add-MT6878-MMSYS-gates.patch": "patching file 'drivers/clk/mediatek/Makefile'\n",
-    "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch": "patching file 'Documentation/devicetree/bindings/power/mediatek,power-controller.yaml'\npatching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\npatching file 'drivers/pmdomain/mediatek/mtk-pm-domains.h'\n",
-    "0070-iommu-mediatek-add-MT6878-display-DMA-data.patch": "patching file 'drivers/iommu/mtk_iommu.c'\npatching file 'drivers/memory/mtk-smi.c'\n",
-    "0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch": "patching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\n",
-    "0092-clk-mediatek-mt6878-camera-main.patch": "patching file 'drivers/clk/mediatek/Makefile'\npatching file 'drivers/clk/mediatek/clk-mt6878-cam.c'\n",
-    "0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch": "patching file 'drivers/clk/mediatek/Makefile'\n",
-    "0113-pmdomain-mediatek-mt6878-modem-power.patch": "patching file 'drivers/pmdomain/mediatek/mtk-pm-domains.h'\npatching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\npatching file 'Documentation/devicetree/bindings/power/mediatek,power-controller.yaml'\n",
-    "0114-media-platform-mediatek-mt6878-seninf-graph.patch": "patching file 'drivers/media/platform/mediatek/seninf/mt6878-seninf-graph.c'\npatching file 'drivers/media/platform/mediatek/seninf/Makefile'\npatching file 'drivers/media/platform/mediatek/seninf/Kconfig'\npatching file 'drivers/media/platform/mediatek/Kconfig'\npatching file 'drivers/media/platform/mediatek/Makefile'\n",
-    "0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch": "patching file 'drivers/pmdomain/mediatek/mtk-pm-domains.c'\n",
-    "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch": "patching file 'drivers/pmdomain/mediatek/Makefile'\npatching file 'drivers/pmdomain/mediatek/Kconfig'\n"
+  "packaged_preparation": {
+    "0002-mfd-mt6369-spmi-pmic.patch": {
+      "zero_fuzz": false
+    },
+    "0006-pinctrl-mediatek-mt6878-eint.patch": {
+      "zero_fuzz": false
+    },
+    "0008-connectivity-mt6878-mt6631-connsys.patch": {
+      "zero_fuzz": false
+    },
+    "0009-clk-mediatek-mt6878-mfg.patch": {
+      "zero_fuzz": false
+    },
+    "0010-audio-mt6878-aw88261.patch": {
+      "zero_fuzz": false
+    },
+    "0018-pmdomain-mediatek-mt6878-audio.patch": {
+      "zero_fuzz": false
+    },
+    "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": {
+      "zero_fuzz": false
+    },
+    "0056-clk-mediatek-add-MT6878-MMSYS-gates.patch": {
+      "zero_fuzz": false
+    },
+    "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch": {
+      "zero_fuzz": false
+    },
+    "0070-iommu-mediatek-add-MT6878-display-DMA-data.patch": {
+      "zero_fuzz": false
+    },
+    "0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch": {
+      "zero_fuzz": false
+    },
+    "0092-clk-mediatek-mt6878-camera-main.patch": {
+      "zero_fuzz": false
+    },
+    "0098-clk-mediatek-add-MT6878-VLP-SCP-mux.patch": {
+      "zero_fuzz": false
+    },
+    "0113-pmdomain-mediatek-mt6878-modem-power.patch": {
+      "zero_fuzz": false
+    },
+    "0114-media-platform-mediatek-mt6878-seninf-graph.patch": {
+      "zero_fuzz": false
+    },
+    "0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch": {
+      "zero_fuzz": false
+    },
+    "0118-pmdomain-mediatek-mt6878-gpueb-power-backend.patch": {
+      "zero_fuzz": true
+    }
   },
   "patch_sha256": "8fbf0a52a41483dc11fb127dd65bd68020c274579d25aeb004478bc8978a90ec",
   "payload_sha256": {
