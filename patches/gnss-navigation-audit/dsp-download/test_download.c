@@ -124,6 +124,13 @@ static void complete(void)
             assert(f.owner.matched_fragments == count && f.owner.fragment_sequence == count + 1u);
             assert(b41_download_next(&f.owner, 9999, &action) == 0);
             assert(action.kind == B41_DOWNLOAD_DONE && f.owner.stage == B41_DOWNLOAD_ACKS_COMPLETE);
+            assert(f.owner.session == NULL);
+            f.session.gps0_fd = -1;
+            f.session.fields = NULL;
+            assert(b41_download_next(&f.owner, 0, &action) == 0);
+            assert(action.kind == B41_DOWNLOAD_DONE);
+            assert(b41_download_abort(&f.owner, -EIO) == -EALREADY);
+            assert(f.owner.stage == B41_DOWNLOAD_ACKS_COMPLETE);
             erased(&f.owner);
         }
     }

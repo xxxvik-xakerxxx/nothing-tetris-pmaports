@@ -6,7 +6,9 @@ The actual-source native harness passed GNU-patch application, IRQ/polling
 ASan/UBSan fixtures and all applicable regression controls in
 [CI38335304033](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38335304033)
 at `e8ad596`. Parent main wires it into the GNSS workflow and adds genuine ARM64
-v051 object compilation to research CI. No package or shipping activation,
+v051 object compilation to research CI. The real ARM64 translation units passed
+[CI38336059980](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38336059980)
+at `9f4b4b2`. No complete module link, package or shipping activation,
 phone write or physical TX test is claimed. Existing untracked drafts are preserved.
 
 ## Production Change

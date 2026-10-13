@@ -92,7 +92,10 @@ at `e8ad596`, together with the exact pinned fragment sequence and actual-source
 nonblocking TX fixtures for both IRQ/polling configurations. No fragment wire
 trigger is invented: ioctl25/26 submits index0..N-1, matched ACK32 advances
 sequence1..N. The new1009 TX patch remains staged, not present in r182/r183;
-real ARM64 v051 translation-unit compilation is the next gate. Legitimate live
+real ARM64 v051 translation-unit compilation passed with full/resource-only
+CCCI, infrastructure clocks and the joint GPU/camera object stack in
+[CI38336059980](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38336059980)
+at `9f4b4b2`. Module linking/packaging and legitimate live
 profile inputs, physical ACK traffic and independent kernel WORKING remain
 required. [Download owner](../patches/gnss-navigation-audit/dsp-download/DOWNLOAD.md)
 documents the limits, including synchronous SMC timing and sole-fd ownership.

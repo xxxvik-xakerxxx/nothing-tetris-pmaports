@@ -1,5 +1,5 @@
 {
-  "status": "staged only; 14 local static checks passed, GNU patch check skipped; native CI and hardware untested",
+  "status": "staged only; actual-source native CI38335304033 and real ARM64 v051 objects CI38336059980 passed; full module link, shipping and hardware untested",
   "connectivity_repository": "NothingOSS/android_kernel_modules_nothing_mt6878",
   "connectivity_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "patch": "patches/gnss/write-boundary/1009-vendor-gnss-nonblocking-data-link-write.patch.vendor",
@@ -21,7 +21,7 @@
     "connectivity/gps/data_link/lib/gps_dl_dma_buf.c": "a08aa460e74bc292edc2dabfcedabf6e7952d25ae4e1ca72372904d22b7174a35de2771ce5f3203036fc059e611f2adb3a96bd139c498e802d8652dc339a444d"
   },
   "write_scope": ["new patches/gnss/write-boundary/** only"],
-  "native_validation": "not compiled or executed locally; GitHub CI-only runner supplied for parent integration",
+  "native_validation": "CI38335304033 at e8ad596 passed actual-source IRQ/polling ASan/UBSan and all applicable regression controls; CI38336059980 at 9f4b4b2 compiled real ARM64 v051 translation units; no native execution locally",
   "shipping_activation": false,
   "residual_limits": [
     "shared o_buf remains unprotected against concurrent descriptor/thread writers; size overflow is bounded but serialization is not added",

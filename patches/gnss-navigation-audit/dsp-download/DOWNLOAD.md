@@ -81,7 +81,12 @@ the GNSS CI workflow. All these checks passed
 [CI38335304033](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38335304033)
 at `e8ad596`. No C was compiled or executed locally. The real ARM64 v051
 translation units are now added to the isolated kernel-object CI gate;
-their compilation and actual hardware integration remain separate checks.
+their compilation passed
+[CI38336059980](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38336059980)
+at `9f4b4b2`. This is not a linked/installed v051 module or hardware TX test.
+Terminal success detaches the borrowed session, and further Linux steps perform
+no syscall. The caller may release session storage after completion without a
+later result query dereferencing it. Failure likewise retains its first error.
 
 Remaining integration: legitimate retained inputs and the sole live fd owner,
 real1009 v051 compilation/packaging, protocol ACK traffic, independent kernel

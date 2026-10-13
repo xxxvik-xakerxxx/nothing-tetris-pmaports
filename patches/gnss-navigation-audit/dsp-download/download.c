@@ -26,6 +26,8 @@ int b41_download_abort(struct b41_download *owner, int error)
         return -EINVAL;
     if (owner->stage == B41_DOWNLOAD_FAILED)
         return owner->first_error;
+    if (owner->stage == B41_DOWNLOAD_ACKS_COMPLETE)
+        return -EALREADY;
     owner->first_error = error < 0 ? error : -EPROTO;
     owner->failure_stage = owner->stage;
     owner->stage = B41_DOWNLOAD_FAILED;
@@ -41,6 +43,8 @@ static int check(struct b41_download *owner, uint64_t now_ns)
         return -EINVAL;
     if (owner->stage == B41_DOWNLOAD_FAILED)
         return owner->first_error;
+    if (owner->stage == B41_DOWNLOAD_ACKS_COMPLETE)
+        return 0;
     if (owner->stage == B41_DOWNLOAD_NEW)
         return -EINVAL;
     if (owner->session == NULL || owner->session->gps0_fd != owner->gps0_fd ||
@@ -51,7 +55,7 @@ static int check(struct b41_download *owner, uint64_t now_ns)
     if (now_ns < owner->last_now_ns)
         return b41_download_abort(owner, -EINVAL);
     owner->last_now_ns = now_ns;
-    if (owner->stage != B41_DOWNLOAD_ACKS_COMPLETE && now_ns >= owner->deadline_ns)
+    if (now_ns >= owner->deadline_ns)
         return b41_download_abort(owner, -ETIMEDOUT);
     return 0;
 }
@@ -224,6 +228,7 @@ int b41_download_received(struct b41_download *owner, uint64_t now_ns,
         ++owner->fragment_sequence;
         if (owner->matched_fragments == owner->fragment_count) {
             owner->stage = B41_DOWNLOAD_ACKS_COMPLETE;
+            owner->session = NULL;
             return 0;
         }
     }

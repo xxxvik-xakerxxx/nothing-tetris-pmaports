@@ -108,7 +108,15 @@ int b41_download_linux_step(struct b41_download *owner)
     uint64_t now;
     ssize_t count;
     int result;
-    int status = monotonic(&now);
+    int status;
+
+    if (owner == NULL)
+        return -EINVAL;
+    if (owner->stage == B41_DOWNLOAD_FAILED)
+        return owner->first_error;
+    if (owner->stage == B41_DOWNLOAD_ACKS_COMPLETE)
+        return 0;
+    status = monotonic(&now);
 
     if (status != 0)
         return b41_download_abort(owner, status);

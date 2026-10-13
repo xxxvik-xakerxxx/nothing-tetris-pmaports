@@ -170,6 +170,10 @@ int main(void)
         while (owner.stage != B41_DOWNLOAD_ACKS_COMPLETE)
             assert(b41_download_linux_step(&owner) == 0);
         assert(query_calls == 1 && write_calls == 1 && fragment_calls == 3 && read_calls == 4);
+        assert(owner.session == NULL);
+        session.gps0_fd = -1;
+        session.fields = NULL;
+        clock_error = 1;
         assert(b41_download_linux_step(&owner) == 0);
     }
     init();
