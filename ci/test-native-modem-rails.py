@@ -115,6 +115,11 @@ class NativeRails(unittest.TestCase):
             self.assertIn(name + f" = <{voltage} {voltage}>;", texts["vendor-board"])
         self.assertIn("ccci-topckgen = <&topckgen_clk>;", texts["vendor-board"])
         self.assertIn('compatible = "mediatek,mt6878-topckgen", "syscon";', texts["vendor-board"])
+        for label, minimum in rails.CHILDREN.values():
+            body = texts["vendor-pmic-dt"].split('regulator-name = "' + label + '";', 1)[1].split("};", 1)[0]
+            self.assertIn(f"regulator-min-microvolt = <{minimum}>;", body)
+            self.assertIn("regulator-max-microvolt = <1193750>;", body)
+        self.assertEqual(manifest["stock_consumer_mapping"]["md-vmodem"]["rail"], "vbuck2")
 
     def test_registration_uses_single_mutable_parse_without_const_cast(self):
         original = (rails.HERE / Path(rails.HELPER).name).read_text()
@@ -125,11 +130,6 @@ class NativeRails(unittest.TestCase):
         self.assertNotIn("config.init_data->constraints.apply_uV", revised)
         self.assertNotIn("(struct regulator_init_data *)", revised)
         self.assertEqual(rails.registration_base(revised), original)
-        for label, minimum in rails.CHILDREN.values():
-            body = texts["vendor-pmic-dt"].split('regulator-name = "' + label + '";', 1)[1].split("};", 1)[0]
-            self.assertIn(f"regulator-min-microvolt = <{minimum}>;", body)
-            self.assertIn("regulator-max-microvolt = <1193750>;", body)
-        self.assertEqual(manifest["stock_consumer_mapping"]["md-vmodem"]["rail"], "vbuck2")
 
     def test_core_clamp_is_suppressed_without_counterfeit_permissions(self):
         _, _, evidence = rails.inputs()
