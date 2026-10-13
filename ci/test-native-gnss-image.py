@@ -41,6 +41,8 @@ class Composition(unittest.TestCase):
         self.assertIn("pkgrel=188\n", apk)
         self.assertEqual(result["kernel_package"], "7.2.1-r188")
         self.assertEqual(result["profile"], fixtures.stage.PROFILE + "-wakeup")
+        loader = module("paired_loader_test", "select-native-modem-uboot.py")
+        self.assertEqual(result["required_uboot_commit"], loader.COMMIT)
         self.assertEqual(result, json.loads(self.report.read_text()))
         self.assertEqual(result["gnss_tx_patch_sha512"], fixtures.stage.PATCH_SHA512)
         self.assertIn(fixtures.stage.PATCH, result["changes"])
@@ -85,6 +87,8 @@ class Composition(unittest.TestCase):
         result = compose.stage(self.tree, self.report, self.tx_report, include_tx=False)
         self.assertEqual(result["kernel_package"], "7.2.1-r187")
         self.assertEqual(result["profile"], "native-md-first-off-wakeup-diagnostic")
+        loader = module("paired_loader_no_tx_test", "select-native-modem-uboot.py")
+        self.assertEqual(result["required_uboot_commit"], loader.COMMIT)
         self.assertNotIn(fixtures.stage.PATCH, result["changes"])
         self.assertFalse(self.tx_report.exists())
 

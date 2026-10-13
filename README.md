@@ -13,6 +13,8 @@ Native display and touch are usable; the redraw flicker fix is in main.
 Display is currently 60 Hz with software rendering. Sensors provide live
 rotation, light and proximity behavior through standard iio-sensor-proxy,
 with guarded cold-boot startup. Calibration and lifecycle remain incomplete.
+The latest r188 diagnostic rejects an incomplete SCP report; a corrected
+loader is flashed, with cold recovery validation pending.
 
 Wi-Fi, Bluetooth, audio, charging, haptics and torch have partial support.
 GNSS has transport progress but no verified position fix. Cellular service,

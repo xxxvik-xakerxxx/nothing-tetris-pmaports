@@ -87,23 +87,23 @@ The check needs `sha256sum` and `file` on the host. Also verify the separate
 U-Boot artifact against its own manifest and checksums. A matching checksum
 does not establish hardware/firmware compatibility.
 
-The maintainer's latest installed **diagnostic** image is r184 from
-[CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811),
-source `91c7a1108149d3694fbb255cdf95c3f6ab62be19`.
-Its separately named `nothing-tetris-native-md-first-off-images` artifact is
-not the ordinary shipping image: it excludes idle/sleep/hotplug and runs one
-native modem power-OFF experiment. Verified clean installation, first boot,
-USB/SSH, FIT and physical modem OFF passed; modem restart/SIM/calls did not.
-Wi-Fi and sensors were reported unavailable after the next restart; the cause
-is being isolated with a same-kernel normal-DT control. Do not treat r184 as a
-validated replacement for the earlier working checkpoint. Visual/lifecycle
-and cold recovery checks remain pending. Use the exact paired
+The maintainer's latest installed **diagnostic** image is r188 from
+[CI38377639691](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38377639691),
+source `e19e691ee25f2edfd3e958111e08345162115d46`.
+Its separately named `nothing-tetris-native-md-gnss-tx-images` artifact is
+not the ordinary shipping image: it disables CPU idle, vetoes sleep/hotplug
+and runs one native modem power-OFF experiment. All five CI jobs, clean
+installation, USB/SSH, image/loader readback, physical modem OFF and Wi-Fi
+scan passed. The user confirmed normal display/touch. Sensors failed
+because the original loader's final SCP preparation report was incomplete;
+the corrected loader is flashed, with cold validation pending. Do not treat this as
+a sensor-ready or battery-optimized release. Use the exact paired
 loader described below, not an older sensor-ready loader selected by name.
-See the maintained [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r184)
+See the maintained [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r188)
 for hashes and remaining failures.
 
 Sealed r182 previously expanded to 104.5 GiB on its first installation boot.
-The image-sealing fix is included in r184; never run `e2fsck` on mounted root.
+The image-sealing fix is included in r188; never run `e2fsck` on mounted root.
 Sensors require the matching SCP-enabled loader and a prepared cold handoff.
 Warm reboot has a known SCP inherited-state failure; lifecycle and other-unit
 testing remain pending. Cellular service, GPS navigation, GPU acceleration
@@ -112,12 +112,15 @@ and camera capture are not working features of these images.
 ## U-Boot prerequisite
 
 Use the [Tetris U-Boot repository](https://github.com/xxxvik-xakerxxx/u-boot).
-Do not flash raw `u-boot.bin` as an LK image. r184 requires the startup-OFF
-profile from [CI38350296947](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38350296947),
-source `322cf227f2ea26a7e319d20e3ce0321db8a38f15`, LK SHA256
-`0a16ba1da3a40b8da43b9d5b322fc496c65636ab5f516a5c152b7639e973073b`.
-It is included in the paired diagnostic artifact, has 3316976 bytes and was
-written/read back in `lk_a`, preserving stock `lk_b`. Other builds at the same
+Do not flash raw `u-boot.bin` as an LK image. The corrected startup-OFF/SCP profile
+is from [CI38389560147](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38389560147),
+source `f25c01444a642c6fca857bd9678ef438ec371988`, LK SHA256
+`30b5f535e5a2642bbd5d650a65637a123209af242c4246f7da9c2dd0fbefdc04`.
+It has 3317552 bytes, fixes late DT capacity and was flashed to `lk_a` only;
+cold execution/readback is pending. Original r188 artifacts contain the older
+`322cf227` loader (`0a16ba1d...`) with the incomplete-report failure. Do not
+downgrade by blindly reflashing that bundled file. Future native diagnostic
+builds select the separately hash-pinned corrected artifact. Other builds at the same
 source may have different profiles: commit identity alone is insufficient.
 
 For that exact validated slot-A setup only, after independently confirming

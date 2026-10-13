@@ -6,7 +6,70 @@ Current development is in [pmOS main](https://github.com/xxxvik-xakerxxx/nothing
 and the maintainer's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot).
 The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
-## Latest installed checkpoint: r184
+## Latest installed checkpoint: r188
+
+Full image [CI38377639691](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38377639691)
+at `e19e691ee25f2edfd3e958111e08345162115d46` passed all five jobs, including
+the complete kernel/rootfs build. Artifact `nothing-tetris-native-md-gnss-tx-images`
+ZIP SHA256 `94438e53dc36a176bbed489b708391749e0b47165884554e62aa18cb76f646d7`
+and every image digest were verified. The sparse image parsed all 7634 chunks,
+expanding to 2785017856 bytes. Both `super` and `userdata` were cleanly flashed;
+neither LK slot nor factory calibration/firmware partitions were written.
+Kernel `7.2.1-r188`, Linux `6.18.0 #189`, device `8-r20`; its first boot used
+the paired `322cf227` loader, SHA256
+`0a16ba1da3a40b8da43b9d5b322fc496c65636ab5f516a5c152b7639e973073b`.
+Stock `lk_b` remains SHA256
+`812873696e06a972eb5d67f5035687b91b1b48e4df0d25efc15d52fbf09b2518`.
+Installed FIT SHA256, read back after boot:
+`ef731b4f4d2058eec19fa61dfdb9241b6b0a0f29b15afaabbf6b1bd7e61327a9`.
+
+Cold boot `c4d22767-3308-42b5-9aa0-feff51527846` retained USB/SSH and completed
+native MD first-OFF with CTL `0x02000009`, isolation `0x3`, IFR9 `0xfbfb03b8`,
+IFR11 `0xcffcd932`, NEMI `0xc1`. This is physical OFF evidence, **not modem
+restart, SIM detection or calls**. Connectivity initialized automatically;
+an actual Wi-Fi scan returned 63 access points. Association/routed traffic
+were not tested. The previous conninfra NULL wake-lock fault is absent from
+the captured first-boot journal. The user confirmed normal display and touch.
+
+Sensors currently fail closed: `/chosen/nothing,scp-prepare-stage` is missing.
+SCP secure state 3 and plaintext region size 60 are present, but secure
+operation/error and prepare stage/error are absent. This is not sufficient
+proof of a complete handoff. The sensor service was not bypassed and hardware
+owners were not reloaded. U-Boot's standard final DT step shrinks its tree
+before late SCP setup. Personal U-Boot
+[`688fb90f`](https://github.com/xxxvik-xakerxxx/u-boot/commit/688fb90f6677ef2421d2bc8b4f059536c6616718)
+adds a bounded, independently reserved DT clone before SCP setup, rejecting
+unproven allocator results before mapping. The matching SCP-secure/BROM-metadata
+[CI38389560147](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38389560147)
+at `f25c01444a642c6fca857bd9678ef438ec371988` passed, including actual libfdt
+sanitizers and ARM64 compilation. The first CI attempt stopped in a new test
+because it incorrectly expected zero rather than a nonnegative DT node offset;
+the follow-up changes only that test. The verified LK image, 3317552 bytes,
+SHA256 `30b5f535e5a2642bbd5d650a65637a123209af242c4246f7da9c2dd0fbefdc04`,
+was successfully flashed to `lk_a` only and full poweroff was issued. Cold
+execution/readback is pending. The hash-pinned
+[experimental mirror](https://github.com/xxxvik-xakerxxx/u-boot/releases/tag/native-md-startup-off-f25c0144)
+is now selected for future native diagnostic images; the frozen r184 parent
+remains unchanged. Existing r188 downloads still contain the original loader.
+Recovery, sensor behavior and lifecycle checks remain outstanding.
+
+r188 packages exact GNSS TX patch1009 and all matching external modules in one
+build. The packaged transport started without reload. One bounded read-only
+link0 cycle at uptime1081.084-1081.093s passed actual power-on, ROM reset,
+OPENED, status0 and metadata (code_size42505, fragment_count106), then confirmed
+TX/RX DMA stop OKAY, GPS power-off and CLOSED. Wi-Fi remained powered and
+USB/SSH survived without a new kernel fault in that cycle's journal. No
+firmware fragments or navigation commands were sent; DSP WORKING, protocol
+ACK, repeatability and a GPS fix remain unproven.
+The same CI compiled the separate GPU flat-metadata candidate as a real
+AArch64 object, source SHA256
+`e0ac3e88c4a23faabf0cc80f406a52e7eda1ac44af0f9004df65de730a367204`, object SHA256
+`49442839b12decedd4a3938e464458903cba910ed85f05239c84dacc0ccef91e`.
+That candidate is not installed or proof of accelerated rendering. Camera
+VMM admission and post-OFF modem TOP gating remain uninstalled sidecars.
+SIM/calls, GPS navigation, GPU acceleration and camera capture remain unavailable.
+
+### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)
 at `91c7a1108149d3694fbb255cdf95c3f6ab62be19` passed all five jobs.
@@ -57,8 +120,9 @@ PM_SLEEP_SMP selects HOTPLUG_CPU in the pinned Linux Kconfig. Preserve that API
 as well and hold the real boot-lifetime `cpu_hotplug_disable()` owner before MD
 writes, requiring all present CPUs online. CPU idle, hibernation and kexec stay
 compiled out; actual CPU up/down and system sleep are vetoed. The veto persists through
-success/failure for this boot; this is not working suspend support. Full CI and
-physical recovery remain required before reporting the fix as working.
+success/failure for this boot; this is not working suspend support. The complete
+r188 build and physical connectivity recovery are recorded above; sensor
+recovery is blocked by the separate incomplete bootloader report.
 This diagnostic profile excludes idle/sleep/hotplug and is not a battery-optimized
 shipping release. GNSS exact1009, camera frames and accelerated rendering are
 not enabled by r184.
@@ -66,10 +130,10 @@ not enabled by r184.
 The opt-in CI `gnss_tx_image` path stages exact1009 in a matched r188 kernel,
 with all genuine supplier/external modules rebuilt together and separately
 named artifacts. Without GNSS TX the corrected first-OFF image is r187; frozen
-r184 remains a reproducible historical parent. The next full image combines
+r184 remains a reproducible historical parent. The installed r188 image combines
 the causal wakeup-source correction and real GNSS TX package integration.
 The new GPU v1 metadata admission preserves the existing RAM owner and actual
-bootloader profile/digest fields; real ARM64 object compilation is queued,
+bootloader profile/digest fields; real ARM64 object compilation passed in CI38377639691,
 not GPUEB upload/start. The camera VMM admission addition rejects independent
 firmware voters before rail acquisition; post-OFF modem TOP gating remains an
 uncalled, default-off staged primitive. None of these source changes establish
@@ -599,11 +663,11 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 
 | Subsystem | Status | Demonstrated / remaining |
 | --- | --- | --- |
-| Boot / UFS | Works for basic boot | Clean r182 boots and reads/writes root; firmware/SKU portability unverified. |
-| Root expansion | Works on tested clean install | Sealed r182 expands to 104.5 GiB on its first installation boot; wider lifecycle/SKU coverage remains. |
+| Boot / UFS | Works for basic boot | Clean r188 boots and reads/writes root; firmware/SKU portability unverified. |
+| Root expansion | Works on tested clean install | r188 root reports 104.5 GiB after clean installation; wider lifecycle/SKU coverage remains. |
 | Native display | Partial | Route and frame-end updates are in main; no visible stripes/flicker. Fixed 60 Hz and software rendering; 120 Hz and power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
-| Sensors | Partial | Five physical classes emit data; rotation, auto-brightness and local-call proximity tested. Automatic cold startup observed; calibration, warm reboot, suspend and smooth brightness remain. |
+| Sensors | Broken on current r188 boot | Earlier five-class transport, rotation, auto-brightness and local-call proximity passed. r188 rejects an incomplete SCP report; corrected loader flashed, cold recovery pending. |
 | USB/NCM/SSH | Partial | Clean boots and transfers pass; reconnect/suspend lifecycle remains. |
 | Wi-Fi / Bluetooth | Partial | Earlier association/traffic and discovery demonstrated; profiles, coexistence and suspend remain. |
 | Audio | Partial | Earlier speaker paths and microphone capture demonstrated; cellular audio and full route coverage remain. |

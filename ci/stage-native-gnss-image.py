@@ -30,6 +30,11 @@ def stage(tree, report, tx_report, include_tx=True):
     if evidence.exists() or evidence.is_symlink():
         raise ValueError("image evidence already exists")
     native = parent.stage(tree, parent_report)
+    # Preserve the frozen provider parent; identify the separately selected loader.
+    spec = importlib.util.spec_from_file_location("paired_loader", Path(__file__).with_name("select-native-modem-uboot.py"))
+    loader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loader)
+    native["required_uboot_commit"] = loader.COMMIT
     tx = None
     revision = 188 if include_tx else 187
     if include_tx:
