@@ -200,6 +200,13 @@ source checks passed; matched ARM64 compilation is pending. Actual acquisition
 must establish the signed LK entry state before any GPUEB continuation. This
 candidate does not write RPC/GPRs, release reset or claim GPU readiness.
 
+Native GNSS parsing now covers escaped frames, bounded measurement epochs and
+the actual host-position record, with supplied UTC rather than an RTC/NTP
+dependency. Seven exact asset/source checks passed; C sanitizer fixtures are
+pending CI. This is not a measurement solver or sufficient navigation INIT:
+the ordinary vendor entry can repeat DSP initialization, so it is not called
+after the retained WORK session. No location, accuracy or NMEA is fabricated.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

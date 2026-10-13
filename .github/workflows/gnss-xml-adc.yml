@@ -152,6 +152,10 @@ jobs:
             --vendor "$TETRIS_MODULES_TREE" --libmnl "$vendor/lib64/mt6878/libmnl.so" \
             2>&1 | tee out/lna-start-evidence/dsp-session-native.log
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
+            sh patches/gnss/native-navigation/run-ci.sh \
+              "$vendor/lib64/mt6878/libmnl.so" "$vendor/bin/mnld" \
+            2>&1 | tee out/lna-start-evidence/navigation-native.log
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
             sh "$dsp/run-ci.sh" 2>&1 | tee out/lna-start-evidence/dsp-wire-native.log
           find "$dsp" -type f -print0 | sort -z | xargs -0 sha256sum \
             > out/lna-start-evidence/DSP-SOURCE-SHA256SUMS
