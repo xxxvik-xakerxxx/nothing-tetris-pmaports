@@ -20,6 +20,10 @@ on:
         description: Also compile default-off GPU/modem ownership sources, without install images
         type: boolean
         default: false
+      native_modem_first_off:
+        description: Build a separate matched native MD first-OFF diagnostic system, not a shipping or working-radio image
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -53,8 +57,10 @@ jobs:
         run: ./scripts/validate-pmaports-overlay.sh
       - name: Validate isolated kernel object inputs
         run: |
+          git fetch --no-tags --depth=1 origin cbb777d415b564c1e40598740288c0c9d953e745
           python3 ci/test-kernel-object-smoke.py
           python3 -B ci/test-native-camera-link.py
+          python3 -B ci/test-native-modem-image.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
@@ -600,6 +606,13 @@ jobs:
           rsync -a \
             pmaports/device/testing/linux-postmarketos-mediatek-mt6878/ \
             upstream/pmaports/device/testing/linux-postmarketos-mediatek-mt6878/
+      - name: Stage frozen native modem diagnostic packages
+        if: ${{ inputs.native_modem_first_off }}
+        run: |
+          cd /work
+          git fetch --no-tags --depth=1 origin cbb777d415b564c1e40598740288c0c9d953e745
+          python3 -B ci/stage-native-modem-image.py --pmaports upstream/pmaports \
+            --report out/native-modem-image-profile.json
       - name: Prepare pmbootstrap workdir
         run: |
           mkdir -p /pmwork/work/cache_distfiles
@@ -640,6 +653,13 @@ jobs:
         run: |
           python3 /work/scripts/collect-kernel-build-evidence.py \
             /pmwork/work /work/out/kernel-build-evidence --commit "$GITHUB_SHA" --modem --diagnostics --metadata
+      - name: Validate actual compiled native modem diagnostic DT
+        if: ${{ inputs.native_modem_first_off }}
+        run: |
+          normal=$(find /pmwork/work -path '*/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb' -print -quit)
+          diagnostic=$(find /pmwork/work -path '*/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-native-md-first-off.dtb' -print -quit)
+          test -n "$normal" && test -n "$diagnostic"
+          python3 /work/ci/check-native-modem-image-dt.py "$normal" "$diagnostic"
       - name: Upload configured kernel evidence
         uses: actions/upload-artifact@v7
         with:
@@ -684,6 +704,11 @@ jobs:
             -c /work/ci/pmbootstrap-aarch64.cfg \
             build --force --lax iio-sensor-proxy-tetris --arch aarch64 ||
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
+      - name: Select successful paired native modem loader
+        if: ${{ inputs.native_modem_first_off }}
+        env:
+          GH_TOKEN: ${{ secrets.NATIVE_MODEM_UBOOT_READ_TOKEN || github.token }}
+        run: python3 /work/ci/select-native-modem-uboot.py
       - name: Build install images
         id: install_images
         run: |
@@ -1108,9 +1133,15 @@ jobs:
           required_uboot_commit=$TETRIS_UBOOT_COMMIT
           required_uboot_sha256=$TETRIS_UBOOT_SHA256
           EOF
+          if [ '${{ inputs.native_modem_first_off }}' = true ]; then
+            printf 'profile=native-md-first-off-diagnostic\nnative_source=cbb777d415b564c1e40598740288c0c9d953e745\n' \
+              >> /work/out/BUILD-MANIFEST
+            (cd /work/out && sha256sum u-boot-tetris-lk.img >> SHA256SUMS)
+          fi
           find /work/out -maxdepth 1 -type f -print
           test -n "$(find /work/out -maxdepth 1 -type f -print -quit)"
       - name: Build isolated read-only diagnostic boot artifacts
+        if: ${{ !inputs.native_modem_first_off }}
         run: |
           native=/work/checked-dtbs/mt6878-nothing-tetris-native.dtb
           diagnostics=/work/checked-dtbs
@@ -1136,6 +1167,7 @@ jobs:
           sha256sum --check SHA256SUMS
       - name: Upload isolated read-only diagnostics
         uses: actions/upload-artifact@v7
+        if: ${{ !inputs.native_modem_first_off }}
         with:
           name: nothing-tetris-readonly-diagnostics
           path: /work/out/readonly-diagnostics/
@@ -1159,13 +1191,16 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{ always() && steps.install_images.outcome == 'success' }}
         with:
-          name: nothing-tetris-images
+          name: ${{ inputs.native_modem_first_off && 'nothing-tetris-native-md-first-off-images' || 'nothing-tetris-images' }}
           path: |
             /work/out/boot_image.itb
             /work/out/nothing-tetris-boot.img
             /work/out/nothing-tetris-root.sparse.img
             /work/out/BUILD-MANIFEST
             /work/out/SHA256SUMS
+            /work/out/native-modem-image-profile.json
+            /work/out/native-modem-uboot.json
+            /work/out/u-boot-tetris-lk.img
           if-no-files-found: error
       - name: Upload build logs
         uses: actions/upload-artifact@v7

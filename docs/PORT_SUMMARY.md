@@ -1,4 +1,4 @@
-# Port summary, 2026-10-12
+# Port summary, 2026-10-13
 
 Native postmarketOS port for Nothing CMF Phone 1 (`nothing-tetris`, MT6878).
 Experimental, not a fully functional daily-driver phone.
@@ -16,7 +16,7 @@ existing RX/SRAM owner, and an isolated disabled CAM/ISP DT graph using the real
 shared USID6 rail and ordered protection clocks. GNSS now has exact MVCD
 bootstrap framing/ACK decoding and source-derived clock synthesis. The actual
 board/profile/frequency inputs remain required; no synthetic bootstrap is sent.
-These are source changes awaiting joint native/ARM64/DT CI, **not installed
+These source changes have passed the joint native build gates, **not installed
 hardware support**. The nonbootable camera fixture is excluded from FIT inputs.
 
 Personal U-Boot master `322cf227f2ea26a7e319d20e3ce0321db8a38f15` adds the
@@ -35,9 +35,22 @@ mailbox fixtures, GNSS framing/clock fixtures, Bionic and sealed-loader jobs
 passed [CI38315471685](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315471685).
 The exact pinned GNSS wire/clock/driver producer checks and native fixtures also
 passed [CI38315481513](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315481513).
-Joint first-OFF ARM64/DT/vmlinux build
+The actual shared first-OFF modem/camera provider compiled and linked strict
+ARM64 vmlinux with both KUNIT=y and KUNIT=n in the `native-provider-link` job of
 [CI38315490334](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38315490334)
-is pending. No install image or hardware function is inferred from these tests.
+at `cbb777d`. The aggregate run failed only on the now-corrected DT comparison:
+stock `hwid-node=<92>` is opaque scalar data, not a source-backed phandle.
+The isolated repair [CI38317130122](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38317130122)
+passed actual ARM64 driver builds, full/resource-only CCCI links and native
+infrastructure clock linking. No hardware function is inferred from these tests.
+
+The opt-in `native_modem_first_off` CI image profile freezes this verified
+`cbb777d` provider while rebuilding the whole pmOS kernel package and its
+external modules together as diagnostic `7.2.1-r183` / device `8-r19`.
+It adds a separately checked board DT; only fresh successful U-Boot handoff may
+enable supplier/domain0. Modem transport, camera and GPU remain disabled.
+Shipping packages and default images are unchanged. This is an installation
+candidate, not SIM/call support or a battery-optimized daily-driver image.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in
