@@ -93,7 +93,6 @@ jobs:
           python3 -B ci/test-gnss-tx-image.py
           python3 -B ci/test-native-gnss-image.py
           python3 -B ci/test-native-gnss-candidate-image.py
-          python3 -B ci/test-native-session-image.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
@@ -407,6 +406,8 @@ jobs:
         run: |
           TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \
             python3 -B patches/gnss/read-boundary/run.py --ci-native
+          TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \
+            python3 -B ci/test-native-session-image.py
       - name: Validate GNSS host callback and borrowed-output contracts
         run: python3 scripts/check-gnss-host-boundary.py
       - name: Validate typed GNSS startup adapter

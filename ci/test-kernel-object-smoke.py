@@ -68,6 +68,10 @@ class SmokeInputs(unittest.TestCase):
         self.assertIn("--include-session1010", workflow)
         self.assertIn("/work/out/gnss-session-image-profile.json", workflow)
         self.assertIn("inputs.gnss_session_image && 'nothing-tetris-native-md-gnss-session-images'", workflow)
+        session_test = workflow.index("python3 -B ci/test-native-session-image.py")
+        self.assertGreater(session_test, workflow.index("- name: Validate GNSS LNA metadata ownership"))
+        self.assertIn('TETRIS_MODULES_TREE="$PWD/upstream/connectivity-modules" \\\n'
+                      '            python3 -B ci/test-native-session-image.py', workflow)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
