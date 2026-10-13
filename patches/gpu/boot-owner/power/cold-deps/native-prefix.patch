@@ -1,0 +1,285 @@
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -1 +1,3 @@
++#include <linux/export.h>
++#include <linux/soc/mediatek/mt6878-gpueb-cold-prefix.h>
+ #include <linux/clk.h>
+--- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
++++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c
+@@ -1,2 +1,96 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Native MFG0 acquisition prefix, not a GPUEB rail/boot-clock producer.
++ * Zero optional supplier clocks and an absent optional regulator are permitted
++ * by the matching NOS domain. Neither absence nor presence proves GPUEB power.
++ */
++static struct scpsys_domain *mt6878_cold_mfg0(struct device *dev)
++{
++	struct generic_pm_domain *genpd;
++	struct scpsys_domain *pd;
++
++	if (!dev || !dev->pm_domain || !dev_gpd_data(dev))
++		return ERR_PTR(-ENODEV);
++	lockdep_assert_held(&dev->mutex);
++	genpd = pd_to_genpd(dev->pm_domain);
++	if (genpd->power_on != scpsys_power_on || genpd->power_off != scpsys_power_off ||
++	    (genpd->flags & GENPD_FLAG_IRQ_SAFE))
++		return ERR_PTR(-ENODEV);
++	pd = to_scpsys_domain(genpd);
++	if (pd->scpsys->soc_data != &mt6878_scpsys_data ||
++	    pd->data != &scpsys_domain_data_mt6878[MT6878_POWER_DOMAIN_MFG0_SHUTDOWN])
++		return ERR_PTR(-ENODEV);
++	return pd;
++}
++
++int mt6878_cold_mfg0_preflight(struct device *dev)
++{
++	struct scpsys_domain *pd = mt6878_cold_mfg0(dev);
++
++	return IS_ERR(pd) ? PTR_ERR(pd) : 0;
++}
++EXPORT_SYMBOL_GPL(mt6878_cold_mfg0_preflight);
++
++int mt6878_cold_mfg0_readback(struct device *dev)
++{
++	struct scpsys_domain *pd = mt6878_cold_mfg0(dev);
++	static const u32 en_offsets[] = { 0x0ca0, 0x0c40 };
++	u32 ctl, enabled;
++	unsigned int i;
++	int ret;
++
++	if (IS_ERR(pd))
++		return PTR_ERR(pd);
++	mutex_lock(&pd->genpd.mlock);
++	if (pd->genpd.status != GENPD_STATE_ON) {
++		ret = -EHOSTDOWN;
++		goto out;
++	}
++	ret = regmap_read(pd->scpsys->base, pd->data->ctl_offs, &ctl);
++	if (ret)
++		goto out;
++	/* Signed B4.1 LK 1ebc8..1ebe0: ACK[31:30]=3, PDN_ACK[12]=0,
++	 * and bit13 MUST BE SET to branch to 1ec54. Never guess its producer.
++	 */
++	if ((ctl & (GENMASK(31, 30) | BIT(12) | BIT(13))) !=
++	    (GENMASK(31, 30) | BIT(13))) {
++		dev_err(dev, "MFG0 prefix: SPM=%#x lacks LK pre-RPC SRAM state\n", ctl);
++		ret = -EHOSTDOWN;
++		goto out;
++	}
++	/* Check native control effects separately from the LK ACK admission. */
++	if ((ctl & (BIT(0) | BIT(2) | BIT(3) | BIT(6))) !=
++	    (BIT(0) | BIT(2) | BIT(3) | BIT(6)) ||
++	    (ctl & (BIT(1) | BIT(4) | BIT(5) | BIT(8)))) {
++		ret = -EHOSTDOWN;
++		goto out;
++	}
++	for (i = 0; i < ARRAY_SIZE(en_offsets); i++) {
++		const struct scpsys_bus_prot_data *bpd = &pd->data->bp_cfg[i];
++		struct regmap *map = scpsys_bus_protect_get_regmap(pd, bpd);
++
++		if (IS_ERR_OR_NULL(map)) {
++			ret = -ENODEV;
++			goto out;
++		}
++		ret = regmap_read(map, en_offsets[i], &enabled);
++		if (ret)
++			goto out;
++		/* NOS ignores clear ACK; read the actual enable register instead.
++		 * No guessed ACK poll or second bus-protection writer is added.
++		 */
++		if (enabled & bpd->bus_prot_set_clr_mask) {
++			dev_err(dev, "MFG0 prefix: bus enable %#x=%#x remains protected\n",
++				en_offsets[i], enabled);
++			ret = -EHOSTDOWN;
++			goto out;
++		}
++	}
++	ret = 0;
++out:
++	mutex_unlock(&pd->genpd.mlock);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_cold_mfg0_readback);
++
+ static struct
+ generic_pm_domain *scpsys_add_one_domain(struct scpsys *scpsys, struct device_node *node)
+--- a/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.c
++++ b/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.c
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ #ifndef GPUEB_MFG0_HOST_TEST
++#include <linux/soc/mediatek/mt6878-gpueb-cold-prefix.h>
+ #include <linux/device.h>
+ #include <linux/err.h>
+ #include <linux/module.h>
+@@ -70,6 +71,9 @@
+ 	ret = mfg0_domain(dev);
+ 	if (ret)
+ 		goto unlock;
++	ret = mt6878_cold_mfg0_preflight(dev);
++	if (ret)
++		goto unlock;
+ 	if (!try_module_get(THIS_MODULE)) {
+ 		ret = -ENODEV;
+ 		goto unlock;
+@@ -138,7 +142,8 @@
+ 		return mt6878_gpueb_mfg0_quarantine(scope, ret);
+ 	if (!pm_runtime_active(dev))
+ 		return mt6878_gpueb_mfg0_quarantine(scope, -EHOSTDOWN);
+-	return 0;
++	ret = mt6878_cold_mfg0_readback(dev);
++	return ret ? mt6878_gpueb_mfg0_quarantine(scope, ret) : 0;
+ }
+ EXPORT_SYMBOL_GPL(mt6878_gpueb_mfg0_resume);
+ 
+@@ -156,6 +161,12 @@
+ 		return -EPERM;
+ 	dev = scope->parent;
+ 	lockdep_assert_held(&dev->mutex);
++	if (scope->attempted) {
++		/* Retain actual native PM ownership without claiming GPUEB boot. */
++		scope->task = NULL;
++		device_unlock(dev);
++		return 0;
++	}
+ 	*slot = NULL;
+ 	/* No physical-OFF claim or automatic power-down on registration failure.
+ 	 * The reset helper's own reference, if acquired, remains independent.
+--- a/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.h
++++ b/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-mfg0.h
+@@ -30,5 +30,9 @@
+  * Finish only ends this synchronous PM transaction. It proves neither OFF
+  * nor that firmware, rails, clocks, reset release or DMA are safe.
+  */
++/* MFG0-only prefix variant: successful attempted resume is retained.
++ * finish unlocks the task mutex but leaves *slot and the real PM lease.
++ * No firmware/reset/RPC continuation is provided by this variant.
++ */
+ int mt6878_gpueb_mfg0_finish(struct mt6878_gpueb_mfg0 **slot);
+ #endif
+--- /dev/null
++++ b/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-cold-prefix.c
+@@ -0,0 +1,81 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/device.h>
++#include <linux/err.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include "mt6878-gpueb-mfg0.h"
++#include "mt6878-gpueb-sram.h"
++#include "mt6878-gpueb-reset.h"
++#include "mt6878-gpueb-cold-prefix.h"
++
++struct mt6878_gpueb_cold_prefix {
++	struct mt6878_gpueb_mfg0 *power;
++	struct mt6878_gpueb_sram *sram;
++	int first_error;
++};
++
++int mt6878_gpueb_cold_prefix_prepare(struct platform_device *parent,
++		struct mt6878_gpueb_cold_prefix **result)
++{
++	struct mt6878_gpueb_cold_prefix *prefix;
++	struct resource *resource;
++	int ret, cleanup;
++
++	if (!parent || !result)
++		return -EINVAL;
++	if (*result)
++		return -EALREADY;
++	prefix = kzalloc(sizeof(*prefix), GFP_KERNEL);
++	if (!prefix)
++		return -ENOMEM;
++	ret = mt6878_gpueb_mfg0_prepare(parent, &prefix->power);
++	if (ret)
++		goto free;
++	ret = mt6878_gpueb_reset_validate_resources(parent);
++	if (ret)
++		goto finish;
++	resource = platform_get_resource_byname(parent, IORESOURCE_MEM, "gpueb_base");
++	/* Claim the one complete SRAM owner BEFORE native power writes. Mapping
++	 * does not clear SRAM, manufacture OFF, or admit an inherited firmware.
++	 */
++	prefix->sram = mt6878_gpueb_sram_create(&parent->dev, resource);
++	if (IS_ERR(prefix->sram)) {
++		ret = PTR_ERR(prefix->sram);
++		prefix->sram = NULL;
++		goto finish;
++	}
++	*result = prefix;
++	ret = mt6878_gpueb_mfg0_resume(prefix->power);
++	if (ret) {
++		prefix->first_error = ret;
++		mt6878_gpueb_sram_unknown_start(prefix->sram);
++		/* Resume already latched the failure and released the task mutex. */
++		return ret;
++	}
++	ret = mt6878_gpueb_mfg0_finish(&prefix->power);
++	if (ret) {
++		prefix->first_error = ret;
++		mt6878_gpueb_sram_unknown_start(prefix->sram);
++		mt6878_gpueb_mfg0_quarantine(prefix->power, ret);
++		return ret;
++	}
++	/* The existing MFG0 object retains real PM/module/device pins. No separate
++	 * supplier, invented regulator/clock handles, RPC mapping or start API.
++	 */
++	return 0;
++finish:
++	cleanup = mt6878_gpueb_mfg0_finish(&prefix->power);
++	if (cleanup) {
++		prefix->first_error = ret;
++		*result = prefix;
++		mt6878_gpueb_mfg0_quarantine(prefix->power, ret);
++		return ret;
++	}
++free:
++	kfree(prefix);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(mt6878_gpueb_cold_prefix_prepare);
++MODULE_DESCRIPTION("MT6878 source-backed native MFG0 acquisition prefix only");
++MODULE_LICENSE("GPL");
+--- /dev/null
++++ b/drivers/soc/mediatek/tetris-owner-smoke/mt6878-gpueb-cold-prefix.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_GPUEB_COLD_PREFIX_H
++#define MT6878_GPUEB_COLD_PREFIX_H
++struct device;
++struct platform_device;
++struct mt6878_gpueb_cold_prefix;
++/* Native SCPSYS implementation, called only with the bound parent locked. */
++int mt6878_cold_mfg0_preflight(struct device *dev);
++int mt6878_cold_mfg0_readback(struct device *dev);
++/* One fixed-parent control work item after binding, never probe/remove/PM/IRQ.
++ * *result starts NULL and remains parent-owned for the whole diagnostic boot.
++ * Non-NULL error result must be retained; no retry or forced detach/overlays.
++ * Success is MFG0/SRAM acquisition ONLY. There is deliberately no continuation
++ * to RPC, firmware install, PLL/rail programming, reset or BOOTREADY here.
++ */
++int mt6878_gpueb_cold_prefix_prepare(struct platform_device *parent,
++		struct mt6878_gpueb_cold_prefix **result);
++#endif
+--- /dev/null
++++ b/include/linux/soc/mediatek/mt6878-gpueb-cold-prefix.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef MT6878_GPUEB_COLD_PREFIX_H
++#define MT6878_GPUEB_COLD_PREFIX_H
++struct device;
++struct platform_device;
++struct mt6878_gpueb_cold_prefix;
++/* Native SCPSYS implementation, called only with the bound parent locked. */
++int mt6878_cold_mfg0_preflight(struct device *dev);
++int mt6878_cold_mfg0_readback(struct device *dev);
++/* One fixed-parent control work item after binding, never probe/remove/PM/IRQ.
++ * *result starts NULL and remains parent-owned for the whole diagnostic boot.
++ * Non-NULL error result must be retained; no retry or forced detach/overlays.
++ * Success is MFG0/SRAM acquisition ONLY. There is deliberately no continuation
++ * to RPC, firmware install, PLL/rail programming, reset or BOOTREADY here.
++ */
++int mt6878_gpueb_cold_prefix_prepare(struct platform_device *parent,
++		struct mt6878_gpueb_cold_prefix **result);
++#endif

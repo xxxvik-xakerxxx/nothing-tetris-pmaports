@@ -60,6 +60,17 @@ class SmokeInputs(unittest.TestCase):
         self.assertIn("inputs.native_radio_link && 'native-link'", workflow)
         self.assertIn("cancel-in-progress: ${{ !inputs.native_camera_link && !inputs.native_radio_link", workflow)
 
+    def test_mfg0_prefix_uses_real_research_inputs_without_full_power_variant(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        block = workflow.split("- name: Compile native MFG0 cold acquisition", 1)[1].split("- name:", 1)[0]
+        self.assertIn("if: ${{ inputs.research_owner_smoke }}", block)
+        self.assertIn("power/cold-deps/ci_prefix.py", block)
+        self.assertIn("--output /tmp/tetris-kernel-smoke/objects", block)
+        self.assertNotIn("power/run-ci.sh", block)
+        self.assertLess(workflow.index("Compile private GPUEB DRAM owner"),
+                        workflow.index("Compile native MFG0 cold acquisition"))
+
     def test_full_camera_link_is_independent_and_uploads_reports_only(self):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github/workflows/ci.yml").read_text()

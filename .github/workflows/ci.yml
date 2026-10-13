@@ -640,6 +640,15 @@ jobs:
       - name: Compile private GPUEB DRAM owner
         if: ${{ inputs.research_owner_smoke }}
         run: sh patches/gpu/boot-owner/dram/run-ci.sh
+      - name: Compile native MFG0 cold acquisition
+        if: ${{ inputs.research_owner_smoke }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/gpu/boot-owner/power/cold-deps/generate_prefix.py --check
+          python3 -B patches/gpu/boot-owner/power/cold-deps/ci_prefix.py --check
+          python3 -B patches/gpu/boot-owner/power/cold-deps/ci_prefix.py \
+            --kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --output /tmp/tetris-kernel-smoke/objects
       - name: Fetch pinned hardware sources for native callbacks
         id: hardware_sources
         if: ${{ !inputs.research_owner_smoke }}

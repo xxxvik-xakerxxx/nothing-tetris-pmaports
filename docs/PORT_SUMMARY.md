@@ -189,6 +189,13 @@ passed; actual vmlinux linkage is pending CI. It does not provide the missing
 board-root producer, calibrated CSI configuration or MMUP voltage-policy
 handoff, and does not enable a camera on r188/r189.
 
+The MFG0 cold-acquisition candidate uses the existing SCPSYS supplier and
+retains its real PM/SRAM ownership. It does not invent mandatory regulator or
+basic-clock handles absent from the NOS MFG0 descriptor. Its sixteen exact
+source checks passed; matched ARM64 compilation is pending. Actual acquisition
+must establish the signed LK entry state before any GPUEB continuation. This
+candidate does not write RPC/GPRs, release reset or claim GPU readiness.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

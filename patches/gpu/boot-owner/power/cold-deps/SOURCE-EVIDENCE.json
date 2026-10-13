@@ -1,0 +1,113 @@
+{
+  "scope": "authenticated static boundaries, no hardware or secure permission claim",
+  "pins": {
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "device_modules": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835"
+  },
+  "lk": {
+    "caller": "LK 0xed58 -> 0x16eb0 (zero-return stub), then 0xed94 -> 0x1eb88",
+    "pre_rpc_admission": {
+      "spm": "0x1c001eb4",
+      "power_ack_bits": "[31:30] == 3",
+      "bit12": "clear",
+      "bit13": "SET, not clear",
+      "success_branch": "0x1ebe0 -> 0x1ec54",
+      "failure": "0x1ec18 returns -16 before allocation/secure firmware loader"
+    },
+    "selected_direct_calls_before_rpc": [
+      {
+        "call": "0x1ec74",
+        "target": "0x140ec"
+      },
+      {
+        "call": "0x1ec80",
+        "target": "0x16ec0"
+      },
+      {
+        "call": "0x1ecb0",
+        "target": "0x148dc"
+      },
+      {
+        "call": "0x1ecd0",
+        "target": "0x7ef84"
+      },
+      {
+        "call": "0x1ecfc",
+        "target": "0x67894"
+      },
+      {
+        "call": "0x1ed1c",
+        "target": "0x69c28"
+      },
+      {
+        "call": "0x1ed4c",
+        "target": "0x140ec"
+      },
+      {
+        "call": "0x1ed68",
+        "target": "0x69c28"
+      },
+      {
+        "call": "0x1ed94",
+        "target": "0x74da0"
+      },
+      {
+        "call": "0x1edbc",
+        "target": "0x5e74"
+      },
+      {
+        "call": "0x1edd0",
+        "target": "0x69c28"
+      }
+    ],
+    "transitive_scope": "direct call sites only; secure loader/other callees are not declared side-effect-free",
+    "rpc_store": {
+      "instruction": "0x1edf0",
+      "address": "0x13f91030",
+      "value": "0x10f00"
+    },
+    "gpueb_pll_timeout_read": {
+      "address": "0x13fa080c",
+      "instruction": "0x1ef74",
+      "meaning": "read/log after boot timeout, not an initialization producer"
+    },
+    "first_unresolved_producer": "earlier than 0x1ebc8/0x1ebd8: owner/order producing MFG0 ACK and bit13 state",
+    "no_inference": "neither a required MFG0 regulator/basic clock nor an earlier PLL/PMIC programming sequence is established"
+  },
+  "nos": {
+    "sources": {
+      "native_domain": {
+        "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+        "line": 367
+      },
+      "optional_regulator": {
+        "path": "drivers/soc/mediatek/mtk-scpsys.c",
+        "line": 224
+      },
+      "gpu_rail_getters": {
+        "path": "drivers/gpu/mediatek/gpufreq/v2/gpufreq_mt6878.c",
+        "line": 673
+      },
+      "gpueb_pll_runtime": {
+        "path": "drivers/clk/mediatek/clk-fhctl-gpueb.c",
+        "line": 128
+      },
+      "actual_pmic_provider": {
+        "path": "drivers/regulator/mt6315-regulator.c",
+        "line": 334
+      }
+    },
+    "mfg0": "optional absent regulator and no basic clocks; PDN [8]/ACK[12], no MFG0 sleep-bit producer",
+    "gpu_rails": "GPUFREQ get-only in EB mode; VGPU MT6319 USID6 VBUCK2 via mt6315 driver, VSRAM MT6363 CPUM",
+    "base_dt_always_on": "kernel policy only, not an LK-before-RPC cold PMIC write/ownership trace",
+    "gpueb_boot_clock": "gpu1/GPUEBPLL at 0x13fa0800, PCW +0xc; FHCTL uses running GPUEB IPI, not cold initialization",
+    "phase_boundary": "GPUFREQ GPR13 + INIT_SHARED_MEM/POWER_CONTROL is after firmware execution, not a producer for LK entry"
+  },
+  "mali_client": {
+    "selection": "mt6878 -> ../gpu_mali/mali_avalon/, r44p1",
+    "source": "gpu/gpu_mali/mali_avalon/mali-r44p1/drivers/gpu/arm/midgard/platform/mt6878/mali_kbase_config_mt6878.c",
+    "power_on_line": 111,
+    "phase": "Mali runtime power callback calls GPUFREQ; not a GPUEB cold boot/PLL producer"
+  }
+}

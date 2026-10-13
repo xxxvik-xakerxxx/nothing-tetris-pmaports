@@ -1,0 +1,46 @@
+{
+  "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
+  "native_prepared_sha256": "4f6ad65a63adcc0589c1172e0541bbbdaf10ff9cf32006f03c89d45f13514e28",
+  "native_headers": {
+    "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6",
+    "drivers/pmdomain/mediatek/mt6878-pm-domains.h": "85024cc72b6e8511eae664ebf4531826c07613dcb4c872ead8375161f4fa2d62"
+  },
+  "native_header_patches": {
+    "0018-pmdomain-mediatek-mt6878-audio.patch": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed",
+    "0035-pmdomain-mediatek-mt6878-mfg0-data.patch": "c2144c276786f77b2fb7c7a107b44ab2e182518f8ce169b9f900ebceda9dbb1d",
+    "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": "f946261f57a28298d4b22d32ca08ef64ffb340efb16134b142378f627b6b5697",
+    "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch": "21952394dca440fe7b8cf70914c09ccf77c78a2c26d9d0aa2dcf84b4d76cf3be",
+    "0113-pmdomain-mediatek-mt6878-modem-power.patch": "03924af715632607de8329d18a7ccdff3f6d403ff4315863fe6b5d3418d90cac"
+  },
+  "mfg0_source_sha256": "c5ec54b492e02d1262cf9328563e499d41c47eaca24a21cca4b10080d2cda78d",
+  "mfg0_header_sha256": "0a916d0643ace4cf26afca2097603fa512e9600947dde1ba755982cae2be0ea0",
+  "module_sources": {
+    "gpu/mt6878/Makefile": "167ba7f875d51ea0b8b2809f48c4899741e154cf0985f8a55ad760892ec5d04d",
+    "gpu/mt6878/mali_avalon": "0c9f5b3d0bdf7db39e4602344065cad1aa7697e15eb1573f3225fd42489f1837",
+    "gpu/gpu_mali/mali_avalon/mali-r44p1/drivers/gpu/arm/midgard/platform/mt6878/mali_kbase_config_mt6878.c": "09c075da4647e1355b6ab745ec0774f8f2da4ba662c0fa9c323209fd8bbd5de6"
+  },
+  "device_sources": {
+    "drivers/soc/mediatek/mtk-scpsys-mt6878.c": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de",
+    "drivers/soc/mediatek/mtk-scpsys.c": "d6652e98da3d4193dfc1d2f112aea656606f314135168c6ab20d086b63cd67ea",
+    "drivers/gpu/mediatek/gpufreq/v2/gpufreq_mt6878.c": "8f12acd02b3ff8af012bac5cad7acae95615bbd9ff19d58cdd166429f626ed27",
+    "drivers/gpu/mediatek/gpufreq/v2/gpufreq_v2.c": "d708446bd1ebcaaefc3433361fb53e2ea9bbe3ba923871334d7b5079146ebbb9",
+    "drivers/clk/mediatek/clk-mt6878.c": "ab87e230702a5f627b3e3c77255363e1a2abc0ead3df736190ebaa6c13f5e122",
+    "drivers/clk/mediatek/clk-fhctl-gpueb.c": "fc1a7524ec676951bee5cb063ee530cd844db8dccda357c47da8a4dcec07786c",
+    "drivers/clk/mediatek/clk-fhctl-pll.c": "857fa972096b75e390fffd82e7bd82a8c22f2ce32174f173591b9048f7549d57",
+    "drivers/regulator/mt6315-regulator.c": "fbd0ec5570d77f34f3b49de816d1f352cae98c49ee8b3629f8a204f96e274b03",
+    "drivers/regulator/mt6363-regulator.c": "5103f926597d3f5feb9d165ea4e6473048d03b1a25db9fd40718438ae7a3be99",
+    "arch/arm64/boot/dts/mediatek/mt6878.dts": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "313491ee77b07a43d0a62c41a5dae2ef40ce9be851dd211ddacdf44ed7d710c5",
+    "arch/arm64/boot/dts/k6878v1_64/cust.dtsi": "46677dfb21ece6ea348c70bbd287055403c3fbb057c21d42a854059eca59ad84"
+  },
+  "lk_windows": {
+    "ed54-edbc": "81de959627bfd3de462c8c9c5af850f880a2a0d739ec86a9191dd4355816771f",
+    "16eb0-16eb8": "2b59db05426e0f313d72b30f3398c65721de2562a59dc46ceeba224f98d0b876",
+    "1eb88-1ec54": "1d75e95d5c77506187307934a1fe3d26e597e3de7d68ce5e8202e9cd44a1bb3c",
+    "1ec54-1edf4": "610e52405074f9df5f0b5b9bdb88235ec9f151554085f2a42dee5ebbf568eb92",
+    "1ef3c-1ef7c": "26b9f56d4bae580bfea686f9b10e7781a91b4b0a535d345809d719896deada56"
+  }
+}
