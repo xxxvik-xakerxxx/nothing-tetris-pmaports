@@ -133,6 +133,11 @@ jobs:
           git -C upstream/linux sparse-checkout add --stdin < /tmp/kernel-stack-paths
       - name: Check complete packaged kernel patch stack
         run: python3 ci/check-kernel-patch-stack.py upstream/linux
+      - name: Validate native diagnostic wakeup and transition policy
+        run: |
+          git -C upstream/linux sparse-checkout add \
+            /kernel/power/Kconfig /kernel/power/suspend.c /kernel/cpu.c /include/linux/pm_wakeup.h
+          python3 -B ci/stage-native-wakeup-image.py --check-kernel upstream/linux
       - name: Validate native display prereq gates
         run: |
           sh patches/native-display/check-postmask.sh upstream/linux

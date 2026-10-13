@@ -53,7 +53,10 @@ configuration regression independently of MD first-OFF. Corrected r187/r188
 image staging keeps SUSPEND/PM_SLEEP/PM_SLEEP_SMP and retains a static PM prepare
 veto before the first modem write. A system-transition mutex trylock excludes
 concurrent suspend/reboot without waiting behind a probe-dependent transition.
-CPU idle, hotplug, hibernation and kexec stay excluded. The veto persists through
+PM_SLEEP_SMP selects HOTPLUG_CPU in the pinned Linux Kconfig. Preserve that API
+as well and hold the real boot-lifetime `cpu_hotplug_disable()` owner before MD
+writes, requiring all present CPUs online. CPU idle, hibernation and kexec stay
+compiled out; actual CPU up/down and system sleep are vetoed. The veto persists through
 success/failure for this boot; this is not working suspend support. Full CI and
 physical recovery remain required before reporting the fix as working.
 This diagnostic profile excludes idle/sleep/hotplug and is not a battery-optimized

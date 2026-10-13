@@ -3,10 +3,11 @@
 import difflib
 import hashlib
 from pathlib import Path
+import argparse
 
 PATCH = "0187-native-modem-wakeup-sleep-veto.patch"
 HEADER = "drivers/pmdomain/mediatek/mt6878-modem-adopt.h"
-SLEEP_API = ("SUSPEND", "PM_SLEEP", "PM_SLEEP_SMP")
+SLEEP_API = ("SUSPEND", "PM_SLEEP", "PM_SLEEP_SMP", "HOTPLUG_CPU")
 VETO = """
 /* Boot-lifetime diagnostic veto; wakeup-source accounting stays available. */
 static int mt6878_md_sleep_veto(struct notifier_block *nb,
@@ -28,7 +29,7 @@ static struct notifier_block mt6878_md_sleep_notifier = {
 def patched_header(parent):
     before = parent.frozen("patches/modem/md-pm-integration/mt6878-modem-adopt.h").decode()
     after = parent.change_once(before, "#include <linux/delay.h>\n",
-                               "#include <linux/delay.h>\n#include <linux/suspend.h>\n#include <linux/limits.h>\n")
+                               "#include <linux/delay.h>\n#include <linux/suspend.h>\n#include <linux/limits.h>\n#include <linux/cpu.h>\n")
     after = parent.change_once(after, "static struct mt6878_md_adoption *mt6878_md_first_off_owner;\n",
                                "static struct mt6878_md_adoption *mt6878_md_first_off_owner;\n" + VETO)
     after = parent.change_once(after,
@@ -36,6 +37,8 @@ def patched_header(parent):
         "\t    IS_ENABLED(CONFIG_SUSPEND) || IS_ENABLED(CONFIG_HIBERNATION) ||",
         "if (IS_ENABLED(CONFIG_CPU_IDLE) || !IS_ENABLED(CONFIG_PM_SLEEP) ||\n"
         "\t    !IS_ENABLED(CONFIG_SUSPEND) || IS_ENABLED(CONFIG_HIBERNATION) ||")
+    after = parent.change_once(after, "IS_ENABLED(CONFIG_HOTPLUG_CPU) || IS_ENABLED(CONFIG_MTK_DVFSRC)",
+                               "!IS_ENABLED(CONFIG_HOTPLUG_CPU) || IS_ENABLED(CONFIG_MTK_DVFSRC)")
     after = parent.change_once(after,
         "\tu32 value;\n\tunsigned int i;\n\tint ret;\n\n\tmutex_lock(&mt6878_md_first_off_lock);",
         "\tu32 value;\n\tunsigned int i;\n\tint ret;\n\tbool transition_locked = false;\n\n"
@@ -52,7 +55,15 @@ def patched_header(parent):
         "\t/* Install under the transition lock before any hardware write. Retain\n"
         "\t * the static notifier through success, failure and provider teardown.\n\t */\n"
         "\tret = register_pm_notifier(&mt6878_md_sleep_notifier);\n\tif (ret)\n\t\tgoto out;\n\n"
+        "\t/* PM_SLEEP_SMP selects HOTPLUG_CPU. Retain its API but prohibit\n"
+        "\t * CPU up/down through the real boot-lifetime hotplug-disable owner.\n\t */\n"
+        "\tcpu_hotplug_disable();\n\n"
         "\t/* Non-devm owner and references survive every failure after the first write. */")
+    after = parent.change_once(after,
+        "\tmt6878_md_first_off_owner = owner;\n\tfor (i = 0; i < 3; i++) {",
+        "\tmt6878_md_first_off_owner = owner;\n"
+        "\tif (!cpumask_equal(cpu_online_mask, cpu_present_mask)) {\n"
+        "\t\tret = -EBUSY;\n\t\tgoto fault;\n\t}\n\tfor (i = 0; i < 3; i++) {")
     after = parent.change_once(after,
         "out:\n\tmutex_unlock(&mt6878_md_first_off_lock);\n\treturn ret;\n}",
         "out:\n\tif (transition_locked)\n\t\tmutex_unlock(&system_transition_mutex);\n"
@@ -99,5 +110,34 @@ def extend(parent, tree, native, revision):
     native["kernel_package"] = f"7.2.1-r{revision}"
     native["changes"][PATCH] = hashlib.sha256(data).hexdigest()
     native["wakeup_source_apis_enabled"] = True
-    native["sleep_policy"] = "permanent PM prepare veto registered before MD writes; transition mutex trylock"
+    native["sleep_policy"] = "permanent PM prepare veto before MD writes; transition mutex trylock"
+    native["hotplug_policy"] = "boot-lifetime cpu_hotplug_disable before writes; all present CPUs required online"
     return native
+
+
+def check_kernel(kernel):
+    kconfig = (kernel / "kernel/power/Kconfig").read_text()
+    selected = kconfig.split("config PM_SLEEP_SMP\n", 1)[1].split("\nconfig ", 1)[0]
+    if "depends on PM_SLEEP" not in selected or "select HOTPLUG_CPU" not in selected:
+        raise ValueError("pinned sleep/hotplug Kconfig dependency changed")
+    cpu = (kernel / "kernel/cpu.c").read_text()
+    disable = cpu.split("void cpu_hotplug_disable(void)\n", 1)[1].split("\n}", 1)[0]
+    positions = [disable.index(token) for token in (
+        "cpu_maps_update_begin();", "cpu_hotplug_disabled++;", "cpu_maps_update_done();")]
+    if positions != sorted(positions) or "EXPORT_SYMBOL_GPL(cpu_hotplug_disable);" not in cpu:
+        raise ValueError("pinned CPU hotplug owner changed")
+    wakeup = (kernel / "include/linux/pm_wakeup.h").read_text()
+    stub = wakeup.split("static inline struct wakeup_source *wakeup_source_register", 1)[1].split("\n}", 1)[0]
+    if "return NULL;" not in stub:
+        raise ValueError("pinned disabled wakeup-source ABI changed")
+    suspend = (kernel / "kernel/power/suspend.c").read_text()
+    prepare = suspend.split("static int suspend_prepare(suspend_state_t state)\n", 1)[1].split("\n}", 1)[0]
+    if prepare.index("pm_notifier_call_chain_robust") >= prepare.index("suspend_freeze_processes"):
+        raise ValueError("PM veto must run before process/device suspension")
+    print("Pinned PM wakeup, sleep/hotplug dependency and pre-freeze veto contracts pass")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-kernel", type=Path, required=True)
+    check_kernel(parser.parse_args().check_kernel)

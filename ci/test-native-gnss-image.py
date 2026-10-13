@@ -49,9 +49,9 @@ class Composition(unittest.TestCase):
         self.assertEqual(tx["kernel_package"], result["kernel_package"])
         self.assertTrue(result["wakeup_source_apis_enabled"])
         config = (self.tree / fixtures.parent.KERNEL / fixtures.stage.CONFIG).read_text()
-        for symbol in ("SUSPEND", "PM_SLEEP", "PM_SLEEP_SMP"):
+        for symbol in ("SUSPEND", "PM_SLEEP", "PM_SLEEP_SMP", "HOTPLUG_CPU"):
             self.assertIn("CONFIG_" + symbol + "=y\n", config)
-        for symbol in ("CPU_IDLE", "HOTPLUG_CPU", "HIBERNATION", "KEXEC_CORE"):
+        for symbol in ("CPU_IDLE", "HIBERNATION", "KEXEC_CORE"):
             self.assertIn("# CONFIG_" + symbol + " is not set\n", config)
         for flag in ("gnss_activation_changed", "shipping_activation",
                      "camera_gpu_enabled", "modem_consumer_enabled",
@@ -98,10 +98,12 @@ class Composition(unittest.TestCase):
             "mutex_trylock(&system_transition_mutex)",
             "mt6878_md_adopt_revalidate(pd, owner)",
             "register_pm_notifier(&mt6878_md_sleep_notifier)",
-            "owner->supplier = get_device", "regmap_write(map,")]
+            "cpu_hotplug_disable()", "owner->supplier = get_device",
+            "cpumask_equal(cpu_online_mask, cpu_present_mask)", "regmap_write(map,")]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("if (transition_locked)\n\t\tmutex_unlock(&system_transition_mutex);", transaction)
         self.assertNotIn("unregister_pm_notifier", after)
+        self.assertNotIn("cpu_hotplug_enable", after)
         for event in ("PM_SUSPEND_PREPARE", "PM_HIBERNATION_PREPARE", "PM_RESTORE_PREPARE"):
             self.assertIn(event, after)
         self.assertIn("return notifier_from_errno(-EBUSY);", after)
