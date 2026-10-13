@@ -110,6 +110,17 @@ def dt_patch():
             " # SPDX-License-Identifier: GPL-2.0\n")
 
 
+def native_header_patch():
+    path = "drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h"
+    before = frozen("patches/camera-camisp/power/mt6878-cam-power.h").decode()
+    after = change_once(before, '#include "mtk-pm-domains.h"', '#include "../mtk-pm-domains.h"')
+    return ("From: Tetris port maintainers\nSubject: [DIAGNOSTIC PATCH] native VMM: resolve the real parent header\n\n"
+            "Same actual shared-provider header as the isolated link, with no research include flags.\n\n"
+            "diff --git a/" + path + " b/" + path + "\n" +
+            "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
+                                          fromfile="a/" + path, tofile="b/" + path)))
+
+
 def stage(tree, report):
     if os.environ.get("CI") != "true" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("diagnostic image staging is GitHub CI-only")
@@ -129,14 +140,7 @@ def stage(tree, report):
     extra["0182-native-md-first-off-board.patch"] = dt_patch().encode()
     # The native leaf Makefile has a parent-header search path, but the parent
     # provider TU does not inherit it while including this nested header.
-    extra["0183-native-camera-header-parent.patch"] = (
-        "From: Tetris port maintainers\nSubject: [DIAGNOSTIC PATCH] native VMM: resolve the real parent header\n\n"
-        "Same actual shared-provider header as the isolated link, with no research include flags.\n\n"
-        "diff --git a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
-        "--- a/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
-        "+++ b/drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h\n"
-        "@@ -8 +8 @@\n-#include \"mtk-pm-domains.h\"\n+#include \"../mtk-pm-domains.h\"\n"
-    ).encode()
+    extra["0183-native-camera-header-parent.patch"] = native_header_patch().encode()
     anchor = '\t1200-vendor-sensor-framework-linux-6.18.patch.vendor\n'
     apk = change_once(apk, anchor, anchor + "".join("\t" + name + "\n" for name in extra))
     apk = change_once(apk, "pkgrel=182\n", "pkgrel=183\n")

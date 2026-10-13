@@ -96,6 +96,18 @@ class ImageTests(unittest.TestCase):
             dt["/chosen"][marker] = b""
         return normal, dt
 
+    def test_native_header_fix_applies_exactly_without_research_flags(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            header = tree / "drivers/pmdomain/mediatek/native-vmm/mt6878-cam-power.h"
+            header.parent.mkdir(parents=True)
+            before = stage.frozen("patches/camera-camisp/power/mt6878-cam-power.h").decode()
+            header.write_text(before)
+            subprocess.run(["git", "apply", "--verbose", "--whitespace=error", "-"],
+                           input=stage.native_header_patch(), cwd=tree, text=True, check=True, capture_output=True)
+            self.assertEqual(header.read_text(), before.replace('#include "mtk-pm-domains.h"',
+                                                               '#include "../mtk-pm-domains.h"'))
+
     def test_exact_board_delta(self):
         check.validate(*self.fixture())
 
