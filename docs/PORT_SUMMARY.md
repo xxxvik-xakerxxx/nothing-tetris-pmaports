@@ -123,6 +123,14 @@ with KUNIT=y and KUNIT=n, full/resource-only CCCI and infrastructure clocks pass
 at `37310ed`. KUnit cases were compiled, not run in a kernel. Disabled rail
 metadata is not activated; no voltage measurement or SIM support is claimed.
 
+The next diagnostic integration wires those three genuine supplies and TOP to
+the disabled modem while preserving inherited voltage during registration.
+It changes only the three native child availabilities when explicitly selected.
+Twelve source/patch/full-tree tests and real ARM64 provider objects with KUNIT=y/n
+passed [CI38363867364](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38363867364)
+at `e44cccc`, including the registration correction. This is not included in
+r184 or shipping images; compiled KUnit cases are not runtime electrical tests.
+
 The corrected diagnostic image
 [CI38331505196](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38331505196)
 at `789d002` passed validation, the complete kernel/module package, selected-DT

@@ -1,9 +1,14 @@
 # Future Native MT6363 Rail Diagnostic
 
-Hardware status: **Untested**. This helper is not connected to shipping inputs,
-the parent staging helper, or a workflow. The r184 ACK30 image and run
-38356364811 remain unchanged. No new build, phone operation, commit or push is
-part of this side task.
+Hardware status: **Untested**. This helper is not connected to a shipping or
+install-image profile. The r184 ACK30 image and run38356364811 remain unchanged.
+Its12 source/application/DT tests run in normal CI. Actual native MT6363 objects
+with and without the registration correction passed KUNIT=y/n compilation in
+[CI38363867364](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38363867364)
+at `e44cccc`. KUnit cases were compiled, not executed in a kernel.
+Corrected header SHA256 `481bdbb534af75681bc92c429b51d8a38459fb4f071eba2a833aa46f539b9199`.
+An earlier compile caught mutation through a const-qualified pointer; the
+current revision uses the single mutable parser result without a cast.
 
 `ci/stage-native-modem-rails.py` consumes a **disposable copy** of the already
 staged r184 package tree and its parent report. It appends the exact verified
@@ -55,8 +60,9 @@ request a PMIC write through these callbacks. Debug/status reads may still
 return real errors. Later core unused-regulator cleanup can request disable;
 the unchanged native callback rejects an inherited enable with `-EBUSY`
 because it owns no enable request. OP banks, SSHUB, shared FCCM keys and
-hardware voters remain untouched. This registration policy is statically
-checked here; it was not part of the earlier native KUnit builds.
+hardware voters remain untouched. This registration policy passed source
+checks and the separate native compilation above; no PMIC registration or
+mutation occurred on a handset.
 
 ## Reusable Entry Points
 
