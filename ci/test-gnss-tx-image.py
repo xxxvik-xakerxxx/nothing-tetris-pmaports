@@ -180,12 +180,12 @@ class GnssTxImage(unittest.TestCase):
         self.candidate()
         self.assertEqual(snapshot(other), expected)
 
-    def test_existing_parent_pattern_with_current_package_inputs(self):
+    def test_frozen_parent_rejects_current_native_patch_additions(self):
         self.prepare()
         for relative in BASE_FILES:
             shutil.copyfile(ROOT / "pmaports" / relative, self.tree / relative)
         parent.stage(self.tree, self.parent_report)
-        self.assertEqual(self.candidate()["parent"]["kernel_package"], "7.2.1-r184")
+        self.refused_unchanged("frozen r184 package input changed")
 
     def test_each_prerequisite_hash_is_enforced(self):
         self.prepare()

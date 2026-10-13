@@ -6,7 +6,7 @@
 static void mark(struct b41_first_config *out, unsigned offset, unsigned count,
                  enum b41_first_provenance source)
 {
-    memset(out->provenance + offset, source, count);
+    memset(out->provenance + offset, (int)source, count);
 }
 
 static void word(struct b41_first_config *out, unsigned offset, uint32_t value,
