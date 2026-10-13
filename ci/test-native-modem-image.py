@@ -49,7 +49,7 @@ class ImageTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "already staged"):
                     stage.stage(tree, tree / "again.json")
             apk = (tree / stage.KERNEL / "APKBUILD").read_text()
-            self.assertIn("pkgrel=183\n", apk)
+            self.assertIn("pkgrel=184\n", apk)
             self.assertIn('die "native MD diagnostic exclusion unresolved: $_symbol"', apk)
             self.assertLess(apk.index("0180-native-md"), apk.index("0181-native-camera"))
             self.assertIn('mediatek/' + stage.BOARD + '.dtb \\\n', apk)
@@ -57,6 +57,8 @@ class ImageTests(unittest.TestCase):
             header_fix = (tree / stage.KERNEL / "0183-native-camera-header-parent.patch").read_text()
             self.assertIn('+#include "../mtk-pm-domains.h"', header_fix)
             self.assertEqual(header_fix.count("diff --git"), 1)
+            self.assertIn("0184-native-modem-single-ack.patch", apk)
+            self.assertEqual(result["kernel_package"], "7.2.1-r184")
             self.assertEqual(result["source_commit"], stage.SOURCE)
             self.assertFalse(result["modem_consumer_enabled"])
             config = (tree / stage.KERNEL / "config-postmarketos-mediatek-mt6878.aarch64").read_text()
@@ -128,6 +130,24 @@ class ImageTests(unittest.TestCase):
                            input=stage.native_header_patch(), cwd=tree, text=True, check=True, capture_output=True)
             self.assertEqual(header.read_text(), before.replace('#include "mtk-pm-domains.h"',
                                                                '#include "../mtk-pm-domains.h"'))
+
+    def test_modem_ack_fix_applies_only_to_modem_mask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            header = tree / "drivers/pmdomain/mediatek/mt6878-modem-pm.h"
+            header.parent.mkdir(parents=True)
+            packaged = stage.frozen("pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0113-pmdomain-mediatek-mt6878-modem-power.patch").decode()
+            before = packaged.split("@@ -0,0 +1,162 @@\n", 1)[1]
+            before = "".join(line[1:] + "\n" for line in before.splitlines() if line.startswith("+"))
+            header.write_text(before)
+            subprocess.run(["git", "apply", "--verbose", "--whitespace=error", "-"],
+                           input=stage.modem_ack_patch(), cwd=tree, text=True, check=True, capture_output=True)
+            self.assertEqual(header.read_text(), before.replace("#define MT6878_MD_ACK GENMASK(31, 30)",
+                                                               "#define MT6878_MD_ACK BIT(30)"))
+            # The recorded hardware ON value lacks ACK31 but has PWR_ON and ACK30.
+            mask = (1 << 30) | (1 << 2)
+            self.assertEqual(0x4200000d & mask, mask)
+            self.assertNotEqual(0x4200000d & ((3 << 30) | 4), (3 << 30) | 4)
 
     def test_exact_board_delta(self):
         check.validate(*self.fixture())

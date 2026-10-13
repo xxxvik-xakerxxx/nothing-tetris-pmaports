@@ -28,8 +28,11 @@ was written and read back in `lk_a`: 3316288 bytes, SHA256
 `4ff2fae500477380575b2c6f9cc1942f66720c944c5db8e8c94accb5598c07a0`.
 Stock `lk_b` is unchanged. Warm boot `b8e13a10-19f6-4ab7-9f71-de0623e1d494`
 returned r182 and USB/SSH; SCP reported handoff not prepared and sensors did
-not start. A real cold power-on is required before claiming sensor recovery
-or proceeding with hardware experiments. The separate
+not start. After the user-confirmed physical cold cycle, boot
+`52ab3b24-f0e5-4cbe-a40f-ac4422e98bdd` automatically initialized SCP and the
+24-entry sensor transport (physical mask31); sensor/proxy/SSH services and
+`usb0` were active, with no failed systemd units. This establishes recovery on
+that cold boot, not warm-reboot support. The separate
 first-OFF kernel profile excludes deep idle, sleep, hotplug and kexec for this
 experiment; it is not a shipping battery-optimization policy. It does not
 implement rail/TOP/FLIGHT shutdown, inhibited restart or SIM/call service.
@@ -65,7 +68,8 @@ failed on the nested native camera header's missing parent include path.
 The diagnostic profile corrects that reference to the same actual shared
 provider header used by native CI, explicitly builds/installs its selected DT,
 and declares the sibling modem node in the power binding. A repeated uncorrected
-attempt was cancelled; no r183 installation is claimed.
+attempt was cancelled. The corrected complete image is available as described
+below; r183 installation remains pending.
 
 The follow-up source revision retains a staged post-OFF TOP/rail owner and
 first errno, but inhibited ON still stops before regulator acquisition or
@@ -97,7 +101,12 @@ CCCI, infrastructure clocks and the joint GPU/camera object stack in
 [CI38336059980](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38336059980)
 at `9f4b4b2`. Module linking/packaging and legitimate live
 profile inputs, physical ACK traffic and independent kernel WORKING remain
-required. [Download owner](../patches/gnss-navigation-audit/dsp-download/DOWNLOAD.md)
+required. Successful download-owner completion now detaches the borrowed
+session; later result queries and adapter steps perform no session dereference,
+clock query or syscall. Native sanitizer/source checks passed
+[CI38338345488](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38338345488)
+at `31cd56d`; no physical DSP transaction was performed.
+[Download owner](../patches/gnss-navigation-audit/dsp-download/DOWNLOAD.md)
 documents the limits, including synchronous SMC timing and sole-fd ownership.
 The updated joint MD/camera provider passed strict ARM64 vmlinux linking with
 KUNIT=y and KUNIT=n, both supplier DT candidates and full/resource-only CCCI
@@ -122,10 +131,33 @@ template still named the ordinary board while boot-deploy copied only the
 selected diagnostic DT. Staging now updates both deviceinfo and the FIT incbin
 reference, with positive and drift/duplicate regression checks. A container-registry quota failure was retried before
 compilation; future jobs use a verified byte-identical Alpine manifest mirror.
-No completed image or r183 flash is claimed yet. The failed image was not installed.
-Its artifact is explicitly
+The failed image was not installed. Corrected full
+[CI38339848611](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38339848611)
+at `bd74848b726b6c5b7e2fbea8db1c1618e6a72f5a` passed all five jobs and produced
+artifact11789527090 (ZIP SHA256
+`1d806baf12529de7434abc788e2cff4f8dc82538fb7ee514c0a51dbdd3c1f8cc`).
+Download, local image verification and installation are pending; CI success
+does not establish a physical OFF transition or radio service.
+The diagnostic artifact is explicitly
 named `nothing-tetris-native-md-first-off-images`, with the paired loader above;
 ordinary shipping images do not activate this experiment.
+
+The real cold r182 report identified an earlier causal failure: loader stage2
+rejected inherited MD ON with `-EBUSY` (CTL `0x4200000d`), so no authenticated
+final metadata or native supplier activation occurred. Corrected loader profile
+[CI38350296947](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38350296947)
+passed at the same `322cf227` source, enabling the existing initial LK OFF
+transaction before RAM writes. Image SHA256
+`0a16ba1da3a40b8da43b9d5b322fc496c65636ab5f516a5c152b7639e973073b`.
+This new profile has not yet been installed.
+The Linux modem-only ACK mask also required correction: pinned B4.1
+`drivers/soc/mediatek/mtk-scpsys-mt6878.c` selects `MD_OPS | IS_PWR_CON_ON`, and
+`scpsys_md_power_on/off()` use `scpsys_pwr_ack_is_on()` with BIT30, not the
+generic second ACK31. The frozen native candidate incorrectly required both.
+Diagnostic r184/device r20 adds an exact post-provider BIT30 correction and
+pairs the corrected loader. Ten static staging/application checks pass;
+complete kernel/image CI and physical first-OFF remain pending. r183 remains
+an uninstalled CI checkpoint, not a working modem claim.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in

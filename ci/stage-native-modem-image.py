@@ -121,6 +121,22 @@ def native_header_patch():
                                           fromfile="a/" + path, tofile="b/" + path)))
 
 
+def modem_ack_patch():
+    # B4.1 MD_OPS uses scpsys_pwr_ack_is_on(), not the generic second ACK.
+    path = "drivers/pmdomain/mediatek/mt6878-modem-pm.h"
+    return ("From: Tetris port maintainers\nSubject: [DIAGNOSTIC PATCH] MT6878 MD uses ACK30 only\n\n"
+            "Nothing ee2be53 MT6878 MD_OPS + IS_PWR_CON_ON selects PWR_ACK BIT(30).\n"
+            "Do not wait for the generic PWR_ACK_2ND bit on this modem domain.\n\n"
+            "diff --git a/" + path + " b/" + path + "\n"
+            "--- a/" + path + "\n+++ b/" + path + "\n"
+            "@@ -3,5 +3,5 @@\n"
+            " #define MT6878_MD_CTL 0x0e00\n"
+            " #define MT6878_MD_ISO 0x0f24\n"
+            " #define MT6878_MD_ISO_MASK GENMASK(1, 0)\n"
+            "-#define MT6878_MD_ACK GENMASK(31, 30)\n"
+            "+#define MT6878_MD_ACK BIT(30)\n \n")
+
+
 def stage(tree, report):
     if os.environ.get("CI") != "true" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("diagnostic image staging is GitHub CI-only")
@@ -141,9 +157,10 @@ def stage(tree, report):
     # The native leaf Makefile has a parent-header search path, but the parent
     # provider TU does not inherit it while including this nested header.
     extra["0183-native-camera-header-parent.patch"] = native_header_patch().encode()
+    extra["0184-native-modem-single-ack.patch"] = modem_ack_patch().encode()
     anchor = '\t1200-vendor-sensor-framework-linux-6.18.patch.vendor\n'
     apk = change_once(apk, anchor, anchor + "".join("\t" + name + "\n" for name in extra))
-    apk = change_once(apk, "pkgrel=182\n", "pkgrel=183\n")
+    apk = change_once(apk, "pkgrel=182\n", "pkgrel=184\n")
     apk = change_once(apk, '\t\tImage.gz modules \\\n',
                       '\t\tImage.gz modules \\\n\t\tmediatek/' + BOARD + '.dtb \\\n')
     install_native = ('\tinstall -Dm644 "$builddir/arch/$_carch/boot/dts/mediatek/mt6878-nothing-tetris-native.dtb" \\\n'
@@ -173,12 +190,13 @@ def stage(tree, report):
                               'data = /incbin/("mt6878-nothing-tetris-native.dtb");',
                               'data = /incbin/("' + BOARD + '.dtb");'))
     device_apk = device / "APKBUILD"
-    device_apk.write_text(change_once(device_apk.read_text(), "pkgrel=18\n", "pkgrel=19\n"))
+    device_apk.write_text(change_once(device_apk.read_text(), "pkgrel=18\n", "pkgrel=20\n"))
     metadata = dict(profile="native-md-first-off-diagnostic", source_commit=SOURCE,
                     linked_kernel_run=LINK_RUN, required_uboot_commit=UBOOT_SOURCE,
-                    kernel_package="7.2.1-r183", device_package="8-r19", board=BOARD,
+                    kernel_package="7.2.1-r184", device_package="8-r20", board=BOARD,
                     changes={name: hashlib.sha256(data).hexdigest() for name, data in extra.items()},
                     native_include_correction="nested header resolves ../mtk-pm-domains.h; no provider behavior change",
+                    modem_ack_correction="MD_OPS + IS_PWR_CON_ON polls ACK30 only; ee2be53 scpsys_pwr_ack_is_on",
                     fit_dtb=BOARD + ".dtb",
                     sleep_idle_hotplug_allowed=False, modem_consumer_enabled=False,
                     camera_gpu_enabled=False, end_user_radio_functionality=False)

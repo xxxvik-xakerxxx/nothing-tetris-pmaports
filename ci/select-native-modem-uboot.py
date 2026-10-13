@@ -9,14 +9,14 @@ import struct
 from urllib.request import Request, urlopen
 import zipfile
 
-RUN = 38325598818
+RUN = 38350296947
 COMMIT = "322cf227f2ea26a7e319d20e3ce0321db8a38f15"
 REPO = "xxxvik-xakerxxx/u-boot"
-ARCHIVE_SHA256 = "2e94bd0a8a0ce5cd8b0b33eaf75e48d652ce177d3e226c12bfb270ba33d06091"
-ARCHIVE_URL = "https://github.com/" + REPO + "/releases/download/native-md-first-off-322cf227/tetris-native-md-first-off-322cf227.zip"
+ARCHIVE_SHA256 = "e334a71099bba15efc307db7b6fe639079a00b83ac9e82e1142196cff1a14941"
+ARCHIVE_URL = "https://github.com/" + REPO + "/releases/download/native-md-startup-off-322cf227/tetris-native-md-startup-off-322cf227.zip"
 PROFILE = {
     "commit": COMMIT,
-    "modem_startup_off": "disabled",
+    "modem_startup_off": "initial-lk-one-attempt-before-ram-writes",
     "modem_brom_only": "cold-one-attempt-owned-metadata-linux-md-disabled",
     "modem_metadata": "owned-64k-nomap-after-brom-linux-md-disabled",
     "scp_secure": "slot-a-diagnostic",
@@ -69,7 +69,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     (output / "u-boot-tetris-lk.img").write_bytes(image)
     (output / "native-modem-uboot.json").write_text(json.dumps(dict(
-        run=RUN, artifact=11780752419, archive_url=ARCHIVE_URL,
+        run=RUN, artifact=11790757533, archive_url=ARCHIVE_URL,
         archive_sha256=ARCHIVE_SHA256, sha256=digest, manifest=manifest), indent=2) + "\n")
     with Path(os.environ["GITHUB_ENV"]).open("a") as env:
         env.write("TETRIS_UBOOT_COMMIT=" + COMMIT + "\nTETRIS_UBOOT_SHA256=" + digest + "\n")
