@@ -499,6 +499,10 @@ int b41_native_l1_download_linux_begin(struct b41_download *owner,
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+#include "../../../gnss/native-session/session.h"
+#endif
+
 static volatile sig_atomic_t interrupted;
 
 static void stop_attempt(int signal_number)
@@ -506,6 +510,29 @@ static void stop_attempt(int signal_number)
     (void)signal_number;
     interrupted = 1;
 }
+
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+static int session_idle(void)
+{
+    struct timespec idle = {0, 1000000};
+    if (interrupted) return -EINTR;
+    return nanosleep(&idle, NULL) ? -errno : 0;
+}
+
+static void retain_for_cold_recovery(int status, int stage)
+{
+    /* Returning or terminating would implicitly close the mutated device.
+     * Keep this sole owner alive, without further firmware actions or queries.
+     * Forced process death and uninterruptible syscalls need external recovery.
+     */
+    alarm(0);
+    fprintf(stderr, "cold_recovery_required status=%d session_stage=%d; descriptor retained\n",
+        status, stage);
+    fflush(stdout);
+    fflush(stderr);
+    for (;;) pause();
+}
+#endif
 
 static void first_word(struct b41_first_config *first, unsigned offset,
     uint32_t value, unsigned count, uint8_t provenance)
@@ -574,6 +601,10 @@ int main(int argc, char **argv)
     struct b41_native_l1_nominal policy;
     struct b41_bootstrap_session session = {0};
     struct b41_download owner = {0};
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+    struct b41_native_session retained = {0};
+    int retain_fd = 0;
+#endif
     struct sigaction action = {0};
     uint64_t now = 0, deadline;
     uint32_t auxiliary = 0, lna = 0;
@@ -584,7 +615,11 @@ int main(int argc, char **argv)
     int aux_status = 0, lna_status = 0, status;
 
     if (argc == 2 && !strcmp(argv[1], "--help")) {
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+        puts("usage: gnss-l1-retained GPS_PHYSICAL_PROFILE [TIMEOUT_MS:1..30000]");
+#else
         puts("usage: gnss-l1-nominal GPS_PHYSICAL_PROFILE [TIMEOUT_MS:1..30000]");
+#endif
         return 0;
     }
     if (argc < 2 || argc > 3 || !argv[1][0] || argv[1][0] == '-') return 2;
@@ -604,11 +639,20 @@ int main(int argc, char **argv)
     if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL)) {
         status = -errno; goto done;
     }
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+    if (sigaction(SIGHUP, &action, NULL) || sigaction(SIGPIPE, &action, NULL)) {
+        status = -errno; goto done;
+    }
+    /* Interrupt the operation but do not terminate the descriptor owner. */
+#else
     action.sa_handler = SIG_DFL;
+#endif
     if (sigaction(SIGALRM, &action, NULL)) { status = -errno; goto done; }
+#ifndef B41_NATIVE_L1_RETAINED_SESSION
     /* Default SIGALRM terminates a stuck syscall without restarting/resetting
      * the device. A kernel-uninterruptible stall still needs external recovery.
      */
+#endif
     alarm((unsigned int)((timeout_ms + 999u)/1000u + 2u));
     status = profile_read(argv[1], &first, &interval, &nv_mode);
     if (status) goto done;
@@ -630,6 +674,15 @@ int main(int argc, char **argv)
      */
     gps_fd = open("/dev/gpsdl0", O_RDWR | O_NONBLOCK | O_CLOEXEC | O_NOFOLLOW);
     if (gps_fd < 0) { status = -errno; goto done; }
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+    retain_fd = 1;
+    status = b41_session_attach(&retained, gps_fd, deadline);
+    if (status) goto done;
+    /* A fresh download requires actual ON or RESET_DONE, not inherited WORK. */
+    if (retained.latest.dsp_state != 1u && retained.latest.dsp_state != 2u) {
+        status = -EBUSY; goto done;
+    }
+#endif
     clock11 = scalar_query(gps_fd, 11UL, 0UL);
     if (clock11 < 0) { status = clock11; goto done; }
     clock30 = scalar_query(gps_fd, 30UL, 0UL);
@@ -672,10 +725,29 @@ int main(int argc, char **argv)
         if (!status && owner.stage != B41_DOWNLOAD_ACKS_COMPLETE && nanosleep(&idle, NULL))
             status = b41_download_abort(&owner, -errno);
     }
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+    while (!status && retained.stage == B41_SESSION_WAIT_WORK) {
+        if (interrupted) { status = -EINTR; break; }
+        status = b41_session_wait_step(&retained);
+        if (!status && retained.stage == B41_SESSION_WAIT_WORK) status = session_idle();
+    }
+    if (!status) status = b41_session_stop_begin(&retained);
+    while (!status && retained.stage != B41_SESSION_STOPPED) {
+        if (interrupted) { status = -EINTR; break; }
+        status = b41_session_stop_step(&retained);
+        if (!status && retained.stage != B41_SESSION_STOPPED) status = session_idle();
+    }
+    if (!status) puts("matched ACKs complete; sampled WORK and STOP/SUSPENDED; fix not established");
+#else
     if (!status) puts("matched ACKs complete; RAM_CODE_READY/WORKING/fix not established");
+#endif
 done:
     forget(owner.tx, sizeof(owner.tx));
     forget(owner.rx, sizeof(owner.rx));
+#ifdef B41_NATIVE_L1_RETAINED_SESSION
+    if (retain_fd && (status || retained.stage != B41_SESSION_STOPPED))
+        retain_for_cold_recovery(status ? status : -EPROTO, (int)retained.stage);
+#endif
     if (gps_fd >= 0 && close(gps_fd) && !status) status = -errno;
     if (conn_fd >= 0 && close(conn_fd) && !status) status = -errno;
     alarm(0);

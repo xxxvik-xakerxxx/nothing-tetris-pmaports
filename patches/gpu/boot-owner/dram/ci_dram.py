@@ -98,10 +98,14 @@ def build(args):
         names = {line.split()[-1] for line in defined.splitlines() if line.split()}
         ci_join.require(set((*ci_join.JOIN_SYMBOLS, *API)) <= names, 'actual owner/DRAM API missing')
         imports = subprocess.check_output(['llvm-nm', '-u', str(linked)], text=True)
-        unresolved = sorted({line.split()[-1] for line in imports.splitlines() if line.split()})
-        ci_join.require(not any(name.startswith(('mt6878_gpueb_', 'gpueb_sram_', 'tetris_gpueb_flat_'))
-                                for name in unresolved), 'unresolved internal owner API')
+        raw_imports = {line.split()[-1] for line in imports.splitlines() if line.split()}
+        manifest['raw_undefined_symbols'] = sorted(raw_imports)
+        unresolved = sorted(raw_imports - names)
         manifest['unverified_kernel_imports'] = unresolved
+        for path in [*objects, linked]:
+            shutil.copyfile(path, report / path.name)
+        ci_join.require(not any(name.startswith(('mt6878_gpueb_', 'gpueb_sram_', 'tetris_gpueb_flat_'))
+                                for name in unresolved), 'unresolved internal owner API: ' + ', '.join(unresolved))
         manifest['kernel_link_boundary'] = 'cma_alloc/cma_release are built-in APIs, not module exports; partial link only'
         manifest['internal_link'] = {**ci_join.object_identity(linked), 'sha256': ci_join.sha(linked)}
         native = work / 'dram-mock-faults'
@@ -111,8 +115,6 @@ def build(args):
                              env={**os.environ, 'ASAN_OPTIONS': 'detect_leaks=1', 'UBSAN_OPTIONS': 'halt_on_error=1'})
         (report / 'mock-faults.txt').write_text(result.stdout + result.stderr)
         manifest['mock_faults'] = 'passed; synthetic CMA history only, no firmware or MMIO'
-        for path in [*objects, linked]:
-            shutil.copyfile(path, report / path.name)
         for path, digest in inputs.items():
             original = output / path if path == '.config' or path.startswith('include/') else kernel / path
             ci_join.require(ci_join.sha(original) == digest, 'shared source/config changed: ' + path)

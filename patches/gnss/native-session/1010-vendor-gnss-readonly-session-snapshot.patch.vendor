@@ -1,0 +1,156 @@
+Subject: [PATCH] gps: expose read-only live session/FSM samples
+
+Base: NothingOSS/android_kernel_modules_nothing_mt6878
+Commit: e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+Prerequisite: exact package 1001..1009, in order
+
+Future opt-in 1010 only. No default package activation, hardware/FW writes,
+assert/reset, wakeup, sleep, poll or readiness token. Existing ioctl12/13
+remain untouched. ioctl31 reads only the real open device's link/session
+and READ_ONCE DSP state. It is a sampled ABI, not an atomic transition.
+
+diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
+--- a/connectivity/gps/data_link/linux/gps_each_device.c
++++ b/connectivity/gps/data_link/linux/gps_each_device.c
+@@ -3,6 +3,8 @@
+  * Copyright (c) 2019 - 2021 MediaTek Inc.
+  */
+ #include <asm/arch_timer.h>
++#include <linux/compiler.h>
++#include "uapi/gpsdl_v051_session.h"
+ #include <linux/build_bug.h>
+ #include "gps_each_device.h"
+ #include "gps_each_link.h"
+@@ -23,6 +25,7 @@
+ 
+ static_assert(sizeof(struct gpsdl_v051_boot_time) == 16);
+ static_assert(sizeof(struct gpsdl_v051_bootup_info) == 20);
++static_assert(sizeof(struct gpsdl_v051_session_snapshot) == 32);
+ 
+ static ssize_t gps_each_device_read(struct file *filp,
+ 	char __user *buf, size_t count, loff_t *f_pos)
+@@ -263,6 +266,45 @@
+ #endif
+ #define GPSDL_IOC_GET_PLATFORM_CLOCK_FREQ     30
+ 
++static int gps_each_device_session_snapshot(struct gps_each_device *dev, unsigned long arg)
++{
++	struct gpsdl_v051_session_snapshot result = {
++		.abi_version = GPSDL_V051_SESSION_ABI,
++		.size = sizeof(result),
++	};
++	struct gps_each_link *link;
++	enum gps_dl_link_id_enum id;
++	enum gps_dsp_state_t before;
++
++	if (!dev || dev->index < 0 || (unsigned int)dev->index >= GPS_DATA_LINK_NUM)
++		return -ENODEV;
++	if (!arg)
++		return -EINVAL;
++	if (!READ_ONCE(dev->is_open))
++		return -ENOTCONN;
++	id = (enum gps_dl_link_id_enum)dev->index;
++	link = gps_dl_link_get(id);
++	if (!link)
++		return -ENODEV;
++	before = gps_dsp_state_snapshot(id);
++	gps_each_link_spin_lock_take(id, GPS_DL_SPINLOCK_FOR_LINK_STATE);
++	result.link_id = id;
++	result.session_id = READ_ONCE(link->session_id);
++	result.link_state = READ_ONCE(link->state_for_user);
++	gps_each_link_spin_lock_give(id, GPS_DL_SPINLOCK_FOR_LINK_STATE);
++	result.dsp_state = gps_dsp_state_snapshot(id);
++	if (!READ_ONCE(dev->is_open))
++		return -ENOTCONN;
++	if (before != result.dsp_state)
++		return -EAGAIN;
++	/* No lock covers the DSP and link together. Return samples, not a claim
++	 * of atomicity, readiness authorization or a successful firmware action.
++	 */
++	if (copy_to_user((void __user *)arg, &result, sizeof(result)))
++		return -EFAULT;
++	return 0;
++}
++
+ static int gps_each_device_ioctl_inner(struct file *filp, unsigned int cmd, unsigned long arg, bool is_compat)
+ {
+ 	struct gps_each_device *dev; /* device information */
+@@ -286,6 +328,8 @@
+ 	UINT32 gps_lna_pin = 0;
+ #endif
+ 	switch (cmd) {
++	case GPSDL_V051_IOC_SESSION_SNAPSHOT:
++		return gps_each_device_session_snapshot(dev, arg);
+ 	case GPSDL_IOC_TRIGGER_ASSERT:
+ 		/* Trigger FW assert for debug */
+ 		GDL_LOGXW_DRW(dev->index, "GPSDL_IOC_TRIGGER_ASSERT, reason = %ld", arg);
+diff --git a/connectivity/gps/data_link/hal/gps_dsp_fsm.c b/connectivity/gps/data_link/hal/gps_dsp_fsm.c
+--- a/connectivity/gps/data_link/hal/gps_dsp_fsm.c
++++ b/connectivity/gps/data_link/hal/gps_dsp_fsm.c
+@@ -17,6 +17,7 @@
+ #endif
+ 
+ #include "gps_dsp_fsm.h"
++#include <linux/compiler.h>
+ #include "gps_dl_log.h"
+ #include "gps_each_link.h"
+ #include "gps_dl_name_list.h"
+@@ -73,6 +74,12 @@
+ 	p_item = &g_gps_dsp_state_history[link_id].items[item_index];
+ 
+ 	return p_item->state;
++}
++
++enum gps_dsp_state_t gps_dsp_state_snapshot(enum gps_dl_link_id_enum link_id)
++{
++	ASSERT_LINK_ID(link_id, GPS_DSP_ST_MAX);
++	return READ_ONCE(g_gps_dsp_state[link_id]);
+ }
+ 
+ enum gps_dsp_state_t gps_dsp_state_get(enum gps_dl_link_id_enum link_id)
+diff --git a/connectivity/gps/data_link/hal/inc/gps_dsp_fsm.h b/connectivity/gps/data_link/hal/inc/gps_dsp_fsm.h
+--- a/connectivity/gps/data_link/hal/inc/gps_dsp_fsm.h
++++ b/connectivity/gps/data_link/hal/inc/gps_dsp_fsm.h
+@@ -105,6 +105,7 @@
+ bool gps_dsp_state_is_dump_needed_for_reset_done(enum gps_dl_link_id_enum link_id);
+ enum gps_dsp_state_t gps_dsp_history_state_get(enum gps_dl_link_id_enum link_id, unsigned int item_index);
+ enum gps_dsp_state_t gps_dsp_state_get(enum gps_dl_link_id_enum link_id);
++enum gps_dsp_state_t gps_dsp_state_snapshot(enum gps_dl_link_id_enum link_id);
+ void gps_dsp_state_change_to(enum gps_dsp_state_t state, enum gps_dl_link_id_enum link_id);
+ bool gps_dsp_state_is(enum gps_dsp_state_t state, enum gps_dl_link_id_enum link_id);
+ 
+diff --git a/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051_session.h b/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051_session.h
+new file mode 100644
+--- /dev/null
++++ b/connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051_session.h
+@@ -0,0 +1,30 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++#ifndef _UAPI_GPSDL_V051_SESSION_H
++#define _UAPI_GPSDL_V051_SESSION_H
++
++#ifdef __KERNEL__
++#include <linux/types.h>
++typedef __u32 gpsdl_session_u32;
++#else
++#include <stdint.h>
++typedef uint32_t gpsdl_session_u32;
++#endif
++
++/* Opt-in 1010 only. Existing ioctl12 is TRIGGER_ASSERT, not a state query. */
++#define GPSDL_V051_IOC_SESSION_SNAPSHOT 31U
++#define GPSDL_V051_SESSION_ABI 1U
++
++/* Independently sampled live scalars, not an atomic FSM transition record.
++ * No pointers, keys, firmware metadata, calibration or writable input fields.
++ */
++struct gpsdl_v051_session_snapshot {
++	gpsdl_session_u32 abi_version;
++	gpsdl_session_u32 size;
++	gpsdl_session_u32 link_id;
++	gpsdl_session_u32 session_id;
++	gpsdl_session_u32 link_state;
++	gpsdl_session_u32 dsp_state;
++	gpsdl_session_u32 reserved[2];
++};
++
++#endif

@@ -421,10 +421,16 @@ def build(kernel, output, work, report, baseline):
         undefined = subprocess.check_output(['llvm-nm', '-u', str(joined)], text=True)
         symbols = {line.split()[-1] for line in defined.splitlines() if line.split()}
         require(set(JOIN_SYMBOLS) <= symbols, 'new owner API definition absent from partial link')
-        imports = sorted({line.split()[-1] for line in undefined.splitlines() if line.split()})
-        require(not any(name.startswith(('mt6878_gpueb_', 'gpueb_sram_', 'tetris_gpueb_flat_'))
-                        for name in imports), 'unresolved internal GPU owner dependency')
+        raw_imports = {line.split()[-1] for line in undefined.splitlines() if line.split()}
+        manifest['raw_undefined_symbols'] = sorted(raw_imports)
+        # Inline export assembly can name a symbol also defined in linked IR.
+        # Keep only exact-name imports without a definition, never prefix aliases.
+        imports = sorted(raw_imports - symbols)
         manifest['unverified_kernel_imports'] = imports
+        for path in [*objects, joined]:
+            shutil.copyfile(path, report / path.name)
+        require(not any(name.startswith(('mt6878_gpueb_', 'gpueb_sram_', 'tetris_gpueb_flat_'))
+                        for name in imports), 'unresolved internal GPU owner dependency: ' + ', '.join(imports))
         native = work / 'mock-faults'
         manifest['fault_command'] = list(map(str, fault_command(variant, native)))
         run(manifest['fault_command'])
@@ -432,8 +438,6 @@ def build(kernel, output, work, report, baseline):
                      env={**os.environ, 'ASAN_OPTIONS': 'detect_leaks=1', 'UBSAN_OPTIONS': 'halt_on_error=1'})
         (report / 'mock-faults.txt').write_text(result.stdout + result.stderr)
         manifest['mock_faults'] = 'passed; synthetic admission history and mocked MMIO only'
-        for path in [*objects, joined]:
-            shutil.copyfile(path, report / path.name)
         shutil.copyfile(work / 'output/.config', report / 'config')
         for path, digest in inputs.items():
             source = output / path if path == '.config' or path.startswith('include/') else kernel / path

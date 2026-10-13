@@ -1,0 +1,28 @@
+{
+  "status": "Untested actual streaming-driver lifecycle candidate; not packaged or activated",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "patch": "stream-owner.patch",
+  "targets": [
+    "drivers/media/i2c/imx882-tetris-stream.c",
+    "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml",
+    "drivers/media/i2c/Kconfig"
+  ],
+  "object": "drivers/media/i2c/imx882-tetris-stream.o",
+  "shipping_selector": "CONFIG_VIDEO_IMX882_TETRIS=n",
+  "compile_selector": "CONFIG_VIDEO_IMX882_TETRIS=y",
+  "required_compile_config": ["I2C", "OF", "GPIOLIB", "COMMON_CLK", "REGULATOR", "PINCTRL", "VIDEO_DEV", "MEDIA_CONTROLLER", "V4L2_FWNODE"],
+  "runtime_activation": "disabled; no DT delta",
+  "clock_contract": "two actual handles: CAMTG2_SEL output and UVPLL192M_D8 24 MHz source; identity 0121 exclusive-rate/parent operations without shared PLL retuning",
+  "lifetime": "built-in, manual bind suppressed; explicit device/resource storage retained until reboot on uncertain power teardown",
+  "stage": "stage.py --ci-apply --prepared-kernel PATH --kernel-archive PATH --device-repo PATH --modules-repo PATH --report PATH",
+  "compile_boundary": "stage helper does not compile, rewrite .config or inspect artifacts; parent builds actual object with original ThinLTO/CFI and existing object_identity",
+  "remaining_activation_inputs": [
+    "GPIO rail and reset/pad mux ownership: ASIS is not a mux-preserving atomic acquisition",
+    "real CAM/ISP VMM operating point, USID-6 supply and MMUP/MMDVFS firmware owner migration/voting",
+    "bound SENINF C-PHY three-trio receiver, graph routing, CAMSV/RAW/ISP descendants and firmware/CCU ownership",
+    "IOMMU/DMA queues and received RAW10/PDAF packets with verified CSI clock and bus routing",
+    "per-SKU sensor/module identity, per-unit calibration, actual cold-start/repeated-stop/suspend lifecycle"
+  ]
+}

@@ -28,8 +28,9 @@ REQUIRED = ("ARM64", "ARCH_MEDIATEK", "HAVE_ARM_SMCCC", "OF", "PM", "MFD_SYSCON"
             "REGULATOR", "MFD_MT6363", "REGULATOR_MT6363",
             "REGMAP_SPMI", "MTK_SCPSYS_PM_DOMAINS", "MTK_MT6878_NATIVE_VMM",
             "PM_SLEEP", "PM_SLEEP_SMP", "SUSPEND", "HOTPLUG_CPU")
-DISABLED = ("CPU_IDLE", "HIBERNATION", "OF_DYNAMIC", "MEMORY_HOTREMOVE", "MTK_DVFSRC",
-            "ARM_PSCI_CHECKER", "KVM", "KEXEC_CORE", "KUNIT", "SCSI_UFS_MEDIATEK_DBG")
+DISABLED = ("CPU_IDLE", "HIBERNATION", "OF_OVERLAY", "OF_UNITTEST", "OF_DYNAMIC",
+            "MEMORY_HOTREMOVE", "MTK_DVFSRC", "ARM_PSCI_CHECKER", "KVM",
+            "KEXEC", "KEXEC_FILE", "KEXEC_CORE", "KUNIT", "SCSI_UFS_MEDIATEK_DBG")
 REAL = ("MTK_MT6878_MODEM_REAL_BOOT_STAGING", "MTK_MT6878_MODEM_POST_OFF_TOP_STAGING")
 
 
@@ -204,6 +205,14 @@ def run(command, log):
         subprocess.run(list(map(str, command)), check=True, stdout=stream, stderr=subprocess.STDOUT)
 
 
+def check_disabled(lines, symbols):
+    # Kconfig omits some invisible n symbols instead of writing a comment.
+    # Any assignment is unexpected here; y/m must never pass as disabled.
+    for symbol in symbols:
+        stage.require(not any(line.startswith("CONFIG_" + symbol + "=") for line in lines),
+                      "CI excluded dependency has an assignment: " + symbol)
+
+
 def configure(kernel, output, config, enabled, log):
     make = ["make", "-j4", "-C", str(kernel), "O=" + str(output), "ARCH=arm64", "LLVM=1"]
     output.mkdir(parents=True, exist_ok=False)
@@ -225,9 +234,7 @@ def configure(kernel, output, config, enabled, log):
                 stage.require(setting in lines, "CI changed the inherited compiler/security profile: " + symbol)
     for symbol in REQUIRED + (REAL if enabled else ()):
         stage.require("CONFIG_" + symbol + "=y" in lines, "CI dependency did not resolve: " + symbol)
-    for symbol in DISABLED + (() if enabled else REAL):
-        stage.require("# CONFIG_" + symbol + " is not set" in lines,
-                      "CI excluded dependency became enabled: " + symbol)
+    check_disabled(lines, DISABLED + (() if enabled else REAL))
     return make
 
 

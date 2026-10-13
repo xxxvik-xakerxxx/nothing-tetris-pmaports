@@ -1,7 +1,7 @@
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -587,15 +587,16 @@
+@@ -587,16 +587,17 @@
        - name: Install package-matching kernel compiler
          run: |
            apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
@@ -11,6 +11,7 @@ diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
        - name: Trust the checked-out CI workspace
          run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
        - name: Compile isolated AArch64 candidate objects
+         id: kernel_candidates
          run: |
            export PATH="/usr/lib/llvm21/bin:$PATH"
            if [ '${{ inputs.research_owner_smoke }}' = true ]; then

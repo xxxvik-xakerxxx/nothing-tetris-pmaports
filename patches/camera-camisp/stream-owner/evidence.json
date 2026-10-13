@@ -1,0 +1,70 @@
+{
+  "archive_source_sha256": {
+    "drivers/clk/clk.c": "a30805dc12b79b20f41dfaf20ce18aa04aa6afb332317b7c1310df3d2b2cd235",
+    "drivers/clk/mediatek/clk-mt6878-topckgen.c": "dd6c777d22152b49e15a69e886a96979becac35a207ce05b089b4196ed385adc",
+    "drivers/media/i2c/Kconfig": "e9c3f1177dc9ed48ee07ac6cc6a49b2207d2d323a85bea0844f723cc24eee2fb",
+    "drivers/media/i2c/Makefile": "19d28f9703d98e26e2db02a2b7ee9af8b636917593e439642a34f58f1a5c0811",
+    "drivers/pinctrl/mediatek/pinctrl-paris.c": "7023ac596d67185f668b26dbfc7e601753e9666a7e23ecea23ad99f172604bce",
+    "include/linux/clk-provider.h": "07d671138c2f938cfd05e1f9e725e74dbfc4fcbe612532842f58b8bf9b2d8791",
+    "include/linux/clk.h": "219714b5994dacfcd5e4d1bd1e4d681f13a656f3850c0c250a1672c76c833fa7",
+    "include/linux/gpio/consumer.h": "951171cfeedaa2424bcd16e78a2b11d93e9a5e860598690843c48bb791acf2dc"
+  },
+  "baseline_sha256": {
+    "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml": "4433a43cf269377ed10e2cc1a053b38e96d03d7b27948f778834244a63bc0d75",
+    "drivers/clk/clk.c": "a30805dc12b79b20f41dfaf20ce18aa04aa6afb332317b7c1310df3d2b2cd235",
+    "drivers/clk/mediatek/clk-mt6878-topckgen.c": "436c50899407daad948ed4a14137b29b5b09ce494404887741fcddbddd8015ba",
+    "drivers/media/i2c/Kconfig": "da375311eedc74896a57126da0d75f5387d7817b240795aff9175eb3c5b228c1",
+    "drivers/media/i2c/Makefile": "4dc8bc3b5d35ff103516c0655080856dfd73e816b7d7e034c209576fcd5f0f3f",
+    "drivers/media/i2c/imx882-identity.c": "d04d065dcf88b44ad5af3c444ae5bf7edaa32e3975dcab0fec19714b5839c593",
+    "drivers/media/i2c/imx882-stream-core.h": "8b3379b39dec3d78b6babc0f2f0ccad2da223b9fc1d6cd3a2f179237e1c61491",
+    "drivers/media/i2c/imx882-tetris-stream.c": "44aeb98ef9971cf62032b7160e9a3383c3c34acf98303616a804badfe7e4955e",
+    "drivers/media/i2c/imx882-tetris-tables.h": "9b6463e3b3c1545ec3dafb76717fdfc3ad1ba7e920ca039e505b6cf6c687ab30",
+    "drivers/pinctrl/mediatek/pinctrl-paris.c": "7023ac596d67185f668b26dbfc7e601753e9666a7e23ecea23ad99f172604bce",
+    "include/linux/clk-provider.h": "07d671138c2f938cfd05e1f9e725e74dbfc4fcbe612532842f58b8bf9b2d8791",
+    "include/linux/clk.h": "219714b5994dacfcd5e4d1bd1e4d681f13a656f3850c0c250a1672c76c833fa7",
+    "include/linux/gpio/consumer.h": "951171cfeedaa2424bcd16e78a2b11d93e9a5e860598690843c48bb791acf2dc"
+  },
+  "device_modules_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "kernel_archive_sha512": "5d809b44f94336549285a559909bfe5d8b2dcc3f213af58c25a52d535cd2cd0345ce34f44e1d155940cf0d4089fd2ad49fa0d6829fd2b965095084cd1500003c",
+  "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "packaged_patch_sha256": {
+    "0009-clk-mediatek-mt6878-mfg.patch": "ebaf8dfa1aecfeed628084b388ab97f6347e88abeb970cdef944e9b861d80dab",
+    "0010-audio-mt6878-aw88261.patch": "998dd225dda66e12cb724034d6d3ee73b88e88c59f16a3d958dfc4162b02cfb6",
+    "0047-media-i2c-pd9302a-vcm.patch": "3c1b0e050b34950894d60f329ac0871e13251db04c8e0467615cf93b56f5914c",
+    "0049-media-i2c-imx882-identity.patch": "855de12c6af5dd5f9abd8c4489ff15a91f98a7033b88a8cf90ecdb7979d45db1",
+    "0050-media-i2c-imx882-honor-active-low-reset.patch": "810a3eb6cfd0e9a6d7b938eb3f8177edb0385ff20790baab4aea864e8aef497c",
+    "0106-media-i2c-imx882-check-shutdown.patch": "a3e5854e3576057af2bbfb387192d346f3086f4efa47c7e1de642484801563db",
+    "0107-media-i2c-imx882-hold-clock-rate.patch": "79170294e4054b45ad13c06b3209c8f25cc2e725e1ba95208b0f722621a41f55",
+    "0112-media-i2c-imx882-v4l2-controls.patch": "2f43c5262d21e2fa799821faa1e6f0caede3bf31449029229a789fe6c7081313",
+    "0121-media-i2c-imx882-acquire-mclk-source.patch": "99a24cd6aa3e2ad91a885f7173c73707337def6ab0a8e26edb62dce6c342d090"
+  },
+  "patch_sha256": "ac387c580c232b7032489646c42e3f64885700bdcf457bfddb5e4e9498c91954",
+  "payload_sha256": {
+    "Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml": "e2e8cc7ef6f7342eee01aa68d3d10a2ece57858af99283da668daa8c40321e7f",
+    "drivers/media/i2c/Kconfig": "0fbe3c162d26d690133fcac47d1a4d8c00c2b0d6c6b3b1dacb26b8ad51062cb5",
+    "drivers/media/i2c/imx882-tetris-stream.c": "72e274bbb6f343c1bef037fc44f4a187d971273c5c652bc8f3ff492e1b59f612"
+  },
+  "shipping_config_sha256": "8aff33a9850ecd0f3374b0706a3c5122ff03ed8286c2e9701d939604d5a74088",
+  "template_sha256": {
+    "probe-resources.c": "cc2deeb62dd30adaf98d1f133f412396caac2e4afb50f3dc415f7f004016bef4",
+    "stream-lifecycle.c": "7ab60b4c9bcaa42c60933f8fdea0124d6a31dd44789333d0fda0ec7b63207479",
+    "stream-power.c": "9f0bd767380280a289ee73c8f9802e2f54b33da27ecc118eda5c63c84f1e6f09"
+  },
+  "vendor_blob_ids": {
+    "arch/arm64/boot/dts/mediatek/cust_mt6878_camera_v4l2.dtsi": "9b515c59678f786f0f9bcb91ec858ba18a91fd51",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "d13065ff2bfd3cdfd3ee9210b248961fd625304c",
+    "drivers/clk/mediatek/clk-mt6878.c": "b482f05196dbe47ffcbc6095fbc9aa3d2b9305ee",
+    "mtkcam/imgsensor/src-v4l2/adaptor-hw.c": "1c2151386ac41f5819d617ea6d4d8e4f26dc6ed4",
+    "mtkcam/imgsensor/src-v4l2/common/imx882_mipi_raw/imx882mipiraw_Sensor.c": "569539f5ca6ad4f46a6c68b35d45261834791950",
+    "mtkcam/imgsensor/src-v4l2/common/imx882txd_mipi_raw/imx882txdmipiraw_Sensor.c": "6709ebcb1700fa3f34aa1a1abe84e0598d49fc74"
+  },
+  "vendor_sha256": {
+    "arch/arm64/boot/dts/mediatek/cust_mt6878_camera_v4l2.dtsi": "f68d62f8710cd042847a8cb34aa59bc229538f6748c9bc23f0631b8210be6f15",
+    "arch/arm64/boot/dts/mediatek/k6878v1_64_tetris.dts": "313491ee77b07a43d0a62c41a5dae2ef40ce9be851dd211ddacdf44ed7d710c5",
+    "drivers/clk/mediatek/clk-mt6878.c": "ab87e230702a5f627b3e3c77255363e1a2abc0ead3df736190ebaa6c13f5e122",
+    "mtkcam/imgsensor/src-v4l2/adaptor-hw.c": "0c99d044bcef79c95b17bd4c49f5e31bde1bc8b21e14026fa4dd2c00f8489d1c",
+    "mtkcam/imgsensor/src-v4l2/common/imx882_mipi_raw/imx882mipiraw_Sensor.c": "73713ea62ee99c7a8a9d4f0b86994249f46389d6f469739c13dc557568764d8d",
+    "mtkcam/imgsensor/src-v4l2/common/imx882txd_mipi_raw/imx882txdmipiraw_Sensor.c": "62329f1f52d4e272bfda6110b201d44da4ac6f3d99abe3341d9fcac0aeb9df58"
+  }
+}

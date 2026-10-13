@@ -37,6 +37,17 @@ jobs:
             "$GITHUB_SHA" > out/gnss-native-download/BUILD-MANIFEST
           sha256sum out/gnss-native-download/gnss-l1-nominal \
             > out/gnss-native-download/SHA256SUMS
+      - name: Build retained same-fd GNSS session owner
+        env:
+          CC: clang
+        run: |
+          python3 -B patches/gnss/native-session/test_download_cli_source.py
+          sh patches/gnss/native-session/run_download_ci.sh \
+            musl-gcc out/gnss-native-download/gnss-l1-retained
+          printf 'retained_session_abi=31\nretained_hardware_tested=false\nrequires=matching-1010-kernel-and-v051-suppliers\n' \
+            >> out/gnss-native-download/BUILD-MANIFEST
+          sha256sum out/gnss-native-download/gnss-l1-retained \
+            >> out/gnss-native-download/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
           name: gnss-native-l1-download
@@ -137,6 +148,9 @@ jobs:
           python3 -B patches/gnss/write-boundary/run.py --ci-native \
             --vendor "$TETRIS_MODULES_TREE" \
             2>&1 | tee out/lna-start-evidence/dsp-tx-native.log
+          python3 -B patches/gnss/native-session/run.py --ci-native \
+            --vendor "$TETRIS_MODULES_TREE" --libmnl "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/dsp-session-native.log
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
             sh "$dsp/run-ci.sh" 2>&1 | tee out/lna-start-evidence/dsp-wire-native.log
           find "$dsp" -type f -print0 | sort -z | xargs -0 sha256sum \

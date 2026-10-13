@@ -1,0 +1,692 @@
+diff --git a/drivers/media/i2c/imx882-tetris-stream.c b/drivers/media/i2c/imx882-tetris-stream.c
+--- a/drivers/media/i2c/imx882-tetris-stream.c
++++ b/drivers/media/i2c/imx882-tetris-stream.c
+@@ -9,6 +9,9 @@
+ #include <media/v4l2-fwnode.h>
+ #include "imx882-tetris-tables.h"
+ #include <linux/clk.h>
++#include <linux/clk-provider.h>
++#include <linux/property.h>
++#include <linux/slab.h>
+ #include <linux/delay.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+@@ -46,13 +49,68 @@
+ 
+ struct imx882_identity {
+ 	struct clk *xclk;
++	struct clk *xclk_source;
+ 	struct gpio_desc *reset;
+ 	struct pinctrl *pinctrl;
+ 	struct pinctrl_state *mclk_4ma;
+ 	struct pinctrl_state *mclk_off;
+ 	struct regulator_bulk_data supplies[IMX882_NUM_SUPPLIES];
+ 	bool rate_exclusive;
+-};
++	bool source_rate_exclusive;
++	bool mclk_selected;
++	int first_error;
++};
++
++static void imx882_mclk_release(struct imx882_identity *imx882)
++{
++	if (imx882->rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk);
++		imx882->rate_exclusive = false;
++	}
++	if (imx882->source_rate_exclusive) {
++		clk_rate_exclusive_put(imx882->xclk_source);
++		imx882->source_rate_exclusive = false;
++	}
++}
++
++static int imx882_mclk_acquire(struct imx882_identity *imx882)
++{
++	int ret;
++
++	if (clk_is_match(imx882->xclk, imx882->xclk_source))
++		return -EINVAL;
++	ret = clk_rate_exclusive_get(imx882->xclk);
++	if (ret)
++		return ret;
++	imx882->rate_exclusive = true;
++	/* Do not reparent an output left running by another owner. */
++	if (__clk_is_enabled(imx882->xclk)) {
++		ret = -EBUSY;
++		goto release;
++	}
++	ret = clk_rate_exclusive_get(imx882->xclk_source);
++	if (ret)
++		goto release;
++	imx882->source_rate_exclusive = true;
++	/* B4.1 uses UVPLL192M_D8. Never tune the shared PLL to obtain 24 MHz. */
++	if (clk_get_rate(imx882->xclk_source) != IMX882_XCLK_RATE) {
++		ret = -ERANGE;
++		goto release;
++	}
++	ret = clk_set_parent(imx882->xclk, imx882->xclk_source);
++	if (ret)
++		goto release;
++	if (!clk_is_match(clk_get_parent(imx882->xclk), imx882->xclk_source) ||
++	    clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE) {
++		ret = -EIO;
++		goto release;
++	}
++	return 0;
++
++release:
++	imx882_mclk_release(imx882);
++	return ret;
++}
+ 
+ static int imx882_read_reg(struct i2c_client *client, u16 reg, u8 *value)
+ {
+@@ -82,105 +140,205 @@
+ 	return 0;
+ }
+ 
+-static int imx882_enable_supply(struct imx882_identity *imx882,
+-				int supply)
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Inserted into the actual streaming driver, using its existing power owner. */
++
++static int imx882_power_fault(struct imx882_identity *power, int error)
++{
++	if (!power->first_error)
++		power->first_error = error;
++	return power->first_error;
++}
++
++static int imx882_reset_observe(struct imx882_identity *power, int asserted)
+ {
+ 	int ret;
+ 
+-	ret = regulator_set_voltage(imx882->supplies[supply].consumer,
+-				    imx882_supply_uv[supply],
+-				    imx882_supply_uv[supply]);
+-	if (ret)
+-		return ret;
+-
+-	return regulator_enable(imx882->supplies[supply].consumer);
+-}
+-
+-static int imx882_disable_supply(struct imx882_identity *imx882,
+-				  int supply)
+-{
+-	return regulator_disable(imx882->supplies[supply].consumer);
+-}
+-
+-static int imx882_power_off(struct imx882_identity *imx882,
+-			     unsigned long enabled_supplies, bool clock_enabled)
+-{
+-	int ret, err, supply;
+-
+-	/* Descriptor values are logical; assert reset before removing power. */
+-	gpiod_set_value_cansleep(imx882->reset, 1);
+-
+-	if (clock_enabled)
+-		clk_disable_unprepare(imx882->xclk);
+-	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_off);
+-
++	ret = gpiod_get_direction(power->reset);
++	if (ret < 0)
++		return ret;
++	if (ret != 0)
++		return -EOPNOTSUPP;
++	ret = gpiod_get_value_cansleep(power->reset);
++	if (ret < 0)
++		return ret;
++	return ret == asserted ? 0 : -EIO;
++}
++
++static int imx882_reset_set(struct imx882_identity *power, int asserted)
++{
++	int ret;
++
++	ret = gpiod_set_value_cansleep(power->reset, asserted);
++	if (!ret)
++		ret = imx882_reset_observe(power, asserted);
++	return ret ? imx882_power_fault(power, ret) : 0;
++}
++
++static int imx882_supplies_observe(struct imx882_identity *power, int enabled)
++{
++	int supply, ret;
++
++	for (supply = 0; supply < IMX882_NUM_SUPPLIES; supply++) {
++		ret = regulator_is_enabled(power->supplies[supply].consumer);
++		if (ret < 0)
++			return ret;
++		if (!!ret != enabled)
++			return enabled ? -EIO : -EBUSY;
++	}
++	return 0;
++}
++
++static int imx882_idle_check(struct imx882_identity *power)
++{
++	if (__clk_is_enabled(power->xclk))
++		return -EBUSY;
++	return imx882_supplies_observe(power, 0);
++}
++
++static int imx882_mclk_check(struct imx882_identity *power)
++{
++	if (!clk_is_match(clk_get_parent(power->xclk), power->xclk_source) ||
++	    clk_get_rate(power->xclk_source) != IMX882_XCLK_RATE ||
++	    clk_get_rate(power->xclk) != IMX882_XCLK_RATE ||
++	    !__clk_is_enabled(power->xclk))
++		return -EIO;
++	return 0;
++}
++
++static int imx882_power_validate(struct imx882_identity *power)
++{
++	int ret;
++
++	if (power->first_error)
++		return power->first_error;
++	ret = imx882_mclk_check(power);
++	if (!ret)
++		ret = imx882_supplies_observe(power, 1);
++	if (!ret)
++		ret = imx882_reset_observe(power, 0);
++	return ret ? imx882_power_fault(power, ret) : 0;
++}
++
++static int imx882_enable_supply(struct imx882_identity *power, int supply)
++{
++	int ret;
++
++	ret = regulator_set_voltage(power->supplies[supply].consumer,
++				    imx882_supply_uv[supply], imx882_supply_uv[supply]);
++	if (!ret)
++		ret = regulator_enable(power->supplies[supply].consumer);
++	return ret ? imx882_power_fault(power, ret) : 0;
++}
++
++static int imx882_power_off(struct imx882_identity *power,
++			    unsigned long *enabled_supplies, bool *clock_enabled)
++{
++	int ret, supply;
++
++	/* Do not retry an uncertain transition or discard its successful inputs. */
++	if (power->first_error)
++		return power->first_error;
++	if (!power->rate_exclusive && !power->source_rate_exclusive &&
++	    !*enabled_supplies && !*clock_enabled && !power->mclk_selected)
++		return 0;
++	ret = imx882_reset_set(power, 1);
++	if (ret)
++		return ret;
++	if (*clock_enabled) {
++		clk_disable_unprepare(power->xclk);
++		*clock_enabled = false;
++	}
++	/* A competing enable is not ours to force OFF by changing pad mux. */
++	if (__clk_is_enabled(power->xclk))
++		return imx882_power_fault(power, -EBUSY);
++	if (power->mclk_selected) {
++		ret = pinctrl_select_state(power->pinctrl, power->mclk_off);
++		if (ret)
++			return imx882_power_fault(power, ret);
++		power->mclk_selected = false;
++	}
+ 	for (supply = IMX882_NUM_SUPPLIES - 1; supply >= 0; supply--) {
+-		if (!(enabled_supplies & BIT(supply)))
++		if (!(*enabled_supplies & BIT(supply)))
+ 			continue;
+-		err = imx882_disable_supply(imx882, supply);
+-		if (!ret)
+-			ret = err;
+-	}
+-	if (imx882->rate_exclusive) {
+-		clk_rate_exclusive_put(imx882->xclk);
+-		imx882->rate_exclusive = false;
+-	}
+-	return ret;
+-}
+-
+-static int imx882_power_on(struct imx882_identity *imx882,
+-			   unsigned long *enabled_supplies,
+-			   bool *clock_enabled)
++		ret = regulator_disable(power->supplies[supply].consumer);
++		if (ret)
++			return imx882_power_fault(power, ret);
++		/* This clears only our successful reference, not another user's rail. */
++		*enabled_supplies &= ~BIT(supply);
++	}
++	imx882_mclk_release(power);
++	return 0;
++}
++
++static int imx882_power_on(struct imx882_identity *power,
++			   unsigned long *enabled_supplies, bool *clock_enabled)
+ {
+ 	int ret;
+ 
+-	ret = clk_set_rate_exclusive(imx882->xclk, IMX882_XCLK_RATE);
+-	if (ret)
+-		return ret;
+-	imx882->rate_exclusive = true;
+-	if (clk_get_rate(imx882->xclk) != IMX882_XCLK_RATE)
+-		return -EINVAL;
+-
+-	gpiod_set_value_cansleep(imx882->reset, 1);
+-
+-	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AFVDD);
++	if (power->first_error)
++		return power->first_error;
++	if (*enabled_supplies || *clock_enabled || power->rate_exclusive ||
++	    power->source_rate_exclusive || power->mclk_selected)
++		return -EBUSY;
++	ret = imx882_idle_check(power);
++	if (ret)
++		return ret;
++	ret = imx882_mclk_acquire(power);
++	if (ret)
++		return ret;
++	/* Reobserve supplies before the first reset direction/output write. */
++	ret = imx882_idle_check(power);
++	if (ret) {
++		imx882_mclk_release(power);
++		return ret;
++	}
++	ret = gpiod_direction_output(power->reset, 1);
++	if (!ret)
++		ret = imx882_reset_observe(power, 1);
++	if (ret)
++		return imx882_power_fault(power, ret);
++
++	ret = imx882_enable_supply(power, IMX882_SUPPLY_AFVDD);
+ 	if (ret)
+ 		return ret;
+ 	*enabled_supplies |= BIT(IMX882_SUPPLY_AFVDD);
+ 	usleep_range(1000, 1100);
+-
+-	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_AVDD);
++	ret = imx882_enable_supply(power, IMX882_SUPPLY_AVDD);
+ 	if (ret)
+ 		return ret;
+ 	*enabled_supplies |= BIT(IMX882_SUPPLY_AVDD);
+-
+-	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DVDD);
++	ret = imx882_enable_supply(power, IMX882_SUPPLY_DVDD);
+ 	if (ret)
+ 		return ret;
+ 	*enabled_supplies |= BIT(IMX882_SUPPLY_DVDD);
+ 	usleep_range(1000, 1100);
+-
+-	ret = imx882_enable_supply(imx882, IMX882_SUPPLY_DOVDD);
++	ret = imx882_enable_supply(power, IMX882_SUPPLY_DOVDD);
+ 	if (ret)
+ 		return ret;
+ 	*enabled_supplies |= BIT(IMX882_SUPPLY_DOVDD);
+ 	usleep_range(1000, 1100);
+-
+-	ret = pinctrl_select_state(imx882->pinctrl, imx882->mclk_4ma);
+-	if (ret)
+-		return ret;
+-
+-	ret = clk_prepare_enable(imx882->xclk);
+-	if (ret)
+-		return ret;
++	ret = pinctrl_select_state(power->pinctrl, power->mclk_4ma);
++	if (ret)
++		return imx882_power_fault(power, ret);
++	power->mclk_selected = true;
++	ret = clk_prepare_enable(power->xclk);
++	if (ret)
++		return imx882_power_fault(power, ret);
+ 	*clock_enabled = true;
+ 	usleep_range(5000, 5100);
+-
+-	gpiod_set_value_cansleep(imx882->reset, 0);
++	ret = imx882_mclk_check(power);
++	if (!ret)
++		ret = imx882_supplies_observe(power, 1);
++	if (ret)
++		return imx882_power_fault(power, ret);
++	ret = imx882_reset_set(power, 0);
++	if (ret)
++		return ret;
+ 	usleep_range(1000, 1100);
+-
+-	return 0;
+-}
++	return 0;
++}
++
+ 
+ /* Appended to the existing, checked IMX882 board power helpers by generate.py. */
+ 
+@@ -202,6 +360,8 @@
+ 	bool clock_enabled;
+ 	bool streaming;
+ 	bool faulted;
++	bool supplies_acquired;
++	int first_error;
+ };
+ 
+ static struct imx882_camera *to_imx882(struct v4l2_subdev *sd)
+@@ -224,6 +384,90 @@
+ 	return (struct imx882_bus) { .write = imx882_write, .context = camera };
+ }
+ 
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Real resource lifetime, including remove after an unsuccessful shutdown. */
++
++static bool imx882_power_active(struct imx882_camera *camera)
++{
++	return camera->enabled_supplies || camera->clock_enabled ||
++		camera->power.rate_exclusive || camera->power.source_rate_exclusive ||
++		camera->power.mclk_selected;
++}
++
++static int imx882_camera_fault(struct imx882_camera *camera, int error)
++{
++	if (!camera->first_error)
++		camera->first_error = error;
++	camera->faulted = true;
++	return camera->first_error;
++}
++
++static void imx882_resources_put(struct imx882_camera *camera)
++{
++	struct imx882_identity *power = &camera->power;
++	struct device *dev = &camera->client->dev;
++
++	if (!IS_ERR_OR_NULL(power->reset))
++		gpiod_put(power->reset);
++	if (!IS_ERR_OR_NULL(power->pinctrl))
++		pinctrl_put(power->pinctrl);
++	if (!IS_ERR_OR_NULL(power->xclk_source))
++		clk_put(power->xclk_source);
++	if (!IS_ERR_OR_NULL(power->xclk))
++		clk_put(power->xclk);
++	if (camera->supplies_acquired)
++		regulator_bulk_free(IMX882_NUM_SUPPLIES, power->supplies);
++	kfree(camera);
++	put_device(dev);
++}
++
++/* SPDX-License-Identifier: GPL-2.0-only */
++
++static int imx882_resources_get(struct imx882_camera *camera)
++{
++	struct device *dev = &camera->client->dev;
++	struct imx882_identity *power = &camera->power;
++	int ret, i;
++
++	for (i = 0; i < IMX882_NUM_SUPPLIES; i++) {
++		char property[32];
++
++		snprintf(property, sizeof(property), "%s-supply", imx882_supply_names[i]);
++		if (!device_property_present(dev, property))
++			return -EINVAL;
++		power->supplies[i].supply = imx882_supply_names[i];
++	}
++	ret = regulator_bulk_get(dev, IMX882_NUM_SUPPLIES, power->supplies);
++	if (ret)
++		return ret;
++	camera->supplies_acquired = true;
++	power->xclk = clk_get(dev, "xclk");
++	if (IS_ERR(power->xclk))
++		return PTR_ERR(power->xclk);
++	power->xclk_source = clk_get(dev, "xclk-source");
++	if (IS_ERR(power->xclk_source))
++		return PTR_ERR(power->xclk_source);
++	power->pinctrl = pinctrl_get(dev);
++	if (IS_ERR(power->pinctrl))
++		return PTR_ERR(power->pinctrl);
++	power->mclk_off = pinctrl_lookup_state(power->pinctrl, "mclk-off");
++	if (IS_ERR(power->mclk_off))
++		return PTR_ERR(power->mclk_off);
++	power->mclk_4ma = pinctrl_lookup_state(power->pinctrl, "mclk-4ma");
++	if (IS_ERR(power->mclk_4ma))
++		return PTR_ERR(power->mclk_4ma);
++	/* ASIS still has a mux-writing request callback; this is not handoff proof. */
++	ret = imx882_idle_check(power);
++	if (ret)
++		return ret;
++	power->reset = gpiod_get(dev, "reset", GPIOD_ASIS);
++	if (IS_ERR(power->reset))
++		return PTR_ERR(power->reset);
++	if (!gpiod_is_active_low(power->reset))
++		return -EINVAL;
++	return 0;
++}
++
+ static int imx882_apply_controls(struct imx882_camera *camera)
+ {
+ 	struct imx882_bus bus = imx882_bus(camera);
+@@ -246,11 +490,14 @@
+ 					min(1000, maximum));
+ 	}
+ 	if (camera->faulted)
+-		return -EIO;
+-	if (camera->streaming)
+-		ret = imx882_apply_controls(camera);
+-	if (ret)
+-		camera->faulted = true;
++		return camera->first_error;
++	if (camera->streaming) {
++		ret = imx882_power_validate(&camera->power);
++		if (!ret)
++			ret = imx882_apply_controls(camera);
++	}
++	if (ret)
++		return imx882_camera_fault(camera, ret);
+ 	return ret;
+ }
+ 
+@@ -382,21 +629,21 @@
+ {
+ 	int ret = 0, cleanup;
+ 
+-	if (camera->streaming)
++	if (camera->power.first_error)
++		return imx882_camera_fault(camera, camera->power.first_error);
++	if (camera->streaming) {
+ 		ret = imx882_write(camera, 0x0100, 0);
+-	cleanup = imx882_power_off(&camera->power, camera->enabled_supplies,
+-				 camera->clock_enabled);
+-	if (!ret)
+-		ret = cleanup;
++		if (ret)
++			imx882_camera_fault(camera, ret);
++	}
++	cleanup = imx882_power_off(&camera->power, &camera->enabled_supplies,
++				 &camera->clock_enabled);
++	if (cleanup)
++		return imx882_camera_fault(camera, cleanup);
++	/* Reset containment and successful reference releases permit a fresh start. */
+ 	camera->streaming = false;
+-	if (cleanup) {
+-		/* An uncertain supply reference must not be enabled a second time. */
+-		camera->faulted = true;
+-		return ret;
+-	}
+-	camera->enabled_supplies = 0;
+-	camera->clock_enabled = false;
+ 	camera->faulted = false;
++	camera->first_error = 0;
+ 	return ret;
+ }
+ 
+@@ -409,15 +656,17 @@
+ 
+ 	mutex_lock(&camera->lock);
+ 	if (!enable) {
+-		ret = camera->streaming ? imx882_stop(camera) : 0;
++		ret = imx882_stop(camera);
+ 		goto unlock;
+ 	}
+ 	if (camera->faulted) {
+-		ret = -EIO;
++		ret = camera->first_error;
+ 		goto unlock;
+ 	}
+ 	if (camera->streaming) {
+-		ret = 0;
++		ret = imx882_power_validate(&camera->power);
++		if (ret)
++			ret = imx882_camera_fault(camera, ret);
+ 		goto unlock;
+ 	}
+ 	ret = imx882_power_on(&camera->power, &camera->enabled_supplies,
+@@ -457,10 +706,11 @@
+ 	camera->streaming = true;
+ 	goto unlock;
+ failed:
+-	/* Reset/power-down contains even an ambiguous final stream-on write. */
++	imx882_camera_fault(camera, ret);
++	/* Only a checked reset/power-down contains an ambiguous stream-on. */
+ 	cleanup = imx882_stop(camera);
+-	if (cleanup)
+-		dev_err(&camera->client->dev, "camera cleanup failed: %d\n", cleanup);
++	if (cleanup && camera->power.first_error)
++		dev_err(&camera->client->dev, "camera cleanup failed: %d\n", camera->power.first_error);
+ 	dev_err(&camera->client->dev, "camera start failed: %d\n", ret);
+ unlock:
+ 	mutex_unlock(&camera->lock);
+@@ -498,11 +748,12 @@
+ 	};
+ 	struct fwnode_handle *ep;
+ 	struct imx882_camera *camera;
+-	struct imx882_identity *power;
+ 	struct v4l2_ctrl *pixel_rate;
+ 	u32 lanes[3], xclk_rate;
+-	int ret, i;
+-
++	int ret;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
++		return -EOPNOTSUPP;
+ 	ep = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
+ 	if (!ep)
+ 		return dev_err_probe(dev, -EINVAL, "missing C-PHY endpoint\n");
+@@ -530,38 +781,16 @@
+ 	ret = device_property_read_u32(dev, "clock-frequency", &xclk_rate);
+ 	if (ret || xclk_rate != IMX882_XCLK_RATE)
+ 		return dev_err_probe(dev, -EINVAL, "requires explicit 24 MHz xclk claim\n");
+-	camera = devm_kzalloc(dev, sizeof(*camera), GFP_KERNEL);
++	camera = kzalloc(sizeof(*camera), GFP_KERNEL);
+ 	if (!camera)
+ 		return -ENOMEM;
+-	power = &camera->power;
++	get_device(dev);
+ 	camera->client = client;
+ 	camera->mode = &imx882_modes[0];
+ 	camera->cphy = endpoint.bus.mipi_csi2;
+-	for (i = 0; i < IMX882_NUM_SUPPLIES; i++)
+-		power->supplies[i].supply = imx882_supply_names[i];
+-	ret = devm_regulator_bulk_get(dev, IMX882_NUM_SUPPLIES, power->supplies);
+-	if (ret)
+-		return dev_err_probe(dev, ret, "camera supplies unavailable\n");
+-	power->xclk = devm_clk_get(dev, "xclk");
+-	if (IS_ERR(power->xclk))
+-		return PTR_ERR(power->xclk);
+-	power->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
+-	if (IS_ERR(power->reset))
+-		return PTR_ERR(power->reset);
+-	if (!gpiod_is_active_low(power->reset))
+-		return dev_err_probe(dev, -EINVAL, "reset must be active-low\n");
+-	ret = gpiod_direction_output(power->reset, 1);
+-	if (ret)
+-		return ret;
+-	power->pinctrl = devm_pinctrl_get(dev);
+-	if (IS_ERR(power->pinctrl))
+-		return PTR_ERR(power->pinctrl);
+-	power->mclk_off = pinctrl_lookup_state(power->pinctrl, "mclk-off");
+-	if (IS_ERR(power->mclk_off))
+-		return PTR_ERR(power->mclk_off);
+-	power->mclk_4ma = pinctrl_lookup_state(power->pinctrl, "mclk-4ma");
+-	if (IS_ERR(power->mclk_4ma))
+-		return PTR_ERR(power->mclk_4ma);
++	ret = imx882_resources_get(camera);
++	if (ret)
++		goto release_resources;
+ 	mutex_init(&camera->lock);
+ 	v4l2_i2c_subdev_init(&camera->sd, client, &imx882_subdev_ops);
+ 	camera->sd.internal_ops = &imx882_internal_ops;
+@@ -608,6 +837,8 @@
+ free_controls:
+ 	v4l2_ctrl_handler_free(&camera->controls);
+ 	mutex_destroy(&camera->lock);
++release_resources:
++	imx882_resources_put(camera);
+ 	return ret;
+ }
+ 
+@@ -619,7 +850,7 @@
+ 
+ 	v4l2_async_unregister_subdev(sd);
+ 	mutex_lock(&camera->lock);
+-	ret = camera->streaming ? imx882_stop(camera) : 0;
++	ret = imx882_stop(camera);
+ 	mutex_unlock(&camera->lock);
+ 	if (ret)
+ 		dev_err(&client->dev, "camera removal shutdown failed: %d\n", ret);
+@@ -627,6 +858,12 @@
+ 	media_entity_cleanup(&sd->entity);
+ 	v4l2_ctrl_handler_free(&camera->controls);
+ 	mutex_destroy(&camera->lock);
++	if (camera->power.first_error || imx882_power_active(camera)) {
++		/* Built-in storage/device/resources survive uncertain shutdown. */
++		dev_err(&client->dev, "camera power owner retained until reboot\n");
++		return;
++	}
++	imx882_resources_put(camera);
+ }
+ 
+ static int imx882_camera_suspend(struct device *dev)
+@@ -637,7 +874,7 @@
+ 
+ 	mutex_lock(&camera->lock);
+ 	/* The receiver must stop the stream first; do not silently lose frames. */
+-	ret = camera->streaming || camera->faulted ? -EBUSY : 0;
++	ret = camera->streaming || camera->faulted || imx882_power_active(camera) ? -EBUSY : 0;
+ 	mutex_unlock(&camera->lock);
+ 	return ret;
+ }
+@@ -655,6 +892,7 @@
+ 	.remove = imx882_camera_remove,
+ 	.driver = {
+ 		.name = "tetris-imx882-stream",
++		.suppress_bind_attrs = true,
+ 		.of_match_table = imx882_camera_of_match,
+ 		.pm = pm_sleep_ptr(&imx882_camera_pm),
+ 	},
+diff --git a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml
+--- a/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/nothing,tetris-imx882-stream.yaml
+@@ -21,9 +21,13 @@
+   reg:
+     maxItems: 1
+   clocks:
+-    maxItems: 1
++    items:
++      - description: CAMTG2_SEL selector and gate
++      - description: UVPLL192M_D8 source, already at 24 MHz
+   clock-names:
+-    const: xclk
++    items:
++      - const: xclk
++      - const: xclk-source
+   clock-frequency:
+     const: 24000000
+   afvdd-supply:
+diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
+--- a/drivers/media/i2c/Kconfig
++++ b/drivers/media/i2c/Kconfig
+@@ -785,7 +785,8 @@
+ 	  explicitly selected bring-up device trees only.
+ 
+ config VIDEO_IMX882_TETRIS
+-	tristate "Nothing Tetris IMX882 V4L2 streaming candidate"
++	bool "Nothing Tetris IMX882 V4L2 streaming candidate"
++	default n
+ 	depends on I2C && OF && GPIOLIB && COMMON_CLK && REGULATOR && PINCTRL
+ 	depends on VIDEO_DEV && MEDIA_CONTROLLER
+ 	select V4L2_FWNODE

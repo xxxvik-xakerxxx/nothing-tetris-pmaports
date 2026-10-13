@@ -1,0 +1,33 @@
+{
+  "status": "frozen API and future opt-in1010; static source/patch checks only; native fixtures, matching full module/image and hardware validation pending",
+  "connectivity_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "patch": "1010-vendor-gnss-readonly-session-snapshot.patch.vendor",
+  "patch_sha512": "aced43779a9831047a8fa387063c45a5a3d8b14bf0112a7caf334d4b39caeedbd7335f2c057f647269e4ef8de93f98103ae2d29c25b4374e23454b0b9a3d40e6",
+  "frozen_api_sha256": {
+    "session.c": "cde72c840093c0219a2dad428f36f901973c144394b951c72ba3c8bd353ecf1a",
+    "session.h": "fe737224e76da649752431941ed1e531b6baf606e1db4bddbe440ba5e7eb5b25",
+    "gpsdl_v051_session.h": "a03a39ea38871dd0ce6b8d48d938de53c4020ab8b5eeb02265310ad1ff636411"
+  },
+  "prerequisite_contract": "unchanged write-boundary/STAGING.json; exact package1001..1008 plus pinned1009 in order",
+  "baseline_sha512": {
+    "connectivity/gps/data_link/linux/gps_each_device.c": "3fcaa8876171a52f38c29db1f56a1252bb1d09a45b60e073675059aac492897e84a1295405c1a16ec3ab551527e3fd988ca4763c9657d7f57710767a5f946dd4",
+    "connectivity/gps/data_link/hal/gps_dsp_fsm.c": "8d6dbda357179751670089615f6f7fcb934ebd4a45f62a6d8eaa0900523388a7fe9e16c8d2365ca93cb763edffcdc76c3b6c2a27340862fb8a94fe0f83274844",
+    "connectivity/gps/data_link/hal/inc/gps_dsp_fsm.h": "da7db0a49944cae70d669370127a33b461e542bd40a37ac28c424d4cce231e8f41b93f2f60aabec38d79e72a7e06794baa9a95075778ff700477d197bd3586e8",
+    "connectivity/gps/data_link/linux/inc/uapi/gpsdl_v051_session.h": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+  },
+  "shipping_activation": false,
+  "firmware_writes_added_by_patch": false,
+  "compiled": false,
+  "hardware_tested": false,
+  "phone_abi_compatible": false,
+  "integration_contract": "CI-INTEGRATION.md; parent-owned tracked download caller and new opt-in matched-image composition",
+  "installed_module_identity": "r188 read-only sysfs/modinfo identify gps_drv_dl_v051.ko, vermagic 6.18.0 SMP preempt mod_unload aarch64; this does not establish new31 support or arbitrary replacement source identity",
+  "next_gates": [
+    "CI actual-source snapshot and native controller ASan/UBSan fixtures",
+    "CI full matching kernel, connadp, conninfra and selected v051 GPS backend build/modpost with opt-in1010",
+    "new matched candidate image; no patching installed modules or claim of r188 ABI compatibility",
+    "cold recovery before any supervised hardware session",
+    "same-fd real WORK, explicit FW stop, real RST then HW_STOP/SUSPENDED and clean close",
+    "source-complete navigation initialization/output semantics and independently acquired accurate UTC seed"
+  ]
+}

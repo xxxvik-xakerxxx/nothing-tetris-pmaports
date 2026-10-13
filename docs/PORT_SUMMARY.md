@@ -154,6 +154,18 @@ U-Boot's bounded late GPUEB DT clone passed
 at `f0f204bfdf`; its retention profile has not been installed and remains separate
 from the modem BROM profile. The phone still uses the verified `f25c01444a` loader.
 
+The native GNSS session candidate adds read-only ioctl31 and keeps the actual
+download descriptor through sampled WORK and source-backed stop. A failed
+attempt enters a live recovery-hold rather than implicitly closing on exit.
+The installed backend was identified read-only as `gps_drv_dl_v051.ko`; the new
+ABI still requires a new matching kernel/supplier/module image before testing.
+IMX882's actual streaming driver now has a staged 24-MHz source contract and
+checked partial-power/reset lifecycle. Camera and cellular compile paths are
+independent in CI; neither is activated by these object-only gates.
+In [CI38416891458](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38416891458),
+all four joined GPUEB ARM64 units compiled, but internal-link validation failed.
+No reset-held installation, DRAM publication or accelerated rendering was tested.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

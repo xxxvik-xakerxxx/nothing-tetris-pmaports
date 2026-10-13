@@ -143,6 +143,22 @@ class RealOnCITests(unittest.TestCase):
         self.assertIn("SCSI_UFS_MEDIATEK_DBG", ci.DISABLED)
         self.assertTrue(set(stage.wakeup.SLEEP_API) <= set(ci.REQUIRED))
 
+    def test_dynamic_dt_and_kexec_selectors_are_disabled_together(self):
+        self.assertTrue({"OF_OVERLAY", "OF_UNITTEST", "OF_DYNAMIC",
+                         "KEXEC", "KEXEC_FILE", "KEXEC_CORE"} <= set(ci.DISABLED))
+        source = (stage.HERE / "ci.py").read_text()
+        configure = source[source.index("def configure("):source.index("def ir_callbacks(")]
+        self.assertLess(configure.index("for symbol in DISABLED:"), configure.index('"olddefconfig"'))
+        self.assertIn('check_disabled(lines, DISABLED + (() if enabled else REAL))', configure)
+        self.assertIn('"LTO_CLANG_THIN", "CFI", "CFI_PERMISSIVE"', configure)
+
+    def test_invisible_n_is_disabled_but_every_assignment_is_rejected(self):
+        for lines in ([], ["# CONFIG_OF_DYNAMIC is not set"], ["CONFIG_OF=y"]):
+            ci.check_disabled(lines, ("OF_DYNAMIC",))
+        for value in ("y", "m", "n", "1", '"invalid"'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ci.check_disabled(["CONFIG_OF_DYNAMIC=" + value], ("OF_DYNAMIC",))
+
     def test_ir_callbacks_resolve_optimization_suffix_and_alias_pointer(self):
         ir = ('define internal i32 @md_on.llvm.123(ptr %p) { ret i32 0 }\n'
               '@md_on = internal alias i32(ptr), ptr @md_on.llvm.123\n'

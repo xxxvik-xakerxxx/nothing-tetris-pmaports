@@ -72,6 +72,7 @@ jobs:
           git fetch --no-tags --depth=1 origin cbb777d415b564c1e40598740288c0c9d953e745
           python3 ci/test-kernel-object-smoke.py
           python3 -B ci/test-native-camera-link.py
+          python3 -B ci/test-native-camera-stream-smoke.py
           python3 -B ci/test-native-modem-image.py
           python3 -B ci/test-gnss-tx-image.py
           python3 -B ci/test-native-gnss-image.py
@@ -595,6 +596,7 @@ jobs:
       - name: Trust the checked-out CI workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Compile isolated AArch64 candidate objects
+        id: kernel_candidates
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           if [ '${{ inputs.research_owner_smoke }}' = true ]; then
@@ -610,6 +612,7 @@ jobs:
         if: ${{ inputs.research_owner_smoke }}
         run: sh patches/gpu/boot-owner/dram/run-ci.sh
       - name: Fetch pinned hardware sources for native callbacks
+        id: hardware_sources
         if: ${{ !inputs.research_owner_smoke }}
         run: |
           git init /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878
@@ -623,6 +626,7 @@ jobs:
             https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git \
             e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
       - name: Compile genuine native modem ON callbacks
+        id: modem_on
         if: ${{ !inputs.research_owner_smoke }}
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -654,7 +658,7 @@ jobs:
             --output /tmp/tetris-native-start-objects \
             --report /tmp/tetris-native-start-evidence/BUILD-MANIFEST.json --enable-native-start
       - name: Compile observed-OFF camera rail provider
-        if: ${{ !inputs.research_owner_smoke }}
+        if: ${{ always() && !inputs.research_owner_smoke && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B patches/camera-camisp/rail-owner/run_ci.py \
@@ -663,6 +667,17 @@ jobs:
             --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
             --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
             --output /tmp/tetris-camera-rail-objects --report /tmp/tetris-camera-rail-evidence
+      - name: Compile real IMX882 streaming lifecycle
+        if: ${{ always() && !inputs.research_owner_smoke && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B ci/native-camera-stream-smoke.py \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --prepared-output /tmp/tetris-kernel-smoke/objects \
+            --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
+            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            --output /tmp/tetris-camera-stream-objects --report /tmp/tetris-camera-stream-evidence
       - uses: actions/upload-artifact@v7
         if: always() && !inputs.research_owner_smoke
         with:
@@ -673,6 +688,7 @@ jobs:
             /tmp/tetris-native-start-objects/**/fsm/*.o
             /tmp/tetris-native-start-objects/**/hif/*.o
             /tmp/tetris-camera-rail-evidence/
+            /tmp/tetris-camera-stream-evidence/
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always() && !inputs.research_owner_smoke
@@ -680,7 +696,9 @@ jobs:
           name: native-modem-real-on-object-evidence
           path: |
             /tmp/tetris-modem-real-on-evidence/
-            /tmp/tetris-modem-real-on-objects/
+            /tmp/tetris-modem-real-on-objects/**/mtk-pm-domains.o
+            /tmp/tetris-modem-real-on-objects/**/mt6363-regulator.o
+            /tmp/tetris-modem-real-on-objects/**/mt6878-nothing-tetris-native-md-first-off.dtb
           if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always()
