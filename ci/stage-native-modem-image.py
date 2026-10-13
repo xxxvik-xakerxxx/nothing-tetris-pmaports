@@ -69,7 +69,8 @@ SUPPLIER_DTS = """
 
 
 def frozen(path):
-    return subprocess.check_output(["git", "-C", str(ROOT), "show", SOURCE + ":" + path])
+    source = Path(os.environ.get("TETRIS_NATIVE_SOURCE_TREE", str(ROOT)))
+    return subprocess.check_output(["git", "-C", str(source), "show", SOURCE + ":" + path])
 
 
 def change_once(text, old, new):

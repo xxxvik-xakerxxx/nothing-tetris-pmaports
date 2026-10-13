@@ -12,6 +12,8 @@ import zipfile
 RUN = 38325598818
 COMMIT = "322cf227f2ea26a7e319d20e3ce0321db8a38f15"
 REPO = "xxxvik-xakerxxx/u-boot"
+ARCHIVE_SHA256 = "2e94bd0a8a0ce5cd8b0b33eaf75e48d652ce177d3e226c12bfb270ba33d06091"
+ARCHIVE_URL = "https://github.com/" + REPO + "/releases/download/native-md-first-off-322cf227/tetris-native-md-first-off-322cf227.zip"
 PROFILE = {
     "commit": COMMIT,
     "modem_startup_off": "disabled",
@@ -25,8 +27,8 @@ PROFILE = {
 }
 
 
-def read(url, token, limit):
-    request = Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"})
+def read(url, limit):
+    request = Request(url)
     with urlopen(request, timeout=60) as response:
         data = response.read(limit + 1)
     if len(data) > limit:
@@ -57,22 +59,18 @@ def checked_image(archive):
 def main():
     if os.environ.get("CI") != "true" or os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("paired loader selection is GitHub CI-only")
-    token = os.environ["GH_TOKEN"]
-    api = "https://api.github.com/repos/" + REPO + "/actions/runs/" + str(RUN)
-    run = json.loads(read(api, token, 1024 * 1024))
-    if run["head_sha"] != COMMIT or run["status"] != "completed" or run["conclusion"] != "success":
-        raise ValueError("paired loader build did not complete successfully at the frozen source")
-    artifacts = json.loads(read(api + "/artifacts", token, 1024 * 1024))["artifacts"]
-    matches = [a for a in artifacts if a["name"] == "mt6878-tetris-u-boot" and not a["expired"]]
-    if len(matches) != 1 or matches[0]["size_in_bytes"] > 50 * 1024 * 1024:
-        raise ValueError("paired loader artifact missing/ambiguous/oversized")
-    artifact = matches[0]
-    image, digest, manifest = checked_image(read(artifact["archive_download_url"], token, 50 * 1024 * 1024))
+    # Public immutable-hash mirror of the individually verified successful CI
+    # artifact. No cross-repository Actions token or mutable latest release.
+    archive = read(ARCHIVE_URL, 16 * 1024 * 1024)
+    if hashlib.sha256(archive).hexdigest() != ARCHIVE_SHA256:
+        raise ValueError("paired loader release archive identity mismatch")
+    image, digest, manifest = checked_image(archive)
     output = Path("/work/out")
     output.mkdir(parents=True, exist_ok=True)
     (output / "u-boot-tetris-lk.img").write_bytes(image)
     (output / "native-modem-uboot.json").write_text(json.dumps(dict(
-        run=RUN, artifact=artifact["id"], sha256=digest, manifest=manifest), indent=2) + "\n")
+        run=RUN, artifact=11780752419, archive_url=ARCHIVE_URL,
+        archive_sha256=ARCHIVE_SHA256, sha256=digest, manifest=manifest), indent=2) + "\n")
     with Path(os.environ["GITHUB_ENV"]).open("a") as env:
         env.write("TETRIS_UBOOT_COMMIT=" + COMMIT + "\nTETRIS_UBOOT_SHA256=" + digest + "\n")
     print("Retained successful paired U-Boot", COMMIT, digest)

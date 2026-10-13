@@ -610,7 +610,12 @@ jobs:
         if: ${{ inputs.native_modem_first_off }}
         run: |
           cd /work
-          git fetch --no-tags --depth=1 origin cbb777d415b564c1e40598740288c0c9d953e745
+          # Alpine initially lacks git: checkout may use REST and have no .git.
+          git init out/native-source
+          git -C out/native-source fetch --no-tags --depth=1 \
+            https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports.git \
+            cbb777d415b564c1e40598740288c0c9d953e745
+          export TETRIS_NATIVE_SOURCE_TREE=/work/out/native-source
           python3 -B ci/stage-native-modem-image.py --pmaports upstream/pmaports \
             --report out/native-modem-image-profile.json
       - name: Prepare pmbootstrap workdir
@@ -706,8 +711,6 @@ jobs:
             { tail -n 300 /pmwork/work/log.txt || true; exit 1; }
       - name: Select successful paired native modem loader
         if: ${{ inputs.native_modem_first_off }}
-        env:
-          GH_TOKEN: ${{ secrets.NATIVE_MODEM_UBOOT_READ_TOKEN || github.token }}
         run: python3 /work/ci/select-native-modem-uboot.py
       - name: Build install images
         id: install_images
