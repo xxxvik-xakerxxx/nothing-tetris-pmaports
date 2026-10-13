@@ -1,4 +1,4 @@
-# Port summary, 2026-10-13
+# Port summary, 2026-10-14
 
 Native postmarketOS port for Nothing CMF Phone 1 (`nothing-tetris`, MT6878).
 Experimental, not a fully functional daily-driver phone.
@@ -6,7 +6,42 @@ Current development is in [pmOS main](https://github.com/xxxvik-xakerxxx/nothing
 and the maintainer's [U-Boot master](https://github.com/xxxvik-xakerxxx/u-boot).
 The shared MT6878-Mainline U-Boot repository has not been updated by this work.
 
-## Latest installed checkpoint: r188
+## Latest installed checkpoint: r189
+
+[CI38459810405](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38459810405)
+at `3e64a1780cfc4ebea87d8adc4f1b442e97f5986e` passed all five jobs.
+Artifact `nothing-tetris-native-md-gnss-session-images` ZIP SHA256:
+`7dc0fd4b17285cd62538c75715ca5fd55a6c515b8c99f0886d5c8d968dc46ca5`.
+Every image digest and all 7641 sparse chunks passed verification. Clean
+`super`/`userdata` writes succeeded; both LK slots and factory partitions were
+untouched. Exact installed `f25c0144` loader bytes were verified before flashing.
+
+User-confirmed physical cold boot `511fa96d-d85f-41e0-9e2f-e5a7ec223d2c`
+reports Linux `6.18.0 #190`, kernel `7.2.1-r189`, device `8-r20`, 104.5 GiB
+rootfs and no failed systemd units. FIT readback matches
+`dcf2e5e4a6893c2665a4db45ceb973566d92953bfec4c82c17a9e487e9ccbcf4`.
+USB/SSH and sensor/proxy/connectivity services are active; the user confirmed
+display, touch, rotation and auto-brightness. Native MD first-OFF is recorded;
+native ON, SIM/network registration and calls are not installed functionality.
+
+The explicitly started opt-in GPS transport supplies the matched v051 module,
+SHA256 `c212246a8617462d94772608bd5828ca26c88a4660b601812934ac3e67de0256`.
+One fresh exclusive session used CI-built `gnss-l1-retained`, SHA256
+`7500854c8bec407fed4135b301aaec8572929a39f4fae354e69661226033269f`.
+All selected firmware fragments received matching ACKs; real ioctl31 and kernel
+events confirmed WORK, RESET_DONE and STOP/SUSPENDED. The private NVM test copy
+was removed without modifying its source partition.
+
+**Physical stop still fails.** At uptime136.072s, RAM_OKAY arrived after STOP
+with `is_err=1`. At136.317s, close's actual DSP-off check timed out after200 polls
+and the HAL reported `l1 ret=-1` before forcing the A-die off. The runner's
+software-state success is not a clean teardown certificate. GPS ended CLOSED;
+USB/SSH and sensor services survived. No second GNSS open was attempted; cold
+recovery is required before another destructive test. Navigation INIT, NMEA and
+a position fix remain unverified. The phone is intentionally offline; manual
+time synchronization may be used for tests, without an RTC/NTP porting change.
+
+## Previous installed checkpoint: r188
 
 Full image [CI38377639691](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38377639691)
 at `e19e691ee25f2edfd3e958111e08345162115d46` passed all five jobs, including
@@ -157,15 +192,16 @@ from the modem BROM profile. The phone still uses the verified `f25c01444a` load
 The native GNSS session candidate adds read-only ioctl31 and keeps the actual
 download descriptor through sampled WORK and source-backed stop. A failed
 attempt enters a live recovery-hold rather than implicitly closing on exit.
-The installed backend was identified read-only as `gps_drv_dl_v051.ko`; the new
-ABI still requires a new matching kernel/supplier/module image before testing.
+The installed backend is `gps_drv_dl_v051.ko`; r189 supplies the matching new
+ABI, tested in the current checkpoint above.
 IMX882's actual streaming driver now has a staged 24-MHz source contract and
 checked partial-power/reset lifecycle. Camera and cellular compile paths are
 independent in CI; neither is activated by these object-only gates.
 At `797e7d8c`, [CI38454201394](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38454201394)
 passed the actual GNSS snapshot/session and retained-download C fixtures under
-sanitizers, plus static AArch64 musl compilation. The new CLI is not compatible
-with installed r188: r189 must supply matching ioctl31 modules first.
+sanitizers, plus static AArch64 musl compilation. The CLI is incompatible with
+old r188; its actual ioctl31 session was tested on matched r189, with the physical
+shutdown failure retained above.
 [CI38454186695](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38454186695)
 passed joined GPUEB SRAM/reset and DRAM ARM64 compilation, internal symbol
 resolution and native allocation/failure fixtures. No reset-held installation,
@@ -176,16 +212,24 @@ the normal objects/DT, camera GPIO-rail provider and actual IMX882 streaming
 driver compiled successfully. The modem step failed on a missing resource-only
 revalidation helper. The correction preserves original physical ON validation
 and separates immutable handoff/resource checks for post-OFF callers; its
-source/application checks passed, but target recompilation is still required.
+source/application checks and actual ARM64 recompilation passed in
+[CI38459810405](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38459810405).
 The additive full CCCI link gate builds the actual kernel exports and native
 first-start callers with strict modpost. Its selected modules are not approved
 for loading into r188. The r189 image composer adds exact session patch1010
 after TX patch1009 without activating camera or GPU hardware.
+Full native CCCI [CI38461798237](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38461798237)
+completed kernel compilation but its ELF reader incorrectly required ET_EXEC
+for the actual relocatable ARM64 kernel. The correction derives ET_DYN/ET_EXEC
+from the real build config, preserves ET_REL-only modules and passes 27 source
+tests. Vendor-module/export closure still requires a fresh successful CI run.
 
 The separate default-off camera cold-capture composition connects sixteen
 production units, the streaming sensor, GPIO rails and native SMI/IOMMU/VMM
 suppliers through real built-in Kbuilds. Its independent source-only checks
-passed; actual vmlinux linkage is pending CI. It does not provide the missing
+passed; actual full vmlinux linkage passed in
+[CI38462424772](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38462424772),
+including 28 production/provider objects and ten real exports. It does not provide the missing
 board-root producer, calibrated CSI configuration or MMUP voltage-policy
 handoff, and does not enable a camera on r188/r189.
 Its additive board-root driver holds real supplier references and invokes the
@@ -195,20 +239,25 @@ RAW10/PDAF producer is still missing; no Bayer8 layout or INIT flags are invente
 
 The MFG0 cold-acquisition candidate uses the existing SCPSYS supplier and
 retains its real PM/SRAM ownership. It does not invent mandatory regulator or
-basic-clock handles absent from the NOS MFG0 descriptor. Its sixteen exact
-source checks passed; matched ARM64 compilation is pending. Actual acquisition
+basic-clock handles absent from the NOS MFG0 descriptor. Its seventeen exact
+source checks and six matched ARM64 units/internal link passed in
+[CI38465169360](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38465169360).
+Full kernel import closure and actual acquisition remain unverified. Acquisition
 must establish the signed LK entry state before any GPUEB continuation. This
 candidate does not write RPC/GPRs, release reset or claim GPU readiness.
 The additive loader diagnostic captures one initial SPM word before SCP/GPUEB
 preparation and publishes checked version/stage/error/raw fields in `/chosen`
-for Linux retrieval. Its twenty-two source/patch/reader checks passed; native
-libfdt fault tests, ARM64 compilation and a matched diagnostic boot remain
-pending. The installed `f25c0144` loader is unchanged.
+for Linux retrieval. Its twenty-two source/patch/reader checks, actual libfdt
+fault fixtures and ARM64 build passed in personal U-Boot
+[CI38468825282](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38468825282).
+A matched diagnostic boot remains pending. That GPUEB profile excludes modem
+BROM/metadata; it is not a paired radio loader. Installed `f25c0144` is unchanged.
 
 Native GNSS parsing now covers escaped frames, bounded measurement epochs and
 the actual host-position record, with supplied UTC rather than an RTC/NTP
-dependency. Seven exact asset/source checks passed; C sanitizer fixtures are
-pending CI. This is not a measurement solver or sufficient navigation INIT:
+dependency. Seven exact asset/source checks and actual C sanitizer fixtures
+passed in [CI38464542553](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38464542553).
+This is not a measurement solver or sufficient navigation INIT:
 the ordinary vendor entry can repeat DSP initialization, so it is not called
 after the retained WORK session. No location, accuracy or NMEA is fabricated.
 

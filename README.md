@@ -13,12 +13,13 @@ Native display and touch are usable; the redraw flicker fix is in main.
 Display is currently 60 Hz with software rendering. Sensors provide live
 rotation, light and proximity behavior through standard iio-sensor-proxy,
 with guarded cold-boot startup. Calibration and lifecycle remain incomplete.
-On r188, the corrected SCP loader restored automatic cold startup, rotation
+On r189, the corrected SCP loader preserves automatic cold startup, rotation
 and auto-brightness; warm reboot and power lifecycle remain incomplete.
 
 Wi-Fi, Bluetooth, audio, charging, haptics and torch have partial support.
 GNSS firmware download and a DSP WORK transition have passed a bounded native
-test; navigation and a position fix are not verified. Cellular service,
+test; physical shutdown still fails, and navigation/a position fix are not
+verified. Cellular service,
 camera capture and GPU acceleration are not working.
 
 [Current status and tested versions](docs/PORT_SUMMARY.md) |

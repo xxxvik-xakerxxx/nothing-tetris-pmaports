@@ -100,8 +100,17 @@ the corrected loader is flashed and one cold recovery passed, including
 rotation and auto-brightness. Do not treat this as
 a sensor-ready or battery-optimized release. Use the exact paired
 loader described below, not an older sensor-ready loader selected by name.
-See the maintained [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r188)
+See the maintained [previous checkpoint](PORT_SUMMARY.md#previous-installed-checkpoint-r188)
 for hashes and remaining failures.
+
+The current installed diagnostic checkpoint is r189 from
+[CI38459810405](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38459810405),
+source `3e64a1780cfc4ebea87d8adc4f1b442e97f5986e`, artifact
+`nothing-tetris-native-md-gnss-session-images`. It uses the same verified
+`f25c0144` loader and adds a read-only GNSS session ABI. Clean installation,
+USB/SSH and user-confirmed display/touch/sensors passed. One firmware WORK/STOP
+test exposed a physical shutdown failure; it is not working GPS navigation.
+See the [current checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r189).
 
 Sealed r182 previously expanded to 104.5 GiB on its first installation boot.
 The image-sealing fix is included in r188; never run `e2fsck` on mounted root.

@@ -128,6 +128,23 @@ def decode_versions(basic, extended_crcs, extended_names, cfg):
     return versions, "enforced_by_inherited_config"
 
 
+def check_linked_type(elf_type, path, cfg=None, module=True):
+    expected = "ET_REL"
+    if not module:
+        # d84 arch/arm64/Makefile: RELOCATABLE=y links -shared -Bsymbolic;
+        # scripts/Makefile.vmlinux's objcopy does not change the ELF type.
+        # Existing kernel callers omit cfg: use the actual adjacent build config,
+        # never infer admission from ET_DYN or fall back to shipping defaults.
+        if cfg is None:
+            actual = Path(path).parent / ".config"
+            require(actual.is_file(), "linked kernel has no actual build config: " + str(actual))
+            cfg = config(actual.read_text())
+        require(cfg.get("ARM64") == "y" and cfg.get("RELOCATABLE") in ("y", "n"),
+                "linked kernel requires explicit ARM64/RELOCATABLE config")
+        expected = "ET_DYN" if cfg["RELOCATABLE"] == "y" else "ET_EXEC"
+    require(elf_type == expected, "wrong linked ELF type: expected " + expected + ", got " + str(elf_type))
+
+
 def elf(path, cfg=None, module=True):
     # pyelftools is already used by the repository's genuine ELF evidence reader.
     from elftools.elf.elffile import ELFFile
@@ -135,7 +152,7 @@ def elf(path, cfg=None, module=True):
         image = ELFFile(stream)
         require(image.elfclass == 64 and image.little_endian and image["e_machine"] == "EM_AARCH64",
                 "not real little-endian ARM64 ELF: " + str(path))
-        require(image["e_type"] == ("ET_REL" if module else "ET_EXEC"), "wrong linked ELF type")
+        check_linked_type(image["e_type"], path, cfg, module)
         symbols = image.get_section_by_name(".symtab")
         require(symbols is not None, "linked ELF has no actual symbol table")
         definitions, imports = set(), {}

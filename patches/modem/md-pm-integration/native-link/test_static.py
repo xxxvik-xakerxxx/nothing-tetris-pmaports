@@ -29,6 +29,49 @@ class ABIParserTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             abi.config("CONFIG_CFI=y\nCONFIG_CFI=n\n")
 
+    def test_relocatable_arm64_kernel_requires_dyn_not_exec(self):
+        cfg = abi.config((link.PACKAGE / "config-postmarketos-mediatek-mt6878.aarch64").read_text())
+        self.assertEqual((cfg["ARM64"], cfg["RELOCATABLE"]), ("y", "y"))
+        abi.check_linked_type("ET_DYN", "unused", cfg, module=False)
+        for kind in ("ET_EXEC", "ET_REL", "ET_NONE", "ET_CORE"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "expected ET_DYN"):
+                abi.check_linked_type(kind, "unused", cfg, module=False)
+
+    def test_nonrelocatable_kernel_requires_exec_not_dyn(self):
+        cfg = {"ARM64": "y", "RELOCATABLE": "n"}
+        abi.check_linked_type("ET_EXEC", "unused", cfg, module=False)
+        for kind in ("ET_DYN", "ET_REL", "ET_NONE", "ET_CORE"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "expected ET_EXEC"):
+                abi.check_linked_type(kind, "unused", cfg, module=False)
+
+    def test_modules_still_require_rel_even_with_relocatable_kernel(self):
+        for cfg in (None, {"ARM64": "y", "RELOCATABLE": "y"}, {"ARM64": "y", "RELOCATABLE": "n"}):
+            abi.check_linked_type("ET_REL", "unused", cfg)
+            for kind in ("ET_DYN", "ET_EXEC", "ET_NONE", "ET_CORE"):
+                with self.subTest(cfg=cfg, kind=kind), self.assertRaisesRegex(ValueError, "expected ET_REL"):
+                    abi.check_linked_type(kind, "unused", cfg)
+
+    def test_kernel_type_never_guesses_missing_arch_or_relocation_config(self):
+        for cfg in ({}, {"ARM64": "n", "RELOCATABLE": "y"}, {"RELOCATABLE": "y"},
+                    {"ARM64": "y"}, {"ARM64": "y", "RELOCATABLE": "m"}):
+            with self.subTest(cfg=cfg), self.assertRaisesRegex(ValueError, "explicit ARM64/RELOCATABLE"):
+                abi.check_linked_type("ET_DYN", "unused", cfg, module=False)
+
+    def test_kernel_call_without_cfg_reads_actual_output_config(self):
+        # Text/config parser fixtures only, never generated linked ELF evidence.
+        with tempfile.TemporaryDirectory(prefix="tetris-native-link-elf-type-") as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(ValueError, "no actual build config"):
+                abi.check_linked_type("ET_DYN", root / "vmlinux", module=False)
+            (root / ".config").write_text("CONFIG_ARM64=y\nCONFIG_RELOCATABLE=y\n")
+            abi.check_linked_type("ET_DYN", root / "vmlinux", module=False)
+            with self.assertRaisesRegex(ValueError, "expected ET_DYN"):
+                abi.check_linked_type("ET_EXEC", root / "vmlinux", module=False)
+            (root / ".config").write_text("CONFIG_ARM64=y\n# CONFIG_RELOCATABLE is not set\n")
+            abi.check_linked_type("ET_EXEC", root / "vmlinux", module=False)
+            with self.assertRaisesRegex(ValueError, "expected ET_EXEC"):
+                abi.check_linked_type("ET_DYN", root / "vmlinux", module=False)
+
     def test_no_security_or_abi_flag_fallback(self):
         shipping = abi.config((link.PACKAGE / "config-postmarketos-mediatek-mt6878.aarch64").read_text())
         self.assertEqual(shipping["MODVERSIONS"], "n")

@@ -31,14 +31,43 @@
   "files_sha256": {
     "Kbuild": "e81fc4528c409fcab29ce2c7578198f2efdbac809afbb7fcf843a4b2fcf99fb3",
     "README.md": "984d924b818c4fbb95c6e1f10b559b56c09fce5edbffe6a2f832bf8c2feef1b2",
-    "abi.py": "da2975a36da97714a9944e91d3fc14ec41348d0b53802d93f3740298ae9e1537",
+    "abi.py": "57eb0e506803172a322098002f8bba283d8f9887edf511419a782abddde1d877",
     "link.py": "e54f3f5dca0a01a63e45965ef03afc1941860a65fc60e58361473861ee955d52",
-    "test_static.py": "e989e055c0c48591180acf24228b3a8fc0e80172364fe97ed5d1c284aa45a478"
+    "test_static.py": "4117900f74c6163eaf7136446749370984cfd7b66eef42e28979d8d3f711c757"
   },
   "checks": [
     "python3 -B -m unittest -v test_static.py",
     "python3 -B link.py --source-check --vendor <exact-vendor-git> --pristine-kernel <three-file-or-full-pristine-d84>"
   ],
   "remaining": "actual native-link compiler/modpost/ELF report; hardware/runtime blockers recorded in link.py BLOCKERS and every BUILD-MANIFEST",
-  "performed": "no local native compilation, emulation/JIT, phone/SSH/fastboot, commit/push, remote mutation or frozen/global file edits"
+  "performed": "no local native compilation, emulation/JIT, phone/SSH/fastboot, commit/push, remote mutation or frozen/global file edits",
+  "linked_elf_policy": {
+    "modules": "ET_REL only, independent of kernel relocation config",
+    "kernel": "actual ARM64=y build config: RELOCATABLE=y requires ET_DYN; RELOCATABLE=n requires ET_EXEC; missing/unknown config rejected",
+    "kernel_config": "explicit cfg or adjacent actual vmlinux output .config, never inferred from ELF type",
+    "source_proof": {
+      "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "arch/arm64/Makefile": {
+        "sha256": "f41c713e2c301cb660ae323858d92356a3333cc184dbb76df39b3d11c16e62cd",
+        "lines": "15-20",
+        "rule": "CONFIG_RELOCATABLE=y adds -shared -Bsymbolic -z notext --no-apply-dynamic-relocs"
+      },
+      "arch/arm64/Kconfig": {
+        "sha256": "7581c8a99c9a72e0c46449f1e2896126865d14882923c3b44cb9f67e327dcd5c",
+        "lines": "2271-2282",
+        "rule": "RELOCATABLE builds PIE; default y"
+      },
+      "scripts/link-vmlinux.sh": {
+        "sha256": "5a5af18db06f65fed1f99f536b2f21884a8c06d1f3a3d527b9f0e6d5d08464df",
+        "lines": "87-104",
+        "rule": "actual final LD consumes LDFLAGS_vmlinux"
+      },
+      "scripts/Makefile.vmlinux": {
+        "sha256": "4a247a787c59fce68dc9526aa1a8ab91bf8818f94955560f7b06de485f61fa28",
+        "lines": "94-100",
+        "rule": "final objcopy changes sections/symbols, not ELF type"
+      }
+    },
+    "regression": "CI 38461798237 at 3744093794ddd67fca3e4b2a6017e5089fdbdbda: compiler log completes full vmlinux/modules; subsequent ELF reader rejects linked type; no linked ELF artifact was downloaded"
+  }
 }
