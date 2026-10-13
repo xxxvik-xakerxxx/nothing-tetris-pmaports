@@ -689,7 +689,7 @@ jobs:
       - name: Link genuine native CCCI and mapped providers
         if: ${{ inputs.native_radio_link && steps.native_start.outcome == 'success' }}
         run: |
-          apk add --no-cache py3-pyelftools
+          apk add --no-cache py3-elftools
           export PATH="/usr/lib/llvm21/bin:$PATH"
           python3 -B patches/modem/md-pm-integration/native-link/link.py \
             --vendor /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \

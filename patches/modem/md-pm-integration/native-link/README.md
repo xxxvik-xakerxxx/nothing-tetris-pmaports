@@ -70,7 +70,7 @@ Module.symvers files as build evidence.
 ## Parent CI Call
 
 Run after ordinary packaged smoke, realON and native-start actual compiler gates
-in the same Linux GitHub job. Add `py3-pyelftools` to the existing Alpine tools;
+in the same Linux GitHub job. Add `py3-elftools` to the existing Alpine tools;
 the structured ELF reader is already used by the repository's evidence tooling.
 No artifact downloads, SSH, emulation, execution of native fixtures or new remote
 state are required. Required historical source objects remain cbb777 and 06fa224
