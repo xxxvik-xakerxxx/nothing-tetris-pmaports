@@ -36,6 +36,10 @@ on:
         description: Full native CCCI module/export link gate (requires kernel_smoke_only)
         type: boolean
         default: false
+      native_camera_link:
+        description: Full native camera capture/provider link gate (requires kernel_smoke_only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,10 +52,10 @@ env:
   NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.native_radio_link && 'native-link' || inputs.research_owner_smoke && 'owner-smoke' || inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.native_camera_link && 'camera-link' || inputs.native_radio_link && 'native-link' || inputs.research_owner_smoke && 'owner-smoke' || inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
   # Image builds are expensive and may already have verified kernel output.
   # Only cheap validation/smoke/PR runs may replace an earlier matching run.
-  cancel-in-progress: ${{ !inputs.native_radio_link && (github.event_name == 'pull_request' || inputs.kernel_smoke_only == true || inputs.validation_only == true || inputs.research_owner_smoke == true) }}
+  cancel-in-progress: ${{ !inputs.native_camera_link && !inputs.native_radio_link && (github.event_name == 'pull_request' || inputs.kernel_smoke_only == true || inputs.validation_only == true || inputs.research_owner_smoke == true) }}
 
 jobs:
   validate-overlay:
@@ -67,6 +71,12 @@ jobs:
             test '${{ inputs.kernel_smoke_only }}' = true
             test '${{ inputs.research_owner_smoke }}' != true
             test '${{ inputs.validation_only }}' != true
+          fi
+          if [ '${{ inputs.native_camera_link }}' = true ]; then
+            test '${{ inputs.kernel_smoke_only }}' = true
+            test '${{ inputs.research_owner_smoke }}' != true
+            test '${{ inputs.validation_only }}' != true
+            test '${{ inputs.native_radio_link }}' != true
           fi
           if [ '${{ inputs.gnss_tx_image }}' = true ]; then
             test '${{ inputs.native_modem_first_off }}' = true
@@ -711,6 +721,22 @@ jobs:
             --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
             --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
             --output /tmp/tetris-camera-stream-objects --report /tmp/tetris-camera-stream-evidence
+      - name: Link actual cold camera capture and native suppliers
+        if: ${{ always() && inputs.native_camera_link && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/camera-camisp/cold-integration/run_ci.py \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
+            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            --output /tmp/tetris-camera-cold-link --report /tmp/tetris-camera-cold-evidence
+      - uses: actions/upload-artifact@v7
+        if: always() && inputs.native_camera_link
+        with:
+          name: native-camera-cold-link-evidence
+          path: /tmp/tetris-camera-cold-evidence/
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always() && inputs.native_radio_link
         with:

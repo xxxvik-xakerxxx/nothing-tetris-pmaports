@@ -182,6 +182,13 @@ first-start callers with strict modpost. Its selected modules are not approved
 for loading into r188. The r189 image composer adds exact session patch1010
 after TX patch1009 without activating camera or GPU hardware.
 
+The separate default-off camera cold-capture composition connects sixteen
+production units, the streaming sensor, GPIO rails and native SMI/IOMMU/VMM
+suppliers through real built-in Kbuilds. Its independent source-only checks
+passed; actual vmlinux linkage is pending CI. It does not provide the missing
+board-root producer, calibrated CSI configuration or MMUP voltage-policy
+handoff, and does not enable a camera on r188/r189.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)

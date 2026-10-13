@@ -57,7 +57,18 @@ class SmokeInputs(unittest.TestCase):
         self.assertIn("/tmp/tetris-native-link/artifacts/", workflow)
         self.assertNotIn("/tmp/tetris-native-link/\n", workflow)
         self.assertIn("inputs.native_radio_link && 'native-link'", workflow)
-        self.assertIn("cancel-in-progress: ${{ !inputs.native_radio_link", workflow)
+        self.assertIn("cancel-in-progress: ${{ !inputs.native_camera_link && !inputs.native_radio_link", workflow)
+
+    def test_full_camera_link_is_independent_and_uploads_reports_only(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        self.assertIn("native_camera_link:", workflow)
+        self.assertIn("test '${{ inputs.native_radio_link }}' != true", workflow)
+        self.assertIn("always() && inputs.native_camera_link && steps.kernel_candidates.outcome == 'success'", workflow)
+        self.assertIn("patches/camera-camisp/cold-integration/run_ci.py", workflow)
+        self.assertIn("inputs.native_camera_link && 'camera-link'", workflow)
+        self.assertIn("path: /tmp/tetris-camera-cold-evidence/", workflow)
+        self.assertNotIn("path: /tmp/tetris-camera-cold-link/", workflow)
 
     def test_session_image_requires_exact1009_and_distinct_artifact(self):
         root = Path(__file__).resolve().parents[1]
