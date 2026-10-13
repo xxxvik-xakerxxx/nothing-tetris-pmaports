@@ -143,6 +143,11 @@ python3 -B patches/camera-camisp/cold-integration/run_ci.py \
 CI copies the normal prepared tree into its own output directory and stages
 only that independent source copy. The original input is rechecked on exit;
 reports do not include the copied source, build directory or vmlinux.
+With `--include-board`, the runner additionally verifies/applies the board-root
+delta in that copy, builds its actual caller and checks publish/wait/retire
+exports in vmlinux. This remains a default-off, uninstalled driver: no producer
+metadata or DT activation is synthesized. The parent camera-link profile selects
+this option; the core-only invocation above still checks the sixteen-unit path.
 CI uses the repository's LLVM toolchain. It preserves shipping ThinLTO, CFI and
 related security settings across olddefconfig, inspects **actual AArch64 LLVM
 bitcode or ELF** using `kernel-object-smoke.object_identity`, builds actual

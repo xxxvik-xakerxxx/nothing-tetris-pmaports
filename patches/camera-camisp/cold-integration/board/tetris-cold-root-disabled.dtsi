@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Review fragment after the frozen supplier-resource fixture. No shipping
+ * include, IOMMU membership change or receiver/calibration invention.
+ * The endpoint deliberately has no remote: the reviewed SENINF board endpoint
+ * must be supplied before probe. All suppliers remain disabled as described.
+ */
+#include <dt-bindings/clock/mediatek,mt6878-clock.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/power/mediatek,mt6878-power.h>
+
+&soc {
+	tetris_camsv0: camera@1a100000 {
+		compatible = "nothing,tetris-cold-camsv0";
+		reg = <0x1a100000 0x1000>, <0x1a110000 0x1000>,
+			<0x1a120000 0x1000>, <0x1a108000 0x1000>,
+			<0x1a118000 0x1000>, <0x1a128000 0x1000>;
+		reg-names = "base", "base_DMA", "base_SCQ", "inner_base",
+			"inner_base_DMA", "inner_base_SCQ";
+		interrupts = <GIC_SPI 651 IRQ_TYPE_LEVEL_HIGH 0>,
+			<GIC_SPI 652 IRQ_TYPE_LEVEL_HIGH 0>, <GIC_SPI 653 IRQ_TYPE_LEVEL_HIGH 0>,
+			<GIC_SPI 669 IRQ_TYPE_LEVEL_HIGH 0>;
+		mediatek,camsv-id = <0>;
+		mediatek,cammux-id = <0>;
+		nothing,csi-port = <1>;
+		nothing,dma-owner = <&camisp_l14>;
+		nothing,cam-main-owner = <&cam_main>;
+		nothing,smi-reset-owner = <&smi_cam_vcore_2x1_sub_comm0>;
+		power-domains = <&spm MT6878_POWER_DOMAIN_CAM_MAIN>;
+		clocks = <&cam_main CLK_CAM_MAIN_CAM>, <&cam_main CLK_CAM_MAIN_LARB14>,
+			<&cam_main CLK_CAM_MAIN_CAMSV_TOP>, <&cam_main CLK_CAM_MAIN_CAM2MM0_GALS>,
+			<&cam_main CLK_CAM_MAIN_CAM2MM1_GALS>, <&cam_main CLK_CAM_MAIN_CAMSV_A_CON_1>,
+			<&topckgen CLK_TOP_CAM_SEL>, <&topckgen CLK_TOP_CAMTM_SEL>;
+		clock-names = "cam_main_cam_cgpdn", "cam_main_larb14_con",
+			"cam_main_camsv_top_con", "cam_main_cam2mm0_gals_con",
+			"cam_main_cam2mm1_gals_con", "cam_main_camsv_a_con",
+			"topckgen_top_cam_sel", "topckgen_top_camtm_sel";
+		status = "disabled";
+		port {
+			tetris_camsv0_sink: endpoint {
+			};
+		};
+	};
+};

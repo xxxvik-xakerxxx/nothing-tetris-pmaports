@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config VIDEO_MT6878_COLD_BOARD
+	bool "Nothing Tetris producer-driven CAMSV0 root (unvalidated)"
+	depends on VIDEO_MT6878_COLD_CAPTURE=y && OF && PM
+	default n
+	help
+	  Own static board suppliers and call the existing capture constructor
+	  after actual driver binding and producer metadata publication.
+	  No fixed image/PDAF layout or firmware ownership handoff is supplied.

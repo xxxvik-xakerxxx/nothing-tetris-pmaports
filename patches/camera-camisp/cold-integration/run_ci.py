@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 import check
 import generate as gen
@@ -44,8 +45,8 @@ def ci_only():
         raise ValueError('native cold capture compilation/linking is CI-only')
 
 
-def run(command):
-    subprocess.run(list(map(str, command)), check=True)
+def run(command, *, cwd=None):
+    subprocess.run(list(map(str, command)), check=True, cwd=cwd)
 
 
 def security_profile(text):
@@ -88,6 +89,7 @@ def main():
     parser.add_argument('--prepared-kernel', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--include-board', action='store_true')
     args = parser.parse_args()
     for key in ('KBUILD_EXTRA_SYMBOLS', 'KBUILD_KCONFIG', 'KCONFIG_CONFIG', 'MAKEFLAGS',
                 'KCFLAGS', 'KCPPFLAGS', 'LDFLAGS', 'CFLAGS', 'CC', 'LD', 'ARCH', 'LLVM', 'CROSS_COMPILE'):
@@ -114,11 +116,31 @@ def main():
         objects_dir = work / 'kernel-output'
         shutil.copytree(kernel, source, ignore=shutil.ignore_patterns('.git'), symlinks=True)
         stage.apply(source, base, output)
+        extra_exports = ()
+        extra_objects = ()
+        if args.include_board:
+            board = gen.HERE / 'board'
+            run([sys.executable, '-B', board / 'stage.py',
+                 '--kernel-archive', args.kernel_archive,
+                 '--device-repo', args.device_repo, '--modules-repo', args.modules_repo,
+                 '--cold-staged-kernel', source])
+            run(['git', 'apply', '--check', board / 'board-owner.patch'], cwd=source)
+            run(['git', 'apply', board / 'board-owner.patch'], cwd=source)
+            board_evidence = json.loads((board / 'evidence.json').read_text())
+            for path, expected in board_evidence['payload_sha256'].items():
+                if gen.sha((source / path).read_bytes()) != expected:
+                    raise ValueError('board staged output differs: ' + path)
+            manifest['board_patch_sha256'] = gen.sha((board / 'board-owner.patch').read_bytes())
+            extra_exports = ('mt6878_cold_board_publish', 'mt6878_cold_board_wait',
+                             'mt6878_cold_board_retire')
+            extra_objects = (gen.DIR + 'board/mt6878-cold-board.o',)
         objects_dir.mkdir()
         (objects_dir / '.config').write_text(shipping)
         config = [source / 'scripts/config', '--file', objects_dir / '.config']
         for symbol in ENABLE:
             config += ['-e', symbol]
+        if args.include_board:
+            config += ['-e', 'VIDEO_MT6878_COLD_BOARD']
         run(config)
         make = ['make', '-C', source, f'O={objects_dir}', 'ARCH=arm64', 'LLVM=1', '-j4']
         manifest['compiler'] = subprocess.check_output(['clang', '--version'], text=True).splitlines()[0]
@@ -128,9 +150,11 @@ def main():
         for symbol in (*ENABLE, *SELECTED):
             if f'CONFIG_{symbol}=y' not in resolved.splitlines():
                 raise ValueError('actual unresolved Kconfig leaf: ' + symbol)
+        if args.include_board and 'CONFIG_VIDEO_MT6878_COLD_BOARD=y' not in resolved.splitlines():
+            raise ValueError('actual unresolved Kconfig leaf: VIDEO_MT6878_COLD_BOARD')
         shutil.copyfile(objects_dir / '.config', report / 'isolated.config')
         smoke = gen.load('cold_object_identity', gen.ROOT / 'ci/kernel-object-smoke.py')
-        objects = [gen.DIR + unit for unit in evidence['production_units']] + list(PROVIDERS)
+        objects = [gen.DIR + unit for unit in evidence['production_units']] + list(PROVIDERS) + list(extra_objects)
         symbols = set()
         for target in objects:
             manifest['current_target'] = target
@@ -139,7 +163,7 @@ def main():
             identity = smoke.object_identity(artifact)  # Real AArch64 bitcode or ELF, unchanged ThinLTO.
             symbols.update(defined_symbols(artifact))
             manifest['objects'][target] = {'sha256': gen.sha(artifact.read_bytes()), 'identity': identity}
-        for name in EXPORTS:
+        for name in (*EXPORTS, *extra_exports):
             if name not in symbols:
                 raise ValueError('actual object export/definition missing: ' + name)
         manifest['current_target'] = 'vmlinux'
@@ -148,12 +172,12 @@ def main():
         if identity.get('format') != 'ELF':
             raise ValueError('linked vmlinux must be actual AArch64 ELF')
         linked = defined_symbols(objects_dir / 'vmlinux')
-        for name in EXPORTS:
+        for name in (*EXPORTS, *extra_exports):
             if name not in linked or '__ksymtab_' + name not in linked:
                 raise ValueError('actual native link lost export: ' + name)
         manifest.update(status='passed-native-link', vmlinux_identity=identity,
                         vmlinux_sha256=gen.sha((objects_dir / 'vmlinux').read_bytes()),
-                        config_sha256=gen.sha(resolved.encode()), checked_exports=list(EXPORTS))
+                        config_sha256=gen.sha(resolved.encode()), checked_exports=list((*EXPORTS, *extra_exports)))
     except Exception as error:
         manifest.update(status='failed', error=str(error))
         raise

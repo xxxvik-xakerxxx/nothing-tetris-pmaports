@@ -188,6 +188,10 @@ suppliers through real built-in Kbuilds. Its independent source-only checks
 passed; actual vmlinux linkage is pending CI. It does not provide the missing
 board-root producer, calibrated CSI configuration or MMUP voltage-policy
 handoff, and does not enable a camera on r188/r189.
+Its additive board-root driver holds real supplier references and invokes the
+capture constructor only after genuine driver binding. Thirty-three source
+checks passed; its optional full-link profile is not yet compiled. A negotiated
+RAW10/PDAF producer is still missing; no Bayer8 layout or INIT flags are invented.
 
 The MFG0 cold-acquisition candidate uses the existing SCPSYS supplier and
 retains its real PM/SRAM ownership. It does not invent mandatory regulator or

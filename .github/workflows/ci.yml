@@ -672,7 +672,7 @@ jobs:
             --device-repo /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
             --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
             --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
-            --output /tmp/tetris-camera-cold-link --report /tmp/tetris-camera-cold-evidence
+            --output /tmp/tetris-camera-cold-link --report /tmp/tetris-camera-cold-evidence --include-board
       - name: Compile genuine native modem ON callbacks
         id: modem_on
         if: ${{ !inputs.research_owner_smoke }}

@@ -236,6 +236,20 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn('stage.apply(kernel, base, output)', text)
         self.assertIn('stage.verify_prepared(kernel, base, output)', text)
 
+    def test_board_option_checks_and_builds_actual_caller_and_exports(self):
+        text = (gen.HERE / 'run_ci.py').read_text()
+        self.assertIn("parser.add_argument('--include-board', action='store_true')", text)
+        self.assertIn("'--cold-staged-kernel', source", text)
+        self.assertIn("'board/mt6878-cold-board.o'", text)
+        self.assertIn("'CONFIG_VIDEO_MT6878_COLD_BOARD=y'", text)
+        for name in ('mt6878_cold_board_publish', 'mt6878_cold_board_wait', 'mt6878_cold_board_retire'):
+            self.assertIn(name, text)
+
+    def test_patch_commands_use_disposable_source_working_directory(self):
+        with patch.object(run_ci.subprocess, 'run') as command:
+            run_ci.run(['git', 'apply', Path('/tmp/board.patch')], cwd=Path('/tmp/source'))
+        command.assert_called_once_with(['git', 'apply', '/tmp/board.patch'], check=True, cwd=Path('/tmp/source'))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
