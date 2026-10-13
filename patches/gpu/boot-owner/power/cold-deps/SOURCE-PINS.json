@@ -4,6 +4,15 @@
   "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
   "native_prepared_sha256": "4f6ad65a63adcc0589c1172e0541bbbdaf10ff9cf32006f03c89d45f13514e28",
+  "native_pristine_sha256": "1bc964d9b4493fe23ac5955e4198fd2219f6e60ecad360cf2fa78518009a4841",
+  "native_patches": {
+    "0018-pmdomain-mediatek-mt6878-audio.patch": "bf94749f512f3151b381470f74931cb51322a0179816a6b9e9a21e7ee7e708ed",
+    "0052-pmdomain-mediatek-mt6878-mfg-rpc-inventory.patch": "f946261f57a28298d4b22d32ca08ef64ffb340efb16134b142378f627b6b5697",
+    "0057-pmdomain-mediatek-add-MT6878-MM_INFRA-and-DISP.patch": "21952394dca440fe7b8cf70914c09ccf77c78a2c26d9d0aa2dcf84b4d76cf3be",
+    "0074-pmdomain-mediatek-tolerate-MT6878-HWCCF-EPERM.patch": "7b6d3c56bbe2f38b53df115e8a553972729e544456f859d414ef82f2193460c1",
+    "0113-pmdomain-mediatek-mt6878-modem-power.patch": "03924af715632607de8329d18a7ccdff3f6d403ff4315863fe6b5d3418d90cac",
+    "0115-pmdomain-mediatek-mt6878-read-only-modem-preflight.patch": "4f79fbce8e8a4e64b7c7b6a743ec71044a6e6e38c824239038cb5404e8da58fa"
+  },
   "native_headers": {
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6",
     "drivers/pmdomain/mediatek/mt6878-pm-domains.h": "85024cc72b6e8511eae664ebf4531826c07613dcb4c872ead8375161f4fa2d62"

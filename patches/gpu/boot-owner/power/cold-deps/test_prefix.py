@@ -15,6 +15,25 @@ from generate_prefix import NATIVE, RESEARCH, SOURCE, native_variant, render
 import ci_prefix
 
 
+def prepared_native(pristine):
+    if sha(pristine) != PINS['native_pristine_sha256']:
+        raise ValueError('pinned native Linux source mismatch')
+    package = ROOT / 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878'
+    with tempfile.TemporaryDirectory(prefix='cold-prefix-native-') as directory:
+        target = Path(directory) / NATIVE
+        target.parent.mkdir(parents=True)
+        target.write_bytes(pristine)
+        for name, expected in PINS['native_patches'].items():
+            path = package / name
+            if sha(path.read_bytes()) != expected:
+                raise ValueError('packaged native patch drift: ' + name)
+            subprocess.run(['git', 'apply', '--unidiff-zero', '--include=' + NATIVE, str(path)],
+                           cwd=directory, check=True, capture_output=True)
+        if sha(target.read_bytes()) != PINS['native_prepared_sha256']:
+            raise ValueError('prepared native source mismatch')
+        return target.read_text()
+
+
 class PrefixSource(unittest.TestCase):
     def setUp(self):
         self.delta, self.files = render()
@@ -24,6 +43,14 @@ class PrefixSource(unittest.TestCase):
 
     def test_generated_patch_matches(self):
         self.assertEqual(self.delta, (HERE / 'native-prefix.patch').read_text())
+
+    def test_required_kconfig_matches_the_packaged_native_supplier(self):
+        text = (HERE / 'ci_prefix.py').read_text()
+        self.assertIn('CONFIG_MTK_SCPSYS_PM_DOMAINS=y', text)
+        self.assertNotIn('CONFIG_MTK_PM_DOMAINS=y', text)
+        shipping = (ROOT / 'pmaports/device/testing/linux-postmarketos-mediatek-mt6878/'
+                    'config-postmarketos-mediatek-mt6878.aarch64').read_text()
+        self.assertIn('CONFIG_MTK_SCPSYS_PM_DOMAINS=y', shipping.splitlines())
 
     def test_no_invented_physical_dependencies(self):
         for text in (self.native, self.parent, self.mfg0):
@@ -155,8 +182,6 @@ class ExactEvidence(unittest.TestCase):
         tree = Path(os.environ.get('TETRIS_LINUX_GIT', '/private/tmp/tetris-gpu-canonical-linux.git'))
         if not tree.exists():
             self.skipTest('pinned Linux git object not supplied')
-        sys.path.insert(0, str(HERE.parent))
-        from test_power import prepared_native
         native = prepared_native(git_source(tree, PINS['linux'], NATIVE))
         with tempfile.TemporaryDirectory(prefix='cold-prefix-apply-') as tmp:
             target = Path(tmp) / NATIVE

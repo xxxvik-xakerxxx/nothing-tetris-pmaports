@@ -52,7 +52,7 @@ def prepared_inputs(kernel, output, baseline):
         join.require(not path.is_symlink() and path.name not in files, 'unsafe/colliding native header')
         files[path.name] = path.read_text()
         fingerprints[str(path.relative_to(kernel))] = join.sha(path)
-    for setting in ('CONFIG_PM=y', 'CONFIG_PM_GENERIC_DOMAINS=y', 'CONFIG_MTK_PM_DOMAINS=y'):
+    for setting in ('CONFIG_PM=y', 'CONFIG_PM_GENERIC_DOMAINS=y', 'CONFIG_MTK_SCPSYS_PM_DOMAINS=y'):
         join.require(setting in (output / '.config').read_text().splitlines(), 'prefix config missing: ' + setting)
     return files, fingerprints
 
