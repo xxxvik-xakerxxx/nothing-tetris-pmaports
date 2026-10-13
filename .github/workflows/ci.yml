@@ -430,7 +430,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Obtain matching pinned Android NDK
         run: |
-          curl --fail --location --proto '=https' --tlsv1.2 \
+          curl --http1.1 --fail --location --proto '=https' --tlsv1.2 \
             https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip
           test "$(stat -c %s /tmp/ndk.zip)" = 663956036
           printf '%s  %s\n' 22105e410cf29afcf163760cc95522b9fb981121 /tmp/ndk.zip | sha1sum --check
@@ -592,6 +592,8 @@ jobs:
           apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
             openssl-dev perl python3 py3-yaml patch linux-headers git dtc
       - uses: actions/checkout@v6
+      - name: Trust the checked-out CI workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Compile isolated AArch64 candidate objects
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -604,6 +606,9 @@ jobs:
       - name: Compile joined GPUEB reset and SRAM owners
         if: ${{ inputs.research_owner_smoke }}
         run: sh patches/gpu/boot-owner/run-ci.sh
+      - name: Compile private GPUEB DRAM owner
+        if: ${{ inputs.research_owner_smoke }}
+        run: sh patches/gpu/boot-owner/dram/run-ci.sh
       - name: Fetch pinned hardware sources for native callbacks
         if: ${{ !inputs.research_owner_smoke }}
         run: |

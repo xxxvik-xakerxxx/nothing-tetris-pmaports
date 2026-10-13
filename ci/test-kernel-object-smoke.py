@@ -27,6 +27,26 @@ class SmokeInputs(unittest.TestCase):
         self.assertLess(job.index("Install package-matching kernel compiler"),
                         job.index("uses: actions/checkout@v6"))
         self.assertIn("python3 py3-yaml patch linux-headers git dtc", job)
+        trust = 'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
+        self.assertEqual(job.count(trust), 1)
+        self.assertLess(job.index("uses: actions/checkout@v6"), job.index(trust))
+        self.assertLess(job.index(trust), job.index("Compile isolated AArch64 candidate objects"))
+        self.assertNotIn("safe.directory '*'", job)
+
+    def test_dram_owner_is_research_only_after_actual_sram_join(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        block = ('      - name: Compile private GPUEB DRAM owner\n'
+                 '        if: ${{ inputs.research_owner_smoke }}\n'
+                 '        run: sh patches/gpu/boot-owner/dram/run-ci.sh\n')
+        self.assertEqual(workflow.count(block), 1)
+        self.assertLess(workflow.index("run: sh patches/gpu/boot-owner/run-ci.sh"),
+                        workflow.index(block))
+        for runner in ("patches/gpu/boot-owner/run-ci.sh", "patches/gpu/boot-owner/dram/run-ci.sh"):
+            source = (root / runner).read_text()
+            self.assertIn("apk add --no-cache clang21-rtlib", source)
+            self.assertIn("export HOSTCC=clang", source)
+            self.assertNotIn("libasan libubsan", source)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

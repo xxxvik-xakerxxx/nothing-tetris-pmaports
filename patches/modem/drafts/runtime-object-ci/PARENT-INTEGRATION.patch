@@ -1,13 +1,15 @@
 diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -587,13 +587,14 @@
+@@ -587,15 +587,16 @@
        - name: Install package-matching kernel compiler
          run: |
            apk add --no-cache bash build-base bc bison flex clang21 llvm21 lld21 \
 -            openssl-dev perl python3 py3-yaml patch linux-headers dtc
 +            openssl-dev perl python3 py3-yaml patch linux-headers git dtc
        - uses: actions/checkout@v6
+       - name: Trust the checked-out CI workspace
+         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
        - name: Compile isolated AArch64 candidate objects
          run: |
            export PATH="/usr/lib/llvm21/bin:$PATH"

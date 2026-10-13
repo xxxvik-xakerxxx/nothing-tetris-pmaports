@@ -1,0 +1,19 @@
+{
+  "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+  "device_modules": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+  "modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+  "linux_blobs": {
+    "include/linux/cma.h": "62d9c1cf632652489ccd9e01bf1370f2b1f3c249",
+    "include/linux/dma-map-ops.h": "10882d00cb170413fbaf1cf1ddb2b841a97fb023",
+    "kernel/dma/contiguous.c": "d9b9dcba6ff7cf5904ac93b72c061fd59072c41b",
+    "mm/cma.c": "813e6dc7b0954864c9ef8cf7adc6a2293241de47",
+    "mm/page_alloc.c": "ed82ee55e66afffafcf6360b13da410119f2898d",
+    "include/linux/gfp.h": "623bee335383ef0a2d868488993d939fa3edb4cf"
+  },
+  "comparison_only_cache_header": {
+    "url": "https://chromium.googlesource.com/chromiumos/platform/ec/+/af044aae7cfec9a5dcbb1b735e4521333a625356/chip/mt_scp/rv32i_common/cache.h",
+    "sha256": "09262fdebf6c4b81ac855f464c69bd0be04aa8f3a415706b9454b76b4b7f340d",
+    "cache_encoding_expression": "COP(rs1) = (rs1 << 15) | 0x400f",
+    "scope": "Official SCP comparison, NOT the GPUEB compiler/ISA or evidence for either OP-0x33 word"
+  }
+}

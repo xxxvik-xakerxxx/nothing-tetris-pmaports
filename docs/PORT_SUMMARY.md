@@ -145,6 +145,15 @@ The later modem-ON step failed before compilation because container checkout
 had fallen back to a non-Git source download. This run is not globally green,
 and neither object result proves camera capture or accelerated rendering.
 
+The additive native CCCI first-start composition, camera GPIO-rail provider
+and GPUEB reset-held SRAM installation are in main as disabled candidates.
+The private GPUEB CMA allocator adds an owned six-MiB workspace, not GPR writes
+or executable GPU startup. Their matched ARM64 and full-link gates remain open.
+U-Boot's bounded late GPUEB DT clone passed
+[CI38415042958](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38415042958)
+at `f0f204bfdf`; its retention profile has not been installed and remains separate
+from the modem BROM profile. The phone still uses the verified `f25c01444a` loader.
+
 ### Previous regression: r184
 
 Full image [CI38356364811](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38356364811)
