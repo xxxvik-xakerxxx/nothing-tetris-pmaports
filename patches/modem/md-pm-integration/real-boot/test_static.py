@@ -133,6 +133,20 @@ class RealBootStaticTests(unittest.TestCase):
     def test_real_operation_contract(self):
         self.assertTrue(validate())
 
+    def test_resource_revalidation_is_real_and_separate_from_physical_state(self):
+        old = audit.native.function(self.before[stage.ADOPT], "mt6878_md_adopt_revalidate")
+        resources = audit.native.function(self.after[stage.ADOPT], "mt6878_md_adopt_revalidate_resources")
+        expected = old.replace("mt6878_md_adopt_revalidate(", "mt6878_md_adopt_revalidate_resources(", 1)
+        expected = expected.replace("\tif (!ret)\n\t\tret = mt6878_md_adopt_on(pd, now.on);\n", "", 1)
+        self.assertEqual(resources, expected)
+        self.assertIn("mt6878_md_adopt_reports(owner->modem, &now)", resources)
+        self.assertIn("mt6878_md_adopt_reservations(&now)", resources)
+        self.assertIn("mt6878_md_adopt_maps(pd)", resources)
+        self.assertNotIn("regmap_read", resources)
+        wrapper = audit.native.function(self.after[stage.ADOPT], "mt6878_md_adopt_revalidate")
+        audit.native.ordered(wrapper, "mt6878_md_adopt_revalidate_resources(pd, owner)",
+                             "mt6878_md_adopt_on(pd, on)", "return ret;")
+
     def test_manifest_covers_only_owned_files(self):
         manifest = json.loads((HERE / "STAGING.json").read_text())
         self.assertEqual(set(manifest["files_sha256"]) | {"STAGING.json"},

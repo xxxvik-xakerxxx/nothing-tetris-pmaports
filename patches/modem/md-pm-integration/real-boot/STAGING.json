@@ -34,17 +34,17 @@
     "consumer": "shipping disabled; candidate final FDT may enable sole real CCCI node with native power-domains binding, before its attach-time ON"
   },
   "files_sha256": {
-    "CI-SOURCES.json": "933f3d9e1b8bf5694d435677e55d61a1a285b67ad5728c75dc1d33d4269d063f",
+    "CI-SOURCES.json": "c5e6295e2eab0654188218fad7194b0bdd03291a2b1da6ed92d4eff147d360dc",
     "Kconfig": "ee5c7d4f29e96db15df8021239b9329217cb5d9cffc1d21442f938bc1a1bd3e4",
     "README.md": "75cbb08fb484ef5c0fa7e1580bf00e91a86130b541083db46cbe0eec1020f60a",
     "SOURCE-EVIDENCE.json": "a03b3392d5818095620c8ed039e0aac11d2fde119cc69e8ea073a4193c70a289",
     "audit.py": "19cbf0f0cc28991dfa65c70e9aaaf19a1fd06700bff893454b985387dc7cdc3d",
-    "ci.py": "a48f2c1ffa23e40b60c5fc90ccdf059d2866ee752a220937a44132e9f8528e39",
+    "ci.py": "1009952cc1667c9d0f9cb66af3c1aaddd1951ed7a2e301032d1eb3c114ad035f",
     "mt6878-modem-real-boot.h": "7d1be8f57af8ce286171821e50bec0fe11694905f40f11936ae3ebca9918e3c2",
-    "native-real-boot-post-off.patch": "781e3a68e36b89ab43f5d4753bfae5843e5fa14e797345b95150253ca84389de",
-    "stage.py": "ccdb6c014a30aaa45761ea81ef9db5bc64cf20c63f29a3a35db6a2565c16e506",
-    "test_ci.py": "fbf80a646be362069f54d2b096ebb61ae3e4cf41addcdde3c70d4c6bb5ccca15",
-    "test_static.py": "3a86761ff8a608a0c033bfae7d1f42c80c0fc48ea049e5eb45c26902a3b7e4fe"
+    "native-real-boot-post-off.patch": "22a579ad446c4e640469e7588f1a3aa435929459978ff3433e22a11d2b0ea70a",
+    "stage.py": "46688667f9f9e5c4422595c185d95de05947953d8eb7becb35950a11fccf3b27",
+    "test_ci.py": "b107d6fad4e87de6ef4e3c62a4df3d739d529a477189b9fb06c615644c63e0da",
+    "test_static.py": "f14e4aa6e5a60fa65e35207a1c1e29a52ce923fc48f59816de89427ef7d417ae"
   },
   "checks": [
     "python3 -B audit.py",

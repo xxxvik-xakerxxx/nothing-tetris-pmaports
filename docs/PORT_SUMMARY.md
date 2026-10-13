@@ -148,7 +148,7 @@ and neither object result proves camera capture or accelerated rendering.
 The additive native CCCI first-start composition, camera GPIO-rail provider
 and GPUEB reset-held SRAM installation are in main as disabled candidates.
 The private GPUEB CMA allocator adds an owned six-MiB workspace, not GPR writes
-or executable GPU startup. Their matched ARM64 and full-link gates remain open.
+or executable GPU startup. The full cellular link gate remains open.
 U-Boot's bounded late GPUEB DT clone passed
 [CI38415042958](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38415042958)
 at `f0f204bfdf`; its retention profile has not been installed and remains separate
@@ -162,9 +162,25 @@ ABI still requires a new matching kernel/supplier/module image before testing.
 IMX882's actual streaming driver now has a staged 24-MHz source contract and
 checked partial-power/reset lifecycle. Camera and cellular compile paths are
 independent in CI; neither is activated by these object-only gates.
-In [CI38416891458](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38416891458),
-all four joined GPUEB ARM64 units compiled, but internal-link validation failed.
-No reset-held installation, DRAM publication or accelerated rendering was tested.
+At `797e7d8c`, [CI38454201394](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38454201394)
+passed the actual GNSS snapshot/session and retained-download C fixtures under
+sanitizers, plus static AArch64 musl compilation. The new CLI is not compatible
+with installed r188: r189 must supply matching ioctl31 modules first.
+[CI38454186695](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38454186695)
+passed joined GPUEB SRAM/reset and DRAM ARM64 compilation, internal symbol
+resolution and native allocation/failure fixtures. No reset-held installation,
+DRAM publication or accelerated rendering was tested on the phone.
+
+In [CI38454175016](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38454175016),
+the normal objects/DT, camera GPIO-rail provider and actual IMX882 streaming
+driver compiled successfully. The modem step failed on a missing resource-only
+revalidation helper. The correction preserves original physical ON validation
+and separates immutable handoff/resource checks for post-OFF callers; its
+source/application checks passed, but target recompilation is still required.
+The additive full CCCI link gate builds the actual kernel exports and native
+first-start callers with strict modpost. Its selected modules are not approved
+for loading into r188. The r189 image composer adds exact session patch1010
+after TX patch1009 without activating camera or GPU hardware.
 
 ### Previous regression: r184
 

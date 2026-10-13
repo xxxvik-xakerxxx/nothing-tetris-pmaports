@@ -48,6 +48,27 @@ class SmokeInputs(unittest.TestCase):
             self.assertIn("export HOSTCC=clang", source)
             self.assertNotIn("libasan libubsan", source)
 
+    def test_full_native_link_is_explicit_and_uploads_only_selected_artifacts(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        self.assertIn("if: ${{ inputs.native_radio_link && steps.native_start.outcome == 'success' }}", workflow)
+        self.assertIn("--enable-native-link", workflow)
+        self.assertIn("apk add --no-cache py3-pyelftools", workflow)
+        self.assertIn("/tmp/tetris-native-link/artifacts/", workflow)
+        self.assertNotIn("/tmp/tetris-native-link/\n", workflow)
+        self.assertIn("inputs.native_radio_link && 'native-link'", workflow)
+        self.assertIn("cancel-in-progress: ${{ !inputs.native_radio_link", workflow)
+
+    def test_session_image_requires_exact1009_and_distinct_artifact(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/ci.yml").read_text()
+        self.assertIn("if [ '${{ inputs.gnss_session_image }}' = true ]; then\n"
+                      "            test '${{ inputs.gnss_tx_image }}' = true", workflow)
+        self.assertIn("ci/stage-native-session-image.py --pmaports upstream/pmaports", workflow)
+        self.assertIn("--include-session1010", workflow)
+        self.assertIn("/work/out/gnss-session-image-profile.json", workflow)
+        self.assertIn("inputs.gnss_session_image && 'nothing-tetris-native-md-gnss-session-images'", workflow)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

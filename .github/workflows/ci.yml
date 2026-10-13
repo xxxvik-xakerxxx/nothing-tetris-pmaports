@@ -28,6 +28,14 @@ on:
         description: Add exact1009 GNSS TX to the matched native MD image (requires native_modem_first_off)
         type: boolean
         default: false
+      gnss_session_image:
+        description: Build matched ioctl31 GNSS session image (requires native_modem_first_off and gnss_tx_image)
+        type: boolean
+        default: false
+      native_radio_link:
+        description: Full native CCCI module/export link gate (requires kernel_smoke_only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,10 +48,10 @@ env:
   NOTHING_DEVICE_MODULES_COMMIT: ee2be53cb75670b548948636a0db1d1ff112bf12
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.research_owner_smoke && 'owner-smoke' || inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.native_radio_link && 'native-link' || inputs.research_owner_smoke && 'owner-smoke' || inputs.kernel_smoke_only && 'smoke' || inputs.validation_only && 'validation' || 'images' }}
   # Image builds are expensive and may already have verified kernel output.
   # Only cheap validation/smoke/PR runs may replace an earlier matching run.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || inputs.kernel_smoke_only == true || inputs.validation_only == true || inputs.research_owner_smoke == true }}
+  cancel-in-progress: ${{ !inputs.native_radio_link && (github.event_name == 'pull_request' || inputs.kernel_smoke_only == true || inputs.validation_only == true || inputs.research_owner_smoke == true) }}
 
 jobs:
   validate-overlay:
@@ -52,6 +60,14 @@ jobs:
       - uses: actions/checkout@v6
       - name: Check diagnostic image selection
         run: |
+          if [ '${{ inputs.gnss_session_image }}' = true ]; then
+            test '${{ inputs.gnss_tx_image }}' = true
+          fi
+          if [ '${{ inputs.native_radio_link }}' = true ]; then
+            test '${{ inputs.kernel_smoke_only }}' = true
+            test '${{ inputs.research_owner_smoke }}' != true
+            test '${{ inputs.validation_only }}' != true
+          fi
           if [ '${{ inputs.gnss_tx_image }}' = true ]; then
             test '${{ inputs.native_modem_first_off }}' = true
             test '${{ inputs.validation_only }}' != true
@@ -77,6 +93,7 @@ jobs:
           python3 -B ci/test-gnss-tx-image.py
           python3 -B ci/test-native-gnss-image.py
           python3 -B ci/test-native-gnss-candidate-image.py
+          python3 -B ci/test-native-session-image.py
           python3 ci/kernel-object-smoke.py --plan-only
           python3 -B patches/modem/drafts/runtime-hif-dt/test_dt.py
       - name: Verify bounded stock asset selection
@@ -641,6 +658,7 @@ jobs:
             --output /tmp/tetris-modem-real-on-objects \
             --report /tmp/tetris-modem-real-on-evidence/BUILD-MANIFEST.json
       - name: Compile native platform CCCI first-start callers
+        id: native_start
         if: ${{ !inputs.research_owner_smoke }}
         run: |
           export PATH="/usr/lib/llvm21/bin:$PATH"
@@ -657,6 +675,20 @@ jobs:
             --vendor /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
             --output /tmp/tetris-native-start-objects \
             --report /tmp/tetris-native-start-evidence/BUILD-MANIFEST.json --enable-native-start
+      - name: Link genuine native CCCI and mapped providers
+        if: ${{ inputs.native_radio_link && steps.native_start.outcome == 'success' }}
+        run: |
+          apk add --no-cache py3-pyelftools
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          python3 -B patches/modem/md-pm-integration/native-link/link.py \
+            --vendor /tmp/tetris-hardware-sources/android_kernel_device_modules_6.1_nothing_mt6878 \
+            --pristine-kernel /tmp/tetris-native-start-pristine \
+            --prepared-kernel /tmp/tetris-kernel-smoke/linux-d84b264a54a37611f2f46bc19363cb9b41606205 \
+            --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
+            --normal-report out/kernel-object-smoke/BUILD-MANIFEST.json \
+            --native-report /tmp/tetris-native-start-evidence/BUILD-MANIFEST.json \
+            --native-output /tmp/tetris-native-start-objects/native-start \
+            --destination /tmp/tetris-native-link --enable-native-link
       - name: Compile observed-OFF camera rail provider
         if: ${{ always() && !inputs.research_owner_smoke && steps.kernel_candidates.outcome == 'success' && steps.hardware_sources.outcome == 'success' }}
         run: |
@@ -678,6 +710,15 @@ jobs:
             --modules-repo /tmp/tetris-hardware-sources/android_kernel_modules_nothing_mt6878 \
             --kernel-archive /tmp/tetris-kernel-smoke/linux-postmarketos-mediatek-mt6878-d84b264a54a37611f2f46bc19363cb9b41606205.tar.gz \
             --output /tmp/tetris-camera-stream-objects --report /tmp/tetris-camera-stream-evidence
+      - uses: actions/upload-artifact@v7
+        if: always() && inputs.native_radio_link
+        with:
+          name: native-ccci-linked-artifacts
+          path: |
+            /tmp/tetris-native-link/artifacts/
+            /tmp/tetris-native-link/BUILD-MANIFEST.json
+            /tmp/tetris-native-link/*.log
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: always() && !inputs.research_owner_smoke
         with:
@@ -771,7 +812,12 @@ jobs:
             https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports.git \
             cbb777d415b564c1e40598740288c0c9d953e745
           export TETRIS_NATIVE_SOURCE_TREE=/work/out/native-source
-          if [ '${{ inputs.gnss_tx_image }}' = true ]; then
+          if [ '${{ inputs.gnss_session_image }}' = true ]; then
+            python3 -B ci/stage-native-session-image.py --pmaports upstream/pmaports \
+              --report out/native-modem-image-profile.json \
+              --tx-report out/gnss-tx-image-profile.json \
+              --session-report out/gnss-session-image-profile.json --include-session1010
+          elif [ '${{ inputs.gnss_tx_image }}' = true ]; then
             python3 -B ci/stage-native-gnss-candidate-image.py --pmaports upstream/pmaports \
               --report out/native-modem-image-profile.json \
               --tx-report out/gnss-tx-image-profile.json --include-exact1009
@@ -1357,7 +1403,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: ${{ always() && steps.install_images.outcome == 'success' }}
         with:
-          name: ${{ inputs.gnss_tx_image && 'nothing-tetris-native-md-gnss-tx-images' || inputs.native_modem_first_off && 'nothing-tetris-native-md-first-off-images' || 'nothing-tetris-images' }}
+          name: ${{ inputs.gnss_session_image && 'nothing-tetris-native-md-gnss-session-images' || inputs.gnss_tx_image && 'nothing-tetris-native-md-gnss-tx-images' || inputs.native_modem_first_off && 'nothing-tetris-native-md-first-off-images' || 'nothing-tetris-images' }}
           path: |
             /work/out/boot_image.itb
             /work/out/nothing-tetris-boot.img
@@ -1367,6 +1413,7 @@ jobs:
             /work/out/native-modem-image-profile.json
             /work/out/native-modem-uboot.json
             /work/out/gnss-tx-image-profile.json
+            /work/out/gnss-session-image-profile.json
             /work/out/u-boot-tetris-lk.img
           if-no-files-found: error
       - name: Upload build logs

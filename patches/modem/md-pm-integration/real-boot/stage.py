@@ -98,9 +98,28 @@ def baseline(kernel, output):
 
 def candidate(before):
     after = dict(before)
+    marker = "static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,"
+    end_marker = "static int mt6878_md_first_off_profile("
+    start = after[ADOPT].index(marker)
+    end = after[ADOPT].index(end_marker, start)
+    original = after[ADOPT][start:end]
+    physical_on = "\tif (!ret)\n\t\tret = mt6878_md_adopt_on(pd, now.on);\n"
+    require(original.count(physical_on) == 1, "wrong frozen resource/ON validation split")
+    resources = original.replace("mt6878_md_adopt_revalidate(",
+                                 "mt6878_md_adopt_revalidate_resources(", 1)
+    resources = resources.replace(physical_on, "", 1)
+    on_wrapper = ("static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,\n"
+                  "\t\t\t\t     struct mt6878_md_adoption *owner)\n"
+                  "{\n\tu32 on[5];\n\tint ret;\n\n"
+                  "\tret = mt6878_md_adopt_revalidate_resources(pd, owner);\n"
+                  "\tif (!ret)\n\t\tret = mt6878_md_adopt_on(pd, on);\n"
+                  "\treturn ret;\n}\n\n")
+    # Post-OFF callers still verify immutable handoff/reservations/maps, but
+    # must use their separate real OFF/ON readback rather than require ON here.
+    after[ADOPT] = after[ADOPT][:start] + resources + on_wrapper + after[ADOPT][end:]
     anchor = "static void mt6878_md_first_off_publication_fault("
     require(before[ADOPT].count(anchor) == 1, "wrong frozen supplier hook")
-    after[ADOPT] = before[ADOPT].replace(anchor,
+    after[ADOPT] = after[ADOPT].replace(anchor,
         '#include "mt6878-modem-real-boot.h"\n\n' + anchor, 1)
     hook = ("\tif (!ret) {\n\t\towner->state = MT6878_MD_OBSERVED_ON;\n"
             "\t\tif (first_off)\n\t\t\tret = mt6878_md_first_off(pd, owner);\n\t}\n")

@@ -51,7 +51,7 @@
     "0187-native-modem-wakeup-sleep-veto.patch": "f03e63b0e9be3cbe27ee37f6bb7461ad77628d70d90d2974de5608cc31aaf2c2",
     "0185-native-modem-rails.patch": "459f5c85b0b8372ce8328d8825013fc692873be1b7f70342d9c5c2d20fc3a832",
     "0186-native-modem-rails-registration-dt.patch": "64cac78a319a937f043ec820a44290c07097cf417fe37d4494214cddc3e75e4e",
-    "0188-native-modem-real-on.patch": "781e3a68e36b89ab43f5d4753bfae5843e5fa14e797345b95150253ca84389de"
+    "0188-native-modem-real-on.patch": "22a579ad446c4e640469e7588f1a3aa435929459978ff3433e22a11d2b0ea70a"
   },
   "prepared_before_sha256": {
     "packaged": {

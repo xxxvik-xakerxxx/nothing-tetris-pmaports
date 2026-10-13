@@ -22,16 +22,46 @@ diff --git a/drivers/pmdomain/mediatek/Kconfig b/drivers/pmdomain/mediatek/Kconf
 diff --git a/drivers/pmdomain/mediatek/mt6878-modem-adopt.h b/drivers/pmdomain/mediatek/mt6878-modem-adopt.h
 --- a/drivers/pmdomain/mediatek/mt6878-modem-adopt.h
 +++ b/drivers/pmdomain/mediatek/mt6878-modem-adopt.h
-@@ -644,6 +644,8 @@
+@@ -460,7 +460,7 @@
+ 	return 0;
+ }
+ 
+-static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
++static int mt6878_md_adopt_revalidate_resources(struct scpsys_domain *pd,
+ 				     struct mt6878_md_adoption *owner)
+ {
+ 	struct mt6878_md_adoption now = { 0 };
+@@ -481,8 +481,18 @@
+ 			ret = -ESTALE;
+ 	if (!ret)
+ 		ret = mt6878_md_adopt_maps(pd);
+-	if (!ret)
+-		ret = mt6878_md_adopt_on(pd, now.on);
++	return ret;
++}
++
++static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
++				     struct mt6878_md_adoption *owner)
++{
++	u32 on[5];
++	int ret;
++
++	ret = mt6878_md_adopt_revalidate_resources(pd, owner);
++	if (!ret)
++		ret = mt6878_md_adopt_on(pd, on);
  	return ret;
  }
  
-+#include "mt6878-modem-real-boot.h"
+@@ -643,6 +653,8 @@
+ 	mutex_unlock(&mt6878_md_first_off_lock);
+ 	return ret;
+ }
 +
++#include "mt6878-modem-real-boot.h"
+ 
  static void mt6878_md_first_off_publication_fault(struct scpsys *scpsys, int error)
  {
- 	struct mt6878_md_adoption *owner;
-@@ -707,10 +709,15 @@
+@@ -707,10 +719,15 @@
  		of_node_put(modem);
  		return count ? -EEXIST : -ENODATA;
  	}
@@ -51,7 +81,7 @@ diff --git a/drivers/pmdomain/mediatek/mt6878-modem-adopt.h b/drivers/pmdomain/m
  	}
  	owner = first_off ? kzalloc(sizeof(*owner), GFP_KERNEL) :
  		devm_kzalloc(pd->scpsys->dev, sizeof(*owner), GFP_KERNEL);
-@@ -742,6 +749,8 @@
+@@ -742,6 +759,8 @@
  		if (first_off)
  			ret = mt6878_md_first_off(pd, owner);
  	}
@@ -60,7 +90,7 @@ diff --git a/drivers/pmdomain/mediatek/mt6878-modem-adopt.h b/drivers/pmdomain/m
  	if (ret) {
  		if (first_off && !owner->supplier) {
  			of_node_put(owner->modem);
-@@ -809,5 +818,5 @@
+@@ -809,5 +828,5 @@
  	mutex_unlock(&owner->lock);
  	put_device(held);
  	/* detach_dev is void: this cannot veto consumer unbind or claim teardown. */

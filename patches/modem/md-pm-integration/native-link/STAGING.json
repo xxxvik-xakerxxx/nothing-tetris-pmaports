@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "scope": "new files under patches/modem/md-pm-integration/native-link only",
+  "status": "source/patch/parser validated; actual full native link pending parent CI, hardware untested",
+  "pins": {
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "companion_modules": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835"
+  },
+  "inputs": "successful ordinary packaged smoke + actual native-start compiler reports, explicit three-file pristine d84 input, prepared native-start kernel, verified shipping d84 archive and exact vendor git",
+  "build": "fresh archive reconstruction + shipping patches + unchanged realON/native-start; unchanged inherited native config/security ABI; full vmlinux/modules + real mapped util + eight original vendor composites",
+  "legacy_backend": "not linked; obsolete three OFF-backend imports rejected",
+  "crc_policy": "preserve shipping MODVERSIONS=n; explicitly report disabled runtime CRC enforcement; validate actual ELF CRC sections if a reviewed inherited configuration enables it",
+  "artifact_policy": {
+    "include": [
+      "artifacts/**/*.ko",
+      "artifacts/*.Module.symvers",
+      "artifacts/native-supplier.o",
+      "BUILD-MANIFEST.json",
+      "selected *.log"
+    ],
+    "exclude": [
+      "entire destination",
+      "source/**",
+      "vendor/**",
+      "modules/**",
+      "kernel-output/**",
+      "vmlinux"
+    ]
+  },
+  "files_sha256": {
+    "Kbuild": "e81fc4528c409fcab29ce2c7578198f2efdbac809afbb7fcf843a4b2fcf99fb3",
+    "README.md": "cb56a3728953286712ba7dc1f464ade6d25e4fd8179f6d193a895a8742a0bf36",
+    "abi.py": "da2975a36da97714a9944e91d3fc14ec41348d0b53802d93f3740298ae9e1537",
+    "link.py": "e54f3f5dca0a01a63e45965ef03afc1941860a65fc60e58361473861ee955d52",
+    "test_static.py": "e989e055c0c48591180acf24228b3a8fc0e80172364fe97ed5d1c284aa45a478"
+  },
+  "checks": [
+    "python3 -B -m unittest -v test_static.py",
+    "python3 -B link.py --source-check --vendor <exact-vendor-git> --pristine-kernel <three-file-or-full-pristine-d84>"
+  ],
+  "remaining": "actual native-link compiler/modpost/ELF report; hardware/runtime blockers recorded in link.py BLOCKERS and every BUILD-MANIFEST",
+  "performed": "no local native compilation, emulation/JIT, phone/SSH/fastboot, commit/push, remote mutation or frozen/global file edits"
+}

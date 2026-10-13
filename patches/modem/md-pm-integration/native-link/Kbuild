@@ -1,0 +1,3 @@
+# One strict modpost pass for the actual vendor composites. The separately
+# built mapped-SMEM util is the sole util instance; no legacy OFF backend.
+obj-m += eccci/ ccmni/ rps/
