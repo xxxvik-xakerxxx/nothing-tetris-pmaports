@@ -83,15 +83,32 @@ The 50-byte field constructor and updated GPU lifetime fixtures passed mandatory
 validation [CI38327618654](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327618654);
 exact GNSS producer/native checks passed
 [CI38327625537](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327625537).
-The new full-frame constructor has not yet passed native CI.
+The full-frame constructor, exact pinned producers and native sanitizer fixtures
+passed [CI38331513481](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38331513481)
+at `789d002`. This does not establish live DSP download or a position fix.
+The updated joint MD/camera provider passed strict ARM64 vmlinux linking with
+KUNIT=y and KUNIT=n, both supplier DT candidates and full/resource-only CCCI
+links in [CI38327631459](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327631459)
+at `5d507e5`. The camera candidates remain excluded from installation.
 
 The running MT6363 provider exposes only VCN13/VRFIO18, not stock modem VBUCK2,
 VSRAM_MODEM and VBUCK1. A standard native three-rail extension is staged under
 `patches/modem/md-pmic-supplier`, preserving the existing connectivity source.
 Selector/SET/CLR/mode operations retain real errors; unsupported shared-key,
-SSHUB, hardware-voter and calibration controls stay denied. Actual ARM64 object
-compilation is the next gate; disabled rail metadata is not activated or
-advertised as SIM support.
+SSHUB, hardware-voter and calibration controls stay denied. Actual ARM64 objects
+with KUNIT=y and KUNIT=n, full/resource-only CCCI and infrastructure clocks passed
+[CI38332592584](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38332592584)
+at `37310ed`. KUnit cases were compiled, not run in a kernel. Disabled rail
+metadata is not activated; no voltage measurement or SIM support is claimed.
+
+The corrected diagnostic image
+[CI38331505196](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38331505196)
+at `789d002` passed validation and isolated compilation and is building the
+whole kernel package. A container-registry quota failure was retried before
+compilation; future jobs use a verified byte-identical Alpine manifest mirror.
+No completed image or r183 flash is claimed yet. Its artifact is explicitly
+named `nothing-tetris-native-md-first-off-images`, with the paired loader above;
+ordinary shipping images do not activate this experiment.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in

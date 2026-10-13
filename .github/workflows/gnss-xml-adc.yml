@@ -99,6 +99,12 @@ jobs:
           python3 -B "$dsp/test_bootstrap_source.py" \
             "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
             2>&1 | tee out/lna-start-evidence/dsp-bootstrap-static.log
+          python3 -B "$dsp/test_download_sequence_source.py" \
+            "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/dsp-sequence-static.log
+          python3 -B patches/gnss/write-boundary/run.py --ci-native \
+            --vendor "$TETRIS_MODULES_TREE" \
+            2>&1 | tee out/lna-start-evidence/dsp-tx-native.log
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
             sh "$dsp/run-ci.sh" 2>&1 | tee out/lna-start-evidence/dsp-wire-native.log
           sha256sum "$dsp"/* > out/lna-start-evidence/DSP-SOURCE-SHA256SUMS

@@ -1,0 +1,116 @@
+Subject: [PATCH] gps: add per-call nonblocking data-link TX
+
+Base: NothingOSS/android_kernel_modules_nothing_mt6878
+Commit: e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
+Prerequisite: package vendor patches 1001 through 1008, in order
+
+Add an explicit nonblocking option, retaining write_with_opt's wait_tx_done
+contract via a wrapper with nonblocking=false. O_NONBLOCK queues once and
+returns before polling completion, or returns -EAGAIN on NOSPACE/BUSY/NOENTRY
+before the capacity wait. Keep other error mappings and blocking behavior.
+
+Return zero-length device writes before any access or recording; bound count
+to sizeof(o_buf) before narrowing/recording. The new nonblocking link entry
+also returns zero for len=0 before lookup. No poll readiness ABI is added.
+
+Staged only: no package activation or hardware validation.
+
+diff --git a/connectivity/gps/data_link/linux/gps_each_device.c b/connectivity/gps/data_link/linux/gps_each_device.c
+--- a/connectivity/gps/data_link/linux/gps_each_device.c
++++ b/connectivity/gps/data_link/linux/gps_each_device.c
+@@ -84,7 +84,12 @@
+ 	enum gps_dl_link_id_enum link_id;
+ 	bool print_log = false;
+ 
++	if (!count)
++		return 0;
++
+ 	dev = (struct gps_each_device *)filp->private_data;
++	if (count > sizeof(dev->o_buf))
++		count = sizeof(dev->o_buf);
+ 	pid = current->pid;
+ 	link_id = (enum gps_dl_link_id_enum)dev->index;
+ 
+@@ -98,11 +103,7 @@
+ 	gps_each_link_rec_write(link_id, pid, count, DRW_ENTER);
+ 
+ 	if (count > 0) {
+-		if (count > GPS_DATA_PATH_BUF_MAX) {
+-			GDL_LOGXW_DRW(link_id, "len = %ld is too long", count);
+-			copy_size = GPS_DATA_PATH_BUF_MAX;
+-		} else
+-			copy_size = count;
++		copy_size = count;
+ 
+ 		retval = copy_from_user(&dev->o_buf[0], &buf[0], copy_size);
+ 		if (retval != 0) {
+@@ -110,7 +111,11 @@
+ 				copy_size, retval);
+ 			retlen = -EFAULT;
+ 		} else {
+-			retval = gps_each_link_write(link_id, &dev->o_buf[0], copy_size);
++			if (filp->f_flags & O_NONBLOCK)
++				retval = gps_each_link_write_with_options(link_id,
++					&dev->o_buf[0], copy_size, true, true);
++			else
++				retval = gps_each_link_write(link_id, &dev->o_buf[0], copy_size);
+ 			if (retval == 0)
+ 				retlen = copy_size;
+ 			else
+diff --git a/connectivity/gps/data_link/gps_each_link.c b/connectivity/gps/data_link/gps_each_link.c
+--- a/connectivity/gps/data_link/gps_each_link.c
++++ b/connectivity/gps/data_link/gps_each_link.c
+@@ -594,10 +594,20 @@
+ int gps_each_link_write_with_opt(enum gps_dl_link_id_enum link_id,
+ 	unsigned char *buf, unsigned int len, bool wait_tx_done)
+ {
+-	struct gps_each_link *p = gps_dl_link_get(link_id);
++	return gps_each_link_write_with_options(link_id, buf, len, wait_tx_done, false);
++}
++
++int gps_each_link_write_with_options(enum gps_dl_link_id_enum link_id,
++	unsigned char *buf, unsigned int len, bool wait_tx_done, bool nonblocking)
++{
++	struct gps_each_link *p;
+ 	enum GDL_RET_STATUS gdl_ret;
+ 	long sigval = 0;
+ 
++	if (nonblocking && !len)
++		return 0;
++
++	p = gps_dl_link_get(link_id);
+ 	if (NULL == p)
+ 		return -EINVAL;
+ 
+@@ -619,6 +629,8 @@
+ 
+ 		if (gdl_ret == GDL_OKAY) {
+ 			gps_dl_link_event_send(GPS_DL_EVT_LINK_WRITE, link_id);
++			if (nonblocking)
++				return 0;
+ #if (GPS_DL_NO_USE_IRQ == 1)
+ 			if (wait_tx_done) {
+ 				do {
+@@ -633,6 +645,9 @@
+ 			return 0;
+ 		} else if (gdl_ret == GDL_FAIL_NOSPACE || gdl_ret == GDL_FAIL_BUSY ||
+ 			gdl_ret == GDL_FAIL_NOENTRY) {
++			if (nonblocking)
++				return -EAGAIN;
++
+ 			/* TODO: */
+ 			/* 1. note: BUSY stands for others thread is do write, it should be impossible */
+ 			/* - If wait on BUSY, should wake up the waitings or return eno_again? */
+diff --git a/connectivity/gps/data_link/inc/gps_each_link.h b/connectivity/gps/data_link/inc/gps_each_link.h
+--- a/connectivity/gps/data_link/inc/gps_each_link.h
++++ b/connectivity/gps/data_link/inc/gps_each_link.h
+@@ -211,6 +211,9 @@
+ 	unsigned char *buf, unsigned int len);
+ int gps_each_link_write_with_opt(enum gps_dl_link_id_enum link_id,
+ 	unsigned char *buf, unsigned int len, bool wait_tx_done);
++/* nonblocking skips capacity and completion waits for this call only. */
++int gps_each_link_write_with_options(enum gps_dl_link_id_enum link_id,
++	unsigned char *buf, unsigned int len, bool wait_tx_done, bool nonblocking);
+ int gps_each_link_read(enum gps_dl_link_id_enum link_id,
+ 	unsigned char *buf, unsigned int len);
+ int gps_each_link_read_with_timeout(enum gps_dl_link_id_enum link_id,
