@@ -116,10 +116,14 @@ metadata is not activated; no voltage measurement or SIM support is claimed.
 
 The corrected diagnostic image
 [CI38331505196](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38331505196)
-at `789d002` passed validation and isolated compilation and is building the
-whole kernel package. A container-registry quota failure was retried before
+at `789d002` passed validation, the complete kernel/module package, selected-DT
+validation and device/sensor packages. Image creation failed because the FIT
+template still named the ordinary board while boot-deploy copied only the
+selected diagnostic DT. Staging now updates both deviceinfo and the FIT incbin
+reference, with positive and drift/duplicate regression checks. A container-registry quota failure was retried before
 compilation; future jobs use a verified byte-identical Alpine manifest mirror.
-No completed image or r183 flash is claimed yet. Its artifact is explicitly
+No completed image or r183 flash is claimed yet. The failed image was not installed.
+Its artifact is explicitly
 named `nothing-tetris-native-md-first-off-images`, with the paired loader above;
 ordinary shipping images do not activate this experiment.
 

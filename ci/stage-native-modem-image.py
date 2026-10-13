@@ -168,6 +168,10 @@ def stage(tree, report):
     info = device / "deviceinfo"
     info.write_text(change_once(info.read_text(), 'deviceinfo_dtb="mt6878-nothing-tetris-native"',
                                'deviceinfo_dtb="' + BOARD + '"'))
+    fit = device / "boot_image.its"
+    fit.write_text(change_once(fit.read_text(),
+                              'data = /incbin/("mt6878-nothing-tetris-native.dtb");',
+                              'data = /incbin/("' + BOARD + '.dtb");'))
     device_apk = device / "APKBUILD"
     device_apk.write_text(change_once(device_apk.read_text(), "pkgrel=18\n", "pkgrel=19\n"))
     metadata = dict(profile="native-md-first-off-diagnostic", source_commit=SOURCE,
@@ -175,6 +179,7 @@ def stage(tree, report):
                     kernel_package="7.2.1-r183", device_package="8-r19", board=BOARD,
                     changes={name: hashlib.sha256(data).hexdigest() for name, data in extra.items()},
                     native_include_correction="nested header resolves ../mtk-pm-domains.h; no provider behavior change",
+                    fit_dtb=BOARD + ".dtb",
                     sleep_idle_hotplug_allowed=False, modem_consumer_enabled=False,
                     camera_gpu_enabled=False, end_user_radio_functionality=False)
     report.parent.mkdir(parents=True, exist_ok=True)

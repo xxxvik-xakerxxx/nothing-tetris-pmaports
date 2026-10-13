@@ -65,6 +65,27 @@ class ImageTests(unittest.TestCase):
             for name in stage.ENABLED:
                 self.assertIn("CONFIG_" + name + "=y\n", config)
             self.assertIn(stage.BOARD, (tree / stage.DEVICE / "deviceinfo").read_text())
+            fit = (tree / stage.DEVICE / "boot_image.its").read_text()
+            self.assertIn('data = /incbin/("' + stage.BOARD + '.dtb");', fit)
+            self.assertNotIn('"mt6878-nothing-tetris-native.dtb"', fit)
+            self.assertEqual(fit.count('/incbin/('), 3)
+            self.assertEqual(result["fit_dtb"], stage.BOARD + ".dtb")
+            self.assertIn('"mt6878-nothing-tetris-native.dtb"',
+                          (ROOT / "pmaports" / stage.DEVICE / "boot_image.its").read_text())
+
+    def test_fit_template_drift_is_not_silently_staged(self):
+        for change in ("missing", "duplicate"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                tree = Path(directory)
+                for relative in (stage.KERNEL, stage.DEVICE):
+                    shutil.copytree(ROOT / "pmaports" / relative, tree / relative)
+                fit = tree / stage.DEVICE / "boot_image.its"
+                original = fit.read_text()
+                fit.write_text(original.replace("mt6878-nothing-tetris-native.dtb", "unreviewed.dtb")
+                               if change == "missing" else original + original)
+                with patch.dict("os.environ", {"CI": "true", "GITHUB_ACTIONS": "true"}):
+                    with self.assertRaises(ValueError):
+                        stage.stage(tree, tree / "result.json")
 
     def test_board_patch_applies_without_compilation(self):
         with tempfile.TemporaryDirectory() as directory:
