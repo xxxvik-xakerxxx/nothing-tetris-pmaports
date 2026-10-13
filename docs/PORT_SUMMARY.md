@@ -31,7 +31,7 @@ an actual Wi-Fi scan returned 63 access points. Association/routed traffic
 were not tested. The previous conninfra NULL wake-lock fault is absent from
 the captured first-boot journal. The user confirmed normal display and touch.
 
-Sensors currently fail closed: `/chosen/nothing,scp-prepare-stage` is missing.
+Sensors on that first boot failed closed: `/chosen/nothing,scp-prepare-stage` was missing.
 SCP secure state 3 and plaintext region size 60 are present, but secure
 operation/error and prepare stage/error are absent. This is not sufficient
 proof of a complete handoff. The sensor service was not bypassed and hardware
@@ -46,12 +46,36 @@ sanitizers and ARM64 compilation. The first CI attempt stopped in a new test
 because it incorrectly expected zero rather than a nonnegative DT node offset;
 the follow-up changes only that test. The verified LK image, 3317552 bytes,
 SHA256 `30b5f535e5a2642bbd5d650a65637a123209af242c4246f7da9c2dd0fbefdc04`,
-was successfully flashed to `lk_a` only and full poweroff was issued. Cold
-execution/readback is pending. The hash-pinned
+was successfully flashed to `lk_a` only and full poweroff was issued. The hash-pinned
 [experimental mirror](https://github.com/xxxvik-xakerxxx/u-boot/releases/tag/native-md-startup-off-f25c0144)
 is now selected for future native diagnostic images; the frozen r184 parent
 remains unchanged. Existing r188 downloads still contain the original loader.
-Recovery, sensor behavior and lifecycle checks remain outstanding.
+
+After the user-confirmed physical cold cycle, boot
+`b09bc1f9-5096-442d-8546-5e1c92aa1bd2` read back that exact corrected LK hash;
+FIT and stock `lk_b` remained unchanged. SCP now reports
+`secure-handoff-prepared`, prepare error0, secure state3/error0, with operation
+also present. Sensor transport and SensorProxy started automatically (24 entries,
+physical mask31), with no failed systemd units. The user confirmed display,
+touch, both rotations and auto-brightness. An actual Wi-Fi scan returned 68
+access points. The complete captured first-boot journal has no new kernel
+Oops/BUG/WARNING/SError/panic/refcount fault. Native MD first-OFF passed again
+with the same recorded values. This is one corrected cold boot on one handset;
+warm reboot, suspend and cross-firmware/SKU coverage remain unproven.
+
+On this corrected boot a second bounded GNSS ROM cycle at uptime540.596-540.604s
+returned status0/code_size42505/fragment_count106 and confirmed both DMA stops,
+GPS OFF and CLOSED. Wi-Fi stayed powered; sensor/proxy/connectivity/SSH services
+remained active. No new fault appeared in the cycle's journal. SensorProxy
+advertises accelerometer and ambient light through its standard D-Bus interface.
+These results close the observed wakeup-source and missing-report regressions,
+not the missing end-user radio, navigation, GPU or camera functions.
+
+Loader-selection integration at `b0aaef16c62cedfad424ba6e278d2cc808c80085`
+passed [CI38391021694](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38391021694):
+overlay validation, Bionic adapter and sealed-loader jobs succeeded. Kernel
+object/full image jobs were intentionally skipped for this validation-only run;
+the installed kernel/rootfs remain the fully built r188 artifacts above.
 
 r188 packages exact GNSS TX patch1009 and all matching external modules in one
 build. The packaged transport started without reload. One bounded read-only
@@ -121,8 +145,8 @@ as well and hold the real boot-lifetime `cpu_hotplug_disable()` owner before MD
 writes, requiring all present CPUs online. CPU idle, hibernation and kexec stay
 compiled out; actual CPU up/down and system sleep are vetoed. The veto persists through
 success/failure for this boot; this is not working suspend support. The complete
-r188 build and physical connectivity recovery are recorded above; sensor
-recovery is blocked by the separate incomplete bootloader report.
+r188 build and physical connectivity recovery are recorded above; the separate
+incomplete bootloader report was corrected and sensor cold recovery passed.
 This diagnostic profile excludes idle/sleep/hotplug and is not a battery-optimized
 shipping release. GNSS exact1009, camera frames and accelerated rendering are
 not enabled by r184.
@@ -667,7 +691,7 @@ firmware/SKU coverage are not implied; earlier evidence is identified explicitly
 | Root expansion | Works on tested clean install | r188 root reports 104.5 GiB after clean installation; wider lifecycle/SKU coverage remains. |
 | Native display | Partial | Route and frame-end updates are in main; no visible stripes/flicker. Fixed 60 Hz and software rendering; 120 Hz and power lifecycle remain. |
 | Touch and keys | Works for basic input | Touch and power/volume keys tested; full suspend/wake coverage remains. |
-| Sensors | Broken on current r188 boot | Earlier five-class transport, rotation, auto-brightness and local-call proximity passed. r188 rejects an incomplete SCP report; corrected loader flashed, cold recovery pending. |
+| Sensors | Partial | Corrected U-Boot on r188 restores automatic 24-entry transport and physical mask31; rotation and auto-brightness confirmed. Earlier local-call proximity passed; calibration, warm reboot and suspend remain. |
 | USB/NCM/SSH | Partial | Clean boots and transfers pass; reconnect/suspend lifecycle remains. |
 | Wi-Fi / Bluetooth | Partial | Earlier association/traffic and discovery demonstrated; profiles, coexistence and suspend remain. |
 | Audio | Partial | Earlier speaker paths and microphone capture demonstrated; cellular audio and full route coverage remain. |

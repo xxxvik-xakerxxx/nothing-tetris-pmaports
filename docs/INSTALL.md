@@ -96,7 +96,8 @@ and runs one native modem power-OFF experiment. All five CI jobs, clean
 installation, USB/SSH, image/loader readback, physical modem OFF and Wi-Fi
 scan passed. The user confirmed normal display/touch. Sensors failed
 because the original loader's final SCP preparation report was incomplete;
-the corrected loader is flashed, with cold validation pending. Do not treat this as
+the corrected loader is flashed and one cold recovery passed, including
+rotation and auto-brightness. Do not treat this as
 a sensor-ready or battery-optimized release. Use the exact paired
 loader described below, not an older sensor-ready loader selected by name.
 See the maintained [checkpoint](PORT_SUMMARY.md#latest-installed-checkpoint-r188)
@@ -116,8 +117,10 @@ Do not flash raw `u-boot.bin` as an LK image. The corrected startup-OFF/SCP prof
 is from [CI38389560147](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38389560147),
 source `f25c01444a642c6fca857bd9678ef438ec371988`, LK SHA256
 `30b5f535e5a2642bbd5d650a65637a123209af242c4246f7da9c2dd0fbefdc04`.
-It has 3317552 bytes, fixes late DT capacity and was flashed to `lk_a` only;
-cold execution/readback is pending. Original r188 artifacts contain the older
+It has 3317552 bytes, fixes late DT capacity and was flashed/read back in `lk_a`
+only. One physical cold boot restored automatic sensors, rotation and
+auto-brightness while preserving display/touch, Wi-Fi scan and USB/SSH.
+Warm reboot and broader lifecycle remain unverified. Original r188 artifacts contain the older
 `322cf227` loader (`0a16ba1d...`) with the incomplete-report failure. Do not
 downgrade by blindly reflashing that bundled file. Future native diagnostic
 builds select the separately hash-pinned corrected artifact. Other builds at the same
