@@ -10,6 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
+#include "../ioctl_request.h"
 
 _Static_assert(sizeof(uintptr_t) == 8, "B4.1 acquisition requires a 64-bit mapping");
 
@@ -560,9 +561,9 @@ static int profile_read(const char *path, struct b41_first_config *first,
     return 0;
 }
 
-static int scalar_query(int fd, unsigned long command, unsigned long argument)
+static int scalar_query(int fd, uint32_t command, unsigned long argument)
 {
-    int result = ioctl(fd, command, argument);
+    int result = ioctl(fd, b41_ioctl_request(command), argument);
     return result < 0 ? -errno : result;
 }
 

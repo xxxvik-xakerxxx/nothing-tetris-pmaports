@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #define _POSIX_C_SOURCE 200809L
 #include "selectors.h"
+#include "../ioctl_request.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -447,6 +448,10 @@ static void test_native_downloader(void)
 
 int main(void)
 {
+    static const uint32_t requests[] = {11, 23, 25, UINT32_C(0x8004c200),
+                                       UINT32_C(0x8004c203), UINT32_MAX};
+    for (unsigned i = 0; i < sizeof(requests) / sizeof(requests[0]); ++i)
+        assert((uint32_t)b41_ioctl_request(requests[i]) == requests[i]);
     assert(fesetround(FE_TONEAREST) == 0);
     test_mode();
     test_associated_acquisition();

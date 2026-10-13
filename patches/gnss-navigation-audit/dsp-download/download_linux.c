@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include "ioctl_request.h"
 
 static void erase(void *storage, size_t size)
 {
@@ -137,7 +138,7 @@ int b41_download_linux_step(struct b41_download *owner)
         status = monotonic(&now);
         return status == 0 ? b41_download_written(owner, now, result) : b41_download_abort(owner, status);
     case B41_DOWNLOAD_SUBMIT_FRAGMENT:
-        result = ioctl(action.gps0_fd, (unsigned long)action.command, (unsigned long)action.argument);
+        result = ioctl(action.gps0_fd, b41_ioctl_request(action.command), (unsigned long)action.argument);
         if (result < 0)
             result = -errno;
         if (result != 0)
