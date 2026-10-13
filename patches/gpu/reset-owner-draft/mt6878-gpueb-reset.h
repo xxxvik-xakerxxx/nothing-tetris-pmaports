@@ -10,6 +10,7 @@ struct device;
 struct platform_device;
 struct mt6878_gpueb_sram;
 struct mt6878_gpueb_reset;
+struct mt6878_gpueb_dispatch;
 /* Require an available mediatek,gpueb node and all eight ee2 memory resources
  * without claiming or accessing them. No chip identity is inferred from the
  * generic compatible alone: endpoints and attached MFG0 profile remain required.
@@ -37,11 +38,27 @@ typedef void (*mt6878_gpueb_receive_t)(void *context, unsigned int channel,
 int mt6878_gpueb_reset_bind_channel(struct mt6878_gpueb_reset *scope,
 		struct device *client, unsigned int channel,
 		mt6878_gpueb_receive_t receive, void *context);
+/* Seal all eleven fixed consumers before any future IRQ activation. Requires
+ * the same bound parent, disabled owned IRQ, healthy SRAM and an existing active
+ * PM reference. Pins the parent driver module/device/PM usage; a live handle
+ * prevents scope destruction and further binding. No MMIO or IRQ enable, and
+ * no cold-start permission is created by acquisition. No caller proof flags.
+ * Parent serializes acquire/release/final destruction and prohibits unbind.
+ */
+struct mt6878_gpueb_dispatch *mt6878_gpueb_reset_dispatch_acquire(
+		struct mt6878_gpueb_reset *scope, struct device *parent);
+/* Drain the entire IRQ including callbacks before releasing the extra pins.
+ * Success consumes the handle. After dispatch MMIO/reset/fault, retains handle
+ * and pins and returns first error or -EBUSY: Linux drain is not physical OFF.
+ * Never call from a callback or while holding a lock the callback needs.
+ */
+int mt6878_gpueb_reset_dispatch_release(struct mt6878_gpueb_dispatch *dispatch);
 /* Process context, one nonblocking full-slot submission by the pinned client.
  * Zero means doorbell submitted, NOT firmware ACK/command completion. Reply
  * channels remain in flight until an actual copied/ACKed RX callback returns.
  * No timeout/retry or caller readiness flag. The current candidate has no owned
- * IRQ activation transition: valid calls return -EOPNOTSUPP without MMIO.
+ * IRQ activation transition: even a sealed owner returns -EOPNOTSUPP without
+ * MMIO. The owner is a lifetime prerequisite, not start authorization.
  * Caller serializes final destruction and supplies stable words for this call;
  * callbacks must not send recursively or hold a lock a drain caller needs.
  */

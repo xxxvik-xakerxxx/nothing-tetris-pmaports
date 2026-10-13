@@ -74,6 +74,13 @@ arithmetic and `574f04` conversions before fourteen16-bit stores at
 `clock.c/h`; see [CLOCK.md](CLOCK.md). Remaining closure is authoritative
 construction of the context/global selectors and the effective override result.
 Copying synthetic zeros would conceal this gate.
+`bootstrap_fields.c/h` now translates the effective-frequency record decoder,
+clock mode, baud, profile and board/feature branches and applies50 bytes at
+4..9,30..61,94..105. [BOOTSTRAP_FIELDS.md](BOOTSTRAP_FIELDS.md) gives the exact
+producers, input-stage requirements and remaining acquisition/transport gates.
+The earlier table's dynamic-input gates now refer to acquiring legitimate
+snapshots; those field computations are implemented. All other56 bytes remain
+untouched by this block, including ROM-session metadata.
 
 ## Receive Grammar And Matching ACK
 

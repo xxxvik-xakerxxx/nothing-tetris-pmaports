@@ -25,13 +25,18 @@ static struct module fixture_module;
 #define THIS_MODULE (&fixture_module)
 static struct irq_data fixture_irq_data;
 static unsigned int fixture_masks, fixture_syncs;
+static int fixture_pm_get_result = 1;
+static unsigned int fixture_pm_refs;
+static struct module *fixture_module_fail;
 static void fixture_barrier(void);
+static void fixture_synchronize(void);
 #define mb() fixture_barrier()
 #define spin_lock_init(lock) assert(!pthread_mutex_init((lock), NULL))
 #define spin_lock_irqsave(lock, flags) do { (flags) = 0; assert(!pthread_mutex_lock(lock)); } while (0)
 #define spin_unlock_irqrestore(lock, flags) do { (void)(flags); assert(!pthread_mutex_unlock(lock)); } while (0)
 static inline int try_module_get(struct module *module)
 {
+	if (module && module == fixture_module_fail) return 0;
 	if (module) module->refs++;
 	return 1;
 }
@@ -49,7 +54,8 @@ static inline void disable_irq_nosync(int irq)
 {
 	assert(irq == 273); fixture_masks++; fixture_irq_data.disabled = 1;
 }
-static inline void synchronize_irq(int irq) { assert(irq == 273); fixture_syncs++; }
+static inline void synchronize_irq(int irq)
+{ assert(irq == 273); fixture_syncs++; fixture_synchronize(); }
 /* Unused platform bring-up dependencies deliberately abort, not fake success. */
 static inline int of_property_count_u32_elems(struct device_node *node, const char *name)
 { (void)node; (void)name; abort(); }
@@ -75,8 +81,10 @@ static inline struct resource *platform_get_resource_byname(struct platform_devi
 static inline int platform_get_irq_byname(struct platform_device *dev, const char *name)
 { (void)dev; (void)name; abort(); }
 static inline unsigned int irq_get_trigger_type(int irq) { (void)irq; abort(); }
-static inline int pm_runtime_get_if_in_use(struct device *dev) { (void)dev; abort(); }
-static inline void pm_runtime_put_noidle(struct device *dev) { (void)dev; abort(); }
+static inline int pm_runtime_get_if_in_use(struct device *dev)
+{ assert(dev); if (fixture_pm_get_result > 0) fixture_pm_refs++; return fixture_pm_get_result; }
+static inline void pm_runtime_put_noidle(struct device *dev)
+{ assert(dev && fixture_pm_refs); fixture_pm_refs--; }
 static inline int request_threaded_irq(int irq, irqreturn_t (*primary)(int, void *),
 		irqreturn_t (*thread)(int, void *), unsigned long flags,
 		const char *name, void *context)

@@ -21,6 +21,23 @@ enum mt6878_md_adopt_state {
 	MT6878_MD_RETIRED,
 };
 
+enum mt6878_md_restart_step {
+	MT6878_MD_RESTART_UNUSED,
+	MT6878_MD_RESTART_HANDOFF,
+	MT6878_MD_RESTART_OFF,
+	MT6878_MD_RESTART_RESOURCES,
+	MT6878_MD_RESTART_INHIBIT_BOUNDARY,
+};
+
+struct mt6878_md_restart {
+	bool attempted;
+	enum mt6878_md_restart_step step;
+	struct device_node *top_node, *rail_nodes[3];
+	struct regmap *top;
+	u32 voltage[3][2];
+	u32 off[5];
+};
+
 struct mt6878_md_adoption {
 	struct mutex lock;
 	struct device_node *modem;
@@ -34,6 +51,7 @@ struct mt6878_md_adoption {
 	struct regmap *maps[4];
 	u32 on[5];
 	u32 off[5];
+	struct mt6878_md_restart restart;
 };
 
 /* Keep the one attempted boot takeover, including failed-probe evidence. */
@@ -442,8 +460,8 @@ static int mt6878_md_adopt_on(struct scpsys_domain *pd, u32 values[5])
 	return 0;
 }
 
-static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
-				     struct mt6878_md_adoption *owner)
+static int mt6878_md_adopt_revalidate_resources(struct scpsys_domain *pd,
+					       struct mt6878_md_adoption *owner)
 {
 	struct mt6878_md_adoption now = { 0 };
 	unsigned int i;
@@ -463,8 +481,17 @@ static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
 			ret = -ESTALE;
 	if (!ret)
 		ret = mt6878_md_adopt_maps(pd);
+	return ret;
+}
+
+static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
+				     struct mt6878_md_adoption *owner)
+{
+	u32 values[5];
+	int ret = mt6878_md_adopt_revalidate_resources(pd, owner);
+
 	if (!ret)
-		ret = mt6878_md_adopt_on(pd, now.on);
+		ret = mt6878_md_adopt_on(pd, values);
 	return ret;
 }
 
@@ -601,6 +628,8 @@ out:
 	return ret;
 }
 
+#include "mt6878-modem-restart.h"
+
 static void mt6878_md_first_off_publication_fault(struct scpsys *scpsys, int error)
 {
 	struct mt6878_md_adoption *owner;
@@ -627,6 +656,7 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 	char status[9];
 	bool first_off = of_property_present(pd->scpsys->dev->of_node,
 					    "nothing,modem-first-off-diagnostic");
+	bool restart;
 	unsigned int count = 0, suppliers = 0;
 	int ret;
 
@@ -638,6 +668,9 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 	    of_get_available_child_count(pd->scpsys->dev->of_node) != 1 ||
 	    mt6878_md_adopt_empty(pd->scpsys->dev->of_node, "nothing,modem-inherited-on-adoption"))
 		return -EOPNOTSUPP;
+	ret = mt6878_md_restart_requested(pd, &restart);
+	if (ret)
+		return ret;
 	if (first_off) {
 		ret = mt6878_md_first_off_profile(pd);
 		if (ret)
@@ -699,6 +732,8 @@ static int mt6878_md_adopt_init(struct scpsys_domain *pd, struct device_node *do
 		if (first_off)
 			ret = mt6878_md_first_off(pd, owner);
 	}
+	if (!ret && restart)
+		ret = mt6878_md_inhibited_restart(pd, owner);
 	if (ret) {
 		if (first_off && !owner->supplier) {
 			of_node_put(owner->modem);
@@ -768,3 +803,5 @@ static void mt6878_md_adopt_detach(struct generic_pm_domain *genpd, struct devic
 	/* detach_dev is void: this cannot veto consumer unbind or claim teardown. */
 	dev_err(pd->scpsys->dev, "MD adoption detached; physical ON retained, reattach/start unsupported\n");
 }
+
+#include "mt6878-modem-restart-test.h"

@@ -144,16 +144,43 @@ struct mt6878_gpueb_reset {
 		void *context;
 	} channels[GPUEB_MBOX_CHANNELS];
 	u32 registered, tx_inflight;
+	struct mt6878_gpueb_dispatch *dispatch_owner;
 	unsigned int mbox_claims;
 	struct mutex lock;
 	spinlock_t irq_lock;
 	int irq, first_error;
-	bool reset_written, dispatch_quiesced, irq_contained;
-	/* Private activation provenance, never a caller-supplied permission. No
-	 * production setter exists until cold-start/IRQ lifecycle is implemented.
+	bool reset_written, dispatch_quiesced, irq_contained, dispatch_used;
+	/* Private activation provenance, never a caller-supplied permission. The
+	 * lifetime lease cannot produce the missing authenticated cold-start epoch.
 	 */
 	bool dispatch_active;
 };
+
+struct mt6878_gpueb_dispatch {
+	struct mt6878_gpueb_reset *scope;
+	struct device *parent;
+	struct module *module;
+};
+
+/* Caller holds scope->lock. Pins cannot prevent forced device_unregister;
+ * the non-hotpluggable parent must serialize its whole driver lifetime.
+ */
+static int dispatch_identity(struct mt6878_gpueb_reset *scope)
+{
+	unsigned int i;
+
+	if (!scope->parent_driver || scope->parent->driver != scope->parent_driver ||
+	    !scope->parent_driver->suppress_bind_attrs)
+		return -ENODEV;
+	for (i = 0; i < GPUEB_MBOX_CHANNELS; i++) {
+		if (!(scope->registered & BIT(i)))
+			continue;
+		if (scope->channels[i].device->driver != scope->channels[i].driver ||
+		    !scope->channels[i].driver->suppress_bind_attrs)
+			return -ENODEV;
+	}
+	return 0;
+}
 
 static void release_mailbox_resources(struct mt6878_gpueb_reset *scope)
 {
@@ -280,7 +307,7 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 		mutex_unlock(&scope->lock);
 		return IRQ_HANDLED;
 	}
-	if (!scope->dispatch_active) {
+	if (!scope->dispatch_active || !scope->dispatch_owner) {
 		/* An unowned external line enable cannot authorize dispatch. Avoid a
 		 * level-triggered storm without reading/ACKing firmware state.
 		 */
@@ -292,6 +319,13 @@ static irqreturn_t mailbox_irq_thread(int irq, void *data)
 		ret = -ESHUTDOWN;
 		goto fault;
 	}
+	ret = dispatch_identity(scope);
+	if (ret)
+		goto fault;
+	/* From this point an ACK may reach firmware. Retain the lifetime owner
+	 * even after a successful drain; no physical OFF producer exists.
+	 */
+	scope->dispatch_used = true;
 	ret = mt6878_gpueb_sram_read_transaction(scope->gpr, scope->mbox,
 					       snapshot_mailbox, &snapshot);
 	if (ret)
@@ -333,6 +367,10 @@ int mt6878_gpueb_reset_bind_channel(struct mt6878_gpueb_reset *scope,
 		ret = -ESHUTDOWN;
 		goto out;
 	}
+	if (scope->dispatch_owner) {
+		ret = -EBUSY;
+		goto out;
+	}
 	if (scope->registered & BIT(channel)) {
 		ret = -EBUSY;
 		goto out;
@@ -353,6 +391,109 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_bind_channel);
+
+struct mt6878_gpueb_dispatch *mt6878_gpueb_reset_dispatch_acquire(
+		struct mt6878_gpueb_reset *scope, struct device *parent)
+{
+	struct mt6878_gpueb_dispatch *dispatch;
+	struct irq_data *irq_data;
+	struct module *module;
+	int ret;
+
+	if (IS_ERR_OR_NULL(scope) || !parent)
+		return ERR_PTR(-EINVAL);
+	dispatch = kzalloc(sizeof(*dispatch), GFP_KERNEL);
+	if (!dispatch)
+		return ERR_PTR(-ENOMEM);
+	mutex_lock(&scope->lock);
+	ret = READ_ONCE(scope->first_error);
+	if (ret)
+		goto fail;
+	if (scope->dispatch_quiesced || scope->reset_written) {
+		ret = -ESHUTDOWN;
+		goto fail;
+	}
+	if (scope->dispatch_owner || scope->dispatch_active) {
+		ret = -EBUSY;
+		goto fail;
+	}
+	if (parent != scope->parent) {
+		ret = -ENODEV;
+		goto fail;
+	}
+	/* ee2 defines eleven channels, including e96 MET event/response users.
+	 * Missing consumers cannot be replaced by discard callbacks here.
+	 */
+	if (scope->registered != BIT(GPUEB_MBOX_CHANNELS) - 1) {
+		ret = -ENXIO;
+		goto fail;
+	}
+	ret = dispatch_identity(scope);
+	if (ret)
+		goto fail;
+	ret = mt6878_gpueb_sram_check_parent(scope->sram, parent);
+	if (ret)
+		goto fail;
+	irq_data = irq_get_irq_data(scope->irq);
+	if (!irq_data || !irqd_irq_disabled(irq_data) || scope->irq_contained) {
+		ret = -EBUSY;
+		goto fail;
+	}
+	module = scope->parent_driver->owner;
+	if (!try_module_get(module)) {
+		ret = -ENODEV;
+		goto fail;
+	}
+	ret = pm_runtime_get_if_in_use(parent);
+	if (ret <= 0) {
+		ret = ret ?: -EAGAIN;
+		module_put(module);
+		goto fail;
+	}
+	dispatch->scope = scope;
+	dispatch->parent = get_device(parent);
+	dispatch->module = module;
+	scope->dispatch_owner = dispatch;
+	mutex_unlock(&scope->lock);
+	return dispatch;
+fail:
+	mutex_unlock(&scope->lock);
+	kfree(dispatch);
+	return ERR_PTR(ret);
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_dispatch_acquire);
+
+int mt6878_gpueb_reset_dispatch_release(struct mt6878_gpueb_dispatch *dispatch)
+{
+	struct mt6878_gpueb_reset *scope;
+	int ret;
+
+	if (IS_ERR_OR_NULL(dispatch))
+		return -EINVAL;
+	scope = dispatch->scope;
+	/* The owner remains published while drain drops the mutex and waits. */
+	ret = mt6878_gpueb_reset_drain_irq(scope);
+	mutex_lock(&scope->lock);
+	if (!ret)
+		ret = dispatch_identity(scope);
+	if (!ret && !scope->dispatch_used && !scope->reset_written)
+		ret = mt6878_gpueb_sram_check_parent(scope->sram, dispatch->parent);
+	if (ret)
+		ret = latch(scope, ret);
+	if (ret || scope->dispatch_used || scope->reset_written) {
+		mt6878_gpueb_sram_unknown_start(scope->sram);
+		mutex_unlock(&scope->lock);
+		return ret ?: -EBUSY;
+	}
+	scope->dispatch_owner = NULL;
+	mutex_unlock(&scope->lock);
+	pm_runtime_put_noidle(dispatch->parent);
+	put_device(dispatch->parent);
+	module_put(dispatch->module);
+	kfree(dispatch);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt6878_gpueb_reset_dispatch_release);
 
 struct gpueb_tx {
 	struct mt6878_gpueb_reset *scope;
@@ -377,6 +518,8 @@ static int tx_before(struct mt6878_gpueb_reader *reader, void *data)
 	if (gpueb_channels[tx->channel].recv_opt &&
 	    (readl(scope->mbox_maps[GPUEB_MBOX_RECV]) & BIT(tx->channel)))
 		return -EPROTO;
+	/* Record before the first slot write, not after a doorbell/readback. */
+	scope->dispatch_used = true;
 	return 0;
 }
 
@@ -439,11 +582,14 @@ int mt6878_gpueb_reset_trysend(struct mt6878_gpueb_reset *scope,
 	 * Both the private owned transition and the real line must be active.
 	 */
 	irq_data = irq_get_irq_data(scope->irq);
-	if (!scope->dispatch_active || !irq_data || irqd_irq_disabled(irq_data) ||
+	if (!scope->dispatch_owner || !scope->dispatch_active || !irq_data || irqd_irq_disabled(irq_data) ||
 	    scope->irq_contained) {
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
+	ret = dispatch_identity(scope);
+	if (ret)
+		goto fault;
 	if (scope->tx_inflight & BIT(channel)) {
 		ret = -EBUSY;
 		goto out;
@@ -592,6 +738,8 @@ int mt6878_gpueb_reset_drain_irq(struct mt6878_gpueb_reset *scope)
 		return -EINVAL;
 	mutex_lock(&scope->lock);
 	scope->dispatch_quiesced = true;
+	if (scope->dispatch_active)
+		scope->dispatch_used = true;
 	scope->dispatch_active = false;
 	mask_irq_once(scope);
 	mutex_unlock(&scope->lock);
@@ -650,6 +798,13 @@ int mt6878_gpueb_reset_destroy(struct mt6878_gpueb_reset *scope)
 	unsigned int i;
 	if (IS_ERR_OR_NULL(scope))
 		return -EINVAL;
+	mutex_lock(&scope->lock);
+	if (scope->dispatch_owner) {
+		ret = READ_ONCE(scope->first_error) ?: -EBUSY;
+		mutex_unlock(&scope->lock);
+		return ret;
+	}
+	mutex_unlock(&scope->lock);
 	ret = mt6878_gpueb_reset_drain_irq(scope);
 	if (ret)
 		return ret;

@@ -1,17 +1,19 @@
 From: Tetris port maintainers
-Subject: [STAGING PATCH] native MT6878 MD: adopt ON or opt in to one boot first-OFF
+Subject: [STAGING PATCH] native MT6878 MD: first-OFF and bounded restart owner
 
 Not shipping. Requires guarded final-producer markers and the actual
 completed boot transaction. Consumer remains disabled. First-OFF additionally
 requires separate paired empty intent/final markers and persistent no-idle,
-no-sleep, no-hotplug and no-kexec kernel profile. No restart or callback
-transition is enabled. Failed first-OFF retains its boot-lifetime owner.
+no-sleep, no-hotplug and no-kexec kernel profile. Separate restart staging
+retains TOP/rail resources after OFF and stops at the missing execution-inhibit
+owner before regulator acquisition or ON writes. Callbacks remain vetoed.
+Failed operations retain the boot-lifetime owner and first errno; no retry.
 
 diff --git a/drivers/pmdomain/mediatek/mt6878-modem-adopt.h b/drivers/pmdomain/mediatek/mt6878-modem-adopt.h
 new file mode 100644
 --- /dev/null
 +++ b/drivers/pmdomain/mediatek/mt6878-modem-adopt.h
-@@ -0,0 +1,770 @@
+@@ -0,0 +1,807 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/* Included after native scpsys types and modem-only domain data. */
 +#include <linux/mutex.h>
@@ -35,6 +37,23 @@ new file mode 100644
 +	MT6878_MD_RETIRED,
 +};
 +
++enum mt6878_md_restart_step {
++	MT6878_MD_RESTART_UNUSED,
++	MT6878_MD_RESTART_HANDOFF,
++	MT6878_MD_RESTART_OFF,
++	MT6878_MD_RESTART_RESOURCES,
++	MT6878_MD_RESTART_INHIBIT_BOUNDARY,
++};
++
++struct mt6878_md_restart {
++	bool attempted;
++	enum mt6878_md_restart_step step;
++	struct device_node *top_node, *rail_nodes[3];
++	struct regmap *top;
++	u32 voltage[3][2];
++	u32 off[5];
++};
++
 +struct mt6878_md_adoption {
 +	struct mutex lock;
 +	struct device_node *modem;
@@ -48,6 +67,7 @@ new file mode 100644
 +	struct regmap *maps[4];
 +	u32 on[5];
 +	u32 off[5];
++	struct mt6878_md_restart restart;
 +};
 +
 +/* Keep the one attempted boot takeover, including failed-probe evidence. */
@@ -456,8 +476,8 @@ new file mode 100644
 +	return 0;
 +}
 +
-+static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
-+				     struct mt6878_md_adoption *owner)
++static int mt6878_md_adopt_revalidate_resources(struct scpsys_domain *pd,
++					       struct mt6878_md_adoption *owner)
 +{
 +	struct mt6878_md_adoption now = { 0 };
 +	unsigned int i;
@@ -477,8 +497,17 @@ new file mode 100644
 +			ret = -ESTALE;
 +	if (!ret)
 +		ret = mt6878_md_adopt_maps(pd);
++	return ret;
++}
++
++static int mt6878_md_adopt_revalidate(struct scpsys_domain *pd,
++				     struct mt6878_md_adoption *owner)
++{
++	u32 values[5];
++	int ret = mt6878_md_adopt_revalidate_resources(pd, owner);
++
 +	if (!ret)
-+		ret = mt6878_md_adopt_on(pd, now.on);
++		ret = mt6878_md_adopt_on(pd, values);
 +	return ret;
 +}
 +
@@ -615,6 +644,8 @@ new file mode 100644
 +	return ret;
 +}
 +
++#include "mt6878-modem-restart.h"
++
 +static void mt6878_md_first_off_publication_fault(struct scpsys *scpsys, int error)
 +{
 +	struct mt6878_md_adoption *owner;
@@ -641,6 +672,7 @@ new file mode 100644
 +	char status[9];
 +	bool first_off = of_property_present(pd->scpsys->dev->of_node,
 +					    "nothing,modem-first-off-diagnostic");
++	bool restart;
 +	unsigned int count = 0, suppliers = 0;
 +	int ret;
 +
@@ -652,6 +684,9 @@ new file mode 100644
 +	    of_get_available_child_count(pd->scpsys->dev->of_node) != 1 ||
 +	    mt6878_md_adopt_empty(pd->scpsys->dev->of_node, "nothing,modem-inherited-on-adoption"))
 +		return -EOPNOTSUPP;
++	ret = mt6878_md_restart_requested(pd, &restart);
++	if (ret)
++		return ret;
 +	if (first_off) {
 +		ret = mt6878_md_first_off_profile(pd);
 +		if (ret)
@@ -713,6 +748,8 @@ new file mode 100644
 +		if (first_off)
 +			ret = mt6878_md_first_off(pd, owner);
 +	}
++	if (!ret && restart)
++		ret = mt6878_md_inhibited_restart(pd, owner);
 +	if (ret) {
 +		if (first_off && !owner->supplier) {
 +			of_node_put(owner->modem);
@@ -782,6 +819,8 @@ new file mode 100644
 +	/* detach_dev is void: this cannot veto consumer unbind or claim teardown. */
 +	dev_err(pd->scpsys->dev, "MD adoption detached; physical ON retained, reattach/start unsupported\n");
 +}
++
++#include "mt6878-modem-restart-test.h"
 diff --git a/drivers/pmdomain/mediatek/mt6878-modem-pm.h b/drivers/pmdomain/mediatek/mt6878-modem-pm.h
 --- a/drivers/pmdomain/mediatek/mt6878-modem-pm.h
 +++ b/drivers/pmdomain/mediatek/mt6878-modem-pm.h
@@ -926,6 +965,278 @@ diff --git a/drivers/pmdomain/mediatek/mt6878-modem-pm.h b/drivers/pmdomain/medi
 -		mt6878_md_power_off(&pd->genpd);
 -}
 +#include "mt6878-modem-adopt.h"
+diff --git a/drivers/pmdomain/mediatek/mt6878-modem-restart-test.h b/drivers/pmdomain/mediatek/mt6878-modem-restart-test.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-modem-restart-test.h
+@@ -0,0 +1,114 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* These tests exercise admission/errno only; they never invoke hardware helpers. */
++#if IS_BUILTIN(CONFIG_KUNIT)
++#include <kunit/test.h>
++
++static void mt6878_md_restart_admission_test(struct kunit *test)
++{
++	struct mt6878_md_adoption *owner = kunit_kzalloc(test, sizeof(*owner), GFP_KERNEL);
++	struct device *supplier = kunit_kzalloc(test, sizeof(*supplier), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, owner);
++	KUNIT_ASSERT_NOT_NULL(test, supplier);
++	owner->supplier = supplier;
++	owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, NULL, supplier), -EXDEV);
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, NULL), -EXDEV);
++	KUNIT_EXPECT_FALSE(test, owner->restart.attempted);
++	owner->state = MT6878_MD_OBSERVED_ON;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), -EBUSY);
++	KUNIT_EXPECT_FALSE(test, owner->restart.attempted);
++	owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
++	owner->attached = supplier;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), -EBUSY);
++	owner->attached = NULL;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), 0);
++	KUNIT_EXPECT_TRUE(test, owner->restart.attempted);
++	KUNIT_EXPECT_EQ(test, owner->restart.step, MT6878_MD_RESTART_HANDOFF);
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), -EALREADY);
++}
++
++static void mt6878_md_restart_first_errno_test(struct kunit *test)
++{
++	struct mt6878_md_adoption *owner = kunit_kzalloc(test, sizeof(*owner), GFP_KERNEL);
++	struct device *supplier = kunit_kzalloc(test, sizeof(*supplier), GFP_KERNEL);
++	static const int errors[] = {
++		-EPROBE_DEFER, -ESTALE, -EINVAL, -ENODEV, -EIO, -ETIMEDOUT, -EOPNOTSUPP,
++	};
++	unsigned int i;
++
++	KUNIT_ASSERT_NOT_NULL(test, owner);
++	KUNIT_ASSERT_NOT_NULL(test, supplier);
++	for (i = 0; i < ARRAY_SIZE(errors); i++) {
++		/* Each iteration is a fresh software fixture, not a production reset. */
++		memset(owner, 0, sizeof(*owner));
++		owner->supplier = supplier;
++		owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
++		KUNIT_ASSERT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), 0);
++		KUNIT_EXPECT_EQ(test, mt6878_md_restart_stop(owner, errors[i]), errors[i]);
++		KUNIT_EXPECT_EQ(test, mt6878_md_restart_stop(owner, -EOPNOTSUPP), errors[i]);
++		KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), errors[i]);
++		KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, NULL, NULL), errors[i]);
++		KUNIT_EXPECT_EQ(test, owner->state, MT6878_MD_FIRST_OFF_COMPLETE);
++	}
++}
++
++static void mt6878_md_restart_no_grant_test(struct kunit *test)
++{
++	struct mt6878_md_adoption *owner = kunit_kzalloc(test, sizeof(*owner), GFP_KERNEL);
++	struct device *supplier = kunit_kzalloc(test, sizeof(*supplier), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, owner);
++	KUNIT_ASSERT_NOT_NULL(test, supplier);
++	owner->supplier = supplier;
++	owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
++	KUNIT_ASSERT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), 0);
++	owner->restart.step = MT6878_MD_RESTART_INHIBIT_BOUNDARY;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_stop(owner, -EOPNOTSUPP), -EOPNOTSUPP);
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), -EOPNOTSUPP);
++	KUNIT_EXPECT_PTR_EQ(test, owner->supplier, supplier);
++	KUNIT_EXPECT_PTR_EQ(test, owner->attached, NULL);
++	KUNIT_EXPECT_EQ(test, owner->state, MT6878_MD_FIRST_OFF_COMPLETE);
++	owner->first_error = 0;
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_stop(owner, 0), -EPROTO);
++}
++
++static void mt6878_md_restart_callback_veto_test(struct kunit *test)
++{
++	struct mt6878_md_adoption *owner = kunit_kzalloc(test, sizeof(*owner), GFP_KERNEL);
++	struct scpsys_domain *pd = kunit_kzalloc(test, sizeof(*pd), GFP_KERNEL);
++	struct device *supplier = kunit_kzalloc(test, sizeof(*supplier), GFP_KERNEL);
++	struct device_node *node = kunit_kzalloc(test, sizeof(*node), GFP_KERNEL);
++
++	KUNIT_ASSERT_NOT_NULL(test, owner);
++	KUNIT_ASSERT_NOT_NULL(test, pd);
++	KUNIT_ASSERT_NOT_NULL(test, supplier);
++	KUNIT_ASSERT_NOT_NULL(test, node);
++	mutex_init(&owner->lock);
++	owner->supplier = supplier;
++	owner->state = MT6878_MD_FIRST_OFF_COMPLETE;
++	owner->restart.top_node = node;
++	owner->restart.rail_nodes[0] = node;
++	pd->md_adoption = owner;
++	KUNIT_ASSERT_EQ(test, mt6878_md_restart_begin(owner, owner, supplier), 0);
++	KUNIT_EXPECT_EQ(test, mt6878_md_adopt_transition(&pd->genpd), -EOPNOTSUPP);
++	KUNIT_EXPECT_EQ(test, mt6878_md_restart_stop(owner, -EIO), -EIO);
++	KUNIT_EXPECT_EQ(test, mt6878_md_adopt_transition(&pd->genpd), -EIO);
++	KUNIT_EXPECT_PTR_EQ(test, owner->restart.top_node, node);
++	KUNIT_EXPECT_PTR_EQ(test, owner->restart.rail_nodes[0], node);
++}
++
++static struct kunit_case mt6878_md_restart_cases[] = {
++	KUNIT_CASE(mt6878_md_restart_admission_test),
++	KUNIT_CASE(mt6878_md_restart_first_errno_test),
++	KUNIT_CASE(mt6878_md_restart_no_grant_test),
++	KUNIT_CASE(mt6878_md_restart_callback_veto_test),
++	{ }
++};
++
++static struct kunit_suite mt6878_md_restart_suite = {
++	.name = "mt6878-md-inhibited-restart-owner",
++	.test_cases = mt6878_md_restart_cases,
++};
++kunit_test_suite(mt6878_md_restart_suite);
++#endif
+diff --git a/drivers/pmdomain/mediatek/mt6878-modem-restart.h b/drivers/pmdomain/mediatek/mt6878-modem-restart.h
+new file mode 100644
+--- /dev/null
++++ b/drivers/pmdomain/mediatek/mt6878-modem-restart.h
+@@ -0,0 +1,148 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Included after the native first-OFF owner and checked observation helpers. */
++
++static int mt6878_md_restart_requested(struct scpsys_domain *pd, bool *requested)
++{
++	struct device_node *supplier = pd->scpsys->dev->of_node;
++	struct device_node *chosen = of_find_node_by_path("/chosen");
++	int ret = 0;
++
++	*requested = of_property_present(supplier, "nothing,modem-inhibited-restart-staging") ||
++		(chosen && of_property_present(chosen, "tetris,modem-inhibited-restart-staging"));
++	if (*requested) {
++		ret = mt6878_md_adopt_empty(supplier, "nothing,modem-inhibited-restart-staging");
++		if (!ret)
++			ret = chosen ? mt6878_md_adopt_empty(chosen,
++				"tetris,modem-inhibited-restart-staging") : -ENODATA;
++		if (!ret)
++			ret = mt6878_md_first_off_profile(pd);
++	}
++	of_node_put(chosen);
++	return ret;
++}
++
++/* Caller holds the boot takeover lock and then the retained owner lock. */
++static int mt6878_md_restart_begin(struct mt6878_md_adoption *owner,
++				  struct mt6878_md_adoption *retained,
++				  struct device *supplier)
++{
++	if (owner->first_error)
++		return owner->first_error;
++	if (owner != retained || !supplier || owner->supplier != supplier)
++		return -EXDEV;
++	if (owner->restart.attempted)
++		return -EALREADY;
++	if (owner->state != MT6878_MD_FIRST_OFF_COMPLETE || owner->attached)
++		return -EBUSY;
++	owner->restart.attempted = true;
++	owner->restart.step = MT6878_MD_RESTART_HANDOFF;
++	return 0;
++}
++
++static int mt6878_md_restart_stop(struct mt6878_md_adoption *owner, int error)
++{
++	/* Even probe deferral becomes terminal after the retained OFF takeover. */
++	return mt6878_md_adopt_fault(owner, error);
++}
++
++static int mt6878_md_restart_resources(struct mt6878_md_adoption *owner)
++{
++	static const char * const supplies[] = {
++		"md-vmodem-supply", "md-vsram-supply", "md-vdigrf-supply",
++	};
++	static const char * const names[] = { "md-vmodem", "md-vsram", "md-vdigrf" };
++	static const u32 voltage[] = { 800000, 800000, 700000 };
++	struct mt6878_md_restart *restart = &owner->restart;
++	struct device_node *modem = owner->modem;
++	unsigned int i, j;
++	int ret;
++
++	/* Exact ee2be53 MT6878 profile: no SRC/O1/PLL/sequencer steps selected. */
++	if (of_property_present(modem, "mediatek,power-flow-config")) {
++		ret = mt6878_md_adopt_scalar(modem, "mediatek,power-flow-config", 0);
++		if (ret)
++			return ret;
++	}
++	if (of_property_present(modem, "mediatek,srclken-o1") ||
++	    of_property_present(modem, "md-vnr-supply") ||
++	    of_property_present(modem, "md-vmdfe-supply"))
++		return -EOPNOTSUPP;
++	if (of_count_phandle_with_args(modem, "ccci-topckgen", NULL) != 1)
++		return -EINVAL;
++	restart->top_node = of_parse_phandle(modem, "ccci-topckgen", 0);
++	ret = mt6878_md_adopt_map_node(restart->top_node,
++				      "mediatek,mt6878-topckgen", 0x10000000);
++	if (ret)
++		return ret;
++	restart->top = device_node_to_regmap(restart->top_node);
++	if (IS_ERR_OR_NULL(restart->top))
++		return restart->top ? PTR_ERR(restart->top) : -ENODEV;
++	for (i = 0; i < ARRAY_SIZE(supplies); i++) {
++		if (of_count_phandle_with_args(modem, supplies[i], NULL) != 1 ||
++		    of_property_count_u32_elems(modem, names[i]) != 2)
++			return -EINVAL;
++		restart->rail_nodes[i] = of_parse_phandle(modem, supplies[i], 0);
++		if (!restart->rail_nodes[i] || !of_device_is_available(restart->rail_nodes[i]))
++			return -ENODEV;
++		for (j = 0; j < i; j++)
++			if (restart->rail_nodes[i] == restart->rail_nodes[j])
++				return -EINVAL;
++		ret = of_property_read_u32_array(modem, names[i], restart->voltage[i], 2);
++		if (ret)
++			return ret;
++		if (restart->voltage[i][0] != voltage[i] || restart->voltage[i][1] != voltage[i])
++			return -EOPNOTSUPP;
++	}
++	return 0;
++}
++
++static int mt6878_md_inhibited_restart(struct scpsys_domain *pd,
++				     struct mt6878_md_adoption *owner)
++{
++	char status[9];
++	bool requested;
++	int ret;
++
++	mutex_lock(&mt6878_md_first_off_lock);
++	mutex_lock(&owner->lock);
++	ret = mt6878_md_restart_begin(owner, mt6878_md_first_off_owner, pd->scpsys->dev);
++	if (ret)
++		goto out;
++	ret = mt6878_md_restart_requested(pd, &requested);
++	if (!ret && !requested)
++		ret = -ENODATA;
++	if (!ret)
++		ret = mt6878_md_adopt_property(owner->modem, "status", status, sizeof(status));
++	if (!ret && memcmp(status, "disabled", sizeof(status)))
++		ret = -EBUSY;
++	if (!ret)
++		ret = mt6878_md_adopt_binding(pd, owner->modem, false);
++	if (!ret)
++		ret = mt6878_md_adopt_revalidate_resources(pd, owner);
++	if (ret)
++		goto fault;
++	owner->restart.step = MT6878_MD_RESTART_OFF;
++	ret = mt6878_md_first_off_readback(pd, owner->restart.off);
++	if (ret)
++		goto fault;
++	owner->restart.step = MT6878_MD_RESTART_RESOURCES;
++	ret = mt6878_md_restart_resources(owner);
++	if (ret)
++		goto fault;
++	owner->restart.step = MT6878_MD_RESTART_INHIBIT_BOUNDARY;
++	/* No active inhibit owner/readback exists in this pinned gen6299 chain.
++	 * Stop BEFORE regulator_get (supply resolution can enable a parent rail),
++	 * PMIC voltage/sync, TOP ungate, FLIGHT, MTCMOS or POWER/0 release.
++	 * A DT selector, OFF readback, skipped reset bit or old BROM is no grant.
++	 */
++	ret = -EOPNOTSUPP;
++fault:
++	ret = mt6878_md_restart_stop(owner, ret);
++	dev_err(pd->scpsys->dev,
++		"MD inhibited restart stopped at step %u: %d; owner retained, reboot required\n",
++		owner->restart.step, ret);
++out:
++	mutex_unlock(&owner->lock);
++	mutex_unlock(&mt6878_md_first_off_lock);
++	return ret;
++}
 diff --git a/drivers/pmdomain/mediatek/mtk-pm-domains.c b/drivers/pmdomain/mediatek/mtk-pm-domains.c
 --- a/drivers/pmdomain/mediatek/mtk-pm-domains.c
 +++ b/drivers/pmdomain/mediatek/mtk-pm-domains.c

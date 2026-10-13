@@ -6,6 +6,15 @@ the SRAM read accessor, and parent/provider channel binding. This is an actual
 Linux resource/MMIO adapter, not a full remoteproc provider or a power-on proof.
 No native C/kernel build or phone operation was performed locally.
 
+The next bounded lifetime prerequisite is implemented in
+[DISPATCH-LIFETIME.md](DISPATCH-LIFETIME.md): an opaque dispatch handle seals all
+eleven consumers and pins the actual parent module/device/active PM usage.
+It prevents premature scope destruction, drains callbacks before unused release,
+and retains every pin after uncertain dispatch/reset/fault. It performs no IRQ
+enable or MMIO and cannot produce the missing authenticated cold-start epoch.
+Even with this handle, valid production sends remain EOPNOTSUPP. Parent CI must
+run the expanded native fixture; CI38315471685 covers the preceding revision.
+
 The current bounded TX addition is documented in MAILBOX-DISPATCH.md. Its
 `mt6878_gpueb_reset_trysend()` uses this same scope and whole-SRAM owner, fixed
 full channel slots, actual GPR2 and hardware SEND checks, a source-backed SET

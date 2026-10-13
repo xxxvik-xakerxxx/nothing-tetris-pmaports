@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate/check native adoption and opt-in first-OFF against packaged sources."""
+"""Generate/check native adoption, first-OFF and bounded restart staging."""
 
 import argparse
 import difflib
@@ -22,6 +22,8 @@ PREFIX = "drivers/pmdomain/mediatek/"
 CFILE = PREFIX + "mtk-pm-domains.c"
 DATA = PREFIX + "mt6878-modem-pm.h"
 ADOPT = PREFIX + "mt6878-modem-adopt.h"
+RESTART = PREFIX + "mt6878-modem-restart.h"
+RESTART_TEST = PREFIX + "mt6878-modem-restart-test.h"
 PATCH = HERE / "native-on-adoption.patch"
 BASE_HASHES = {
     CFILE: "1bc964d9b4493fe23ac5955e4198fd2219f6e60ecad360cf2fa78518009a4841",
@@ -116,12 +118,14 @@ def candidate(before):
     after[DATA] = replace_once(prefix[0], "MTK_SCPD_MT6878_MD | MTK_SCPD_KEEP_DEFAULT_OFF |",
                               "MTK_SCPD_MT6878_MD |") + '#include "mt6878-modem-adopt.h"\n'
     after[ADOPT] = (HERE / "mt6878-modem-adopt.h").read_text()
+    after[RESTART] = (HERE / "mt6878-modem-restart.h").read_text()
+    after[RESTART_TEST] = (HERE / "mt6878-modem-restart-test.h").read_text()
     return after
 
 
 def diff(before, after):
-    text = "From: Tetris port maintainers\nSubject: [STAGING PATCH] native MT6878 MD: adopt ON or opt in to one boot first-OFF\n\n"
-    text += "Not shipping. Requires guarded final-producer markers and the actual\ncompleted boot transaction. Consumer remains disabled. First-OFF additionally\nrequires separate paired empty intent/final markers and persistent no-idle,\nno-sleep, no-hotplug and no-kexec kernel profile. No restart or callback\ntransition is enabled. Failed first-OFF retains its boot-lifetime owner.\n\n"
+    text = "From: Tetris port maintainers\nSubject: [STAGING PATCH] native MT6878 MD: first-OFF and bounded restart owner\n\n"
+    text += "Not shipping. Requires guarded final-producer markers and the actual\ncompleted boot transaction. Consumer remains disabled. First-OFF additionally\nrequires separate paired empty intent/final markers and persistent no-idle,\nno-sleep, no-hotplug and no-kexec kernel profile. Separate restart staging\nretains TOP/rail resources after OFF and stops at the missing execution-inhibit\nowner before regulator acquisition or ON writes. Callbacks remain vetoed.\nFailed operations retain the boot-lifetime owner and first errno; no retry.\n\n"
     for path in sorted(after):
         if before.get(path) == after[path]:
             continue
@@ -164,6 +168,14 @@ def contract(patch, before, after, inputs):
     return {
         "schema": 1,
         "phase": "staging-supplier-only-consumer-disabled",
+        "previous_first_off_validation": {
+            "basis": "user-supplied CI result; not rerun or applied to this new revision",
+            "run": "CI38315490334",
+            "result": "native full vmlinux passed KUNIT=y and KUNIT=n",
+            "patch_sha256": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a",
+            "helper_sha256": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
+            "production": "r182 remains unchanged",
+        },
         "pins": {
             "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
             "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
@@ -173,6 +185,10 @@ def contract(patch, before, after, inputs):
         "patch": {"path": "native-on-adoption.patch", "sha256": digest(patch.encode())},
         "canonical_helper": {"path": "mt6878-modem-adopt.h", "target": ADOPT,
                              "sha256": digest(after[ADOPT].encode())},
+        "restart_helpers": [
+            {"path": path.removeprefix(PREFIX), "target": path,
+             "sha256": digest(after[path].encode())} for path in (RESTART, RESTART_TEST)
+        ],
         "packaged_inputs": inputs,
         "prepared_before_sha256": {path: digest(text.encode()) for path, text in sorted(before.items())},
         "staged_after_sha256": {path: digest(text.encode()) for path, text in sorted(after.items())},
@@ -207,7 +223,7 @@ def contract(patch, before, after, inputs):
             "failure": "first errno returned directly; no publication or rollback; NOMAP, persistent syscon handles and non-devm owner/device/node references retained; no reattempt before reboot",
             "publication_failure": "same retained first-error record covers generic supplier probe publication unwind",
             "runtime_put": "not used; no swallowed genpd callback errno",
-            "status": "implemented-source-only; CI/native/hardware untested",
+            "status": "prior first-OFF baseline native CI passed per user; changed staged revision CI pending; hardware untested",
         },
         "ci": {
             "source_check": "python3 -B patches/modem/md-pm-integration/stage.py --kernel <pristine-d84>",
@@ -225,13 +241,40 @@ def contract(patch, before, after, inputs):
             "combined_link": "MD first; parent adapts camera native-provider.patch to this shared C; build shared object and one vmlinux; pending",
             "aggregate_readiness": "not-claimed-by-independent-object-checks",
         },
+        "inhibited_restart": {
+            "scope": "opt-in supplier-init operation after verified first-OFF; disabled consumer; no genpd publication on failure",
+            "chosen_empty": "/chosen/tetris,modem-inhibited-restart-staging",
+            "supplier_empty_final_only": "nothing,modem-inhibited-restart-staging",
+            "producer_status": "new staging selector contract; parent producer implementation not assumed",
+            "profile": "same resolved diagnostic.config plus first-off.config; no additional active hardware permission",
+            "order": ["retain existing boot takeover identity under boot-lock then owner-lock",
+                      "claim exactly one restart attempt", "revalidate paired selectors and disabled modem",
+                      "revalidate actual unchanged handoff/NOMAP/maps", "read complete native OFF",
+                      "retain DT TOP node and cached native syscon map",
+                      "retain three distinct actual available rail nodes and exact pinned voltage pairs",
+                      "stop at missing execution-inhibit owner before regulator_get and every ON operation"],
+            "resource_profile": {"power_flow_config": "absent or exact zero",
+                                 "rails_uv": {"md-vmodem": [800000, 800000],
+                                              "md-vsram": [800000, 800000],
+                                              "md-vdigrf": [700000, 700000]}},
+            "boundary_errno": "-EOPNOTSUPP; earlier exact errno wins, including -EPROBE_DEFER",
+            "retention": "non-devm first-OFF owner/supplier/modem, NOMAP, persistent maps and all acquired TOP/rail node references survive probe unwind through reboot",
+            "not_claimed": ["exclusive ownership of shared rails/TOP", "regulator handles",
+                            "execution-inhibited ON", "new authentication/EMI permission",
+                            "full shutdown", "consumer/transport activation"],
+            "tests": {"static": "test_static.py", "kunit_suite": "mt6878-md-inhibited-restart-owner",
+                      "kunit_scope": "actual admission/first-errno helpers and genpd callback veto; no hardware operations",
+                      "execution": "not compiled or executed locally; new revision native KUNIT=y/n CI pending"},
+            "evidence": "RESTART-SOURCE-EVIDENCE.json",
+            "status": "resource-operation-implemented; active-inhibit-owner-missing; hardware-untested",
+        },
         "failed_requirements": {
             "consumer_unbind_veto": "detach_dev is void and cannot veto; detach retires observation with ESHUTDOWN, no teardown claim",
             "dynamic_supplier_removal": "existing suppress_bind_attrs only prevents userspace unbind; arbitrary in-kernel unregister unsupported",
             "present_packaged_config_runtime_adoption": "blocked by OF_DYNAMIC=y and MEMORY_HOTREMOVE=y; package unchanged",
         },
-        "remaining": ["first-OFF final producer marker and resolved-profile CI/hardware validation",
-                      "consumer activation/attachment", "inhibited restart",
+        "remaining": ["new staged revision native KUNIT=y/n CI and matched-candidate first-OFF hardware validation",
+                      "consumer activation/attachment", "active execution-inhibit owner before ON",
                       "suspend and secure-idle lifecycle", "current effective EMI permission lifetime", "SIM operation"],
         "hardware": "not-executed; no SMC/write/reset/activation",
     }
@@ -258,8 +301,8 @@ def main():
         for path in (CFILE, DATA):
             if (args.prepared_kernel / path).read_text() != before[path]:
                 raise ValueError("prepared kernel differs from exact packaged baseline: " + path)
-        if (args.prepared_kernel / ADOPT).exists():
-            raise ValueError("prepared kernel already contains an adoption helper")
+        if any((args.prepared_kernel / path).exists() for path in (ADOPT, RESTART, RESTART_TEST)):
+            raise ValueError("prepared kernel already contains a staging helper")
         if args.ci_apply:
             apply(args.prepared_kernel, patch)
             for path in after:
@@ -270,7 +313,7 @@ def main():
     elif args.emit_contract:
         print(json.dumps(contract(patch, before, after, inputs), indent=2))
     else:
-        print("PASS: exact packaged MD stack, deterministic adoption patch and exact Git context application")
+        print("PASS: exact packaged MD stack, deterministic first-OFF/restart patch and exact Git context application")
         print("inputs=" + str(len(inputs)) + "; patch_sha256=" + digest(patch.encode()))
 
 

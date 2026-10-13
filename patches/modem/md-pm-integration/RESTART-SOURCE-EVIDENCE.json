@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "pins": {
+    "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+    "linux": "d84b264a54a37611f2f46bc19363cb9b41606205"
+  },
+  "method": "exact vendor git objects and hashed pristine Linux sources; source-only",
+  "sources": {
+    "vendor-md": {
+      "path": "drivers/misc/mediatek/eccci/fsm/md_sys1_platform.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "ae3e3998c2ce060ef7e5e406fa647cbff2fae14f196f1d2494784cc4c46848af"
+    },
+    "vendor-consumer": {
+      "path": "drivers/misc/mediatek/eccci/fsm/modem_sys1.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "53a546c3de0614215e205e4ba69ce06ec7064303c8598b90b2917be632f24faa"
+    },
+    "vendor-secure-abi": {
+      "path": "drivers/misc/mediatek/eccci/inc/modem_secure_base.h",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2d5727255d1381ea914df7d8811de99dfcf1d4917a85597c9fb1ab49f13d814c"
+    },
+    "vendor-pm": {
+      "path": "drivers/soc/mediatek/mtk-scpsys.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "d6652e98da3d4193dfc1d2f112aea656606f314135168c6ab20d086b63cd67ea"
+    },
+    "vendor-domain": {
+      "path": "drivers/soc/mediatek/mtk-scpsys-mt6878.c",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "25f33779ae7293747564162bdd328beac349ece7a5caddffff636c8bcb8cf9de"
+    },
+    "vendor-dts": {
+      "path": "arch/arm64/boot/dts/mediatek/mt6878.dts",
+      "revision": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "sha256": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b"
+    },
+    "linux-regulator": {
+      "path": "drivers/regulator/core.c",
+      "revision": null,
+      "sha256": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122"
+    },
+    "linux-regulator-of": {
+      "path": "drivers/regulator/of_regulator.c",
+      "revision": null,
+      "sha256": "b6feada4bfec5356ef8efe432dd49fc9e6ffc27b383220faa8535a3aaef8de8a"
+    },
+    "linux-syscon": {
+      "path": "drivers/mfd/syscon.c",
+      "revision": null,
+      "sha256": "78b656e67537bd2bcc232bb289d44d85d956af90c48af8a59af9da9b7c42e030"
+    }
+  },
+  "causal_edges": [
+    {
+      "source": "vendor-md",
+      "line": 1383,
+      "anchor": "static int md_cd_let_md_go(struct ccci_modem *md)",
+      "meaning": "POWER/0 execution release is separate from md_cd_power_on; this does not prove an inhibited restart"
+    },
+    {
+      "source": "vendor-secure-abi",
+      "line": 39,
+      "anchor": "MD_KERNEL_BOOT_UP,",
+      "meaning": "POWER/0 release opcode"
+    },
+    {
+      "source": "vendor-domain",
+      "line": 121,
+      "anchor": "MTK_SCPD_BYPASS_INIT_ON | MTK_SCPD_REMOVE_MD_RSTB,",
+      "meaning": "MD domain omits reset-bit handling; reset deassert/assert cannot be invented as inhibition"
+    },
+    {
+      "source": "vendor-md",
+      "line": 648,
+      "anchor": "static void flight_mode_set_by_atf(struct ccci_modem *md,",
+      "meaning": "vendor FLIGHT setter logs secure returns but provides no inhibit acknowledgement"
+    },
+    {
+      "source": "vendor-md",
+      "line": 594,
+      "anchor": "static void md1_pmic_setting_on(void)",
+      "meaning": "vendor PMIC setter continues after voltage/sync errors; new owner must preserve first errno"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 13975,
+      "anchor": "md-vmodem = <800000 800000>;",
+      "meaning": "exact MT6878 vmodem pair, not table fallback 825000"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 13977,
+      "anchor": "md-vsram = <800000 800000>;",
+      "meaning": "exact MT6878 vsram pair"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 13979,
+      "anchor": "md-vdigrf = <700000 700000>;",
+      "meaning": "exact MT6878 RF pair"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 2621,
+      "anchor": "compatible = \"mediatek,mt6878-topckgen\", \"syscon\";",
+      "meaning": "TOP is the actual source-described shared syscon, not a fabricated modem MMIO window"
+    },
+    {
+      "source": "vendor-dts",
+      "line": 2620,
+      "anchor": "topckgen_clk: syscon@10000000 {\n\t\tcompatible = \"mediatek,mt6878-topckgen\", \"syscon\";\n\t\treg = <0 0x10000000 0 0x1000>;",
+      "meaning": "source-backed TOP geometry validated before map acquisition"
+    },
+    {
+      "source": "vendor-md",
+      "line": 1567,
+      "anchor": "md_cd_plat_val_ptr.power_flow_config = 0;",
+      "meaning": "absent MT6878 flow selector means zero; SRC/O1/PLL/sequencer paths do not apply"
+    },
+    {
+      "source": "linux-regulator-of",
+      "line": 735,
+      "anchor": "struct regulator *of_regulator_get_optional(struct device *dev,",
+      "meaning": "real native supplier can acquire disabled-anchor rails without creating a fake modem device, but acquisition is deferred at inhibition boundary"
+    },
+    {
+      "source": "linux-regulator",
+      "line": 2042,
+      "anchor": "static int regulator_resolve_supply(struct regulator_dev *rdev)",
+      "meaning": "regulator_get can enable a newly resolved upstream supply; it is not an observation-only acquisition"
+    },
+    {
+      "source": "linux-syscon",
+      "line": 255,
+      "anchor": "struct regmap *device_node_to_regmap(struct device_node *np)",
+      "meaning": "native TOP mapping is cached for boot lifetime; staging retains its actual DT node and map without reading/writing TOP"
+    }
+  ],
+  "gen6299_chain": [
+    "first MTCMOS OFF",
+    "UFS unblock",
+    "settle >=4ms",
+    "FLIGHT true",
+    "TOP bits8/9 gate",
+    "PMIC voltage/sync",
+    "TOP bits8/9 ungate",
+    "flow0 skips SRC/O1/sequencer",
+    "FLIGHT false",
+    "native isolation down then PWR_ON/ACK then reverse bus release",
+    "optional staged EMI",
+    "separate POWER/0 execution release",
+    "WDT enable"
+  ],
+  "implemented_operation": [
+    "one retained first-OFF owner",
+    "unchanged actual handoff and NOMAP",
+    "complete current OFF readback",
+    "acquire cached native TOP map",
+    "retain distinct available DT rail nodes and exact voltage pairs",
+    "terminal -EOPNOTSUPP at missing active execution-inhibit owner"
+  ],
+  "explicit_boundary": "before regulator_get, PMIC setter, TOP ungate, FLIGHT, MTCMOS ON or execution release",
+  "why_blocked": [
+    "native first-OFF has not implemented full UFS/FLIGHT/TOP shutdown",
+    "pinned REMOVE_MD_RSTB chain provides no AP reset/inhibit owner or readback",
+    "separate POWER/0 call and initial BROM do not establish inhibition after cycling power",
+    "regulator acquisition may enable an upstream rail before the explicit voltage setter"
+  ],
+  "not_grants": [
+    "DT markers",
+    "FIRST_OFF_COMPLETE",
+    "initial BROM/BL33 EMI",
+    "FLIGHT result",
+    "AP mutex"
+  ],
+  "status": "resource-staging-implemented; active-inhibited-ON-blocked; hardware-untested"
+}

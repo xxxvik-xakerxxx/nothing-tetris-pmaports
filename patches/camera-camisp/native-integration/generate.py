@@ -319,6 +319,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--md-on-adoption", action="store_true")
+    parser.add_argument("--refresh-md-profile", action="store_true",
+                        help="explicitly refresh reviewed MD inputs; requires --md-on-adoption --write")
     parser.add_argument("--kernel-archive", type=Path)
     parser.add_argument("--vendor-repo", type=Path)
     parser.add_argument("--modules-repo", type=Path)
@@ -331,7 +333,7 @@ def main():
         spec.loader.exec_module(composite)
         composite.run(args, generator=sys.modules[__name__])
         return
-    if args.prepared_kernel or args.ci_apply:
+    if args.prepared_kernel or args.ci_apply or args.refresh_md_profile:
         parser.error("prepared-tree operations require --md-on-adoption")
     native, patches = native_inputs(args.kernel_archive)
     vendor = vendor_inputs(args.vendor_repo, args.modules_repo)

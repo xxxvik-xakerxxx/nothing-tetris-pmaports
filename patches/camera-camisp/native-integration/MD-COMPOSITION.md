@@ -15,8 +15,8 @@ vendor rail/TOP/FLIGHT shutdown. Joint CI uses the persistent first-OFF exclusio
 profile so these writers are compiled rather than optimized away by idle/sleep
 gates; shipping configuration is unchanged.
 
-`MD-ON-ADOPTION-PROFILE.json` pins the MD stage generator, helper, staging patch,
-six pre-MD files, seven post-MD files, three source commits and frozen canonical
+`MD-ON-ADOPTION-PROFILE.json` pins the MD stage generator, adoption/restart/test
+helpers and staging patch, six pre-MD files, nine post-MD files, three source commits and frozen canonical
 camera artifacts. The MD patch must exactly match the pinned stage generator's
 pure candidate/diff output against the verified packaged baseline. Changed MD
 inputs fail; there is no auto-repin or arbitrary rebase fallback.
@@ -58,13 +58,18 @@ using sorted JSON keys and compact separators; the serialized report is stable.
 
 Add `--write` to explicitly generate/update only the two composite artifacts.
 Without it, the generated overlay and report must equal the stored artifacts.
-The profile manifest requires a source review and explicit edit when MD changes.
+After source review, `generate.py --md-on-adoption --write --refresh-md-profile`
+explicitly refreshes only MD hashes against the unchanged packaged baseline and
+canonical camera inputs. Ordinary checks and CI never refresh the profile.
+The new restart staging retains TOP/rail node identities and the first errno;
+it still stops before regulator acquisition and every ON write. The composition
+validator forbids changing those helpers or inserting a hardware operation.
 
 ## Prepared Kernel Boundary
 
 The parent first applies the exact MD staging patch through its own workflow.
 Then add `--prepared-kernel "$CAMERA_PREPARED_KERNEL"` to either CLI to verify
-that the prepared tree contains the seven exact post-MD files and no camera
+that the prepared tree contains the nine exact post-MD files and no camera
 payload. This option alone performs no writes to the prepared tree.
 
 In GitHub CI only, also pass `--ci-apply` with `CI=true` and

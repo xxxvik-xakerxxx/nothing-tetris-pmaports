@@ -13,8 +13,10 @@
     "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml": "b61eb73e51a3bb021d8163d3827f2b20399398cab7ab06123b862364d43e2544",
     "drivers/pmdomain/mediatek/Kconfig": "41c428f0c0fb116c6614798bc4dbf775940e24080c424fb1d8a620722c7d06e5",
     "drivers/pmdomain/mediatek/Makefile": "4f4774660de8d1b336d7f7901d17246883f1999a89e2d0e980bef4acdf1a57a9",
-    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "f71c1c772a1e225f131935768da390646dc32694afcda018f646a66cd33f8ab6",
     "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart-test.h": "1c06e761e63fe4beee6d6b00b47a02787b9144f5b66d826c76e638a194b31720",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart.h": "4e6f39cf3c09fa876b2b67b2bdf7b97c094f5b1a37a069412f3a65d5625a52bc",
     "drivers/pmdomain/mediatek/mt6878-native-vmm.inc": "aaf5726542e04b72d2546d6bbede9053081deb7d63eb5e16f4c1ae373ecde61a",
     "drivers/pmdomain/mediatek/mtk-pm-domains.c": "74628c3231ec93ac462da424ef4f8400cf1a51f0cf14eede00eaebd0430768a2",
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6",
@@ -37,9 +39,11 @@
   "hardware_tested": false,
   "kernel_commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
   "md_source_sha256": {
-    "patches/modem/md-pm-integration/mt6878-modem-adopt.h": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
-    "patches/modem/md-pm-integration/native-on-adoption.patch": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a",
-    "patches/modem/md-pm-integration/stage.py": "79542bac662f719d02b515d58502422434fe6edbe767041993a7c1c1bfc313bf"
+    "patches/modem/md-pm-integration/mt6878-modem-adopt.h": "f71c1c772a1e225f131935768da390646dc32694afcda018f646a66cd33f8ab6",
+    "patches/modem/md-pm-integration/mt6878-modem-restart-test.h": "1c06e761e63fe4beee6d6b00b47a02787b9144f5b66d826c76e638a194b31720",
+    "patches/modem/md-pm-integration/mt6878-modem-restart.h": "4e6f39cf3c09fa876b2b67b2bdf7b97c094f5b1a37a069412f3a65d5625a52bc",
+    "patches/modem/md-pm-integration/native-on-adoption.patch": "5750c51134b4a6881925303bbd71ea398835b2f2f1634a5280b691638d1ee679",
+    "patches/modem/md-pm-integration/stage.py": "ca74e73e221b435b53a70d2cf4d1035106eba026cfcadff468c277b8c4d11f3a"
   },
   "modules_commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
   "native_provider_sha256": "74628c3231ec93ac462da424ef4f8400cf1a51f0cf14eede00eaebd0430768a2",
@@ -57,8 +61,10 @@
     "Documentation/devicetree/bindings/power/mediatek,power-controller.yaml": "790265b49c4b7a223c62744abdea00e8f247080857e63f05d262cccb149496d2",
     "drivers/pmdomain/mediatek/Kconfig": "847465b69664f6dee85ae97dd88ced5a51c0eba29ad244bba64c15593b72f7dd",
     "drivers/pmdomain/mediatek/Makefile": "a7fec4c02cbe6ac10ce043d242a0b2b893dc8b7882c59da1842f25204fb57828",
-    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "f71c1c772a1e225f131935768da390646dc32694afcda018f646a66cd33f8ab6",
     "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart-test.h": "1c06e761e63fe4beee6d6b00b47a02787b9144f5b66d826c76e638a194b31720",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart.h": "4e6f39cf3c09fa876b2b67b2bdf7b97c094f5b1a37a069412f3a65d5625a52bc",
     "drivers/pmdomain/mediatek/mtk-pm-domains.c": "bdc881b5aea9cde730dc9803035e3e5290b496ced5246425f95aa8791105b197",
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
@@ -71,8 +77,8 @@
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
   "profile": "md-on-adoption-v1",
-  "profile_sha256": "fe1005019292e65f0aca793107787a34af7a32e473dfe77753a04d03ab9a74b7",
-  "report_sha256": "bf29442ac019a49456705f6f1ace715dec1ccee207c4fc786b3282d5236a55dd",
+  "profile_sha256": "577879872a938bebbbce9b45c34588fc6abdb1bb5df111ba42eb814db7d76773",
+  "report_sha256": "6c21946edd2000d04a74fa9f107423f26c212d0d4555cba8bd1a8f548bde45f4",
   "validation": "actual exact MD application then camera application; shared-provider source checks only",
   "vendor_commit": "ee2be53cb75670b548948636a0db1d1ff112bf12"
 }

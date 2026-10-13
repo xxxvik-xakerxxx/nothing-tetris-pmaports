@@ -70,6 +70,13 @@ class NativeCameraLink(unittest.TestCase):
         self.assertIn('finally:', source)
         self.assertGreaterEqual(source.count('(report / "BUILD-MANIFEST.json").write_text('), 3)
 
+    def test_real_supplier_dt_variants_are_checked_without_booting(self):
+        source = (ROOT / "ci/link-native-camera-vmm.py").read_text()
+        self.assertIn('smoke.compile_camisp_supplier_dtbs(make, output, variant)', source)
+        self.assertIn('run([*make, "mediatek/mt6878-nothing-tetris-native.dtb"])', source)
+        self.assertIn('supplier_dt["payload_sha256"][Path(source).name]', source)
+        self.assertIn('"--staged-tree", kernel', source)
+
 
 if __name__ == "__main__":
     unittest.main()

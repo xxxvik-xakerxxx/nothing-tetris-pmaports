@@ -1,0 +1,29 @@
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-camisp-vmm-ownership-blocked.dtsi b/arch/arm64/boot/dts/mediatek/mt6878-camisp-vmm-ownership-blocked.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-camisp-vmm-ownership-blocked.dtsi
+@@ -0,0 +1,15 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* BLOCKED ownership description. Never include in a boot/install candidate.
++ * Removing the observer selects regulator registration, not read-only access.
++ * PMIC, VBUCK1 and CAM/ISP domains deliberately remain disabled. The active
++ * native VMM guard rejects this pair before publishing SPM (including display).
++ * Firmware handoff and voltage/rate policy must be resolved before revising it.
++ */
++&mt6319_gpu {
++	/delete-property/ mediatek,observe-vgpu-only;
++};
++
++&spm {
++	cam-vcore-supply = <&mt6319_6_vbuck1>;
++	isp-vcore-supply = <&mt6319_6_vbuck1>;
++};
+diff --git a/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts
+@@ -0,0 +1,4 @@
++// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
++/* Compile-only ownership delta; NOT bootable with native VMM enabled. */
++#include "mt6878-nothing-tetris-camisp-supplier.dts"
++#include "mt6878-camisp-vmm-ownership-blocked.dtsi"

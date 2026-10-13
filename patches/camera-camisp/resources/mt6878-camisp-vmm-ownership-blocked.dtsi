@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* BLOCKED ownership description. Never include in a boot/install candidate.
+ * Removing the observer selects regulator registration, not read-only access.
+ * PMIC, VBUCK1 and CAM/ISP domains deliberately remain disabled. The active
+ * native VMM guard rejects this pair before publishing SPM (including display).
+ * Firmware handoff and voltage/rate policy must be resolved before revising it.
+ */
+&mt6319_gpu {
+	/delete-property/ mediatek,observe-vgpu-only;
+};
+
+&spm {
+	cam-vcore-supply = <&mt6319_6_vbuck1>;
+	isp-vcore-supply = <&mt6319_6_vbuck1>;
+};

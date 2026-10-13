@@ -7,10 +7,19 @@
       "arch/arm64/boot/dts/mediatek/mt6878.dts": "2b3a4dae9e8aaac457ab8550f5e7bb7eb666af110506a5570c42764f8910ea6b",
       "drivers/soc/mediatek/mtk-mbox.c": "636032b98db9cef93dad9aef52d0c18f49cd9bac3d15938514d9167ad829c67a",
       "drivers/gpu/mediatek/gpueb/gpueb_ipi.c": "cdc386eadc270b03af51ff0e8750e2b74fdc46a161e9dc7ca7dca50fb5c03341",
+      "drivers/gpu/mediatek/gpueb/gpueb_init.c": "d1d32dc6cb94dbc668216dcc5572f38d095ba772a1d79a69a77e04357d20dd25",
       "drivers/gpu/mediatek/gpueb/gpueb_reserved_mem.c": "f525e39bcd7a7abc1883c2885e2f946bfe02dbbd4f3e7db507f8703f68b4b09f",
       "drivers/rpmsg/mtk_rpmsg_mbox.c": "557089af2c471cef8a61e417a7106ab87e177cf6359bb1f384c1a2b3cbc288a0",
       "drivers/soc/mediatek/mtk_tinysys_ipi.c": "6e2dafc6e7759fefeca1f9f91ca5304685bef8c0047003c30e0fd0a3646a0e36"
     }
+  },
+  "dispatch_vendor_consumers": {
+    "repository": "https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878.git",
+    "commit": "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835",
+    "files_sha256": {
+      "met_drv_v3/common/tinysys/v1/gpueb/gpueb_met_ipi_handle.c": "21893eba734fbb3142c78cde6187862709248611eaad6ac83550038bcfe1fa32"
+    },
+    "scope": "MET channels 8/9 are consumers of the existing IPI device; gpueb_start starts logging through IPI, not RV33 cold boot"
   },
   "dtb": {
     "artifact": "tetris-stock-vendor-boot-b-base.dtb",

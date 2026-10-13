@@ -52,13 +52,16 @@ checksum before returning its frequency word. If unavailable, it uses
 context+18 (or stock26000000 fallback when zero), then consults662820 for a
 private adjustment selector. The latter is reduced modulo3 and can adjust the
 frequency via the double constants constructed at552478..55249c, followed by
-unsigned truncation. This input is **not** the ioctl30 PMIC selector. Its real
-configuration/provisioning has not been recovered in this scope. No private
-record value is read, printed, committed or included in fixture vectors.
+unsigned saturating truncation. This input is **not** the ioctl30 PMIC selector.
+`bootstrap_fields.c` now implements both checksum decoders, the raw returned
+word, override priority, exact binary64 adjustment and final-1 sentinel.
+See [BOOTSTRAP_FIELDS.md](BOOTSTRAP_FIELDS.md). Real configuration/provisioning
+has not been recovered. No real private record was inspected or included in
+fixtures; new fixture records are wholly synthetic public arithmetic vectors.
 
 Therefore a successful query11/30 alone cannot certify effective_hz for an FE
-profile. The caller must establish the actual override or its legitimate absence,
-then supply the resulting frequency. This is the concrete remaining gate.
+profile. The caller must acquire the actual two private record snapshots for
+the new producer; NULL cannot establish absence or a fallback frequency.
 
 ## Exact Arithmetic Translation
 
@@ -112,10 +115,12 @@ were executed. Native comparison is pending parent CI.
 
 Run `test_clock_source.py PINNED_MNLD PINNED_LIBMNL` with the existing offline
 Capstone directory on PYTHONPATH for immutable proof checks. `sh run-ci.sh`
-now builds both wire and clock fixtures **only in GitHub Actions**.
+now builds wire, clock and bootstrap-field fixtures **only in GitHub Actions**.
 
 Next input gate: actual first-profile selection, configured de304 ID, mode
-selectors and final frequency override. Once those are closed, synthesize the
+selectors and actual private clock record acquisition. The new constructor
+closes the override arithmetic and mode branches from those inputs. Once
+acquisition is closed, synthesize the
 real fields and complete the remaining bootstrap bytes before a single parent-
 owned guarded test. No firmware download or DSP WORKING claim follows from math
 fixtures; MCUBbit0 remains required independently.

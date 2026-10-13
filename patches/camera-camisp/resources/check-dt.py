@@ -26,7 +26,8 @@ def unique(tree, predicate, description):
     return matches[0]
 
 
-def validate(base, tree, data):
+def validate(base, tree, data, profile="disabled"):
+    require(profile in ("disabled", "supplier", "ownership-blocked"), "Unknown board profile")
     owners = phandle_owners(tree)
     base_owners = phandle_owners(base)
     spm = unique(base, lambda p, v: b"mediatek,mt6878-power-controller" in compatible(v), "native SPM")
@@ -64,20 +65,52 @@ def validate(base, tree, data):
     # Compare references by actual owner path, not incidental phandle numbers.
     changes = {spm: {"status", "cam-vcore-supply", "isp-vcore-supply"}, mm: {"status"},
                iommu: {"status", "mediatek,larbs"}}
+    removals = {}
+    if profile != "disabled":
+        require({b"nothing,tetris", b"mediatek,mt6878"} <= set(compatible(base.get("/", {}))),
+                "Wrong native base identity")
+        for path in (spm, mm, iommu):
+            require(base[path].get("status", b"okay\0") in (b"okay\0", b"ok\0"),
+                    "Supplier base must preserve available display owners: " + path)
+        require({"clocks", "clock-names", "mediatek,hardware-voter"} <= base[mm].keys(),
+                "Supplier base lacks real MM_INFRA clocks/HWV")
+        require(base[pmic].get("status") == b"disabled\0" and
+                base[pmic].get("mediatek,observe-vgpu-only") == b"", "Expected dormant observer baseline")
+        require(not ({"cam-vcore-supply", "isp-vcore-supply"} & base[spm].keys()),
+                "Baseline already opts into native VMM")
+        changes = {}
+        if profile == "ownership-blocked":
+            changes = {spm: {"cam-vcore-supply", "isp-vcore-supply"}, pmic: {"mediatek,observe-vgpu-only"}}
+            removals = {pmic: {"mediatek,observe-vgpu-only"}}
+            require("mediatek,observe-vgpu-only" not in tree[pmic], "Blocked migration must remove observer")
     for path, props in base.items():
         allowed = changes.get(path, set())
         require(set(tree[path]) - set(props) <= allowed | {"phandle", "linux,phandle"}, "Unexpected base property: " + path)
-        require(set(props) - set(tree[path]) <= {"phandle", "linux,phandle"}, "Removed base property: " + path)
+        require(set(props) - set(tree[path]) <= removals.get(path, set()) | {"phandle", "linux,phandle"},
+                "Removed base property: " + path)
         for prop, value in props.items():
             if prop in allowed or prop in ("phandle", "linux,phandle"):
                 continue
             require(reference_value(base, base_owners, prop, value) ==
                     reference_value(tree, owners, prop, tree[path][prop]), "Base property changed: " + path + "/" + prop)
-    for path in added | {spm, mm, pmic, iommu}:
+    for path in added | ({spm, mm, pmic, iommu} if profile == "disabled" else {pmic}):
         require(tree[path].get("status") == b"disabled\0", "All candidate hardware must stay disabled: " + path)
     rail = regulators + "/vbuck1"
     for prop in ("cam-vcore-supply", "isp-vcore-supply"):
-        require(reference_value(tree, owners, prop, tree[spm][prop]) == ((rail, ()),), "Real equal supply pair")
+        if profile == "supplier":
+            require(prop not in tree[spm], "Dormant supplier must not opt into native VMM")
+        else:
+            require(reference_value(tree, owners, prop, tree[spm].get(prop, b"")) == ((rail, ()),), "Real equal supply pair")
+    if profile != "disabled":
+        for path, props in tree.items():
+            # Match the native guard's node-local availability rule for supplies.
+            for prop, value in props.items():
+                if prop.endswith("-supply") and props.get("status", b"okay\0") in (b"okay\0", b"ok\0"):
+                    refs = reference_value(tree, owners, prop, value)
+                    require((rail, ()) not in refs or (profile == "ownership-blocked" and path == spm and
+                            prop in ("cam-vcore-supply", "isp-vcore-supply")), "Competing available VBUCK1 user")
+            if path.startswith(spm + "/") and props.get("reg") in map(u32, (3, 10, 11, 12, 13, 14, 15, 16, 17, 18)):
+                require(props.get("status") == b"disabled\0", "Camera/unsupported domain must stay disabled")
     for index in (1, 4):
         props = tree[f"{regulators}/vbuck{index}"]
         expected = {"regulator-name": strings(f"6_vbuck{index}"), "status": b"disabled\0"}
@@ -151,14 +184,19 @@ def validate(base, tree, data):
                         ((supplier, ()),), "Common31 reset supplier")
         require(set(actual) - {"phandle", "linux,phandle"} == expected_keys, "Exact resource property inventory")
     larb0 = unique(base, lambda p, v: v.get("mediatek,larb-id") == u32(0) and "reg" in v, "display larb0")
-    require(reference_value(tree, owners, "mediatek,larbs", tree[iommu]["mediatek,larbs"]) ==
-            tuple((path, ()) for path in (larb0, paths["smi_larb13"], paths["smi_larb14"])), "IOMMU retains physical display larb")
+    expected_larbs = (tuple((path, ()) for path in (larb0, paths["smi_larb13"], paths["smi_larb14"]))
+                      if profile == "disabled" else
+                      reference_value(base, base_owners, "mediatek,larbs", base[iommu]["mediatek,larbs"]))
+    require((larb0, ()) in expected_larbs, "Baseline IOMMU must contain display larb0")
+    require(reference_value(tree, owners, "mediatek,larbs", tree[iommu]["mediatek,larbs"]) == expected_larbs,
+            "IOMMU retains physical display larb")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
+    parser.add_argument("--profile", choices=("disabled", "supplier", "ownership-blocked"), default="disabled")
     args = parser.parse_args()
-    validate(read_tree(args.base), read_tree(args.fixture), json.loads((HERE / "evidence.json").read_text()))
-    print("PASS: compiled disabled native CAM/ISP graph, shared USID6 rail, real ordered clocks, base preserved")
+    validate(read_tree(args.base), read_tree(args.fixture), json.loads((HERE / "evidence.json").read_text()), args.profile)
+    print("PASS: compiled " + args.profile + " exact DT delta/resources; no runtime ownership claim")

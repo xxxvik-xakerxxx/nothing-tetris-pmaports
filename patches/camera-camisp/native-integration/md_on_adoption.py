@@ -18,9 +18,14 @@ MD_DIR = "patches/modem/md-pm-integration/"
 MD_PATCH = MD_DIR + "native-on-adoption.patch"
 MD_STAGE = MD_DIR + "stage.py"
 MD_HELPER = MD_DIR + "mt6878-modem-adopt.h"
+MD_RESTART = MD_DIR + "mt6878-modem-restart.h"
+MD_RESTART_TEST = MD_DIR + "mt6878-modem-restart-test.h"
+MD_SOURCES = {MD_PATCH, MD_STAGE, MD_HELPER, MD_RESTART, MD_RESTART_TEST}
 CFILE = PREFIX + "mtk-pm-domains.c"
 DATA = PREFIX + "mt6878-modem-pm.h"
 ADOPT = PREFIX + "mt6878-modem-adopt.h"
+RESTART = PREFIX + "mt6878-modem-restart.h"
+RESTART_TEST = PREFIX + "mt6878-modem-restart-test.h"
 
 
 def require(condition, message):
@@ -45,7 +50,7 @@ def load_profile(gen):
     require(profile["profile"] == "md-on-adoption-v1", "unknown MD composition profile")
     require((profile["kernel_commit"], profile["vendor_commit"], profile["modules_commit"]) ==
             (gen.KERNEL, gen.VENDOR, gen.MODULES), "MD composition source pins drift")
-    require(set(profile["md_source_sha256"]) == {MD_PATCH, MD_STAGE, MD_HELPER}, "fixed MD input closure")
+    require(set(profile["md_source_sha256"]) == MD_SOURCES, "fixed MD input closure")
     for path, expected in profile["md_source_sha256"].items():
         require(digest((gen.ROOT / path).read_bytes()) == expected, "MD profile input drift: " + path)
     for name, expected in profile["canonical_camera_sha256"].items():
@@ -79,7 +84,7 @@ def stage_candidate(gen, native, profile):
     require((stage.CFILE, stage.DATA, stage.ADOPT) == (CFILE, DATA, ADOPT), "MD stage scope drift")
     before = {p: native[p.removeprefix(PREFIX)] for p in (CFILE, DATA, PREFIX + "mtk-pm-domains.h")}
     after = stage.candidate(before)
-    require(set(after) == set(before) | {ADOPT}, "MD stage payload closure drift")
+    require(set(after) == set(before) | {ADOPT, RESTART, RESTART_TEST}, "MD stage payload closure drift")
     raw = (gen.ROOT / MD_PATCH).read_text()
     require(raw == stage.diff(before, after), "MD patch differs from its pinned deterministic stage payload")
     result = {gen.native_path(n): c for n, c in native.items()}
@@ -113,6 +118,14 @@ def combined_contract(gen, files, md_after):
     c = compact(code)
     helper = files[ADOPT]
     require(helper == md_after[ADOPT] and files[DATA] == md_after[DATA], "camera must not change MD helper/data")
+    for path in (RESTART, RESTART_TEST):
+        require(files[path] == md_after[path], "camera must not change restart staging: " + path)
+    restart = compact(files[RESTART])
+    require("ret=-EOPNOTSUPP;fault:ret=mt6878_md_restart_stop(owner,ret);" in restart,
+            "staged restart must retain the direct unsupported/first-error boundary")
+    require(not re.search(r"\b(?:regmap_(?:write|raw_write|bulk_write|update_bits\w*|set_bits|clear_bits)|"
+                          r"arm_smccc_\w+|writel\w*|iowrite\w*|regulator_\w+|clk_\w+)\s*\(", restart),
+            "restart resource staging must not acquire rails or execute hardware transitions")
     for token in ("structmt6878_md_adoption*md_adoption;", "ret=mt6878_md_adopt_init(pd,node);if(ret)gotoerr_put_subsys_clocks;",
                   "pd->genpd.power_on=mt6878_md_adopt_transition;", "pd->genpd.power_off=mt6878_md_adopt_transition;",
                   "pd->genpd.attach_dev=mt6878_md_adopt_attach;", "pd->genpd.detach_dev=mt6878_md_adopt_detach;"):
@@ -194,7 +207,7 @@ def validate(gen, archive=None, vendor_repo=None, modules_repo=None):
             path = tree / gen.native_path(n)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
-        apply_exact(tree, md_patch, {p: md_after[p] for p in (CFILE, DATA, ADOPT)})
+        apply_exact(tree, md_patch, {p: md_after[p] for p in (CFILE, DATA, ADOPT, RESTART, RESTART_TEST)})
         apply_exact(tree, overlay, camera)
         actual = {str(p.relative_to(tree)): p.read_bytes().decode() for p in tree.rglob("*") if p.is_file()}
         require(actual == expected, "combined tree contains ignored/extra/missing files")
@@ -223,10 +236,34 @@ def check_prepared(tree, md_after, expected):
         require(not (tree / path).exists(), "prepared tree already contains camera payload: " + path)
 
 
+def refresh_profile(gen, archive):
+    profile = json.loads(PROFILE.read_text())
+    native, _ = gen.native_inputs(archive, include_md=True)
+    require(hashes({gen.native_path(n): c for n, c in native.items()}) == profile["pre_md_input_sha256"],
+            "profile refresh cannot change the packaged baseline")
+    for name, expected in profile["canonical_camera_sha256"].items():
+        require(digest((HERE / name).read_bytes()) == expected, "profile refresh cannot change canonical camera")
+    spec = importlib.util.spec_from_file_location("refresh_md_stage", gen.ROOT / MD_STAGE)
+    stage = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stage)
+    before = {p: native[p.removeprefix(PREFIX)] for p in (CFILE, DATA, PREFIX + "mtk-pm-domains.h")}
+    after = stage.candidate(before)
+    require(stage.diff(before, after) == (gen.ROOT / MD_PATCH).read_text(), "MD canonical generation drift")
+    files = {gen.native_path(n): c for n, c in native.items()}
+    files.update(after)
+    profile["post_md_input_sha256"] = hashes(files)
+    profile["md_source_sha256"] = {p: digest((gen.ROOT / p).read_bytes()) for p in sorted(MD_SOURCES)}
+    PROFILE.write_text(json.dumps(profile, indent=2, sort_keys=True) + "\n")
+
+
 def run(args, generator):
     require(not args.ci_apply or (args.prepared_kernel and not args.write and
             os.environ.get("CI") == "true" and os.environ.get("GITHUB_ACTIONS") == "true"),
             "--ci-apply requires --prepared-kernel, no --write, CI=true and GITHUB_ACTIONS=true")
+    if getattr(args, "refresh_md_profile", False):
+        require(args.write and not args.prepared_kernel and not args.ci_apply,
+                "profile refresh requires explicit --write and no prepared-tree operation")
+        refresh_profile(generator, args.kernel_archive)
     overlay, report, expected, md_after = validate(generator, args.kernel_archive, args.vendor_repo, args.modules_repo)
     serialized = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.write:

@@ -93,6 +93,9 @@ jobs:
           python3 -B "$dsp/test_clock_source.py" \
             "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
             2>&1 | tee out/lna-start-evidence/dsp-clock-static.log
+          python3 -B "$dsp/test_bootstrap_fields_source.py" \
+            "$vendor/bin/mnld" "$vendor/lib64/mt6878/libmnl.so" \
+            2>&1 | tee out/lna-start-evidence/dsp-bootstrap-fields-static.log
           ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
             sh "$dsp/run-ci.sh" 2>&1 | tee out/lna-start-evidence/dsp-wire-native.log
           sha256sum "$dsp"/* > out/lna-start-evidence/DSP-SOURCE-SHA256SUMS

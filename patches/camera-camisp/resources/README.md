@@ -1,5 +1,11 @@
 # Disabled CAMISP board fixture (Untested)
 
+The separate supplier board and explicit blocked observer-to-owner delta are
+documented in [SUPPLIER-WIRING.md](SUPPLIER-WIRING.md). They have a distinct
+`SUPPLIER-STAGING.json` check plan. The original fixture below remains
+nonbootable even though it compiled in CI38317130122; it is not the new
+baseline-preserving candidate. No parent CI or shipping integration is changed.
+
 This isolated candidate implements native MediaTek CCF gate providers for the
 B4.1 MRAW and CAM_VCORE banks. It does not implement camera power ownership,
 VMM, streaming, or a genpd driver. All new devices in the reference description are disabled;

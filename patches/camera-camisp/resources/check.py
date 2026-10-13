@@ -228,6 +228,10 @@ def check(root=ROOT, staged=None, kernel=None):
         for name, value in data["power"]["domains"].items():
             require(int(generate.one(r"^#define MT6878_POWER_DOMAIN_" + name + r"\s+(\d+)\s*$", power_header)) == value,
                     "native power ABI: " + name)
+    supplier_spec = importlib.util.spec_from_file_location("camisp_supplier_check", here / "check-supplier.py")
+    supplier = importlib.util.module_from_spec(supplier_spec)
+    supplier_spec.loader.exec_module(supplier)
+    supplier.check(root=root)
     print("CAMISP resources/source/patch/isolation PASS; no C/dtc compilation or hardware access")
 
 

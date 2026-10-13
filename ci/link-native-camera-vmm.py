@@ -104,6 +104,22 @@ def main(md_on_adoption=False, md_first_off=False):
         makefile = (kernel / "drivers/pmdomain/mediatek/Makefile").read_text()
         if any(name in makefile for name in ("tetris-cam-power-smoke", "tetris-vmm-supplier-smoke")):
             raise ValueError("duplicate stand-alone VMM route entered real Kbuild")
+        supplier_dt = smoke.CAMISP_SUPPLIER_PLAN
+        for source, destination in supplier_dt["sources"].items():
+            target = kernel / destination
+            if target.exists():
+                raise ValueError("native supplier DT already staged: " + destination)
+            data = (ROOT / source).read_bytes()
+            if hashlib.sha256(data).hexdigest() != supplier_dt["payload_sha256"][Path(source).name]:
+                raise ValueError("native supplier DT source hash changed: " + source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        header = ROOT / supplier_dt["requires_existing_resource_header"]
+        destination = kernel / "include/dt-bindings/clock" / header.name
+        if destination.exists():
+            raise ValueError("camera supplier clock header already staged")
+        shutil.copyfile(header, destination)
+        run(["python3", ROOT / "patches/camera-camisp/resources/check-supplier.py", "--staged-tree", kernel])
         # Linux tracks configuration dependencies per object. Resolve and link
         # both variants while retaining the unchanged objects between them.
         output = Path("/tmp/tetris-kernel-smoke/native-camera-vmm-combined")
@@ -160,6 +176,8 @@ def main(md_on_adoption=False, md_first_off=False):
                 if name not in defined:
                     raise ValueError("missing actual supplier object definition: " + name)
             outcome["supplier_symbols"] = list(SUPPLIER_SYMBOLS)
+            run([*make, "mediatek/mt6878-nothing-tetris-native.dtb"])
+            outcome["supplier_diagnostic_dt"] = smoke.compile_camisp_supplier_dtbs(make, output, variant)
             outcome["status"] = "vmlinux-link-started"
             (report / "BUILD-MANIFEST.json").write_text(json.dumps(result, indent=2) + "\n")
             run([*make, "vmlinux"])

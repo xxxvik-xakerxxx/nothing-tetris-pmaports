@@ -252,6 +252,11 @@ jobs:
           git -C upstream/connectivity-modules fetch --filter=blob:none --depth=1 origin \
             e96f60dc081ae3525ef43d4bcf0ee5ee97e53835
           python3 scripts/check-gnss-clock-readback.py upstream/connectivity-modules
+      - name: Validate GPUEB dispatch lifetime against both pinned producers
+        run: |
+          export TETRIS_DEVICE_MODULES_TREE="$PWD/upstream/device-modules"
+          export TETRIS_VENDOR_MODULES_TREE="$PWD/upstream/connectivity-modules"
+          python3 -B patches/gpu/reset-owner-draft/test_dispatch_owner.py
       - name: Validate IMX882 streaming modes and controls
         run: |
           python3 patches/camera-imx882/check.py \

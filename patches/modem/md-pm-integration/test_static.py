@@ -8,6 +8,7 @@ import re
 import unittest
 
 import audit
+import audit_restart
 import stage
 
 HERE = Path(__file__).resolve().parent
@@ -115,12 +116,72 @@ def check_first_off(source):
     require("return 0;" not in transaction, "first-OFF success bypasses recorded result")
 
 
+def check_restart(source, adoption):
+    stripped = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    require(not re.search(r"\b(?:arm_smccc_\w+|regmap_(?:write|raw_write|bulk_write|set_bits|clear_bits|update_bits\w*)|"
+                         r"writel\w*|writew\w*|writeb\w*|iowrite\w*|ioremap\w*|"
+                         r"regulator_\w+|of_regulator_\w+|clk_\w+|"
+                         r"reset_control_\w+|pm_runtime_\w+|platform_device_\w+|"
+                         r"dev_pm_domain_attach\w*|memcpy_toio)\s*\(", stripped),
+            "restart crossed the active inhibition boundary")
+    begin = body(source, "mt6878_md_restart_begin")
+    audit.ordered(begin, "if (owner->first_error)", "return owner->first_error",
+                  "owner != retained", "owner->supplier != supplier", "return -EXDEV",
+                  "owner->restart.attempted", "return -EALREADY",
+                  "owner->state != MT6878_MD_FIRST_OFF_COMPLETE || owner->attached",
+                  "return -EBUSY", "owner->restart.attempted = true",
+                  "owner->restart.step = MT6878_MD_RESTART_HANDOFF", "return 0")
+    require("mt6878_md_adopt_fault(owner, error)" in body(source, "mt6878_md_restart_stop"),
+            "restart replaced first errno or lost terminal deferral")
+    operation = body(source, "mt6878_md_inhibited_restart")
+    audit.ordered(operation, "mutex_lock(&mt6878_md_first_off_lock)", "mutex_lock(&owner->lock)",
+                  "mt6878_md_restart_begin(owner, mt6878_md_first_off_owner, pd->scpsys->dev)",
+                  "if (ret)", "goto out", "mt6878_md_restart_requested(pd, &requested)",
+                  'memcmp(status, "disabled", sizeof(status))', "mt6878_md_adopt_binding",
+                  "mt6878_md_adopt_revalidate_resources(pd, owner)",
+                  "MT6878_MD_RESTART_OFF", "mt6878_md_first_off_readback(pd, owner->restart.off)",
+                  "if (ret)", "goto fault", "MT6878_MD_RESTART_RESOURCES",
+                  "mt6878_md_restart_resources(owner)", "if (ret)", "goto fault",
+                  "MT6878_MD_RESTART_INHIBIT_BOUNDARY", "ret = -EOPNOTSUPP;", "fault:",
+                  "mt6878_md_restart_stop(owner, ret)", "out:", "mutex_unlock(&owner->lock)",
+                  "mutex_unlock(&mt6878_md_first_off_lock)", "return ret;")
+    require("return 0;" not in operation and "owner->state =" not in operation,
+            "restart fabricated ON/inhibited/READY success")
+    require("ret = -EOPNOTSUPP;" in stripped.split("MT6878_MD_RESTART_INHIBIT_BOUNDARY;", 1)[1],
+            "missing terminal inhibit boundary")
+    resources = body(source, "mt6878_md_restart_resources")
+    audit.ordered(resources, '"mediatek,power-flow-config", 0',
+                  'of_count_phandle_with_args(modem, "ccci-topckgen", NULL) != 1',
+                  "restart->top_node = of_parse_phandle", "mt6878_md_adopt_map_node(restart->top_node",
+                  '"mediatek,mt6878-topckgen", 0x10000000', "if (ret)", "return ret;",
+                  "restart->top = device_node_to_regmap(restart->top_node)", "IS_ERR_OR_NULL(restart->top)",
+                  "restart->rail_nodes[i] = of_parse_phandle", "of_device_is_available(restart->rail_nodes[i])",
+                  "restart->rail_nodes[i] == restart->rail_nodes[j]",
+                  "of_property_read_u32_array", "if (ret)", "return ret;",
+                  "restart->voltage[i][0] != voltage[i] || restart->voltage[i][1] != voltage[i]")
+    require("{ 800000, 800000, 700000 }" in resources, "not pinned MT6878 voltages")
+    require("of_node_put(" not in resources and "devm_" not in resources,
+            "resource references released during failed post-OFF probe")
+    selector = body(source, "mt6878_md_restart_requested")
+    require(selector.count("mt6878_md_adopt_empty(") == 2 and
+            '"nothing,modem-inhibited-restart-staging"' in selector and
+            '"tetris,modem-inhibited-restart-staging"' in selector and
+            "mt6878_md_first_off_profile(pd)" in selector,
+            "unpaired restart marker or missing persistent exclusion profile")
+    init = body(adoption, "mt6878_md_adopt_init")
+    audit.ordered(init, "mt6878_md_restart_requested(pd, &restart)", "if (ret)", "return ret;",
+                  "mt6878_md_first_off(pd, owner)", "if (!ret && restart)",
+                  "ret = mt6878_md_inhibited_restart(pd, owner);", "if (ret)",
+                  "if (first_off && !owner->supplier)", "return ret;", "pd->md_adoption = owner")
+
+
 class StaticAdoption(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.patch, cls.before, cls.after, cls.inputs = stage.validate(KERNEL)
         cls.source = cls.after[stage.ADOPT]
         cls.native = cls.after[stage.CFILE]
+        cls.restart = cls.after[stage.RESTART]
 
     def test_actual_packaged_patch_application(self):
         self.assertIn(stage.MD_PATCH, [p["patch"] for p in self.inputs])
@@ -324,6 +385,61 @@ class StaticAdoption(unittest.TestCase):
         with self.assertRaises(ValueError):
             check_first_off(self.source.replace("if (ret)\n\t\t\tgoto fault;",
                                                 "if (ret)\n\t\t\tret = 0;", 1))
+
+    def test_restart_resource_operation_and_publication_boundary(self):
+        check_restart(self.restart, self.source)
+        self.assertNotIn("mt6878_md_adopt_on", body(self.source, "mt6878_md_adopt_revalidate_resources"))
+        self.assertIn('mt6878-modem-restart.h', self.source)
+        self.assertIn('mt6878-modem-restart-test.h', self.source)
+        for path in (stage.RESTART, stage.RESTART_TEST):
+            self.assertEqual(self.after[path], (HERE / Path(path).name).read_text())
+
+    def test_restart_pinned_vendor_chain_and_hidden_regulator_activation(self):
+        record = audit_restart.evidence()
+        self.assertEqual(record, json.loads((HERE / "RESTART-SOURCE-EVIDENCE.json").read_text()))
+        self.assertEqual(record["pins"]["vendor"], audit.VENDOR)
+        self.assertEqual(record["pins"]["linux"], audit.LINUX)
+        self.assertIn("regulator_get", record["explicit_boundary"])
+        self.assertIn("FIRST_OFF_COMPLETE", record["not_grants"])
+        self.assertTrue(any("REMOVE_MD_RSTB" in value for value in record["why_blocked"]))
+
+    def test_restart_kunit_exercises_actual_admission_without_hardware(self):
+        tests = self.after[stage.RESTART_TEST]
+        self.assertIn("#if IS_BUILTIN(CONFIG_KUNIT)", tests)
+        self.assertIn('"mt6878-md-inhibited-restart-owner"', tests)
+        self.assertEqual(tests.count("KUNIT_CASE("), 4)
+        self.assertIn("-EPROBE_DEFER, -ESTALE, -EINVAL, -ENODEV, -EIO, -ETIMEDOUT, -EOPNOTSUPP", tests)
+        self.assertIn("mt6878_md_restart_begin(owner, NULL, NULL)", tests)
+        self.assertNotIn("mt6878_md_inhibited_restart(", tests)
+        self.assertNotIn("mt6878_md_restart_resources(", tests)
+        self.assertNotIn("struct device supplier =", tests)
+        self.assertIn("mt6878_md_adopt_transition(&pd->genpd), -EOPNOTSUPP", tests)
+        self.assertIn("mt6878_md_adopt_transition(&pd->genpd), -EIO", tests)
+
+    def test_restart_mutants_reject_grants_retries_and_resource_loss(self):
+        for old, new in (("ret = -EOPNOTSUPP;", "ret = 0;"),
+                         ("owner->restart.attempted = true", "owner->restart.attempted = false"),
+                         ("owner != retained", "false"),
+                         ("owner->supplier != supplier", "false"),
+                         ("owner->state != MT6878_MD_FIRST_OFF_COMPLETE", "false"),
+                         ("return owner->first_error", "return -EALREADY"),
+                         ("mt6878_md_adopt_fault(owner, error)", "error"),
+                         ("mt6878_md_first_off_readback(pd, owner->restart.off)", "0"),
+                         ("mt6878_md_adopt_revalidate_resources(pd, owner)", "0"),
+                         ("restart->rail_nodes[i] == restart->rail_nodes[j]", "false"),
+                         ("mt6878_md_adopt_map_node(restart->top_node,", "mutant_map(restart->top_node,"),
+                         ("restart->top = device_node_to_regmap(restart->top_node)", "restart->top = NULL"),
+                         ("{ 800000, 800000, 700000 }", "{ 825000, 825000, 700000 }"),
+                         ("return 0;\n}", "of_node_put(restart->top_node);\n\treturn 0;\n}")):
+            with self.subTest(old=old), self.assertRaises(ValueError):
+                check_restart(self.restart.replace(old, new), self.source)
+        for operation in ("regmap_set_bits(map, 0xe00, 4)",
+                          "of_regulator_get_optional(dev, node, name)",
+                          "pm_runtime_resume_and_get(dev)"):
+            with self.subTest(operation=operation), self.assertRaises(ValueError):
+                check_restart(self.restart + "\nvoid mutant(void) { " + operation + "; }\n", self.source)
+        with self.assertRaises(ValueError):
+            check_restart(self.restart, self.source.replace("if (!ret && restart)", "if (restart)"))
 
 
 if __name__ == "__main__":

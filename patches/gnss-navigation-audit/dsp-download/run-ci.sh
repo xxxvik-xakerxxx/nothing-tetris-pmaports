@@ -17,3 +17,9 @@ trap 'rm -rf "$out"' EXIT HUP INT TERM
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     "$here/clock.c" "$here/test_clock.c" -lm -o "$out/test-clock"
 "$out/test-clock"
+"${CC:-clang}" -std=c11 -Wall -Wextra -Werror -Wconversion -Wshadow \
+    -O1 -g -frounding-math -ffp-contract=off \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "$here/clock.c" "$here/bootstrap_fields.c" "$here/test_bootstrap_fields.c" \
+    -lm -o "$out/test-bootstrap-fields"
+"$out/test-bootstrap-fields"

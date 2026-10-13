@@ -121,6 +121,35 @@ class SmokeInputs(unittest.TestCase):
         self.assertFalse((report / "nonbootable-dtbs").exists())
         self.assertEqual((report / "unvalidated-nonbootable-dtbs" / dtb.name).read_bytes(), dtb.read_bytes())
 
+    def test_supplier_dt_variants_never_enter_install_inputs(self):
+        output = self.package / "objects"
+        report = self.package / "evidence"
+        for name in ("candidate", "blocked_ownership"):
+            dtb = output / "arch/arm64/boot/dts" / smoke.CAMISP_SUPPLIER_PLAN[name]["target"]
+            dtb.parent.mkdir(parents=True, exist_ok=True)
+            dtb.write_bytes(name.encode())
+        with patch.object(smoke, "run") as run:
+            result = smoke.compile_camisp_supplier_dtbs(["make"], output, report)
+        self.assertEqual(run.call_count, 4)
+        self.assertFalse((report / "dtbs").exists())
+        self.assertEqual(set(result), {"candidate", "blocked_ownership"})
+        for name, value in result.items():
+            self.assertFalse(value["install_allowed"])
+            self.assertFalse(value["hardware_activated"])
+
+    def test_rejected_supplier_dt_preserves_raw_evidence_only(self):
+        output = self.package / "objects"
+        report = self.package / "evidence"
+        dtb = output / "arch/arm64/boot/dts" / smoke.CAMISP_SUPPLIER_PLAN["candidate"]["target"]
+        dtb.parent.mkdir(parents=True)
+        dtb.write_bytes(b"rejected candidate")
+        with patch.object(smoke, "run", side_effect=[None, subprocess.CalledProcessError(1, "validator")]):
+            with self.assertRaises(subprocess.CalledProcessError):
+                smoke.compile_camisp_supplier_dtbs(["make"], output, report)
+        self.assertEqual((report / "unvalidated-supplier-dtbs" / dtb.name).read_bytes(), dtb.read_bytes())
+        self.assertFalse((report / "dormant-supplier-dtbs").exists())
+        self.assertFalse((report / "dtbs").exists())
+
     def test_missing_dtb_stops_smoke(self):
         with patch.object(smoke, "run"):
             with self.assertRaisesRegex(ValueError, "missing compiled DTB"):

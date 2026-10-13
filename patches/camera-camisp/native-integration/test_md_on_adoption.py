@@ -74,6 +74,23 @@ class CompositeProvider(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exact MD-applied input profile"):
             gen.payload(source, {}, md_on_adoption=profile)
 
+    def test_restart_helpers_cannot_disappear_or_gain_hardware_operations(self):
+        changed = {**self.files, md.RESTART: self.files[md.RESTART] + "\n"}
+        with self.assertRaisesRegex(ValueError, "must not change restart"):
+            md.combined_contract(gen, changed, self.md_after)
+        for operation in ("arm_smccc_smc(0);", "regulator_get(NULL, NULL);", "regmap_write(NULL, 0, 0);"):
+            source = self.files[md.RESTART] + "\nstatic void bad(void) { " + operation + " }\n"
+            with self.subTest(operation=operation), self.assertRaisesRegex(ValueError, "must not acquire rails"):
+                md.combined_contract(gen, {**self.files, md.RESTART: source}, {**self.md_after, md.RESTART: source})
+
+    def test_profile_refresh_is_explicit_and_never_a_ci_fallback(self):
+        args = SimpleNamespace(ci_apply=False, prepared_kernel=None, write=False,
+                               refresh_md_profile=True, kernel_archive=None)
+        with mock.patch.object(md, "refresh_profile") as refresh:
+            with self.assertRaisesRegex(ValueError, "requires explicit --write"):
+                md.run(args, generator=gen)
+            refresh.assert_not_called()
+
     def test_patch_offsets_and_partial_scope_are_rejected(self):
         old = "a\nb\nc\nd\nold\ne\nf\ng\nh\ni\n"
         new = old.replace("old\n", "new\n")

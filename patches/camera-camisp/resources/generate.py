@@ -3,6 +3,7 @@
 import argparse
 import difflib
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -11,6 +12,9 @@ import tarfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+supplier_spec = importlib.util.spec_from_file_location("camisp_supplier_wiring", HERE / "supplier_wiring.py")
+supplier_wiring = importlib.util.module_from_spec(supplier_spec)
+supplier_spec.loader.exec_module(supplier_wiring)
 DEVICE_COMMIT = "ee2be53cb75670b548948636a0db1d1ff112bf12"
 CAMERA_COMMIT = "e96f60dc081ae3525ef43d4bcf0ee5ee97e53835"
 KERNEL_COMMIT = "d84b264a54a37611f2f46bc19363cb9b41606205"
@@ -288,7 +292,7 @@ def binding(data):
     return code + "#endif\n"
 
 
-def fragment(data):
+def fragment(data, display_membership=True):
     code = """// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Review fixture only; no shipping board includes this file.
  * Native CAM/ISP graph is supplied by the paired disabled diagnostic fixture.
@@ -348,6 +352,8 @@ def fragment(data):
                 value = value.replace(">, <", ">,\n\t\t\t <")
             code += f"\t\t{key} = {value};\n"
         code += "\t};\n\n"
+    if not display_membership:
+        return code + "};\n"
     code += """};
 
 /* Reference membership retains the display larb; neither IOMMU nor camera is
@@ -361,7 +367,7 @@ def fragment(data):
     return code
 
 
-def power_fragment(data):
+def power_fragment(data, supplier_only=False):
     code = """// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /* Include ONLY in the isolated diagnostic board, after native-display and
  * GPU-supplies. Extend the existing controller/USID6, never duplicate them.
@@ -386,7 +392,9 @@ def power_fragment(data):
         code += '\t\t\tstatus = "disabled";\n\t\t};\n'
     code += """\t};
 };
-
+"""
+    if not supplier_only:
+        code += """
 /* Supply pair is inert because THIS diagnostic board disables the real SPM.
  * Never copy these properties into the active shipping controller.
  */
@@ -395,10 +403,12 @@ def power_fragment(data):
 \tisp-vcore-supply = <&mt6319_6_vbuck1>;
 \tstatus = "disabled";
 };
-
-&mm_infra {
-\tstatus = "disabled";
 """
+    code += """
+&mm_infra {
+"""
+    if not supplier_only:
+        code += '\tstatus = "disabled";\n'
     for name in ("CAM_VCORE", "ISP_VCORE"):
         label = "cam_vcore_pd" if name == "CAM_VCORE" else "isp_vcore_pd"
         code += f"\t{label}: power-domain@{data['power']['domains'][name]:x} {{\n"
@@ -444,23 +454,29 @@ def outputs(data):
             code += "".join(difflib.unified_diff([], files[name].splitlines(True),
                                               fromfile="/dev/null", tofile="b/" + destination))
         patches[output] = code
-    return {**files, **patches}
+    return {**files, **patches, **supplier_wiring.outputs(data, fragment, power_fragment)}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, default=ROOT.parent)
     parser.add_argument("--refresh-evidence", action="store_true")
+    parser.add_argument("--refresh-supplier-evidence", action="store_true")
     parser.add_argument("--verify-vendor", action="store_true")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    if args.refresh_evidence and args.check:
+    if (args.refresh_evidence or args.refresh_supplier_evidence) and args.check:
         parser.error("--check must not rewrite evidence")
     if args.refresh_evidence:
         (HERE / "evidence.json").write_text(json.dumps(trace(args.upstream), indent=2) + "\n")
     data = json.loads((HERE / "evidence.json").read_text())
+    if args.refresh_supplier_evidence:
+        (HERE / "supplier-evidence.json").write_text(json.dumps(
+            supplier_wiring.trace(args.upstream, ROOT, data), indent=2) + "\n")
     if args.verify_vendor and data != trace(args.upstream):
         raise ValueError("frozen resource evidence differs from pinned git objects")
+    if args.verify_vendor and json.loads((HERE / "supplier-evidence.json").read_text()) != supplier_wiring.trace(args.upstream, ROOT, data):
+        raise ValueError("supplier ownership evidence differs from pinned inputs")
     for name, content in outputs(data).items():
         if args.check:
             if (HERE / name).read_text() != content:

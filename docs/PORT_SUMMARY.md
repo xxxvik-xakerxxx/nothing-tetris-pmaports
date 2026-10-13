@@ -22,7 +22,14 @@ hardware support**. The nonbootable camera fixture is excluded from FIT inputs.
 Personal U-Boot master `322cf227f2ea26a7e319d20e3ce0321db8a38f15` adds the
 paired fresh final first-OFF marker, without a new hardware operation. Its
 [CI38314466282](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38314466282)
-passed; installed `8d2ccc12` and stock `lk_b` remain unchanged. The separate
+passed. The matching SCP-secure/BROM-metadata build
+[CI38325598818](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38325598818)
+was written and read back in `lk_a`: 3316288 bytes, SHA256
+`4ff2fae500477380575b2c6f9cc1942f66720c944c5db8e8c94accb5598c07a0`.
+Stock `lk_b` is unchanged. Warm boot `b8e13a10-19f6-4ab7-9f71-de0623e1d494`
+returned r182 and USB/SSH; SCP reported handoff not prepared and sensors did
+not start. A real cold power-on is required before claiming sensor recovery
+or proceeding with hardware experiments. The separate
 first-OFF kernel profile excludes deep idle, sleep, hotplug and kexec for this
 experiment; it is not a shipping battery-optimization policy. It does not
 implement rail/TOP/FLIGHT shutdown, inhibited restart or SIM/call service.
@@ -51,6 +58,20 @@ It adds a separately checked board DT; only fresh successful U-Boot handoff may
 enable supplier/domain0. Modem transport, camera and GPU remain disabled.
 Shipping packages and default images are unchanged. This is an installation
 candidate, not SIM/call support or a battery-optimized daily-driver image.
+The first image attempt, CI38326117165, passed validation/isolated compilation
+but stopped before kernel compilation because Alpine checkout had no Git
+history. The corrected [CI38326786870](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38326786870)
+has entered full kernel-package compilation; no r183 installation is claimed.
+
+The follow-up source revision retains a staged post-OFF TOP/rail owner and
+first errno, but inhibited ON still stops before regulator acquisition or
+hardware writes. GPU gains a sealed eleven-consumer dispatch lifetime, not IRQ
+activation/RV33 startup. GNSS adds the source-derived constructor for 50 of 106
+bootstrap bytes, including real private-record frequency semantics; the other
+56 bytes and same-session inputs remain required before sending. New camera
+supplier DT candidates preserve the native board or explicitly identify a
+forbidden-to-boot ownership delta. These follow-ups require their own native
+CI and do not replace the frozen `cbb777d` image inputs.
 
 The older observation-only source `57f97dd` compiled all three actual native
 objects in both KUNIT configurations in
@@ -207,7 +228,7 @@ FIT matches CI SHA256 `91d7f77a7d8b177fe6320d7bdce267dc88ec26ed146feff9227b55645
 | Sensor backend | `iio-sensor-proxy-tetris 3.9-r2`, included in the image |
 | Root filesystem | Writable; expanded to 104.5 GiB on the next boot; first-install issue recorded below |
 
-The latest installed modem/SCP loader passed [CI 38235543158](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38235543158).
+At the r181 checkpoint, the modem/SCP loader passed [CI 38235543158](https://github.com/xxxvik-xakerxxx/u-boot/actions/runs/38235543158).
 Its image was synchronously written only to `lk_a` and prefix-readback verified.
 Stock `lk_b`, NV and calibration remain unchanged. The ordinary minimum loader
 `dcb20ce` in the pmOS manifest is a recovery baseline, not this diagnostic profile.

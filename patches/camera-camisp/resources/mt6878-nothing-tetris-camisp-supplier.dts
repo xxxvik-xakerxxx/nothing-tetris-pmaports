@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Boot-preserving candidate, UNTESTED. No SPM supply opt-in or rail registration.
+ * All new nodes are disabled; existing display/SCP/USB properties are inherited.
+ */
+#include "mt6878-nothing-tetris-native.dts"
+#include "mt6878-camisp-supplier-resources-disabled.dtsi"
+#include "mt6878-camisp-supplier-power-disabled.dtsi"

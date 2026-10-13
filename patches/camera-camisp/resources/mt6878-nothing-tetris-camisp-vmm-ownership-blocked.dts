@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/* Compile-only ownership delta; NOT bootable with native VMM enabled. */
+#include "mt6878-nothing-tetris-camisp-supplier.dts"
+#include "mt6878-camisp-vmm-ownership-blocked.dtsi"

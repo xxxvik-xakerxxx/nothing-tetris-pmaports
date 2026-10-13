@@ -1,0 +1,53 @@
+{
+  "scope": "dormant supplier board plus explicitly blocked ownership delta; no CI/shipping changes",
+  "sources": {
+    "patches/camera-camisp/resources/mt6878-camisp-supplier-resources-disabled.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-supplier-resources-disabled.dtsi",
+    "patches/camera-camisp/resources/mt6878-camisp-supplier-power-disabled.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-supplier-power-disabled.dtsi",
+    "patches/camera-camisp/resources/mt6878-nothing-tetris-camisp-supplier.dts": "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-supplier.dts",
+    "patches/camera-camisp/resources/mt6878-camisp-vmm-ownership-blocked.dtsi": "arch/arm64/boot/dts/mediatek/mt6878-camisp-vmm-ownership-blocked.dtsi",
+    "patches/camera-camisp/resources/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts": "arch/arm64/boot/dts/mediatek/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts"
+  },
+  "payload_sha256": {
+    "mt6878-camisp-supplier-resources-disabled.dtsi": "08d33ee30519987f8360dfdc0383428838e3ea549c81094f0cbd3b99403eb43e",
+    "mt6878-camisp-supplier-power-disabled.dtsi": "2bbf029e6bc96edec96e20e1d1a7f81d5fd5fd7bff747f45925c996eeae200a1",
+    "mt6878-nothing-tetris-camisp-supplier.dts": "ace6f4ec3405a1f79654ebb5793c1b095c445c64109100b32bcb0ee027f01202",
+    "mt6878-camisp-vmm-ownership-blocked.dtsi": "ef8a91b828887d10298c41967b28ce5e59c0f6cd63581471ca238067dd17ecbd",
+    "mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dts": "f36ea610642a1686011daa14b300200b610be8a6867a21a69271463aaff52ec4"
+  },
+  "requires_existing_resource_header": "patches/camera-camisp/resources/mediatek,mt6878-camisp-clock.h",
+  "base": "mediatek/mt6878-nothing-tetris-native.dtb",
+  "candidate": {
+    "target": "mediatek/mt6878-nothing-tetris-camisp-supplier.dtb",
+    "profile": "supplier",
+    "runtime_activation": "disabled",
+    "boot_eligibility": "baseline-preserving candidate only; CI and live boot untested",
+    "native_vmm_config_variants": [
+      "n",
+      "y"
+    ]
+  },
+  "blocked_ownership": {
+    "target": "mediatek/mt6878-nothing-tetris-camisp-vmm-ownership-blocked.dtb",
+    "profile": "ownership-blocked",
+    "compile_only": true,
+    "boot_allowed": false,
+    "reason": "real supply opt-in with disabled rail/domains rejects active SPM probe"
+  },
+  "validator": "patches/camera-camisp/resources/check-dt.py",
+  "static_check": "patches/camera-camisp/resources/check-supplier.py",
+  "static_fixtures": "patches/camera-camisp/resources/test-supplier.py",
+  "parent_checks": [
+    "compile exact baseline and both targets in CI only",
+    "validate each full DT delta and dt-schema",
+    "link canonical native VMM in CI; never use dummy MM_INFRA",
+    "do not install/boot ownership-blocked target"
+  ],
+  "activation_blockers": [
+    "regulator registration writes/unused cleanup/shutdown policy",
+    "VBUCK1 voltage/rate policy; bounds are not an operating point",
+    "vmmspm isolation notifier and MMDVFS Linux owner migration",
+    "MMUP/VCP firmware voltage/clock/isolation handoff",
+    "observed cold OFF rail, isolation, SRAM, ACKs and bus protection",
+    "live repeat, clean install, lifecycle and portability"
+  ]
+}

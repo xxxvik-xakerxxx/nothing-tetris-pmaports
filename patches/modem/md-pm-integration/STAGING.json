@@ -1,6 +1,14 @@
 {
   "schema": 1,
   "phase": "staging-supplier-only-consumer-disabled",
+  "previous_first_off_validation": {
+    "basis": "user-supplied CI result; not rerun or applied to this new revision",
+    "run": "CI38315490334",
+    "result": "native full vmlinux passed KUNIT=y and KUNIT=n",
+    "patch_sha256": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a",
+    "helper_sha256": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
+    "production": "r182 remains unchanged"
+  },
   "pins": {
     "linux": "d84b264a54a37611f2f46bc19363cb9b41606205",
     "vendor": "ee2be53cb75670b548948636a0db1d1ff112bf12",
@@ -9,13 +17,25 @@
   },
   "patch": {
     "path": "native-on-adoption.patch",
-    "sha256": "715d68ba00491324752ddc8fe8c08e176422edf21645f3d78842bed41c82bc6a"
+    "sha256": "5750c51134b4a6881925303bbd71ea398835b2f2f1634a5280b691638d1ee679"
   },
   "canonical_helper": {
     "path": "mt6878-modem-adopt.h",
     "target": "drivers/pmdomain/mediatek/mt6878-modem-adopt.h",
-    "sha256": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc"
+    "sha256": "f71c1c772a1e225f131935768da390646dc32694afcda018f646a66cd33f8ab6"
   },
+  "restart_helpers": [
+    {
+      "path": "mt6878-modem-restart.h",
+      "target": "drivers/pmdomain/mediatek/mt6878-modem-restart.h",
+      "sha256": "4e6f39cf3c09fa876b2b67b2bdf7b97c094f5b1a37a069412f3a65d5625a52bc"
+    },
+    {
+      "path": "mt6878-modem-restart-test.h",
+      "target": "drivers/pmdomain/mediatek/mt6878-modem-restart-test.h",
+      "sha256": "1c06e761e63fe4beee6d6b00b47a02787b9144f5b66d826c76e638a194b31720"
+    }
+  ],
   "packaged_inputs": [
     {
       "patch": "0018-pmdomain-mediatek-mt6878-audio.patch",
@@ -48,8 +68,10 @@
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
   "staged_after_sha256": {
-    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "134f17d3a59f1290778b1c4f4c6faa9f526f34461f5e74b514962eaebe2d69fc",
+    "drivers/pmdomain/mediatek/mt6878-modem-adopt.h": "f71c1c772a1e225f131935768da390646dc32694afcda018f646a66cd33f8ab6",
     "drivers/pmdomain/mediatek/mt6878-modem-pm.h": "2c2a2ef9dc7649e3a93a8554747059534081730cc8043ff20dae4417036fe7d0",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart-test.h": "1c06e761e63fe4beee6d6b00b47a02787b9144f5b66d826c76e638a194b31720",
+    "drivers/pmdomain/mediatek/mt6878-modem-restart.h": "4e6f39cf3c09fa876b2b67b2bdf7b97c094f5b1a37a069412f3a65d5625a52bc",
     "drivers/pmdomain/mediatek/mtk-pm-domains.c": "bdc881b5aea9cde730dc9803035e3e5290b496ced5246425f95aa8791105b197",
     "drivers/pmdomain/mediatek/mtk-pm-domains.h": "d149bbfc7d2694924e3cf2047553795cb1ee20d6f04a603ab1872c469953d1d6"
   },
@@ -104,7 +126,7 @@
     "failure": "first errno returned directly; no publication or rollback; NOMAP, persistent syscon handles and non-devm owner/device/node references retained; no reattempt before reboot",
     "publication_failure": "same retained first-error record covers generic supplier probe publication unwind",
     "runtime_put": "not used; no swallowed genpd callback errno",
-    "status": "implemented-source-only; CI/native/hardware untested"
+    "status": "prior first-OFF baseline native CI passed per user; changed staged revision CI pending; hardware untested"
   },
   "ci": {
     "source_check": "python3 -B patches/modem/md-pm-integration/stage.py --kernel <pristine-d84>",
@@ -129,15 +151,67 @@
     "combined_link": "MD first; parent adapts camera native-provider.patch to this shared C; build shared object and one vmlinux; pending",
     "aggregate_readiness": "not-claimed-by-independent-object-checks"
   },
+  "inhibited_restart": {
+    "scope": "opt-in supplier-init operation after verified first-OFF; disabled consumer; no genpd publication on failure",
+    "chosen_empty": "/chosen/tetris,modem-inhibited-restart-staging",
+    "supplier_empty_final_only": "nothing,modem-inhibited-restart-staging",
+    "producer_status": "new staging selector contract; parent producer implementation not assumed",
+    "profile": "same resolved diagnostic.config plus first-off.config; no additional active hardware permission",
+    "order": [
+      "retain existing boot takeover identity under boot-lock then owner-lock",
+      "claim exactly one restart attempt",
+      "revalidate paired selectors and disabled modem",
+      "revalidate actual unchanged handoff/NOMAP/maps",
+      "read complete native OFF",
+      "retain DT TOP node and cached native syscon map",
+      "retain three distinct actual available rail nodes and exact pinned voltage pairs",
+      "stop at missing execution-inhibit owner before regulator_get and every ON operation"
+    ],
+    "resource_profile": {
+      "power_flow_config": "absent or exact zero",
+      "rails_uv": {
+        "md-vmodem": [
+          800000,
+          800000
+        ],
+        "md-vsram": [
+          800000,
+          800000
+        ],
+        "md-vdigrf": [
+          700000,
+          700000
+        ]
+      }
+    },
+    "boundary_errno": "-EOPNOTSUPP; earlier exact errno wins, including -EPROBE_DEFER",
+    "retention": "non-devm first-OFF owner/supplier/modem, NOMAP, persistent maps and all acquired TOP/rail node references survive probe unwind through reboot",
+    "not_claimed": [
+      "exclusive ownership of shared rails/TOP",
+      "regulator handles",
+      "execution-inhibited ON",
+      "new authentication/EMI permission",
+      "full shutdown",
+      "consumer/transport activation"
+    ],
+    "tests": {
+      "static": "test_static.py",
+      "kunit_suite": "mt6878-md-inhibited-restart-owner",
+      "kunit_scope": "actual admission/first-errno helpers and genpd callback veto; no hardware operations",
+      "execution": "not compiled or executed locally; new revision native KUNIT=y/n CI pending"
+    },
+    "evidence": "RESTART-SOURCE-EVIDENCE.json",
+    "status": "resource-operation-implemented; active-inhibit-owner-missing; hardware-untested"
+  },
   "failed_requirements": {
     "consumer_unbind_veto": "detach_dev is void and cannot veto; detach retires observation with ESHUTDOWN, no teardown claim",
     "dynamic_supplier_removal": "existing suppress_bind_attrs only prevents userspace unbind; arbitrary in-kernel unregister unsupported",
     "present_packaged_config_runtime_adoption": "blocked by OF_DYNAMIC=y and MEMORY_HOTREMOVE=y; package unchanged"
   },
   "remaining": [
-    "first-OFF final producer marker and resolved-profile CI/hardware validation",
+    "new staged revision native KUNIT=y/n CI and matched-candidate first-OFF hardware validation",
     "consumer activation/attachment",
-    "inhibited restart",
+    "active execution-inhibit owner before ON",
     "suspend and secure-idle lifecycle",
     "current effective EMI permission lifetime",
     "SIM operation"

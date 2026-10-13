@@ -1,5 +1,12 @@
 # Unified native receive dispatcher candidate
 
+Current bounded follow-up: [DISPATCH-LIFETIME.md](DISPATCH-LIFETIME.md) implements
+the opaque full-bank lifetime handle, frozen consumers, parent module/device/PM
+pins, RX driver checks and refusal of premature/uncertain teardown. That handle
+is now mandatory for both TX and RX, but it cannot activate dispatch. The
+parent's reported TX/RX fixture CI38315471685 predates this lifetime revision;
+the expanded fixture and ARM64 objects still need parent CI validation.
+
 Status: source wiring implemented; static checks only. GPU remains **Broken**.
 This candidate supersedes the no-dispatch description of the resource-owner
 snapshot in RESOURCE-CONTRACT.md. CI38287440390 compiled that earlier snapshot,

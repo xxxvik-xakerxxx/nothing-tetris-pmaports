@@ -197,6 +197,19 @@ CAMISP_RESOURCE_REACHABLE = tuple(CAMISP_RESOURCE_PLAN["required_reachable"])
 CAMISP_RESOURCE_INPUTS = tuple("patches/camera-camisp/resources/" + name for name in (
     "STAGING.json", "evidence.json", "generate.py", "check.py", "test-source.py",
     "check-dt.py", "test-dt.py", "clock-providers.patch", "disabled-description.patch"))
+CAMISP_SUPPLIER_MANIFEST = "patches/camera-camisp/resources/SUPPLIER-STAGING.json"
+CAMISP_SUPPLIER_PLAN = json.loads((Path(__file__).resolve().parents[1] / CAMISP_SUPPLIER_MANIFEST).read_text())
+if (CAMISP_SUPPLIER_PLAN["candidate"]["runtime_activation"] != "disabled" or
+        CAMISP_SUPPLIER_PLAN["blocked_ownership"]["boot_allowed"] is not False or
+        len(CAMISP_SUPPLIER_PLAN["sources"]) != 5):
+    raise ValueError("camera supplier candidates must not activate hardware or become boot inputs")
+for source, destination in CAMISP_SUPPLIER_PLAN["sources"].items():
+    if (not source.startswith("patches/camera-camisp/resources/") or
+            not destination.startswith("arch/arm64/boot/dts/mediatek/") or
+            ".." in Path(source).parts or ".." in Path(destination).parts or
+            destination in RESEARCH_SOURCES.values()):
+        raise ValueError("unsafe/duplicate supplier DT staging destination")
+RESEARCH_SOURCES.update(CAMISP_SUPPLIER_PLAN["sources"])
 CAMISP_POWER_MANIFEST = "patches/camera-camisp/power/STAGING.json"
 CAMISP_POWER_CHECK = "patches/camera-camisp/power/check.py"
 
@@ -340,6 +353,29 @@ def compile_camisp_resource_dtb(make, output, report):
     return {"dtb_sha256": hashlib.sha256(dtb.read_bytes()).hexdigest(),
             "target": board["target"], "install_allowed": False,
             "scope": "compiled disabled camera graph only; SPM/MM_INFRA disabled; never boot"}
+
+
+def compile_camisp_supplier_dtbs(make, output, report):
+    plan = CAMISP_SUPPLIER_PLAN
+    base = output / "arch/arm64/boot/dts" / plan["base"]
+    outcomes = {}
+    for name in ("candidate", "blocked_ownership"):
+        board = plan[name]
+        run([*make, board["target"]])
+        dtb = output / "arch/arm64/boot/dts" / board["target"]
+        if not dtb.is_file() or not dtb.stat().st_size:
+            raise ValueError("missing compiled supplier DT: " + board["target"])
+        raw = report / "unvalidated-supplier-dtbs"
+        raw.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(dtb, raw / dtb.name)
+        run(["python3", plan["validator"], "--profile", board["profile"],
+             "--base", base, "--fixture", dtb])
+        destination = report / ("dormant-supplier-dtbs" if name == "candidate" else "nonbootable-dtbs")
+        destination.mkdir(exist_ok=True)
+        shutil.copyfile(dtb, destination / dtb.name)
+        outcomes[name] = dict(target=board["target"], dtb_sha256=hashlib.sha256(dtb.read_bytes()).hexdigest(),
+                              install_allowed=False, hardware_activated=False)
+    return outcomes
 
 
 def compile_dt_only(kernel, package, work, report, manifest):
@@ -565,6 +601,8 @@ def main():
         run(["python3", "patches/camera-camisp/resources/generate.py", "--check"])
         run(["python3", "patches/camera-camisp/resources/test-source.py"])
         run(["python3", "patches/camera-camisp/resources/test-dt.py"])
+        run(["python3", "patches/camera-camisp/resources/check-supplier.py"])
+        run(["python3", "patches/camera-camisp/resources/test-supplier.py"])
         run(["python3", CAMISP_POWER_CHECK])
         run(["python3", "patches/camera-camisp/power/test_source.py"])
         run(["python3", "patches/camera-camisp/power/test_supplier.py"])
@@ -593,6 +631,11 @@ def main():
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
         stage_research_sources(kernel)
+        for source, destination in CAMISP_SUPPLIER_PLAN["sources"].items():
+            if hashlib.sha256((kernel / destination).read_bytes()).hexdigest() != \
+                    CAMISP_SUPPLIER_PLAN["payload_sha256"][Path(source).name]:
+                raise ValueError("camera supplier staged source drift: " + source)
+        run(["python3", "patches/camera-camisp/resources/check-supplier.py", "--staged-tree", kernel])
         run(["python3", CAMISP_RESOURCE_CHECK, "--staged-tree", kernel,
              "--kernel-tree", kernel])
         manifest["derived_camisp_resource_sources_sha256"] = {
@@ -644,6 +687,7 @@ def main():
     if args.research_owners:
         manifest["hif_dt"] = compile_hif_dtb(make, kernel, output, report)
         manifest["camisp_resource_dt"] = compile_camisp_resource_dtb(make, output, report)
+        manifest["camisp_supplier_dt"] = compile_camisp_supplier_dtbs(make, output, report)
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copyfile(output / ".config", report / "isolated.config")
     config = (output / ".config").read_text().splitlines()

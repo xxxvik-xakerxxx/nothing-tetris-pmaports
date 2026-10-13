@@ -1,0 +1,51 @@
+{
+  "provenance": [
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/misc/mediatek/vmm_spm/mtk-vmm-spm.c",
+      "sha256": "0de01af3eb910734339fea1ee2a7686ae366992000ee8d28f7759c49adf33dd7"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/misc/mediatek/mmdvfs/mtk-mmdvfs-debug.c",
+      "sha256": "67d26fe4230296b351fbcbf6e843e36b7785f3b66d0b4c37470c4910c365b533"
+    },
+    {
+      "repository": "android_kernel_device_modules_6.1_nothing_mt6878",
+      "commit": "ee2be53cb75670b548948636a0db1d1ff112bf12",
+      "path": "drivers/soc/mediatek/mtk-mmdvfs-v3.c",
+      "sha256": "b523231cf75cae38ebad6e927f0e72f5b47b98fbc2befb7d03b4d0a4fe272d37"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/regulator/core.c",
+      "sha256": "e09274caf113bd6def035b5918ac2e48a7605cd320eb1bfc73c34dd6223e9122"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/regulator/of_regulator.c",
+      "sha256": "b6feada4bfec5356ef8efe432dd49fc9e6ffc27b383220faa8535a3aaef8de8a"
+    },
+    {
+      "repository": "MT6878-mainline/linux",
+      "commit": "d84b264a54a37611f2f46bc19363cb9b41606205",
+      "path": "drivers/regulator/mt6315-regulator.c",
+      "sha256": "3c3cfcbf91795a7ecb08fe3f00c9c1ba69d987315f5ce1c6704f97fa733a611a"
+    }
+  ],
+  "parent_input_sha256": {
+    "patches/camera-camisp/native-integration/mt6878-native-vmm.inc": "856182b13b38b75e435a63e5b1bc350e5fc7e10700b407fc5f5a065074494f27",
+    "patches/camera-camisp/native-integration/native-provider.patch": "dd9160d13f690a655c7386e1c317cb7bf26c2146b3ef2a1377a8231de1e061fc",
+    "patches/camera-camisp/power/mt6878-vmm-supplier.c": "aa47b7800ede4fb8ffd71e629ef9966bcd1dd2bb73f8fbeaf73e6a08aa3942c5",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0105-regulator-mt6315-read-active-voltage-selector.patch": "2cb0c829e11e5ec0e318b9e3f2751ad9db0ba474f5a26bf0c65a45aea0957305",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0109-regulator-mt6315-stop-mode-change-on-read-error.patch": "0478fab57afd1db3f2f7715d23b8d8a81fab64db381255629ec54f5f5daa8c69",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0110-regulator-mt6315-register-described-rails.patch": "551d10263f413615831aa6957bbcaf4ea1a50324efe114b20a4e549465b7905b",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0111-regulator-mt6315-fail-closed-shutdown.patch": "8885df38c32843ae32f608f96a12f89b2773bd9f60d86e2c9025ad4420bfd466",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0113-regulator-mt6315-reject-unowned-phase-mask.patch": "dc112adca7f880f037699ea7ebbdd3e1d6272077a0e42ff41f592d9d6b48b74f",
+    "pmaports/device/testing/linux-postmarketos-mediatek-mt6878/0114-regulator-mt6315-read-only-vgpu-observer.patch": "fec2a0401b502f1ad8fc9e64f54571cf4297e0f92b4e8e470a8f69b74a4ff365"
+  }
+}
