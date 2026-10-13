@@ -815,6 +815,16 @@ class GnssModuleGate(unittest.TestCase):
 
 
 class NativeProviderOrdering(unittest.TestCase):
+    def test_modem_registration_policy_gets_real_kunit_variants(self):
+        source = inspect.getsource(smoke.compile_md_pmic)
+        self.assertIn('rails.inputs()', source)
+        self.assertIn('rails.REGISTRATION + anchor', source)
+        self.assertIn('registration_source_sha256', source)
+        self.assertIn('registration_variants', source)
+        self.assertIn('("y", "n")', source)
+        self.assertIn('"registration-kunit-" + unit', source)
+        self.assertIn('finally:\n        header.write_text(before)', source)
+
     def test_exact_prepared_source_is_checked_before_native_objects(self):
         source = Path(smoke.__file__).read_text()
         checked = source.index('"--prepared-kernel", kernel])')

@@ -140,6 +140,11 @@ jobs:
           sh patches/modem/check-candidates.sh upstream/device-modules
           sh patches/modem/check-ccmni.sh upstream/device-modules
           python3 patches/modem/check-smem-mapping.py upstream/device-modules
+      - name: Validate native modem rail image integration
+        run: |
+          export TETRIS_VENDOR_TREE="$PWD/upstream/device-modules"
+          export TETRIS_KERNEL_TREE="$PWD/upstream/linux"
+          python3 -B ci/test-native-modem-rails.py
       - name: Validate staged modem lifecycle callbacks
         run: |
           export TETRIS_VENDOR_TREE="$PWD/upstream/device-modules"

@@ -417,6 +417,42 @@ def compile_md_pmic(kernel, work, report):
         name: hashlib.sha256((kernel / name).read_bytes()).hexdigest()
         for name in plan["staged_after_sha256"]
     }
+    # Compile the future image's registration-only correction against the same
+    # real native provider. Restore canonical inputs before other smoke gates.
+    spec = importlib.util.spec_from_file_location("md_rail_image", Path("ci/stage-native-modem-rails.py"))
+    rails = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rails)
+    rails.inputs()
+    header = kernel / rails.HELPER
+    before = header.read_text()
+    anchor = "\t\trdev = devm_regulator_register(dev, &states[i].desc, &config);\n"
+    if before.count(anchor) != 1:
+        raise ValueError("native regulator registration anchor changed")
+    revised = before.replace(anchor, rails.REGISTRATION + anchor, 1)
+    result["registration_source_sha256"] = hashlib.sha256(revised.encode()).hexdigest()
+    result["registration_variants"] = {}
+    try:
+        header.write_text(revised)
+        for unit in ("y", "n"):
+            shutil.copyfile(Path(PACKAGE) / CONFIG, output / ".config")
+            run([kernel / "scripts/config", "--file", output / ".config",
+                 "-e", "REGULATOR_MT6363", "-e", "MFD_MT6363",
+                 "-e" if unit == "y" else "-d", "KUNIT"])
+            run([*make, "olddefconfig"])
+            config = (output / ".config").read_text().splitlines()
+            if "CONFIG_REGULATOR_MT6363=y" not in config or "CONFIG_MFD_MT6363=y" not in config or \
+                    ("CONFIG_KUNIT=y" in config) != (unit == "y"):
+                raise ValueError("native modem registration configuration failed to resolve")
+            run([*make, name])
+            destination = report / "native-modem-pmic" / ("registration-kunit-" + unit)
+            destination.mkdir(parents=True, exist_ok=False)
+            target = destination / "mt6363-regulator.o"
+            shutil.copyfile(output / name, target)
+            shutil.copyfile(output / ".config", destination / "config")
+            result["registration_variants"][unit] = {
+                **object_identity(target), "sha256": hashlib.sha256(target.read_bytes()).hexdigest()}
+    finally:
+        header.write_text(before)
     return result
 
 
