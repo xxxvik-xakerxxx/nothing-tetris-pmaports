@@ -199,6 +199,11 @@ basic-clock handles absent from the NOS MFG0 descriptor. Its sixteen exact
 source checks passed; matched ARM64 compilation is pending. Actual acquisition
 must establish the signed LK entry state before any GPUEB continuation. This
 candidate does not write RPC/GPRs, release reset or claim GPU readiness.
+The additive loader diagnostic captures one initial SPM word before SCP/GPUEB
+preparation and publishes checked version/stage/error/raw fields in `/chosen`
+for Linux retrieval. Its twenty-two source/patch/reader checks passed; native
+libfdt fault tests, ARM64 compilation and a matched diagnostic boot remain
+pending. The installed `f25c0144` loader is unchanged.
 
 Native GNSS parsing now covers escaped frames, bounded measurement epochs and
 the actual host-position record, with supplied UTC rather than an RTC/NTP

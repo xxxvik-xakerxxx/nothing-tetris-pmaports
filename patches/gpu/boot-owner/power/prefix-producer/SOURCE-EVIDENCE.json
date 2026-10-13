@@ -1,0 +1,764 @@
+{
+  "address_inventory": {
+    "constant_spm_memory_candidates": [
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1e194",
+        "write": false
+      },
+      {
+        "address": "0x1c001410",
+        "instruction": "ldr",
+        "offset": "0x1e1b8",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1e42c",
+        "write": false
+      },
+      {
+        "address": "0x1c001410",
+        "instruction": "ldr",
+        "offset": "0x1e45c",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1eb74",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1ebc8",
+        "write": false
+      },
+      {
+        "address": "0x1c00e024",
+        "instruction": "ldrh",
+        "offset": "0x2072c",
+        "write": false
+      },
+      {
+        "address": "0x1c00e018",
+        "instruction": "ldrh",
+        "offset": "0x20738",
+        "write": false
+      },
+      {
+        "address": "0x1c00e000",
+        "instruction": "ldurh",
+        "offset": "0x208a4",
+        "write": false
+      },
+      {
+        "address": "0x1c00e004",
+        "instruction": "ldrh",
+        "offset": "0x208ac",
+        "write": false
+      },
+      {
+        "address": "0x1c0018ec",
+        "instruction": "ldr",
+        "offset": "0x318ec",
+        "write": false
+      },
+      {
+        "address": "0x1c00f3b0",
+        "instruction": "ldr",
+        "offset": "0x3ccd8",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x3dcdc",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x3dd00",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3eaf8",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "str",
+        "offset": "0x3eb04",
+        "write": true
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3eb28",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "str",
+        "offset": "0x3eb38",
+        "write": true
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3eb54",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "str",
+        "offset": "0x3eb60",
+        "write": true
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3eb74",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3eb8c",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "ldr",
+        "offset": "0x3ebcc",
+        "write": false
+      },
+      {
+        "address": "0x1c00a024",
+        "instruction": "str",
+        "offset": "0x3ebd4",
+        "write": true
+      },
+      {
+        "address": "0x1c00a000",
+        "instruction": "ldr",
+        "offset": "0x3ec04",
+        "write": false
+      },
+      {
+        "address": "0x1c00a000",
+        "instruction": "str",
+        "offset": "0x3ec14",
+        "write": true
+      },
+      {
+        "address": "0x1c00a008",
+        "instruction": "str",
+        "offset": "0x3ec38",
+        "write": true
+      },
+      {
+        "address": "0x1c00a004",
+        "instruction": "str",
+        "offset": "0x3ec54",
+        "write": true
+      },
+      {
+        "address": "0x1c00a000",
+        "instruction": "ldur",
+        "offset": "0x3ec7c",
+        "write": false
+      },
+      {
+        "address": "0x1c00a048",
+        "instruction": "ldr",
+        "offset": "0x3ed40",
+        "write": false
+      },
+      {
+        "address": "0x1c00a048",
+        "instruction": "str",
+        "offset": "0x3ed44",
+        "write": true
+      },
+      {
+        "address": "0x1c00a048",
+        "instruction": "ldr",
+        "offset": "0x3ed48",
+        "write": false
+      },
+      {
+        "address": "0x1c00a048",
+        "instruction": "str",
+        "offset": "0x3eda8",
+        "write": true
+      },
+      {
+        "address": "0x1c00a048",
+        "instruction": "ldr",
+        "offset": "0x3edac",
+        "write": false
+      },
+      {
+        "address": "0x1c00a030",
+        "instruction": "ldr",
+        "offset": "0x3edf0",
+        "write": false
+      },
+      {
+        "address": "0x1c00a030",
+        "instruction": "ldr",
+        "offset": "0x3ee60",
+        "write": false
+      },
+      {
+        "address": "0x1c00a000",
+        "instruction": "ldr",
+        "offset": "0x3efc0",
+        "write": false
+      },
+      {
+        "address": "0x1c00a000",
+        "instruction": "str",
+        "offset": "0x3efd4",
+        "write": true
+      },
+      {
+        "address": "0x1c00a030",
+        "instruction": "str",
+        "offset": "0x3efd8",
+        "write": true
+      },
+      {
+        "address": "0x1c00a034",
+        "instruction": "str",
+        "offset": "0x3efdc",
+        "write": true
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "ldr",
+        "offset": "0x53cfc",
+        "write": false
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "str",
+        "offset": "0x53d04",
+        "write": true
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "ldr",
+        "offset": "0x53d0c",
+        "write": false
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "str",
+        "offset": "0x53d30",
+        "write": true
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "ldr",
+        "offset": "0x53d34",
+        "write": false
+      },
+      {
+        "address": "0x1c001ef0",
+        "instruction": "str",
+        "offset": "0x53d3c",
+        "write": true
+      },
+      {
+        "address": "0x1c001f24",
+        "instruction": "ldr",
+        "offset": "0x54b08",
+        "write": false
+      },
+      {
+        "address": "0x1c001f24",
+        "instruction": "str",
+        "offset": "0x54b10",
+        "write": true
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "ldr",
+        "offset": "0x54b14",
+        "write": false
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "str",
+        "offset": "0x54b1c",
+        "write": true
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "ldr",
+        "offset": "0x54b20",
+        "write": false
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "ldr",
+        "offset": "0x54c4c",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x54c54",
+        "write": false
+      },
+      {
+        "address": "0x1c001f24",
+        "instruction": "ldr",
+        "offset": "0x54c64",
+        "write": false
+      },
+      {
+        "address": "0x1c001f40",
+        "instruction": "ldr",
+        "offset": "0x54c74",
+        "write": false
+      },
+      {
+        "address": "0x1c001f44",
+        "instruction": "ldr",
+        "offset": "0x54c84",
+        "write": false
+      },
+      {
+        "address": "0x1c00c210",
+        "instruction": "ldr",
+        "offset": "0x54ca8",
+        "write": false
+      },
+      {
+        "address": "0x1c00c220",
+        "instruction": "ldr",
+        "offset": "0x54cb0",
+        "write": false
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "ldr",
+        "offset": "0x54dfc",
+        "write": false
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "str",
+        "offset": "0x54e04",
+        "write": true
+      },
+      {
+        "address": "0x1c001e00",
+        "instruction": "ldr",
+        "offset": "0x54e08",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x54e80",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x54e88",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x54e8c",
+        "write": false
+      },
+      {
+        "address": "0x1c00c218",
+        "instruction": "str",
+        "offset": "0x54f6c",
+        "write": true
+      },
+      {
+        "address": "0x1c00c218",
+        "instruction": "str",
+        "offset": "0x54f70",
+        "write": true
+      },
+      {
+        "address": "0x1c00c214",
+        "instruction": "stur",
+        "offset": "0x54fc0",
+        "write": true
+      },
+      {
+        "address": "0x1c00c220",
+        "instruction": "ldr",
+        "offset": "0x54fc4",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x55024",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x5502c",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x55030",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x55038",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x5503c",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x55044",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x55048",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x5513c",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x55144",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x55148",
+        "write": false
+      },
+      {
+        "address": "0x1c00c218",
+        "instruction": "str",
+        "offset": "0x55228",
+        "write": true
+      },
+      {
+        "address": "0x1c00c218",
+        "instruction": "str",
+        "offset": "0x5522c",
+        "write": true
+      },
+      {
+        "address": "0x1c00c214",
+        "instruction": "stur",
+        "offset": "0x5527c",
+        "write": true
+      },
+      {
+        "address": "0x1c00c220",
+        "instruction": "ldr",
+        "offset": "0x55280",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x552e0",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x552e8",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x552ec",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x552f4",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x552f8",
+        "write": false
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "str",
+        "offset": "0x55300",
+        "write": true
+      },
+      {
+        "address": "0x1c001e7c",
+        "instruction": "ldr",
+        "offset": "0x55304",
+        "write": false
+      }
+    ],
+    "scope": "all aligned signed payload bytes; local constants only, data may decode as instructions; no indirect/dynamic writer exclusion",
+    "spm_high_movk_candidates": [
+      "0x1e170",
+      "0x1e180",
+      "0x1e1d0",
+      "0x1e408",
+      "0x1e414",
+      "0x1e474",
+      "0x1eb6c",
+      "0x1ebac",
+      "0x1efa4",
+      "0x1eff0",
+      "0x20704",
+      "0x20720",
+      "0x2087c",
+      "0x315f8",
+      "0x31810",
+      "0x318e4",
+      "0x32f94",
+      "0x32fa0",
+      "0x32fac",
+      "0x32fbc",
+      "0x331ac",
+      "0x3ccbc",
+      "0x3ccd0",
+      "0x3ccec",
+      "0x3dcd0",
+      "0x3dcfc",
+      "0x3eaf0",
+      "0x3eb20",
+      "0x3eb4c",
+      "0x3eb6c",
+      "0x3eb84",
+      "0x3ebc4",
+      "0x3ebe4",
+      "0x3ec30",
+      "0x3ec48",
+      "0x3ec74",
+      "0x3ed34",
+      "0x3eda0",
+      "0x3ede8",
+      "0x3ee58",
+      "0x3efa4",
+      "0x53cf0",
+      "0x54af4",
+      "0x54c44",
+      "0x54ca0",
+      "0x54de8",
+      "0x54e6c",
+      "0x54f40",
+      "0x54f9c",
+      "0x55010",
+      "0x55128",
+      "0x551fc",
+      "0x55258",
+      "0x552cc"
+    ],
+    "target_candidates": [
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1e194",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1e42c",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1eb74",
+        "write": false
+      },
+      {
+        "address": "0x1c001eb4",
+        "instruction": "ldr",
+        "offset": "0x1ebc8",
+        "write": false
+      }
+    ]
+  },
+  "admission": "0x1ebc8/0x1ebd8: ACK[31:30]=3, bit12=0, bit13=1",
+  "atf": {
+    "conditional_spm_event": "0x30f54 -> 0x39cc -> 0x39d8 stores1 to SPM_CPU_WAKEUP_EVENT0x1c0010b0; selected state/control branch, not a MFG0 writer or unconditional boot proof",
+    "first_unresolved_producer": "SPM program/control effects after conditional PCM preparation/event or earlier preloader/EL3 MFG0 SRAM_SLEEP_B initialization; actual bit9 writer/ACK13 state producer not selected",
+    "limits": "no MFG0 bit9 writer/ACK13 producer proven by this dispatch trace; firmware-only origin is NOT established; no secure call is imported into loader",
+    "payload_sha256": "05a247cb02696ce4fe1982ea00bba81236c352146c307159d3f9e380635ea32e",
+    "platform_table_initializer": "0x30bac -> 0x29f04 stores table0x5a808 at 0xf6040; mutable runtime identity not observed",
+    "provenance": "matching hash-pinned declared ATF payload; supplied container has no certificate pair, not independently authenticated here",
+    "registration": "0x2033c -> 0x1f530 registers group6 callback 0x1f560; registration code is not runtime proof",
+    "resolved_platform_callbacks": {
+      "0x3108c": "table+0x18 -> 0x19f00: read SPM0x1c001194",
+      "0x310f0": "table+0x30 -> 0x30f00: SPM control helpers",
+      "0x311cc": "table+0x28 -> 0x30eb4: PCM preparation helpers"
+    },
+    "selected_arguments": "group6, UID 0x5731, action1, firmware pointer, 0x10000 bytes",
+    "selected_callback": "0x1f594 -> 0x30fd4 stores firmware pointer/count and calls 0x3195c, then tail-calls 0x31048",
+    "service_record": "0x58a80: MTK_SIP_BL_LPM_CONTROL -> 0x1994c"
+  },
+  "direct_gpueb_loader_refs": [
+    "0xed94"
+  ],
+  "direct_smc_wrapper_refs": [
+    "0x17138",
+    "0x1716c",
+    "0x171a0",
+    "0x171d4",
+    "0x17204",
+    "0x17580",
+    "0x175d4",
+    "0x17bd8",
+    "0x17c38",
+    "0x17ddc",
+    "0x182c0",
+    "0x1833c",
+    "0x199cc",
+    "0x19d30",
+    "0x1af80",
+    "0x27858",
+    "0x278f8",
+    "0x27a44",
+    "0x27b44",
+    "0x27c64",
+    "0x27d44",
+    "0x2d140",
+    "0x2d170",
+    "0x2d1d0",
+    "0x2d204",
+    "0x2d3e4",
+    "0x2d468",
+    "0x2d4e4",
+    "0x2d560",
+    "0x2d640",
+    "0x2e46c",
+    "0x2f030",
+    "0x305b8",
+    "0x30714",
+    "0x33438",
+    "0x3910c",
+    "0x39140",
+    "0x3921c",
+    "0x3b4d8",
+    "0x3b57c",
+    "0x3ca38",
+    "0x3d444",
+    "0x3d484",
+    "0x3f26c",
+    "0x4139c",
+    "0x41438",
+    "0x414d4",
+    "0x7c6fc",
+    "0x7cb1c",
+    "0x7d0bc",
+    "0x7d4b4",
+    "0x7d50c",
+    "0x7d898",
+    "0x7d8f4",
+    "0x7d944",
+    "0x7d994",
+    "0x7ecc4",
+    "0x7ecf8",
+    "0x7ed60",
+    "0x7ed9c",
+    "0x7ee88",
+    "0x7f09c",
+    "0x821bc",
+    "0x8a0dc",
+    "0x8a180",
+    "0x8a224",
+    "0x8a2c8",
+    "0x8a36c",
+    "0x8a410",
+    "0x8b3d0",
+    "0x8b474",
+    "0x8b518",
+    "0x8f574",
+    "0x8f59c",
+    "0x8f5c4",
+    "0x8f5ec",
+    "0xa79f8",
+    "0xa7a34",
+    "0xa7a60",
+    "0xa7a94",
+    "0xa7ac0"
+  ],
+  "entry_argument_capture": "0x40/0x44 save incoming x0..x3; producer outside this capture not resolved",
+  "first_unresolved_boundary": "producer of MFG0 SRAM_SLEEP_B bit9/ACK13 before loader entry: preceding secure SPM-load handler or earlier inherited state; neither selected by this inventory",
+  "immediate_hook": "0xed58 -> 0x16eb0 is mov w0,wzr; ret, not a producer",
+  "lk_payload_sha256": "431e0551382e21f4edfb8ff3ca05cd67b177d40b1a51f9e863965eea58f8b94a",
+  "no_activation": "no reconstructed writer, SMC, poll or borrowed domain is installed",
+  "nos": {
+    "bit13": "SC_MFG0_SRAM_SLEEP_B_ACK; status, not a permission cookie",
+    "bit9": "MFG0_SRAM_SLEEP_B",
+    "limits": "register naming does not identify who initialized the control bit",
+    "line": 2879,
+    "path": "drivers/misc/mediatek/lpm/modules/include/mt6878/spm_reg.h",
+    "sha256": "42aa7fe02beb009a33c2b43ba6ead74033b123ad2f886ab471d408fa44a8e0de"
+  },
+  "preceding_spm_boundary": {
+    "caller": "0xec04 -> 0x331e4",
+    "firmware_reader": "0x332d4 -> 0x74da0; negative return branches away",
+    "meaning": "actual preceding SPM-load secure call; bit9/ACK13 side effect NOT established",
+    "smc": "0x33438 -> 0x188dc",
+    "x0": "0x82000410",
+    "x1": "0xda065731",
+    "x2": 1,
+    "x3": "allocated SPM firmware reservation",
+    "x4": "0x10000"
+  },
+  "reviewed_mfg0_reads": [
+    "0x1e194",
+    "0x1e42c",
+    "0x1eb74",
+    "0x1ebc8",
+    "0x1ebd8",
+    "0x1efa8"
+  ],
+  "target_literals": {
+    "lk_virtual_u64": [],
+    "offset_1eb4_u32": [],
+    "physical_u32": []
+  }
+}
