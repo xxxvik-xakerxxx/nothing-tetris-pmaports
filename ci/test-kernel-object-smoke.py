@@ -3,6 +3,7 @@
 
 import hashlib
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 import subprocess
@@ -74,6 +75,21 @@ class SmokeInputs(unittest.TestCase):
         self.assertGreater(len(plan["patches"]), 100)
         self.assertEqual(len(plan["objects"]), 6)
         self.assertEqual(plan["dtbs"], smoke.DTBS)
+
+    def test_gnss_compiler_uses_reviewed_stack_and_real_kbuild(self):
+        source = inspect.getsource(smoke.compile_gnss_tx)
+        contract = json.loads((Path(__file__).resolve().parents[1] /
+                               "patches/gnss/write-boundary/STAGING.json").read_text())
+        self.assertIn('plan["stacked_source_sha512"]', source)
+        self.assertEqual(len(contract["stacked_source_sha512"]), 4)
+        self.assertIn('plan["patch_sha512"]', source)
+        self.assertIn('stage.transform(name', source)
+        self.assertIn('"CONFIG_MTK_GPS_SUPPORT=y"', source)
+        self.assertIn('("gps_each_link.o", "linux/gps_each_device.o")', source)
+        self.assertLess(source.index('"olddefconfig"'), source.index('"modules_prepare"'))
+        self.assertNotIn('"modules"]', source)
+        self.assertNotIn("KBUILD_MODPOST_WARN", source)
+        self.assertNotIn("KCFLAGS=-I", source)
 
     def test_real_dtbs_compiled_validated_and_retained(self):
         output = self.package / "objects"

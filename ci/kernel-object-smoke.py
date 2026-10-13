@@ -420,6 +420,77 @@ def compile_md_pmic(kernel, work, report):
     return result
 
 
+def compile_gnss_tx(kernel, work, report):
+    draft = Path("patches/gnss/write-boundary").resolve()
+    spec = importlib.util.spec_from_file_location("gnss_tx_stage", draft / "generate.py")
+    stage = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stage)
+    archive_name = "android-kernel-modules-" + stage.PIN + ".tar.gz"
+    checksums = re.findall(r"^([0-9a-f]{128})  " + re.escape(archive_name) + r"$",
+                           (PACKAGE / "APKBUILD").read_text(), re.M)
+    if len(checksums) != 1:
+        raise ValueError("missing exact GNSS source archive identity")
+    archive = work / archive_name
+    url = "https://github.com/NothingOSS/android_kernel_modules_nothing_mt6878/archive/" + stage.PIN + ".tar.gz"
+    with urllib.request.urlopen(url, timeout=120) as response, archive.open("wb") as dest:
+        shutil.copyfileobj(response, dest)
+    with archive.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha512").hexdigest() != checksums[0]:
+            raise ValueError("GNSS source archive checksum mismatch")
+    with tarfile.open(archive) as tar:
+        tar.extractall(work, filter="data")
+    vendor = work / ("android_kernel_modules_nothing_mt6878-" + stage.PIN)
+    for patch in stage.stack():
+        if patch.name.startswith("1005-"):
+            clock = vendor / (stage.BASE + "linux/gps_dl_linux_clock_mng.c")
+            clock.write_bytes(clock.read_bytes().replace(b"\r\n", b"\n"))
+        run(["patch", "--batch", "--fuzz=0", "-p1", "-d", vendor, "-i", patch])
+    plan = json.loads((draft / "STAGING.json").read_text())
+    for name, digest in plan["stacked_source_sha512"].items():
+        if hashlib.sha512((vendor / name).read_bytes()).hexdigest() != digest:
+            raise ValueError("GNSS compiler preimage differs from reviewed TX fixture: " + name)
+    if hashlib.sha512(stage.PATCH.read_bytes()).hexdigest() != plan["patch_sha512"]:
+        raise ValueError("GNSS reviewed TX patch identity changed")
+    expected = {name: stage.transform(name, (vendor / name).read_text()).encode() for name in stage.SOURCES}
+    run(["patch", "--batch", "--fuzz=0", "-p1", "-d", vendor, "-i", stage.PATCH])
+    for name, content in expected.items():
+        if (vendor / name).read_bytes() != content:
+            raise ValueError("actual GNSS compiler source differs from reviewed TX fixture: " + name)
+    output = work / "gnss-tx-objects"
+    output.mkdir(exist_ok=False)
+    shutil.copyfile(PACKAGE / CONFIG, output / ".config")
+    make = ["make", "-j4", "-C", kernel, "O=" + str(output), "ARCH=arm64", "LLVM=1"]
+    run([*make, "olddefconfig"])
+    run([*make, "modules_prepare"])
+    gps = vendor / "connectivity/gps/data_link/plat/v051"
+    # Use the actual vendor Kbuild and its existing packaged compatibility
+    # stack, not standalone fixtures or private header/prototype stubs.
+    module_make = [*make, "M=" + str(gps), "CONFIG_MTK_GPS_SUPPORT=y",
+                   "CONFIG_ARM64=y", "CONFIG_MTK_COMBO=y", "CONFIG_MTK_CONNINFRA=m",
+                   "CONFIG_CONNINFRA_PLAT_BUILD_MODE=module", "MTK_PLATFORM=mt6878",
+                   "MTK_CONSYS_ADIE=MT6631", "TARGET_BUILD_VARIANT=user",
+                   "KCFLAGS=-DCONFIG_MTK_COMBO_CHIP_CONSYS_6878=1 -Wno-error=format "
+                   "-Wno-error=format-extra-args -Wno-error=missing-prototypes"]
+    names = ("gps_each_link.o", "linux/gps_each_device.o")
+    run([*module_make, *names])
+    destination = report / "gnss-tx-objects"
+    destination.mkdir(exist_ok=False)
+    shutil.copyfile(output / ".config", destination / "config")
+    identities = {}
+    for name in names:
+        target = gps / name
+        saved = destination / name
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(target, saved)
+        identities[name] = {**object_identity(saved), "sha256": hashlib.sha256(saved.read_bytes()).hexdigest()}
+    if list(gps.rglob("*.ko")):
+        raise ValueError("GNSS object-only gate must not produce runtime modules")
+    return {"scope": "real ARM64 v051 translation units; no modpost, installation or hardware test",
+            "connectivity_commit": stage.PIN, "archive_sha512": checksums[0],
+            "patch_sha512": hashlib.sha512(stage.PATCH.read_bytes()).hexdigest(),
+            "objects": identities}
+
+
 def compile_dt_only(kernel, package, work, report, manifest):
     output = work / "dt-only-output"
     output.mkdir(exist_ok=False)
@@ -673,6 +744,7 @@ def main():
         # Built-in translation units: no MODULE define, probe, parent Kbuild
         # linkage or shipping Kconfig change. Preserve exact production bytes.
         manifest["native_modem_pmic"] = compile_md_pmic(kernel, args.work, report)
+        manifest["gnss_nonblocking_tx"] = compile_gnss_tx(kernel, args.work, report)
         stage_research_sources(kernel)
         for source, destination in CAMISP_SUPPLIER_PLAN["sources"].items():
             if hashlib.sha256((kernel / destination).read_bytes()).hexdigest() != \

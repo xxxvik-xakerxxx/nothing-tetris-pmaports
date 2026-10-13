@@ -86,6 +86,16 @@ exact GNSS producer/native checks passed
 The full-frame constructor, exact pinned producers and native sanitizer fixtures
 passed [CI38331513481](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38331513481)
 at `789d002`. This does not establish live DSP download or a position fix.
+The one-attempt secure L1 controller and actual Linux syscall adapter then passed
+[CI38335304033](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38335304033)
+at `e8ad596`, together with the exact pinned fragment sequence and actual-source
+nonblocking TX fixtures for both IRQ/polling configurations. No fragment wire
+trigger is invented: ioctl25/26 submits index0..N-1, matched ACK32 advances
+sequence1..N. The new1009 TX patch remains staged, not present in r182/r183;
+real ARM64 v051 translation-unit compilation is the next gate. Legitimate live
+profile inputs, physical ACK traffic and independent kernel WORKING remain
+required. [Download owner](../patches/gnss-navigation-audit/dsp-download/DOWNLOAD.md)
+documents the limits, including synchronous SMC timing and sole-fd ownership.
 The updated joint MD/camera provider passed strict ARM64 vmlinux linking with
 KUNIT=y and KUNIT=n, both supplier DT candidates and full/resource-only CCCI
 links in [CI38327631459](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38327631459)

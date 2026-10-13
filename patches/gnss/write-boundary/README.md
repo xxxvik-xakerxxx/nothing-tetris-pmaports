@@ -2,9 +2,12 @@
 
 Status: **Untested on hardware; staged only.** Local static suite: 14 passed,
 one GNU-patch check skipped because GNU patch is unavailable on this host.
-The actual-source native harness has not been compiled or run. No package,
-kernel checkout, DSP controller, workflow, phone, or shipping activation changes
-are part of this scope. Existing untracked drafts are preserved.
+The actual-source native harness passed GNU-patch application, IRQ/polling
+ASan/UBSan fixtures and all applicable regression controls in
+[CI38335304033](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38335304033)
+at `e8ad596`. Parent main wires it into the GNSS workflow and adds genuine ARM64
+v051 object compilation to research CI. No package or shipping activation,
+phone write or physical TX test is claimed. Existing untracked drafts are preserved.
 
 ## Production Change
 

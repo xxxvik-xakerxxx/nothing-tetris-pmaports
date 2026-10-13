@@ -77,7 +77,11 @@ syscall argument ABI and preserve an earlier syscall errno across a subsequent
 clock failure. The new pinned static sequence check passes13 tests locally;
 the TX source/application suite passes14 with one local GNU-patch check skipped.
 GNU patch and both actual-source IRQ/polling native fixtures are mandatory in
-the GNSS CI workflow. No C was compiled or executed locally.
+the GNSS CI workflow. All these checks passed
+[CI38335304033](https://github.com/xxxvik-xakerxxx/nothing-tetris-pmaports/actions/runs/38335304033)
+at `e8ad596`. No C was compiled or executed locally. The real ARM64 v051
+translation units are now added to the isolated kernel-object CI gate;
+their compilation and actual hardware integration remain separate checks.
 
 Remaining integration: legitimate retained inputs and the sole live fd owner,
 real1009 v051 compilation/packaging, protocol ACK traffic, independent kernel
